@@ -11,7 +11,7 @@ export default async function PeoplePage({ params }: { params: Promise<{ planId:
     <GuidedStep
       planId={planId} formId="people-form" prevId="vision" step={2} group="People · Key People" wide
       title="Who runs the business?"
-      why="Owners, directors and the people a lender or investor would ask about. Name, role, and how much of their time is spent selling — the rest is optional and can wait."
+      why="Owners, directors and the people a lender or investor would ask about. Name, role, shareholding and salary — the rest is optional and can wait."
       aside={<>
         <CoachPanel title="What good looks like">
           <p>Three to six people is typical. Start with the owner; add anyone whose absence would change the plan.</p>

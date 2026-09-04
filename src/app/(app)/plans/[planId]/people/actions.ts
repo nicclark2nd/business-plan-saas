@@ -26,7 +26,6 @@ export async function savePerson(planId: string, formData: FormData): Promise<{ 
     plan_id: planId,
     name: String(formData.get("name") ?? "").trim(),
     position: txt(formData.get("position")),
-    pct_time_in_sales: num(formData.get("pct_time_in_sales")),
     pct_shareholding: num(formData.get("pct_shareholding")),
     annual_salary: num(formData.get("annual_salary")),
     salary_by_year,
