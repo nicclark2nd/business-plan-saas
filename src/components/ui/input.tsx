@@ -1,5 +1,4 @@
 import * as React from "react"
-import { Input as InputPrimitive } from "@base-ui/react/input"
 import { cn } from "cn"
 
 function Input({ className, type, autoComplete, ...props }: React.ComponentProps<"input">) {

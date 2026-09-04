@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type ComponentProps } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input as BaseInput } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,42 @@ import { savePerson, deletePerson, continueFromPeople, type Person } from "./act
 type Row = Person & { _new?: boolean; _open?: boolean; _dirty?: boolean; _error?: string };
 const PRODUCTIVITY = ["Exceptional", "Strong", "Solid", "Developing", "Needs support"];
 const money = (n: number | null | undefined) => n ? "$" + Math.round(n).toLocaleString("en-AU") : "—";
+
+function Input(props: ComponentProps<typeof BaseInput>) {
+  const ref = useRef<HTMLInputElement>(null);
+  const expectedAutocomplete = props.autoComplete ?? "off";
+  const handleClickCapture: NonNullable<ComponentProps<typeof BaseInput>["onClickCapture"]> = (event) => {
+    props.onClickCapture?.(event);
+    const classes = Array.from(event.currentTarget.classList);
+    const wasModified = classes.includes("psono-icon-injected") || classes.some((name) => name.startsWith("securepass-"));
+    const { right } = event.currentTarget.getBoundingClientRect();
+    if (wasModified && event.clientX >= right - 52) event.stopPropagation();
+  };
+
+  useEffect(() => {
+    const input = ref.current;
+    if (!input) return;
+
+    const removeInjectedDecoration = () => {
+      const classes = Array.from(input.classList);
+      const wasModified = classes.includes("psono-icon-injected") || classes.some((name) => name.startsWith("securepass-"));
+      if (!wasModified) return;
+
+      input.style.removeProperty("background-image");
+      input.style.removeProperty("background-position");
+      input.style.removeProperty("background-repeat");
+      input.style.removeProperty("background-size");
+      if (input.getAttribute("autocomplete") !== expectedAutocomplete) input.setAttribute("autocomplete", expectedAutocomplete);
+    };
+
+    removeInjectedDecoration();
+    const observer = new MutationObserver(removeInjectedDecoration);
+    observer.observe(input, { attributes: true, attributeFilter: ["class", "style", "autocomplete"] });
+    return () => observer.disconnect();
+  }, [expectedAutocomplete]);
+
+  return <BaseInput {...props} ref={ref} autoComplete={expectedAutocomplete} onClickCapture={handleClickCapture} />;
+}
 
 function blank(): Row {
   return { id: "", name: "", position: "", pct_time_in_sales: 0, pct_shareholding: 0, annual_salary: 0, salary_by_year: {}, productivity_level: null,
