@@ -70,7 +70,7 @@ export function PeopleList({ planId, initial }: { planId: string; initial: Perso
               ) : (
                 <form className="space-y-4 px-4 py-4" onSubmit={(e) => { e.preventDefault(); save(i, e.currentTarget); }}>
                   <input type="hidden" name="id" value={r.id} />
-                  <div className="grid grid-cols-[minmax(180px,1.2fr)_minmax(180px,1fr)_130px_150px_120px] gap-3">
+                  <div className="grid grid-cols-[minmax(180px,1.2fr)_minmax(180px,1fr)_150px_170px] gap-3">
                     <div className="space-y-1"><Label htmlFor={`person-${i}-name`}>Name</Label><Input id={`person-${i}-name`} name="name" defaultValue={r.name} required placeholder="Full name" /></div>
                     <div className="space-y-1"><Label>Position</Label><Input name="job_title" defaultValue={r.position ?? ""} placeholder="e.g. Managing Director" /></div>
                                         <div className="space-y-1"><Label className="whitespace-nowrap">Shareholding %</Label><Input name="pct_shareholding" inputMode="decimal" className="num text-right" defaultValue={r.pct_shareholding || ""} placeholder="0" /></div>
