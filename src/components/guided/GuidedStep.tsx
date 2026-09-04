@@ -42,11 +42,13 @@ export function CoachExample({ children }: { children: React.ReactNode }) {
 }
 
 /** Sticky footer. Render as the last child of the step's <form>. */
-export function StepFooter({ planId, prevId = "dashboard", nextLabel = "Save and continue →", pending, note }: {
-  planId: string; prevId?: string; nextLabel?: string; pending?: boolean; note?: React.ReactNode;
+export function StepFooter({ planId, prevId = "dashboard", nextLabel = "Save and continue →", pending, note, hasAside = true }: {
+  planId: string; prevId?: string; nextLabel?: string; pending?: boolean; note?: React.ReactNode; hasAside?: boolean;
 }) {
+  // Spans the whole content area (form column + aside) so it reads as the pane's footer, not a floating strip.
   return (
-    <div className="sticky bottom-0 z-10 -mx-7 mt-6 flex items-center justify-between border-t border-border bg-background px-7 py-3.5">
+    <div className="sticky bottom-0 z-10 -mx-7 mt-6 flex items-center justify-between border-t border-border bg-background px-7 py-3.5"
+      style={hasAside ? { marginRight: "calc(-280px - 18px - 28px)" } : undefined}>
       <Button variant="outline" type="button" render={<Link href={`/plans/${planId}/${prevId}`} />}>← Back</Button>
       {note && <span className="text-xs text-muted-foreground">{note}</span>}
       <div className="flex gap-2">
