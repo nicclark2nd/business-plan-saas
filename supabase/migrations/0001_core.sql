@@ -1,7 +1,9 @@
 -- 0001_core: tenancy, identity, plans, membership, RLS helpers
 -- Every plan-level table in later migrations is keyed by plan_id and protected by can_read_plan / can_write_plan.
 
-create extension if not exists "pgcrypto";
+-- Supabase keeps pgcrypto in the "extensions" schema; plain Postgres puts it in "public". Qualify calls with extensions.* and make that schema exist locally.
+create schema if not exists extensions;
+create extension if not exists "pgcrypto" with schema extensions;
 
 -- ---------- enums ----------
 create type organisation_kind as enum ('owner', 'coach', 'consultant', 'accounting_firm');
@@ -107,7 +109,7 @@ create table plan_invitations (
   plan_id     uuid not null references plans(id) on delete cascade,
   email       text not null,
   role        plan_role not null default 'owner',
-  token       text not null unique default encode(gen_random_bytes(24), 'hex'),
+  token       text not null unique default encode(extensions.gen_random_bytes(24), 'hex'),
   invited_by  uuid references auth.users(id),
   accepted_at timestamptz,
   expires_at  timestamptz not null default now() + interval '14 days',
