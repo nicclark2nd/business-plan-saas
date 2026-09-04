@@ -35,7 +35,7 @@ never `user_id` — the single biggest change from APeX, and what makes the prod
 |---|---|
 | `plan_framework` | One row: `vision`, `mission`, `purpose`, `brand_promise`, `ai_direction`, `field_of_play` |
 | `plan_outlets`, `plan_social_media`, `plan_memberships`, `plan_ip`, `plan_capital_equipment` | Simple registers; descriptive only (no financial effect) |
-| `plan_people` | `name`, `position`, `pct_time_in_sales`, `pct_shareholding`, `annual_salary`, `salary_by_year` jsonb, `productivity_level`, `productivity_comments`, `duties`, `qualities`, `education`, `focus_areas` — one row per person, the seven APeX tabs become columns |
+| `plan_people` | `name`, `position`, ~~`pct_time_in_sales`~~ (retired 4 Sep 2026 — column kept, not shown), `pct_shareholding`, `annual_salary`, `salary_by_year` jsonb, `productivity_level`, `productivity_comments`, `duties`, `qualities`, `education`, `focus_areas` — one row per person, the seven APeX tabs become columns |
 | `plan_marketing` | One row: market research (`target_market`, `market_size`, `market_trends`, `customer_needs`, `competitive_analysis`), research (`research_topic`, `methodology`, `key_findings`, `recommendations`), branding (`brand_purpose`, `brand_values`, `brand_personality`, `visual_identity`) |
 | `plan_promotion_items` | Six fixed kinds (advertising, content, sales_promotions, pr, partnerships, retention): `kind`, `approach`, `estimated_budget` |
 | `plan_distribution_channels` | `channel`, `cost` |
