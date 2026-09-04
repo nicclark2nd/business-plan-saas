@@ -35,9 +35,9 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
 
       <div className="mb-3 grid grid-cols-5 gap-3">
         {["Revenue", "Gross margin", "Net profit", "Cash at year end", "Debtor days"].map((k) => (
-          <Card key={k} className="gap-1 py-4"><CardContent>
+          <Card key={k} className="gap-1 py-3.5"><CardContent className="px-4">
             <div className="text-xs font-semibold text-muted-foreground">{k}</div>
-            <div className="num mt-1 text-2xl font-bold text-faint">—</div>
+            <div className="num mt-1 text-2xl font-bold tracking-[-0.01em] text-faint">—</div>
             <div className="mt-0.5 text-xs text-faint">{hasNumbers ? "Forecast pending" : "Needs Sales & Overheads"}</div>
           </CardContent></Card>
         ))}
