@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { Suspense, useActionState } from "react";
 import { useSearchParams } from "next/navigation";
 import { signIn } from "../actions";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,22 @@ import { Label } from "@/components/ui/label";
 import { FormError } from "@/components/FormMessage";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginCardFallback />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginCardFallback() {
+  return (
+    <Card>
+      <CardHeader><CardTitle>Sign in</CardTitle><CardDescription>Loading your sign-in form…</CardDescription></CardHeader>
+    </Card>
+  );
+}
+
+function LoginForm() {
   const [state, action, pending] = useActionState(signIn, undefined);
   const next = useSearchParams().get("next") ?? "";
   return (
