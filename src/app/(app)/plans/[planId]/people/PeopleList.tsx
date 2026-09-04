@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input as BaseInput } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormError } from "@/components/FormMessage";
 import { useStep } from "@/components/guided/StepFrame";
@@ -98,26 +97,27 @@ export function PeopleList({ planId, initial }: { planId: string; initial: Perso
 
         <div className="max-h-[520px] overflow-auto">
           {rows.length > 0 && (
-            <div className="sticky top-0 z-[1] grid grid-cols-[minmax(180px,1.2fr)_minmax(180px,1fr)_130px_150px_120px] gap-3 border-b border-input bg-card px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground whitespace-nowrap">
-              <span>Name</span><span>Position</span><span className="text-right" title="Percent shareholding">Share %</span><span className="text-right">Salary</span><span />
+            <div className="sticky top-0 z-[1] grid grid-cols-[minmax(180px,1.2fr)_minmax(180px,1fr)_130px_150px_170px] gap-3 border-b border-input bg-card px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground whitespace-nowrap">
+              <span>Name</span><span>Position</span><span>Shareholding %</span><span>Annual salary ($)</span><span />
             </div>
           )}
           {rows.map((r, i) => (
             <div key={r.id || `new-${i}`} className={cn("border-b border-border last:border-b-0", r._new && "bg-accent/40")}>
               {!r._open ? (
-                <div className="grid grid-cols-[minmax(180px,1.2fr)_minmax(180px,1fr)_130px_150px_120px] items-center gap-3 px-4 py-2.5 text-[13px]">
+                <div className="grid grid-cols-[minmax(180px,1.2fr)_minmax(180px,1fr)_130px_150px_170px] items-center gap-3 px-4 py-2.5 text-[13px]">
                   <span className="font-semibold">{r.name}</span><span className="text-muted-foreground">{r.position || "—"}</span>
                   <span className="num text-right">{r.pct_shareholding ?? 0}%</span><span className="num text-right">{money(r.annual_salary)}</span>
                   <span className="flex justify-end gap-1"><Button type="button" variant="ghost" size="sm" onClick={() => patch(i, { _open: true })}>Edit</Button><Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => remove(i)} title="Remove">×</Button></span>
                 </div>
               ) : (
-                <div className="space-y-4 px-4 py-4" data-person-editor onKeyDown={(e) => { if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") { e.preventDefault(); save(i, e.currentTarget); } }}>
+                <div className="space-y-3 px-4 py-3" data-person-editor onKeyDown={(e) => { if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") { e.preventDefault(); save(i, e.currentTarget); } }}>
                   <input type="hidden" name="id" value={r.id} />
-                  <div className="grid grid-cols-[minmax(180px,1.2fr)_minmax(180px,1fr)_150px_170px] gap-3">
-                    <div className="space-y-1"><Label htmlFor={`person-${i}-name`}>Name</Label><Input id={`person-${i}-name`} name="name" defaultValue={r.name} required placeholder="Full name" /></div>
-                    <div className="space-y-1"><Label>Position</Label><Input name="job_title" defaultValue={r.position ?? ""} placeholder="e.g. Managing Director" /></div>
-                                        <div className="space-y-1"><Label className="whitespace-nowrap">Shareholding %</Label><Input name="pct_shareholding" inputMode="decimal" className="num text-right" defaultValue={r.pct_shareholding || ""} placeholder="0" /></div>
-                    <div className="space-y-1"><Label className="whitespace-nowrap">Annual salary ($)</Label><Input name="annual_salary" inputMode="numeric" className="num text-right" defaultValue={r.annual_salary || ""} placeholder="0" /></div>
+                  <div className="grid grid-cols-[minmax(180px,1.2fr)_minmax(180px,1fr)_130px_150px_170px] gap-3">
+                    <Input id={`person-${i}-name`} name="name" defaultValue={r.name} required placeholder="Full name" aria-label="Name" />
+                    <Input name="job_title" defaultValue={r.position ?? ""} placeholder="e.g. Managing Director" aria-label="Position" />
+                                        <Input name="pct_shareholding" inputMode="decimal" className="num text-right" defaultValue={r.pct_shareholding || ""} placeholder="0" aria-label="Shareholding %" />
+                    <Input name="annual_salary" inputMode="numeric" className="num text-right" defaultValue={r.annual_salary || ""} placeholder="0" aria-label="Annual salary" />
+                    <div className="flex items-center justify-end gap-1"><Button type="button" size="sm" disabled={pending} onClick={(e) => save(i, (e.currentTarget as HTMLElement).closest<HTMLElement>("[data-person-editor]")!)}>{pending ? "Saving…" : r._new ? "Add" : "Save"}</Button><Button type="button" size="sm" variant="ghost" onClick={() => (r._new ? remove(i) : patch(i, { _open: false }))}>Cancel</Button></div>
                   </div>
 
                   <details className="group rounded-md border border-border bg-secondary/60">
@@ -138,11 +138,6 @@ export function PeopleList({ planId, initial }: { planId: string; initial: Perso
                   </details>
 
                   <FormError>{r._error}</FormError>
-                  <div className="flex items-center gap-2">
-                    <Button type="button" size="sm" disabled={pending} onClick={(e) => save(i, (e.currentTarget as HTMLElement).closest<HTMLElement>("[data-person-editor]")!)}>{pending ? "Saving…" : r._new ? "Add person" : "Save changes"}</Button>
-                    <Button type="button" size="sm" variant="ghost" onClick={() => (r._new ? remove(i) : patch(i, { _open: false }))}>Cancel</Button>
-                    {!r._new && <Badge variant="outline" className="ml-auto text-muted-foreground">Saved</Badge>}
-                  </div>
                 </div>
               )}
             </div>
