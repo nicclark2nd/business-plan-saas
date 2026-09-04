@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export type Person = {
   id: string; name: string; position: string | null;
-  pct_time_in_sales: number | null; pct_shareholding: number | null; annual_salary: number | null;
+  pct_shareholding: number | null; annual_salary: number | null;
   salary_by_year: Record<string, number> | null;
   productivity_level: string | null; productivity_comments: string | null;
   duties: string | null; qualities: string | null; education: string | null; focus_areas: string | null;
