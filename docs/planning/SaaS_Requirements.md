@@ -284,3 +284,7 @@ Permissions model that falls out of this: Organisation (coach / firm / consultan
 4. ~~SWOT placement~~ **Closed: Goals group, ordered SWOT → Goals.**
 5. ~~Goals status field~~ **Closed: add it** (Not started / In progress / Done / At risk).
 6. ~~Capital Equipment → forecast?~~ **Closed 4 Sep 2026: stays descriptive.** Financial effect of assets flows Historic → Funding only. No standalone depreciation module — this is a planning app, not a tracking app.
+
+## 6.8 Component library — RULE (4 Sep 2026)
+
+All UI is built from **shadcn/ui** components in `src/components/ui` (Button, Input, Label, Select, Card, Badge, Textarea, RadioGroup, Separator, …), themed once in `src/app/globals.css` with the NetSuite-style palette. No hand-rolled button/input/card classes anywhere; no literal colours in components — only theme tokens (`primary`, `muted-foreground`, `good`/`warn`/`bad`, `sidebar-*`). Add a component with `npx shadcn@latest add <name>`; change a colour in one place. Nic: "components come from a library, not produced each time."

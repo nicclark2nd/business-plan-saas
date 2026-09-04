@@ -1,37 +1,107 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-/* Design tokens — flat, enterprise (NetSuite-inspired). See docs/mockup. */
+/*
+  Theme — flat, enterprise (NetSuite-inspired). Single light theme.
+  Every component takes colour from these variables via shadcn/ui; no ad-hoc colours in components.
+  Semantic state colours (good / warn / bad) are separate from the accent.
+*/
 :root {
-  --nav: #1C2B3A; --nav-text: #C9D3DE; --nav-muted: #7F8FA3; --nav-active: #25384B; --nav-line: #2C3F54;
-  --bg: #F2F4F7; --surface: #FFFFFF; --surface-2: #F7F9FB; --line: #D9DEE5; --line-strong: #B9C2CD;
-  --text: #1F2933; --muted: #6B7A8C; --faint: #98A4B3;
-  --primary: #1F6FCB; --primary-ink: #FFFFFF; --primary-soft: #E6F0FB;
-  --good: #2E7D32; --good-soft: #E8F3E9; --warn: #C77800; --warn-soft: #FCF1E0; --bad: #C62828; --bad-soft: #FBE9E9;
+  --radius: 0.375rem;
+
+  --background: #F2F4F7;            /* page ground */
+  --foreground: #1F2933;            /* text */
+  --card: #FFFFFF;
+  --card-foreground: #1F2933;
+  --popover: #FFFFFF;
+  --popover-foreground: #1F2933;
+
+  --primary: #1F6FCB;               /* the one accent */
+  --primary-foreground: #FFFFFF;
+  --secondary: #F7F9FB;             /* quiet surface */
+  --secondary-foreground: #1F2933;
+  --muted: #F7F9FB;
+  --muted-foreground: #6B7A8C;
+  --accent: #E6F0FB;                /* primary-soft: selected / highlighted */
+  --accent-foreground: #1F6FCB;
+  --destructive: #C62828;
+  --destructive-foreground: #FFFFFF;
+
+  --border: #D9DEE5;
+  --input: #B9C2CD;                 /* input borders, slightly stronger */
+  --ring: #1F6FCB;
+
+  /* semantic state */
+  --good: #2E7D32;  --good-soft: #E8F3E9;
+  --warn: #C77800;  --warn-soft: #FCF1E0;
+  --bad:  #C62828;  --bad-soft:  #FBE9E9;
+  --faint: #98A4B3;
+
+  /* app chrome (top bar + sidebar) */
+  --sidebar: #1C2B3A;
+  --sidebar-foreground: #C9D3DE;
+  --sidebar-primary: #1F6FCB;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #25384B;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: #2C3F54;
+  --sidebar-ring: #1F6FCB;
+  --sidebar-muted: #7F8FA3;
+
+  --chart-1: #1F6FCB; --chart-2: #5FA8E8; --chart-3: #2A8C8C; --chart-4: #7A5AC9; --chart-5: #C77800;
 }
 
 @theme inline {
-  --color-nav: var(--nav); --color-nav-text: var(--nav-text); --color-nav-muted: var(--nav-muted);
-  --color-nav-active: var(--nav-active); --color-nav-line: var(--nav-line);
-  --color-bg: var(--bg); --color-surface: var(--surface); --color-surface-2: var(--surface-2);
-  --color-line: var(--line); --color-line-strong: var(--line-strong);
-  --color-text: var(--text); --color-muted: var(--muted); --color-faint: var(--faint);
-  --color-primary: var(--primary); --color-primary-ink: var(--primary-ink); --color-primary-soft: var(--primary-soft);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
   --color-good: var(--good); --color-good-soft: var(--good-soft);
   --color-warn: var(--warn); --color-warn-soft: var(--warn-soft);
-  --color-bad: var(--bad); --color-bad-soft: var(--bad-soft);
+  --color-bad: var(--bad);   --color-bad-soft: var(--bad-soft);
+  --color-faint: var(--faint);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-chart-1: var(--chart-1); --color-chart-2: var(--chart-2); --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4); --color-chart-5: var(--chart-5);
   --font-sans: var(--font-open-sans), "Open Sans", "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-heading: var(--font-sans);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
 }
 
-html { color-scheme: light; }
-body { background: var(--bg); color: var(--text); font-family: var(--font-sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
-.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+@layer base {
+  html { color-scheme: light; }
+  * { @apply border-border outline-ring/50; }
+  body { @apply bg-background text-foreground font-sans text-sm antialiased; }
+}
 
-/* shared primitives */
-.btn { @apply inline-flex items-center gap-2 rounded px-3.5 py-1.5 text-[13px] font-semibold whitespace-nowrap border border-line-strong bg-surface text-text hover:bg-surface-2 disabled:opacity-50 disabled:cursor-not-allowed; }
-.btn-primary { @apply border-primary bg-primary text-primary-ink hover:brightness-105; }
-.btn-sm { @apply px-2.5 py-1 text-xs; }
-.card { @apply rounded-md border border-line bg-surface p-4; }
-.eyebrow { @apply text-[11px] font-semibold uppercase tracking-[0.06em] text-muted; }
-.field label { @apply mb-1 block text-[13px] font-semibold; }
-.field input, .field select, .field textarea { @apply w-full rounded border border-line-strong bg-surface px-2.5 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft; }
-.pill { @apply inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11.5px] font-semibold; }
+/* Typographic utilities used across the app */
+@utility num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+@utility eyebrow { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted-foreground); }
