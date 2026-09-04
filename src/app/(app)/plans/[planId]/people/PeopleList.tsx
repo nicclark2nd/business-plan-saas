@@ -33,8 +33,15 @@ export function PeopleList({ planId, initial }: { planId: string; initial: Perso
 
   const add = () => { setRows((rs) => [blank(), ...rs]); setTimeout(() => (document.querySelector<HTMLInputElement>("#person-0-name"))?.focus(), 0); };
   const remove = (i: number) => { const r = rows[i]; setRows((rs) => rs.filter((_, j) => j !== i)); if (r.id) start(() => deletePerson(planId, r.id)); };
-  const save = (i: number, form: HTMLFormElement) => {
-    const fd = new FormData(form);
+  // Not a <form>: a single-line input + submit button inside a form is what password managers treat as a login
+  // form and decorate. Values are collected from the row container instead (same approach APeX used).
+  const collect = (root: HTMLElement) => {
+    const fd = new FormData();
+    root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input[name], textarea[name], select[name]").forEach((el) => fd.append(el.name, el.value));
+    return fd;
+  };
+  const save = (i: number, root: HTMLElement) => {
+    const fd = collect(root);
     start(async () => {
       const res = await savePerson(planId, fd);
       if (res.error) patch(i, { _error: res.error });
@@ -68,7 +75,7 @@ export function PeopleList({ planId, initial }: { planId: string; initial: Perso
                   <span className="flex justify-end gap-1"><Button type="button" variant="ghost" size="sm" onClick={() => patch(i, { _open: true })}>Edit</Button><Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => remove(i)} title="Remove">×</Button></span>
                 </div>
               ) : (
-                <form className="space-y-4 px-4 py-4" onSubmit={(e) => { e.preventDefault(); save(i, e.currentTarget); }}>
+                <div className="space-y-4 px-4 py-4" data-person-editor onKeyDown={(e) => { if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") { e.preventDefault(); save(i, e.currentTarget); } }}>
                   <input type="hidden" name="id" value={r.id} />
                   <div className="grid grid-cols-[minmax(180px,1.2fr)_minmax(180px,1fr)_150px_170px] gap-3">
                     <div className="space-y-1"><Label htmlFor={`person-${i}-name`}>Name</Label><Input id={`person-${i}-name`} name="name" defaultValue={r.name} required placeholder="Full name" /></div>
@@ -96,11 +103,11 @@ export function PeopleList({ planId, initial }: { planId: string; initial: Perso
 
                   <FormError>{r._error}</FormError>
                   <div className="flex items-center gap-2">
-                    <Button type="submit" size="sm" disabled={pending}>{pending ? "Saving…" : r._new ? "Add person" : "Save changes"}</Button>
+                    <Button type="button" size="sm" disabled={pending} onClick={(e) => save(i, (e.currentTarget as HTMLElement).closest<HTMLElement>("[data-person-editor]")!)}>{pending ? "Saving…" : r._new ? "Add person" : "Save changes"}</Button>
                     <Button type="button" size="sm" variant="ghost" onClick={() => (r._new ? remove(i) : patch(i, { _open: false }))}>Cancel</Button>
                     {!r._new && <Badge variant="outline" className="ml-auto text-muted-foreground">Saved</Badge>}
                   </div>
-                </form>
+                </div>
               )}
             </div>
           ))}
