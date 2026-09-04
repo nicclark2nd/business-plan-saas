@@ -6,7 +6,9 @@ function Input({ className, type, autoComplete, ...props }: React.ComponentProps
   // Password managers (Keeper, 1Password, LastPass…) attach badges and menus to inputs they can't classify.
   // These are business-plan fields, never credentials — opt out everywhere unless a field says otherwise.
   const isCredential = type === "password" || type === "email" || autoComplete === "current-password" || autoComplete === "new-password" || autoComplete === "email" || autoComplete === "name";
-  const pmIgnore = isCredential ? {} : { autoComplete: autoComplete ?? "off", "data-1p-ignore": "", "data-lpignore": "true", "data-bwignore": "", "data-form-type": "other", "data-keeper-ignore": "" };
+  // Chrome ignores autocomplete="off" on name/address-looking fields and offers saved addresses; a value it
+  // does not recognise as fillable ("one-time-code") suppresses that menu.
+  const pmIgnore = isCredential ? {} : { autoComplete: autoComplete ?? "one-time-code", "data-1p-ignore": "", "data-lpignore": "true", "data-bwignore": "", "data-form-type": "other", "data-keeper-ignore": "" };
   return (
     <input
       type={type}
