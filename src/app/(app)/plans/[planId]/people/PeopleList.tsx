@@ -55,27 +55,27 @@ export function PeopleList({ planId, initial }: { planId: string; initial: Perso
 
         <div className="max-h-[520px] overflow-auto">
           {rows.length > 0 && (
-            <div className="sticky top-0 z-[1] grid grid-cols-[1.4fr_1.2fr_.7fr_.7fr_.9fr_auto] gap-3 border-b border-input bg-card px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-              <span>Name</span><span>Position</span><span className="text-right">% time in sales</span><span className="text-right">% shareholding</span><span className="text-right">Annual salary</span><span className="w-[120px]" />
+            <div className="sticky top-0 z-[1] grid grid-cols-[minmax(160px,1.4fr)_minmax(150px,1.2fr)_90px_90px_120px_120px] gap-3 border-b border-input bg-card px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground whitespace-nowrap">
+              <span>Name</span><span>Position</span><span className="text-right" title="Percent of time spent selling">Sales %</span><span className="text-right" title="Percent shareholding">Share %</span><span className="text-right">Salary</span><span />
             </div>
           )}
           {rows.map((r, i) => (
             <div key={r.id || `new-${i}`} className={cn("border-b border-border last:border-b-0", r._new && "bg-accent/40")}>
               {!r._open ? (
-                <div className="grid grid-cols-[1.4fr_1.2fr_.7fr_.7fr_.9fr_auto] items-center gap-3 px-4 py-2.5 text-[13px]">
+                <div className="grid grid-cols-[minmax(160px,1.4fr)_minmax(150px,1.2fr)_90px_90px_120px_120px] items-center gap-3 px-4 py-2.5 text-[13px]">
                   <span className="font-semibold">{r.name}</span><span className="text-muted-foreground">{r.position || "—"}</span>
                   <span className="num text-right">{r.pct_time_in_sales ?? 0}%</span><span className="num text-right">{r.pct_shareholding ?? 0}%</span><span className="num text-right">{money(r.annual_salary)}</span>
-                  <span className="flex w-[120px] justify-end gap-1"><Button type="button" variant="ghost" size="sm" onClick={() => patch(i, { _open: true })}>Edit</Button><Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => remove(i)} title="Remove">×</Button></span>
+                  <span className="flex justify-end gap-1"><Button type="button" variant="ghost" size="sm" onClick={() => patch(i, { _open: true })}>Edit</Button><Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => remove(i)} title="Remove">×</Button></span>
                 </div>
               ) : (
                 <form className="space-y-4 px-4 py-4" onSubmit={(e) => { e.preventDefault(); save(i, e.currentTarget); }}>
                   <input type="hidden" name="id" value={r.id} />
-                  <div className="grid grid-cols-[1.4fr_1.2fr_.7fr_.7fr_.9fr] gap-3">
+                  <div className="grid grid-cols-[minmax(160px,1.4fr)_minmax(150px,1.2fr)_110px_110px_140px] gap-3">
                     <div className="space-y-1"><Label htmlFor={`person-${i}-name`}>Name</Label><Input id={`person-${i}-name`} name="name" defaultValue={r.name} required placeholder="Full name" /></div>
-                    <div className="space-y-1"><Label>Position</Label><Input name="position" defaultValue={r.position ?? ""} placeholder="e.g. Owner / Director" /></div>
-                    <div className="space-y-1"><Label>% time in sales</Label><Input name="pct_time_in_sales" type="number" min={0} max={100} className="num text-right" defaultValue={r.pct_time_in_sales ?? 0} /></div>
-                    <div className="space-y-1"><Label>% shareholding</Label><Input name="pct_shareholding" type="number" min={0} max={100} className="num text-right" defaultValue={r.pct_shareholding ?? 0} /></div>
-                    <div className="space-y-1"><Label>Annual salary ($)</Label><Input name="annual_salary" inputMode="numeric" className="num text-right" defaultValue={r.annual_salary || ""} placeholder="0" /></div>
+                    <div className="space-y-1"><Label>Position</Label><Input name="position" defaultValue={r.position ?? ""} placeholder="e.g. Owner" /></div>
+                    <div className="space-y-1"><Label className="whitespace-nowrap">Time in sales %</Label><Input name="pct_time_in_sales" type="number" min={0} max={100} className="num text-right" defaultValue={r.pct_time_in_sales ?? 0} /></div>
+                    <div className="space-y-1"><Label className="whitespace-nowrap">Shareholding %</Label><Input name="pct_shareholding" type="number" min={0} max={100} className="num text-right" defaultValue={r.pct_shareholding ?? 0} /></div>
+                    <div className="space-y-1"><Label className="whitespace-nowrap">Annual salary ($)</Label><Input name="annual_salary" inputMode="numeric" className="num text-right" defaultValue={r.annual_salary || ""} placeholder="0" /></div>
                   </div>
 
                   <details className="group rounded-md border border-border bg-secondary/60">

@@ -16,15 +16,23 @@ export function GuidedStep({
   const total = GUIDED_STEPS.length;
   return (
     <StepFrame footer={<StepFooter planId={planId} prevId={prevId} formId={formId} nextLabel={nextLabel} />}>
-      <div className={wide ? "mx-auto max-w-[960px]" : "mx-auto max-w-[860px]"}>
+      <div className="mx-auto max-w-[1180px]">
         <span className="eyebrow">Step {step} of {total} · {group}</span>
         <div className="mb-5 mt-2.5 h-1 overflow-hidden rounded bg-border"><i className="block h-full bg-primary" style={{ width: `${(step / total) * 100}%` }} /></div>
         <h1 className="text-2xl font-semibold leading-tight text-balance">{title}</h1>
-        <p className="mt-1.5 max-w-[64ch] text-[13px] text-muted-foreground">{why}</p>
-        <div className={aside ? "mt-5 grid grid-cols-[1fr_280px] items-start gap-[18px]" : "mt-5"}>
-          <div>{children}</div>
-          {aside && <aside className="space-y-3">{aside}</aside>}
-        </div>
+        <p className="mt-1.5 max-w-[72ch] text-[13px] text-muted-foreground">{why}</p>
+        {wide ? (
+          // Table-style steps: coach panels sit above the table as a compact row so the table gets the full width.
+          <>
+            {aside && <div className="mt-5 grid grid-cols-2 gap-3 [&>*]:mb-0">{aside}</div>}
+            <div className="mt-4">{children}</div>
+          </>
+        ) : (
+          <div className={aside ? "mt-5 grid grid-cols-[minmax(0,1fr)_300px] items-start gap-[18px]" : "mt-5"}>
+            <div className="min-w-0">{children}</div>
+            {aside && <aside className="space-y-3">{aside}</aside>}
+          </div>
+        )}
       </div>
     </StepFrame>
   );
