@@ -1,0 +1,770 @@
+<title>Business Plan SaaS Mockup</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap">
+<style>
+:root{
+  --nav:#1C2B3A; --nav-text:#C9D3DE; --nav-muted:#7F8FA3; --nav-active:#25384B; --nav-line:#2C3F54;
+  --bg:#F2F4F7; --surface:#FFFFFF; --surface-2:#F7F9FB; --line:#D9DEE5; --line-strong:#B9C2CD;
+  --text:#1F2933; --muted:#6B7A8C; --faint:#98A4B3;
+  --primary:#1F6FCB; --primary-ink:#FFFFFF; --primary-soft:#E6F0FB;
+  --good:#2E7D32; --good-soft:#E8F3E9; --warn:#C77800; --warn-soft:#FCF1E0; --bad:#C62828; --bad-soft:#FBE9E9;
+  --shadow:0 1px 2px rgba(31,41,51,.08),0 2px 8px rgba(31,41,51,.06);
+  --radius:6px; --font:"Open Sans","Oracle Sans","Segoe UI",Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --nav:#0F1820; --nav-text:#C9D3DE; --nav-muted:#748699; --nav-active:#1A2733; --nav-line:#22303E;
+    --bg:#141C25; --surface:#1C2733; --surface-2:#22303D; --line:#2E3D4C; --line-strong:#405264;
+    --text:#E6ECF2; --muted:#9AAABB; --faint:#6E7F91;
+    --primary:#5B9BE6; --primary-ink:#0B1622; --primary-soft:#1B3350;
+    --good:#6FCF7A; --good-soft:#1B3322; --warn:#F0B35A; --warn-soft:#3A2C13; --bad:#F27D7D; --bad-soft:#3E1F1F;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 2px 8px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  --nav:#0F1820; --nav-text:#C9D3DE; --nav-muted:#748699; --nav-active:#1A2733; --nav-line:#22303E;
+  --bg:#141C25; --surface:#1C2733; --surface-2:#22303D; --line:#2E3D4C; --line-strong:#405264;
+  --text:#E6ECF2; --muted:#9AAABB; --faint:#6E7F91;
+  --primary:#5B9BE6; --primary-ink:#0B1622; --primary-soft:#1B3350;
+  --good:#6FCF7A; --good-soft:#1B3322; --warn:#F0B35A; --warn-soft:#3A2C13; --bad:#F27D7D; --bad-soft:#3E1F1F;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 2px 8px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 var(--font);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+h1,h2,h3,h4{margin:0;text-wrap:balance;font-weight:600}
+h1{font-size:22px;line-height:1.25}
+h2{font-size:16px}
+h3{font-size:14px}
+p{margin:0}
+.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.eyebrow{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+/* shell */
+.app{display:grid;grid-template-rows:48px 1fr;grid-template-columns:240px 1fr;height:100vh;min-height:640px}
+.topbar{grid-column:1/3;background:var(--nav);color:var(--nav-text);display:flex;align-items:center;padding:0 16px;gap:16px;border-bottom:1px solid var(--nav-line)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;color:#fff;letter-spacing:.01em;width:224px}
+.brand .mark{width:26px;height:26px;border-radius:5px;background:linear-gradient(135deg,#3E8EE0,#1F6FCB);display:grid;place-items:center;font-size:12px;color:#fff}
+.plan-name{color:var(--nav-muted);font-size:13px}
+.plan-name b{color:var(--nav-text);font-weight:600}
+.topbar .spacer{flex:1}
+.mode{display:flex;background:var(--nav-active);border:1px solid var(--nav-line);border-radius:20px;padding:2px}
+.mode button{border:0;background:transparent;color:var(--nav-muted);padding:4px 14px;border-radius:16px;font-size:12px;font-weight:600}
+.mode button.on{background:var(--primary);color:#fff}
+.avatar{width:28px;height:28px;border-radius:50%;background:#3E5A78;display:grid;place-items:center;font-size:11px;font-weight:700;color:#fff}
+.sidebar{background:var(--nav);color:var(--nav-text);overflow-y:auto;padding:8px 0 24px;border-right:1px solid var(--nav-line)}
+.grp{margin-top:10px}
+.grp-h{display:flex;align-items:center;justify-content:space-between;padding:6px 16px 4px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--nav-muted);font-weight:700;cursor:pointer;user-select:none}
+.grp-h .chev{transition:transform .15s}
+.grp.closed .chev{transform:rotate(-90deg)}
+.grp.closed .items{display:none}
+.item{display:flex;align-items:center;gap:10px;padding:7px 16px 7px 18px;font-size:13px;color:var(--nav-text);cursor:pointer;border-left:3px solid transparent}
+.item:hover{background:var(--nav-active)}
+.item.active{background:var(--nav-active);border-left-color:var(--primary);color:#fff}
+.item .ic{width:16px;height:16px;flex:none;opacity:.75}
+.item .stepno{width:18px;height:18px;border-radius:50%;background:var(--nav-active);border:1px solid var(--nav-line);display:grid;place-items:center;font-size:10px;font-weight:700;color:var(--nav-muted);flex:none}
+.item.done .stepno{background:var(--good);border-color:var(--good);color:#fff}
+.item.active .stepno{background:var(--primary);border-color:var(--primary);color:#fff}
+.item .tag{margin-left:auto;font-size:10px;color:var(--nav-muted)}
+.item.dim{opacity:.45}
+.sidebar .foot{padding:14px 16px 0;font-size:11px;color:var(--nav-muted);border-top:1px solid var(--nav-line);margin-top:14px}
+.main{overflow-y:auto;padding:24px 28px 0}
+.screen{display:none;max-width:1180px;margin:0 auto;padding-bottom:72px}
+.screen.on{display:block}
+.page-h{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px}
+.page-h .sub{color:var(--muted);margin-top:4px;font-size:13px}
+/* cards */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+.card.raised{box-shadow:var(--shadow)}
+.card-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.card-h h2{font-size:14px}
+.link{color:var(--primary);text-decoration:none;font-weight:600;font-size:12.5px;background:none;border:0;padding:0}
+.link:hover{text-decoration:underline}
+.btn{white-space:nowrap;border:1px solid var(--line-strong);background:var(--surface);color:var(--text);padding:7px 14px;border-radius:4px;font-weight:600;font-size:13px;display:inline-flex;align-items:center;gap:8px}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-ink)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.sm{padding:4px 10px;font-size:12px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:12px;font-size:11.5px;font-weight:600}
+.pill.good{background:var(--good-soft);color:var(--good)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.neutral{background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+.pill.info{background:var(--primary-soft);color:var(--primary)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line-strong);white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.r,th.r{text-align:right}
+tr.total td{font-weight:700;border-top:2px solid var(--line-strong);background:var(--surface-2)}
+.tbl-wrap{overflow-x:auto}
+.tbl-scroll{overflow:auto;max-height:420px}
+.tbl-scroll thead th{position:sticky;top:0;background:var(--surface);z-index:1}
+.tbl-scroll tfoot td{position:sticky;bottom:0;z-index:1}
+tr.new td{background:var(--primary-soft)}
+/* dashboard */
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;position:relative}
+.kpi .lbl{font-size:12px;color:var(--muted);font-weight:600}
+.kpi .val{font-size:24px;font-weight:700;margin:4px 0 2px;letter-spacing:-.01em}
+.kpi .cmp{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center}
+.kpi .delta{font-weight:700}
+.kpi .delta.up{color:var(--good)} .kpi .delta.down{color:var(--bad)}
+.kpi .src{position:absolute;top:12px;right:12px;font-size:11px}
+.dash-grid{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:12px;margin-bottom:12px}
+.dash-grid2{display:grid;grid-template-columns:1.6fr 1fr;gap:12px}
+.runway{display:flex;gap:18px;align-items:flex-start}
+.runway>div:last-child{flex:1;min-width:200px}
+.runway .big{font-size:30px;font-weight:700;line-height:1.1}
+.runway .big small{font-size:13px;font-weight:600;color:var(--muted);display:block;margin-top:2px}
+.prog{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.prog>i{display:block;height:100%;background:var(--primary)}
+.prog.good>i{background:var(--good)}
+.sec-row{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:13px}
+.sec-row .nm{width:150px;flex:none}
+.sec-row .prog{flex:1}
+.sec-row .pct{min-width:56px;text-align:right;color:var(--muted);font-size:12px;white-space:nowrap}
+.goal{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line)}
+.goal:last-child{border-bottom:0}
+.goal .dot{width:9px;height:9px;border-radius:50%;margin-top:6px;flex:none}
+.goal .g-t{font-weight:600}
+.goal .g-m{color:var(--muted);font-size:12px}
+.insight{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.insight:last-child{border-bottom:0}
+.insight .sev{width:4px;border-radius:2px;flex:none;align-self:stretch}
+.insight .i-t{font-weight:600}
+.insight .i-b{color:var(--muted);font-size:12.5px;margin-top:2px}
+.insight .i-l{margin-top:6px}
+.next{background:var(--primary-soft);border:1px solid var(--primary);border-radius:var(--radius);padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.next .n-t{font-weight:700;font-size:15px}
+.next .n-b{color:var(--muted);font-size:12.5px;margin-top:2px}
+/* guided */
+.ftypes{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:16px}
+.ftype{display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px;cursor:pointer;font-size:12.5px}
+.ftype.on{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft)}
+.ftype input{margin:0;align-self:flex-start}
+.ftype b{display:block;font-size:13px}
+.ftype span{color:var(--muted);line-height:1.35;display:block;margin-top:2px}
+.ftype em{font-style:normal;font-size:11px;color:var(--primary);font-weight:600;margin-top:auto;min-height:14px}
+@media (max-width:1000px){.ftypes{grid-template-columns:1fr 1fr}}
+.g-shell{max-width:860px;margin:0 auto}
+.g-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.g-prog{height:4px;background:var(--line);border-radius:2px;margin:10px 0 22px;overflow:hidden}
+.g-prog>i{display:block;height:100%;background:var(--primary)}
+.g-title h1{font-size:24px}
+.g-title .why{color:var(--muted);margin-top:6px;max-width:64ch}
+.stmts{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:16px}
+.stmts a{font-size:12px;font-weight:600;color:var(--muted);text-decoration:none;border:1px solid var(--line);border-radius:12px;padding:3px 10px;background:var(--surface)}
+.stmts a.on{color:var(--good);border-color:var(--good);background:var(--good-soft)}
+.stmts .stmts-n{font-size:12px;color:var(--muted);margin-left:auto}
+.g-body{display:grid;grid-template-columns:1fr 280px;gap:18px;margin-top:20px;align-items:start}
+.field{margin-bottom:16px}
+.field label{display:block;font-weight:600;font-size:13px;margin-bottom:5px}
+.field .hint{font-size:12px;color:var(--muted);margin-bottom:6px;max-width:64ch}
+.field textarea,.field input,.field select{width:100%;border:1px solid var(--line-strong);background:var(--surface);border-radius:4px;padding:9px 11px;font-size:14px}
+.field textarea{min-height:88px;resize:vertical;line-height:1.5}
+.field .ai{margin-top:6px;display:flex;gap:10px;align-items:center}
+.coach{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+.coach h3{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.coach p{font-size:13px;margin-bottom:8px}
+.coach .ex{border-left:3px solid var(--primary);padding:6px 10px;font-size:12.5px;color:var(--muted);background:var(--surface);border-radius:0 4px 4px 0;margin-top:8px}
+.g-foot{display:flex;justify-content:space-between;align-items:center;margin-top:22px;padding:14px 0;border-top:1px solid var(--line);position:sticky;bottom:0;background:var(--bg);z-index:5}
+.main{padding-bottom:0}
+.g-shell{padding-bottom:24px}
+.timer{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.timer b{font-variant-numeric:tabular-nums;color:var(--text)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+td input{width:100%;border:1px solid transparent;background:transparent;padding:4px 6px;border-radius:3px;text-align:right}
+td input:hover{border-color:var(--line-strong)}
+td input:focus{border-color:var(--primary);background:var(--surface)}
+.chk{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}
+.chk input{margin-top:3px}
+.review-q{display:flex;gap:10px;margin-top:14px}
+/* what-if */
+.outcomes{display:grid;grid-template-columns:1.1fr 1.1fr .9fr;gap:12px;margin-bottom:12px}
+.out-h{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.out-now{font-size:12.5px;color:var(--muted);margin-top:2px}
+.out-big{font-size:32px;font-weight:700;letter-spacing:-.01em;line-height:1.1;margin-top:8px}
+.out-delta{font-size:13px;color:var(--muted);margin-top:2px}
+.out-delta b{font-weight:700}
+.out-parts{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--muted);margin-top:8px;min-height:18px}
+.out-target{display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.out-target label{font-size:12px;font-weight:600;color:var(--muted)}
+.out-target input{width:110px;border:1px solid var(--line-strong);border-radius:4px;padding:5px 8px;text-align:right;background:var(--surface)}
+.out-actions{display:flex;flex-direction:column}
+.out-note{font-size:11.5px;color:var(--muted);margin-top:4px;text-align:center}
+.out-insight{margin-top:auto;padding-top:12px;font-size:12.5px;color:var(--muted)}
+.out-insight:empty{display:none}
+.levers{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.lv{display:grid;grid-template-columns:120px 1fr 64px;gap:6px 12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.lv:last-of-type{border-bottom:0}
+.lv-n{font-weight:600;font-size:13px}
+.lv input[type=range]{width:100%;min-width:0;accent-color:var(--primary);margin:0}
+.lv-v{text-align:right;font-weight:700;font-size:13px}
+.lv-t{grid-column:2/4;font-size:12px;color:var(--muted);min-height:16px}
+.lv-t:empty::before{content:"No change";color:var(--faint)}
+.lv-help{font-size:12px;color:var(--muted);padding-top:12px;border-top:1px solid var(--line);margin-top:4px}
+.modal-bg[hidden],[hidden]{display:none!important}
+.modal-bg{position:fixed;inset:0;background:rgba(15,24,32,.45);display:grid;place-items:center;z-index:70}
+.modal{background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,.3);padding:20px 22px;width:min(640px,92vw);max-height:86vh;overflow:auto}
+.chg{display:grid;grid-template-columns:1fr auto auto;gap:10px 16px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+.chg:last-child{border-bottom:0}
+.chg .c-w{color:var(--muted);font-size:12px}
+.chg select{border:1px solid var(--line-strong);border-radius:4px;padding:3px 6px;font-size:12px;background:var(--surface)}
+.pos{color:var(--good)} .neg{color:var(--bad)}
+.result .row,.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+.row:last-child{border-bottom:0}
+@media (max-width:1000px){.outcomes,.levers{grid-template-columns:1fr}}
+/* reports */
+.tpl{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.tpl button{text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;display:block}
+.tpl button.on{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft)}
+.tpl .t-n{font-weight:700}
+.tpl .t-d{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4}
+.tpl .t-m{font-size:11px;color:var(--faint);margin-top:8px}
+.tpl .t-r{color:var(--primary);font-weight:600}
+.rep{display:grid;grid-template-columns:260px 1fr;gap:18px;align-items:start}
+.toc li{list-style:none;padding:6px 10px;border-radius:4px;font-size:13px;display:flex;justify-content:space-between;gap:8px}
+.toc{padding:0;margin:0}
+.toc li.off{color:var(--faint);text-decoration:line-through}
+.toc li .st{font-size:11px;color:var(--muted)}
+.doc{background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);padding:44px 52px;min-height:640px;font-size:13.5px;line-height:1.6;max-width:760px}
+.doc h1{font-size:26px;margin-bottom:4px}
+.doc h2{font-size:15px;margin:22px 0 8px;color:var(--primary);text-transform:uppercase;letter-spacing:.05em;font-size:12px}
+.doc p{margin-bottom:8px;max-width:68ch}
+.doc .mf{background:var(--primary-soft);color:var(--primary);padding:0 4px;border-radius:2px;font-weight:600}
+.doc table{font-size:12.5px;margin-top:6px}
+/* prototype panel */
+.proto{position:fixed;right:18px;top:60px;width:290px;background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.18);font-size:12px;z-index:50}
+.proto .p-h{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line);cursor:pointer;background:var(--surface);border-radius:8px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;font-size:10.5px;color:var(--muted)}
+.proto .p-b{padding:6px 6px 8px}
+.proto.min .p-b{display:none}
+.proto.min{width:auto}
+.proto.min .p-h{border-bottom:0}
+.proto .ps{display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border-radius:4px;cursor:pointer}
+.proto .ps:hover{background:var(--surface-2)}
+.proto .ps.on{background:var(--primary-soft);color:var(--primary);font-weight:600}
+.proto .ps .t{font-variant-numeric:tabular-nums;color:var(--muted);font-weight:400}
+.proto .note{padding:6px 8px 2px;color:var(--faint);border-top:1px solid var(--line);margin-top:4px}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--nav);color:#fff;padding:9px 16px;border-radius:6px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:60}
+.toast.show{opacity:1}
+svg text{fill:var(--muted);font-size:10px;font-family:var(--font)}
+@media (max-width:1000px){.kpis{grid-template-columns:repeat(2,1fr)}.dash-grid,.dash-grid2,.g-body,.wi,.rep{grid-template-columns:1fr}.tpl{grid-template-columns:1fr 1fr}.app{grid-template-columns:200px 1fr}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><span class="mark">▲</span> PlanWell</div>
+    <div class="plan-name">Plan: <b>DesignOne Concreting</b> · FY2026 · Year 1 of 5</div>
+    <div class="spacer"></div>
+    <div class="mode" role="group" aria-label="Interface mode">
+      <button id="modeG" class="on" onclick="setMode('guided')">Guided</button>
+      <button id="modeA" onclick="setMode('advanced')">Advanced</button>
+    </div>
+    <div class="avatar" title="Nic Clark">NC</div>
+  </div>
+
+  <nav class="sidebar" id="sidebar"></nav>
+
+  <main class="main" id="main">
+
+    <!-- ================= DASHBOARD ================= -->
+    <section class="screen on" id="s-dashboard">
+      <div class="page-h">
+        <div><div class="eyebrow">Dashboard</div><h1>DesignOne Concreting — Year 1 plan</h1><div class="sub">Plan figures shown. Actual vs plan appears here once monthly check-ins begin (phase 2).</div></div>
+        <div style="display:flex;gap:8px"><select class="btn" style="padding:6px 10px"><option>Full Year 1</option><option>This quarter</option><option>This month</option><option>Year to date</option></select><button class="btn">Financial Situation Report</button></div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi"><div class="lbl">Revenue</div><div class="val num">$2,119,240</div><div class="cmp"><span class="delta up num">▲ 6.1%</span> vs last year $1,997,000</div><a class="link src" href="#" onclick="go('sales-products');return false">Sales</a></div>
+        <div class="kpi"><div class="lbl">Gross margin</div><div class="val num">39.1%</div><div class="cmp"><span class="delta up num">▲ 0.7 pts</span> vs 38.4%</div><a class="link src" href="#" onclick="toast('COGS — not in this mockup');return false">COGS</a></div>
+        <div class="kpi"><div class="lbl">Net profit</div><div class="val num">$80,735</div><div class="cmp"><span class="delta up num">▲ $151,735</span> vs −$71,000</div><a class="link src" href="#" onclick="go('forecast');return false">P&amp;L</a></div>
+        <div class="kpi"><div class="lbl">Cash at year end</div><div class="val num">$541,816</div><div class="cmp"><span class="delta up num">▲</span> from $21,315 opening</div><a class="link src" href="#" onclick="toast('Cash Flow — not in this mockup');return false">Cash Flow</a></div>
+        <div class="kpi"><div class="lbl">Debtor days</div><div class="val num">42</div><div class="cmp"><span class="delta up num">▼ 4 days</span> vs 46 historic</div><a class="link src" href="#" onclick="toast('Plan Settings — not in this mockup');return false">Settings</a></div>
+      </div>
+
+      <div class="dash-grid">
+        <div class="card">
+          <div class="card-h"><h2>Cash runway</h2><span class="pill warn">Low point Feb</span></div>
+          <div class="runway">
+            <div><div class="big num">$18,400<small>lowest projected cash · Feb 2026</small></div></div>
+            <div>
+              <svg viewBox="0 0 320 90" width="100%" height="90" aria-label="Monthly cash balance Year 1">
+                <defs><linearGradient id="cg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#1F6FCB" stop-opacity=".25"/><stop offset="1" stop-color="#1F6FCB" stop-opacity="0"/></linearGradient></defs>
+                <line x1="0" y1="78" x2="320" y2="78" stroke="var(--line)"/>
+                <path d="M0,74 L27,77 L54,73 L81,68 L108,62 L135,55 L162,48 L189,40 L216,32 L243,24 L270,16 L297,8 L320,4 L320,78 L0,78Z" fill="url(#cg)"/>
+                <path d="M0,74 L27,77 L54,73 L81,68 L108,62 L135,55 L162,48 L189,40 L216,32 L243,24 L270,16 L297,8 L320,4" fill="none" stroke="#1F6FCB" stroke-width="2"/>
+                <circle cx="27" cy="77" r="3.5" fill="#C77800"/><circle cx="320" cy="4" r="3.5" fill="#1F6FCB"/>
+                <text x="0" y="88">Jan</text><text x="150" y="88">Jun</text><text x="300" y="88">Dec</text>
+              </svg>
+              <div style="font-size:12px;color:var(--muted)">Opening cash $21,315 covers ~0.4 months of overheads. The plan funds itself from March once the $400k debt facility lands. <a class="link" href="#" onclick="go('funding-debt');return false">Review Funding</a></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h2>Plan completeness</h2><span class="pill info num">72%</span></div>
+          <div class="sec-row"><span class="nm">Strategy &amp; Direction</span><div class="prog good"><i style="width:100%"></i></div><span class="pct">1 / 1</span></div>
+          <div class="sec-row"><span class="nm">Assets</span><div class="prog"><i style="width:60%"></i></div><span class="pct">3 / 5</span></div>
+          <div class="sec-row"><span class="nm">People</span><div class="prog good"><i style="width:100%"></i></div><span class="pct">7 / 7</span></div>
+          <div class="sec-row"><span class="nm">Market</span><div class="prog"><i style="width:43%"></i></div><span class="pct">3 / 7</span></div>
+          <div class="sec-row"><span class="nm">Goals</span><div class="prog"><i style="width:50%"></i></div><span class="pct">SWOT done · annual goals not set</span></div>
+          <div class="sec-row"><span class="nm">Financials</span><div class="prog"><i style="width:83%"></i></div><span class="pct">5 / 6</span></div>
+          <div style="margin-top:8px;font-size:12px;color:var(--muted)">Historic is missing Period 4. Forecasts are running on three periods of history.</div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h2>This quarter's goals</h2><span class="eyebrow">Q1 FY26</span></div>
+          <div class="goal"><span class="dot" style="background:var(--good)"></span><div><div class="g-t">Win 2 mining-works contracts</div><div class="g-m">Sales · milestone 31 Mar · Done</div></div></div>
+          <div class="goal"><span class="dot" style="background:var(--primary)"></span><div><div class="g-t">Cut debtor days from 46 to 42</div><div class="g-m">Financial · in progress · 44 days at last check</div></div></div>
+          <div class="goal"><span class="dot" style="background:var(--warn)"></span><div><div class="g-t">Hire second slab crew supervisor</div><div class="g-m">Operational · at risk · role unfilled 6 weeks</div></div></div>
+          <div class="goal"><span class="dot" style="background:var(--faint)"></span><div><div class="g-t">Launch decorative patio range</div><div class="g-m">Marketing · not started</div></div></div>
+        </div>
+      </div>
+
+      <div class="dash-grid2">
+        <div class="card">
+          <div class="card-h"><h2>AI insights</h2><span class="pill neutral">Read from your plan · 3 of 3</span></div>
+          <div class="insight"><span class="sev" style="background:var(--bad)"></span><div><div class="i-t">Overheads exceed gross margin in the historic period</div><div class="i-b">Overheads were $819,835 against gross margin of $767,473 — an operating loss of $52,362. The Year 1 plan closes the gap mainly through 6% revenue growth, not cost reduction. If growth slips, the loss returns.</div><div class="i-l"><a class="link" href="#" onclick="go('whatif');return false">Test a 3% overhead cut in What-If →</a></div></div></div>
+          <div class="insight"><span class="sev" style="background:var(--warn)"></span><div><div class="i-t">Gross margin has fallen 3.6 points over four periods</div><div class="i-b">From 42.0% to 38.4%. Variable COGS on Driveways and House Slabs grew faster than their prices. The plan assumes 39.1% — a recovery that is not yet explained by any pricing or supplier change in the plan.</div><div class="i-l"><a class="link" href="#" onclick="go('sales-products');return false">Review product pricing →</a></div></div></div>
+          <div class="insight"><span class="sev" style="background:var(--primary)"></span><div><div class="i-t">Cash is thin until the debt facility arrives</div><div class="i-b">Opening cash of $21,315 is 0.08× current liabilities. The $400k Westpac facility in Funding is dated March; a one-month delay puts February and March cash below zero.</div><div class="i-l"><a class="link" href="#" onclick="go('funding-debt');return false">Check the loan start date →</a></div></div></div>
+        </div>
+        <div>
+          <div class="next"><div><div class="eyebrow" style="color:var(--primary)">Next action</div><div class="n-t">Add Period 4 to Historic</div><div class="n-b">Your forecasts and AI insights are running on three periods. Ten minutes with your last set of accounts.</div></div><button class="btn primary" onclick="toast('Historic — not in this mockup')">Open Historic</button></div>
+          <div class="card" style="margin-top:12px">
+            <div class="card-h"><h2>Then</h2></div>
+            <div class="sec-row" style="border-bottom:1px solid var(--line)"><span style="flex:1">Finish Market → Distribution, Action Plan, Budget</span><a class="link" href="#" onclick="toast('Market — not in this mockup');return false">Go</a></div>
+            <div class="sec-row" style="border-bottom:1px solid var(--line)"><span style="flex:1">Add SWOT (needed before AI strategy runs)</span><a class="link" href="#" onclick="toast('SWOT — not in this mockup');return false">Go</a></div>
+            <div class="sec-row"><span style="flex:1">Generate your plan for the bank</span><a class="link" href="#" onclick="go('reports');return false">Reports</a></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= GUIDED: FRAMEWORK ================= -->
+    <section class="screen" id="s-framework">
+      <div class="g-shell">
+        <div class="g-top"><span class="eyebrow">Step 1 of 12 · Strategy &amp; Direction · Vision &amp; Purpose</span><span class="timer">⏱ Step time <b id="t-framework">00:00</b></span></div>
+        <div class="g-prog"><i style="width:8%"></i></div>
+        <div class="g-title"><h1>What is this business for?</h1><p class="why">Six short statements. They open your business plan, and every lender, grant assessor and investor reads them first. Rough is fine — you can polish later, and the assistant will offer a draft from what you type.</p></div>
+        <div class="g-body">
+          <div>
+            <div class="stmts" id="stmts">
+              <a href="#f1" class="on">1 Vision</a><a href="#f2" class="on">2 Mission</a><a href="#f3">3 Purpose</a><a href="#f4" class="on">4 Brand promise</a><a href="#f5">5 AI direction</a><a href="#f6" class="on">6 Field of play</a>
+              <span class="stmts-n">4 of 6 written · all six on this page</span>
+            </div>
+            <div class="field"><label for="f1">1 · Vision — where the business is going</label><div class="hint">One sentence. What does DesignOne look like in five years if the plan works?</div><textarea id="f1">To be the Illawarra's first-choice concreter for residential slabs and decorative work — known for turning up on the day we said, at the price we quoted.</textarea><div class="ai"><button class="btn sm">✦ Suggest a draft</button><span style="font-size:12px;color:var(--muted)">Uses your industry, products and goals</span></div></div>
+            <div class="field"><label for="f2">2 · Mission — what you do, for whom, every day</label><textarea id="f2">We pour, finish and guarantee residential and light-commercial concrete for builders and homeowners across Wollongong and the South Coast.</textarea></div>
+            <div class="field"><label for="f3">3 · Purpose — why the business exists beyond profit</label><textarea id="f3" placeholder="e.g. To give local tradespeople a company worth building a career in."></textarea><div class="ai"><button class="btn sm">✦ Suggest a draft</button></div></div>
+            <div class="field"><label for="f4">4 · Brand promise — what a customer can count on</label><textarea id="f4">Quoted price is the final price. Slab poured within 10 working days of site ready.</textarea></div>
+            <div class="field"><label for="f5">5 · AI direction — how the business will use AI</label><div class="hint">New in this plan. Even "we won't yet, and here's why" is a valid answer.</div><textarea id="f5" placeholder="e.g. Quoting from site photos; automated job scheduling; supplier price monitoring."></textarea><div class="ai"><button class="btn sm">✦ Suggest a draft</button></div></div>
+            <div class="field"><label for="f6">6 · Field of play — what you will and won't do</label><textarea id="f6">Residential and light-commercial slabs, driveways, patios and retaining walls within 90 minutes of Wollongong. Not: civil, high-rise, or interstate.</textarea></div>
+          </div>
+          <aside>
+            <div class="coach"><h3>What good looks like</h3><p>Specific beats grand. A vision a competitor could also claim isn't a vision.</p><p>A grant assessor is checking that you know exactly what you sell and to whom. Name the customer and the area.</p><div class="ex">"To be the best concreter in Australia" tells the reader nothing. "First-choice for residential slabs in the Illawarra" tells them where you'll win.</div></div>
+            <div class="coach" style="margin-top:12px"><h3>Where this goes</h3><p style="margin:0">Opens the <b>Executive Summary</b> in every report template. Read by the AI when it writes strategy suggestions.</p></div>
+          </aside>
+        </div>
+        <div class="g-foot"><button class="btn" onclick="go('dashboard')">← Back</button><div style="display:flex;gap:8px"><button class="btn">Save and finish later</button><button class="btn primary" onclick="toast('Real flow: → Step 2 Key People. Mockup skips to Step 6 Sales.');setTimeout(()=>go('sales-products'),900)">Save and continue →</button></div></div>
+      </div>
+    </section>
+
+    <!-- ================= GUIDED: SALES PRODUCTS ================= -->
+    <section class="screen" id="s-sales-products">
+      <div class="g-shell" style="max-width:960px">
+        <div class="g-top"><span class="eyebrow">Step 6 of 12 · Financials · Sales</span><span class="timer">⏱ Step time <b id="t-sales-products">00:00</b></span></div>
+        <div class="g-prog"><i style="width:50%"></i></div>
+        <div class="g-title"><h1>What do you sell, and roughly how much of it?</h1><p class="why">Your products or services, an average price, and how many you sold last year. Annual sales is worked out for you. Round numbers are fine — this becomes the starting point for your five-year projection.</p></div>
+        <div class="g-body" style="grid-template-columns:1fr 260px">
+          <div class="card" style="padding:0">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)"><button class="btn primary sm" onclick="addProd()">+ Add a product or service</button><span style="font-size:12px;color:var(--muted)"><span id="pCount"></span> · new ones appear at the top</span></div>
+            <div class="tbl-scroll"><table id="prodTable">
+              <thead><tr><th style="width:44%">Product or service</th><th class="r">Average price ($)</th><th class="r">Units last year</th><th class="r">Annual sales ($)</th><th></th></tr></thead>
+              <tbody></tbody>
+              <tfoot><tr class="total"><td>Total</td><td></td><td class="r num" id="pUnits">—</td><td class="r num" id="pTotal">—</td><td></td></tr></tfoot>
+            </table></div>
+            <div style="padding:8px 12px;font-size:12px;color:var(--muted);border-top:1px solid var(--line)">Historic revenue was <b class="num">$1,997,000</b> — your products should land near that.</div>
+          </div>
+          <aside>
+            <div class="coach"><h3>What good looks like</h3><p>Between 3 and 12 lines. If you have 40 products, group them the way your customers buy them.</p><p>"Units" can be jobs, hours, slabs, square metres — whatever you quote in.</p><div class="ex">A concreter's "unit" is usually a job. Average job price × jobs per year is more accurate than m² for a slab business.</div></div>
+            <div class="coach" style="margin-top:12px"><h3>Check</h3><p id="pCheck" style="margin:0">Your total is being compared to last year's revenue.</p></div>
+          </aside>
+        </div>
+        <div class="g-foot"><button class="btn" onclick="go('framework')">← Back</button><div style="display:flex;gap:8px"><button class="btn">Save and finish later</button><button class="btn primary" onclick="go('funding-debt')">Save and continue →</button></div></div>
+      </div>
+    </section>
+
+    <!-- ================= GUIDED: FUNDING DEBT ================= -->
+    <section class="screen" id="s-funding-debt">
+      <div class="g-shell">
+        <div class="g-top"><span class="eyebrow">Step 9 of 12 · Financials · Funding</span><span class="timer">⏱ Step time <b id="t-funding-debt">00:00</b></span></div>
+        <div class="g-prog"><i style="width:75%"></i></div>
+        <div class="g-title"><h1>Where is the money coming from?</h1><p class="why">Tick everything that applies. You'll only be asked about the ones you tick. Each one changes your cash flow and balance sheet — we do that arithmetic.</p></div>
+        <div class="ftypes">
+          <label class="ftype"><input type="checkbox" checked><div><b>My own money</b><span>Cash or a loan from an owner</span></div><em>1 entered</em></label>
+          <label class="ftype on"><input type="checkbox" checked><div><b>A loan</b><span>Bank, equipment or vehicle finance, overdraft</span></div><em>2 entered · this step</em></label>
+          <label class="ftype"><input type="checkbox"><div><b>An investor</b><span>Selling a share of the business</span></div><em></em></label>
+          <label class="ftype"><input type="checkbox"><div><b>A grant</b><span>Government or industry money you don't repay</span></div><em></em></label>
+          <label class="ftype"><input type="checkbox"><div><b>Revenue-based finance</b><span>Repaid as a share of sales</span></div><em></em></label>
+        </div>
+        <h2 style="margin-top:22px">Your loans</h2>
+        <div class="g-body">
+          <div>
+            <div class="card" style="margin-bottom:14px">
+              <div class="card-h"><h2>Loan 1 of 2</h2><span class="pill good">Complete</span></div>
+              <div class="grid2">
+                <div class="field"><label>Lender</label><input value="Westpac Business"></div>
+                <div class="field"><label>Loan type</label><select><option>Term loan</option><option>Equipment finance</option><option>Vehicle finance</option><option>Overdraft / line of credit</option><option>Director loan</option></select></div>
+              </div>
+              <div class="grid3">
+                <div class="field"><label>Amount borrowed ($)</label><input class="num" value="400,000"></div>
+                <div class="field"><label>Interest rate (% p.a.)</label><input class="num" value="8.25"></div>
+                <div class="field"><label>Term (months)</label><input class="num" value="60"></div>
+              </div>
+              <div class="grid3">
+                <div class="field"><label>Repayment type</label><select><option>Principal &amp; interest</option><option>Interest only</option></select></div>
+                <div class="field"><label>Repayment frequency</label><select><option>Monthly</option><option>Fortnightly</option><option>Quarterly</option></select></div>
+                <div class="field"><label>First drawdown</label><input type="month" value="2026-03"></div>
+              </div>
+              <div class="field" style="margin-bottom:0"><label>Residual / balloon at end ($) <span style="color:var(--muted);font-weight:400">— optional</span></label><input class="num" value="0" style="max-width:220px"></div>
+              <div style="margin-top:12px;padding:10px 12px;background:var(--surface-2);border-radius:4px;font-size:12.5px;color:var(--muted)">Worked out for you: repayment <b class="num" style="color:var(--text)">$8,157 / month</b> · Year 1 interest <b class="num" style="color:var(--text)">$26,390</b> · closing balance Year 1 <b class="num" style="color:var(--text)">$331,600</b></div>
+            </div>
+            <div class="card" style="border-style:dashed;text-align:center;padding:18px"><button class="btn">+ Add another loan</button><div style="font-size:12px;color:var(--muted);margin-top:6px">Loan 2 (Toyota Finance · HiLux · $58,000) is saved.</div></div>
+                      </div>
+          <aside>
+            <div class="coach"><h3>What good looks like</h3><p>Enter what the lender has offered, not what you hope for. A plan that assumes finance you don't have yet should say so in the funding section of the report.</p><p>Vehicle and equipment finance counts here even if the dealer arranged it.</p><div class="ex">If the facility isn't approved yet, set the drawdown month to when you expect it and note "subject to approval" — the report will carry that wording.</div></div>
+            <div class="coach" style="margin-top:12px"><h3>Where this goes</h3><p style="margin:0">Cash Flow → Financing; Balance Sheet → Bank Loans; P&amp;L → Interest Expense. Funding-linked equipment lands in Fixed Assets automatically.</p></div>
+          </aside>
+        </div>
+        <div class="g-foot"><button class="btn" onclick="go('sales-products')">← Back</button><div style="display:flex;gap:8px"><button class="btn">Save and finish later</button><button class="btn primary" onclick="go('forecast')">Save and continue →</button></div></div>
+      </div>
+    </section>
+
+    <!-- ================= GUIDED: FORECAST REVIEW ================= -->
+    <section class="screen" id="s-forecast">
+      <div class="g-shell" style="max-width:960px">
+        <div class="g-top"><span class="eyebrow">Step 10 of 12 · Review your forecast</span><span class="timer">⏱ Step time <b id="t-forecast">00:00</b></span></div>
+        <div class="g-prog"><i style="width:92%"></i></div>
+        <div class="g-title"><h1>Here's the five-year picture. Does it look like your business?</h1><p class="why">Everything you've entered, run through the forecast. You're not checking arithmetic — you're checking whether the story is believable. Three questions below.</p></div>
+
+        <div class="card" style="margin-top:18px">
+          <div class="card-h"><h2>Profit &amp; Loss — 5 year projection ($)</h2><div style="display:flex;gap:8px"><button class="btn sm">Full P&amp;L</button><button class="btn sm">Balance Sheet</button><button class="btn sm">Cash Flow</button></div></div>
+          <div class="tbl-wrap"><table class="num">
+            <thead><tr><th></th><th class="r">Historic</th><th class="r">Year 1</th><th class="r">Year 2</th><th class="r">Year 3</th><th class="r">Year 4</th><th class="r">Year 5</th></tr></thead>
+            <tbody>
+              <tr><td>Revenue</td><td class="r">1,997,000</td><td class="r">2,119,240</td><td class="r">2,289,000</td><td class="r">2,472,000</td><td class="r">2,645,000</td><td class="r">2,804,000</td></tr>
+              <tr><td>Cost of goods</td><td class="r">1,229,527</td><td class="r">1,290,860</td><td class="r">1,378,000</td><td class="r">1,470,000</td><td class="r">1,560,000</td><td class="r">1,640,000</td></tr>
+              <tr class="total"><td>Gross margin</td><td class="r">767,473</td><td class="r">828,380</td><td class="r">911,000</td><td class="r">1,002,000</td><td class="r">1,085,000</td><td class="r">1,164,000</td></tr>
+              <tr><td>Overheads</td><td class="r">819,835</td><td class="r">834,393</td><td class="r">851,000</td><td class="r">876,000</td><td class="r">902,000</td><td class="r">929,000</td></tr>
+              <tr><td>Depreciation</td><td class="r">—</td><td class="r">1,750</td><td class="r">13,400</td><td class="r">13,400</td><td class="r">13,400</td><td class="r">13,400</td></tr>
+              <tr class="total"><td>Operating profit</td><td class="r" style="color:var(--bad)">−52,362</td><td class="r" style="color:var(--bad)">−7,763</td><td class="r">46,600</td><td class="r">112,600</td><td class="r">169,600</td><td class="r">221,600</td></tr>
+              <tr><td>Interest</td><td class="r">18,638</td><td class="r">26,390</td><td class="r">21,900</td><td class="r">17,100</td><td class="r">11,900</td><td class="r">6,300</td></tr>
+              <tr><td>Extraordinary &amp; other</td><td class="r">—</td><td class="r">129,135</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">—</td></tr>
+              <tr><td>Tax</td><td class="r">—</td><td class="r">14,247</td><td class="r">6,175</td><td class="r">23,875</td><td class="r">39,425</td><td class="r">53,825</td></tr>
+              <tr class="total"><td>Net profit</td><td class="r" style="color:var(--bad)">−71,000</td><td class="r">80,735</td><td class="r">18,525</td><td class="r">71,625</td><td class="r">118,275</td><td class="r">161,475</td></tr>
+            </tbody>
+          </table></div>
+        </div>
+
+        <div class="grid2" style="margin-top:14px">
+          <div class="card">
+            <div class="card-h"><h2>Revenue and net profit</h2></div>
+            <svg viewBox="0 0 420 170" width="100%" aria-label="Revenue bars and net profit line, historic plus five years">
+              <line x1="40" y1="140" x2="410" y2="140" stroke="var(--line-strong)"/>
+              <line x1="40" y1="20" x2="410" y2="20" stroke="var(--line)" stroke-dasharray="2 3"/><text x="0" y="24">$3.0M</text>
+              <line x1="40" y1="80" x2="410" y2="80" stroke="var(--line)" stroke-dasharray="2 3"/><text x="0" y="84">$1.5M</text>
+              <text x="0" y="144">$0</text>
+              <g fill="#1F6FCB" opacity=".85">
+                <rect x="55" y="60" width="30" height="80"/><rect x="115" y="55" width="30" height="85"/><rect x="175" y="48" width="30" height="92"/><rect x="235" y="41" width="30" height="99"/><rect x="295" y="34" width="30" height="106"/><rect x="355" y="28" width="30" height="112"/>
+              </g>
+              <polyline fill="none" stroke="#2E7D32" stroke-width="2.5" points="70,142.8 130,136.8 190,139.3 250,137.1 310,135.3 370,133.5"/>
+              <g fill="#2E7D32"><circle cx="70" cy="142.8" r="3"/><circle cx="130" cy="136.8" r="3"/><circle cx="190" cy="139.3" r="3"/><circle cx="250" cy="137.1" r="3"/><circle cx="310" cy="135.3" r="3"/><circle cx="370" cy="133.5" r="3"/></g>
+              <text x="58" y="156">Hist</text><text x="122" y="156">Y1</text><text x="182" y="156">Y2</text><text x="242" y="156">Y3</text><text x="302" y="156">Y4</text><text x="362" y="156">Y5</text>
+              <rect x="40" y="162" width="10" height="6" fill="#1F6FCB"/><text x="54" y="168">Revenue</text><line x1="120" y1="165" x2="132" y2="165" stroke="#2E7D32" stroke-width="2.5"/><text x="136" y="168">Net profit</text>
+            </svg>
+          </div>
+          <div class="card">
+            <div class="card-h"><h2>Three things to check</h2></div>
+            <label class="chk"><input type="checkbox" checked> <span><b>Year 1 profit is $80,735 but operating profit is a loss.</b> The gain comes from a $129,135 extraordinary item (insurance settlement). Is that real and is it cash? If not, Year 1 is a loss year.</span></label>
+            <label class="chk" style="margin-top:8px"><input type="checkbox"> <span><b>Overheads grow 2% a year while revenue grows 7%.</b> That's where all the profit growth comes from. Can you really hold overheads that flat while adding a second crew?</span></label>
+            <label class="chk" style="margin-top:8px"><input type="checkbox"> <span><b>Gross margin recovers from 38.4% to 39.1% in Year 1.</b> Nothing in Sales or COGS explains the recovery yet. Either add the price rise, or set Year 1 margin to historic.</span></label>
+            <div class="review-q"><button class="btn primary" onclick="go('reports')">Looks right — continue →</button><button class="btn" onclick="go('whatif')">Something's off — open What-If</button></div>
+          </div>
+        </div>
+        <div class="g-foot"><button class="btn" onclick="go('funding-debt')">← Back</button><span style="font-size:12px;color:var(--muted)">Step 11 drafts your annual goals from these numbers · Step 12 generates your report.</span></div>
+      </div>
+    </section>
+
+    <!-- ================= WHAT-IF PLANNER ================= -->
+    <section class="screen" id="s-whatif">
+      <div class="page-h">
+        <div><div class="eyebrow">Financials · What-If Planner</div><h1>What if…?</h1><div class="sub">Move a lever and watch profit and cash change. Set a target and press <b>Suggest</b> to have the planner find the levers for you. Nothing in your plan moves until you say so.</div></div>
+        <div style="display:flex;gap:8px"><button class="btn" onclick="resetWI()">Reset</button><button class="btn">Saved scenarios (2)</button></div>
+      </div>
+
+      <div class="outcomes">
+        <div class="card raised out">
+          <div class="out-h"><div><div class="eyebrow">Year 1 operating profit</div><div class="out-now">Now <b class="num">−$7,763</b></div></div><span class="pill neutral" id="p-status">No change yet</span></div>
+          <div class="out-big num" id="p-val">−$7,763</div>
+          <div class="out-delta num" id="p-delta">With these changes</div>
+          <div class="out-parts" id="p-parts"></div>
+          <div class="out-target"><label>Target</label><input class="num" id="p-target" value="100,000" onchange="wi()"><button class="btn sm primary" onclick="suggest('p')">✦ Suggest</button></div>
+        </div>
+        <div class="card raised out">
+          <div class="out-h"><div><div class="eyebrow">Lowest cash in Year 1 · February</div><div class="out-now">Now <b class="num">$18,400</b></div></div><span class="pill neutral" id="c-status">No change yet</span></div>
+          <div class="out-big num" id="c-val">$18,400</div>
+          <div class="out-delta num" id="c-delta">With these changes</div>
+          <div class="out-parts" id="c-parts"></div>
+          <div class="out-target"><label>Target</label><input class="num" id="c-target" value="50,000" onchange="wi()"><button class="btn sm primary" onclick="suggest('c')">✦ Suggest</button></div>
+        </div>
+        <div class="card out-actions">
+          <div class="eyebrow">When it looks right</div>
+          <button class="btn primary" style="width:100%;justify-content:center;margin-top:10px" onclick="openExit('plan')">Make this the plan</button>
+          <div class="out-note">Updates Sales, Overheads and Settings — you confirm each change first.</div>
+          <button class="btn" style="width:100%;justify-content:center;margin-top:10px" onclick="openExit('goals')">Turn into goals</button>
+          <div class="out-note">One goal per lever, with an owner and a quarter.</div>
+          <div id="r-insight" class="out-insight"></div>
+        </div>
+      </div>
+
+      <div class="levers">
+        <div class="card">
+          <div class="card-h"><h2>Profit levers</h2><span class="eyebrow">also move cash</span></div>
+          <div class="lv"><div class="lv-n">Price</div><input type="range" min="-10" max="10" step="0.5" value="0" data-k="price" oninput="wi()"><div class="lv-v num" id="v-price">0%</div><div class="lv-t" id="t-price"></div></div>
+          <div class="lv"><div class="lv-n">Volume</div><input type="range" min="-20" max="20" step="1" value="0" data-k="vol" oninput="wi()"><div class="lv-v num" id="v-vol">0%</div><div class="lv-t" id="t-vol"></div></div>
+          <div class="lv"><div class="lv-n">Cost of goods</div><input type="range" min="-10" max="10" step="0.5" value="0" data-k="cogs" oninput="wi()"><div class="lv-v num" id="v-cogs">0%</div><div class="lv-t" id="t-cogs"></div></div>
+          <div class="lv"><div class="lv-n">Overheads</div><input type="range" min="-10" max="10" step="0.5" value="0" data-k="oh" oninput="wi()"><div class="lv-v num" id="v-oh">0%</div><div class="lv-t" id="t-oh"></div></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h2>Cash levers</h2><span class="eyebrow">move cash, not profit</span></div>
+          <div class="lv"><div class="lv-n">Debtor days</div><input type="range" min="20" max="70" step="1" value="42" data-k="dd" oninput="wi()"><div class="lv-v num" id="v-dd">42</div><div class="lv-t" id="t-dd"></div></div>
+          <div class="lv"><div class="lv-n">Stock days</div><input type="range" min="0" max="30" step="1" value="5" data-k="sd" oninput="wi()"><div class="lv-v num" id="v-sd">5</div><div class="lv-t" id="t-sd"></div></div>
+          <div class="lv"><div class="lv-n">Creditor days</div><input type="range" min="0" max="60" step="1" value="15" data-k="cd" oninput="wi()"><div class="lv-v num" id="v-cd">15</div><div class="lv-t" id="t-cd"></div></div>
+          <div class="lv-help">Days are how long money sits with someone else. Fewer debtor and stock days, and more creditor days, all put cash back in your account.</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px" id="wiAdvanced" hidden>
+        <div class="card-h"><h2>Baseline vs adjusted — Year 1</h2><span style="font-size:12px;color:var(--muted)">Advanced view</span></div>
+        <div class="grid2"><table class="num" style="font-size:12.5px"><thead><tr><th></th><th class="r">Baseline</th><th class="r">Adjusted</th><th class="r">Var</th></tr></thead><tbody id="wiTable"></tbody></table>
+        <div><div class="row"><span>Year 1 cash flow improvement</span><b class="num" id="r-cash">+$0</b></div><div class="row"><span>Year 1 operating profit improvement</span><b class="num" id="r-ebit">+$0</b></div><div class="row"><span>Adjusted revenue</span><b class="num" id="r-rev"></b></div><div class="row"><span>Adjusted operating profit</span><b class="num" id="r-ebitabs"></b></div><div class="row"><span>Lowest cash in Year 1</span><b class="num" id="r-low"></b></div></div></div>
+      </div>
+
+      <div class="modal-bg" id="exitModal" hidden onclick="if(event.target===this)closeExit()">
+        <div class="modal">
+          <div class="card-h"><h2 id="exitTitle"></h2><button class="link" onclick="closeExit()">Close</button></div>
+          <div id="exitBody"></div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button class="btn" onclick="closeExit()">Cancel</button><button class="btn primary" id="exitConfirm" onclick="confirmExit()"></button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= REPORTS ================= -->
+    <section class="screen" id="s-reports">
+      <div class="page-h">
+        <div><div class="eyebrow">Reports</div><h1>Generate your business plan</h1><div class="sub">Pick who it's for. The template decides which sections appear and how the numbers are presented, and follows the requirements for your country (set in Plan Settings). Every figure comes from your plan — nothing is retyped.</div></div>
+        <div style="display:flex;gap:8px"><button class="btn">Edit template</button><button class="btn">Download Word</button><button class="btn primary">Download PDF</button></div>
+      </div>
+      <div class="tpl" id="tpl">
+        <button class="on" onclick="setTpl(0)"><div class="t-n">Bank or lender</div><div class="t-d">Serviceability first: cash flow, debt cover, security. Conservative tone.</div><div class="t-m">14 sections · ~22 pages</div></button>
+        <button onclick="setTpl(1)"><div class="t-n">Government loan application</div><div class="t-d">Follows the lender's required outline. 3-year projections, monthly Year 1.</div><div class="t-m">11 sections · ~18 pages</div></button>
+        <button onclick="setTpl(2)"><div class="t-n">Self-Employment Assistance</div><div class="t-d">Meets the program's plan requirements. Mentor sign-off page included.</div><div class="t-m">12 sections · ~16 pages</div></button>
+        <button onclick="setTpl(3)"><div class="t-n">Investor pack</div><div class="t-d">Growth story, unit economics, cap table, use of funds, 5-year exit view.</div><div class="t-m">13 sections · ~24 pages</div></button>
+      </div>
+      <div class="rep">
+        <div class="card">
+          <div class="card-h"><h2>Sections</h2><span class="eyebrow" id="tplName">Bank or lender</span></div>
+          <ul class="toc" id="toc"></ul>
+          <div style="margin-top:12px;font-size:12px;color:var(--muted)">Struck-through sections are excluded by this template. Toggle any section in <b>Edit template</b>.</div>
+        </div>
+        <div class="doc" id="doc"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="proto min" id="proto">
+  <div class="p-h" onclick="document.getElementById('proto').classList.toggle('min')"><span>Prototype · screens</span><span>▾</span></div>
+  <div class="p-b" id="protoList"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- navigation model ---------- */
+const NAV=[
+  {g:'',items:[{id:'dashboard',n:'Dashboard',ic:'▦'}]},
+  {g:'Strategy & Direction',items:[{id:'framework',n:'Vision & Purpose',step:1}]},
+  {g:'Assets',items:[{id:'outlets',n:'Outlets'},{id:'social',n:'Social Media'},{id:'membership',n:'Membership'},{id:'ip',n:'Intellectual Property'},{id:'equipment',n:'Capital Equipment'}],adv:true},
+  {g:'People',items:[{id:'people',n:'Key People',step:2}]},
+  {g:'Market',items:[{id:'marketing',n:'Marketing',step:3},{id:'competitors',n:'Competitors'}]},
+  {g:'Goals',items:[{id:'swot',n:'SWOT',step:4},{id:'goals',n:'Goals',step:11,tag:'AI-drafted'}]},
+  {g:'Financials',items:[{id:'historic',n:'Historic',step:5},{id:'sales-products',n:'Sales',step:6},{id:'cogs',n:'COGS',step:7},{id:'overheads',n:'Overheads',step:8},{id:'funding-debt',n:'Funding',step:9},{id:'extraordinary',n:'Extraordinary'},{id:'whatif',n:'What-If Planner',ic:'⇄'}]},
+  {g:'Forecasts',items:[{id:'forecast',n:'Review forecast',step:10,advN:'Profit & Loss'},{id:'breakeven',n:'Break-Even'},{id:'bs',n:'Balance Sheet'},{id:'cf',n:'Cash Flow'},{id:'ue',n:'Unit Economics'}]},
+  {g:'Strategy (AI)',items:[{id:'ai',n:'Recommendations',tag:'soon'}]},
+  {g:'Reports',items:[{id:'reports',n:'Business plan',step:12,ic:'▤'}]},
+];
+const SCREENS={dashboard:'Dashboard',framework:'Guided · Vision & Purpose',"sales-products":'Guided · Sales products',"funding-debt":'Guided · Funding · Debt',forecast:'Guided · Forecast review',whatif:'What-If Planner',reports:'Reports'};
+const DONE=new Set([1,2,3,4,5,6,7,8,9]); // steps completed in the sample plan
+let mode='guided', current='dashboard';
+
+function renderNav(){
+  const sb=document.getElementById('sidebar'); sb.innerHTML='';
+  NAV.forEach(grp=>{
+    const g=document.createElement('div'); g.className='grp';
+    if(grp.g){const h=document.createElement('div');h.className='grp-h';h.innerHTML=`<span>${grp.g}</span><span class="chev">▾</span>`;h.onclick=()=>g.classList.toggle('closed');g.appendChild(h);}
+    const wrap=document.createElement('div');wrap.className='items';
+    grp.items.forEach(it=>{
+      if(mode==='guided' && !it.step && !it.ic) return; // guided nav shows the path + tools only
+      const el=document.createElement('div'); el.className='item'+(it.id===current?' active':'')+(it.step&&DONE.has(it.step)?' done':'');
+      const label = (mode==='advanced' && it.advN) ? it.advN : it.n;
+      const lead = (mode==='guided' && it.step) ? `<span class="stepno">${it.step}</span>` : `<span class="ic">${it.ic||'▸'}</span>`;
+      el.innerHTML=`${lead}<span>${label}</span>${it.tag?`<span class="tag">${it.tag}</span>`:''}`;
+      el.onclick=()=>go(it.id); wrap.appendChild(el);
+    });
+    if(!wrap.children.length) return;
+    g.appendChild(wrap); sb.appendChild(g);
+  });
+  const foot=document.createElement('div');foot.className='foot';
+  foot.innerHTML= mode==='guided' ? '<b>Guided path</b> — 12 steps, 9 done. Switch to Advanced to see every module.' : '<b>Advanced</b> — every module and assumption. ⚙ Plan Settings lives behind the gear icon.';
+  sb.appendChild(foot);
+}
+function setMode(m){mode=m;document.getElementById('modeG').classList.toggle('on',m==='guided');document.getElementById('modeA').classList.toggle('on',m==='advanced');renderNav();
+  document.getElementById('wiAdvanced').hidden=(m!=='advanced');}
+
+/* ---------- screens + step timers ---------- */
+const timers={}; let tick=null;
+function go(id){
+  if(!SCREENS[id]){toast(`${labelFor(id)} — not in this mockup`);return;}
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  document.getElementById('s-'+id).classList.add('on');
+  current=id; renderNav(); renderProto(); document.getElementById('main').scrollTop=0;
+  if(document.getElementById('t-'+id)){ if(!timers[id]) timers[id]={start:Date.now(),acc:0}; else timers[id].start=Date.now(); }
+  clearInterval(tick); tick=setInterval(updTimers,500); updTimers();
+}
+function labelFor(id){for(const g of NAV)for(const it of g.items)if(it.id===id)return it.n;return id}
+function fmtT(ms){const s=Math.floor(ms/1000);return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
+function updTimers(){for(const id in timers){const t=timers[id];const live=(current===id)?Date.now()-t.start:0;if(current!==id&&t.start){t.acc+=Date.now()-t.start;t.start=0;}const tot=t.acc+live;const el=document.getElementById('t-'+id);if(el)el.textContent=fmtT(tot);const p=document.getElementById('pt-'+id);if(p)p.textContent=fmtT(tot);}}
+function renderProto(){const l=document.getElementById('protoList');l.innerHTML='';Object.entries(SCREENS).forEach(([id,n])=>{const d=document.createElement('div');d.className='ps'+(id===current?' on':'');d.innerHTML=`<span>${n}</span><span class="t" id="pt-${id}">${timers[id]?fmtT(timers[id].acc+(timers[id].start?Date.now()-timers[id].start:0)):''}</span>`;d.onclick=()=>go(id);l.appendChild(d);});const n=document.createElement('div');n.className='note';n.textContent='Step times accumulate while a Guided screen is open. Menu items without a screen show a notice.';l.appendChild(n);}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._x);t._x=setTimeout(()=>t.classList.remove('show'),m.length>60?4200:1800);}
+
+/* ---------- sales products table ---------- */
+const PRODS=[['Carports',6800,22],['Concrete Foundations',18500,14],['Decorative Concrete Patios',9200,26],['Driveways',7400,58],['Foot Paths',2900,41],['Garage, Granny Flat & Home Extension Slabs',14200,21],['House Slab',31500,17],['Mining Works',68000,4],['Retaining Walls',11800,19],['Shed and Tank Concrete Slabs',6100,33]];
+const fmt=n=>Math.round(n).toLocaleString('en-AU');
+function renderProds(){const tb=document.querySelector('#prodTable tbody');tb.innerHTML='';PRODS.forEach((p,i)=>{const tr=document.createElement('tr');tr.innerHTML=`<td><input style="text-align:left" value="${p[0]}"></td><td class="r"><input class="num" value="${fmt(p[1])}" onchange="upd(${i},1,this)"></td><td class="r"><input class="num" value="${p[2]}" onchange="upd(${i},2,this)"></td><td class="r num" id="ps-${i}">${fmt(p[1]*p[2])}</td><td style="width:32px;text-align:center"><button class="link" title="Remove" onclick="PRODS.splice(${i},1);renderProds()">×</button></td>`;tb.appendChild(tr);});totals();}
+function upd(i,k,el){PRODS[i][k]=parseFloat(String(el.value).replace(/[^0-9.]/g,''))||0;el.value=k===1?fmt(PRODS[i][1]):PRODS[i][2];document.getElementById('ps-'+i).textContent=fmt(PRODS[i][1]*PRODS[i][2]);totals();}
+function totals(){const t=PRODS.reduce((a,p)=>a+p[1]*p[2],0),u=PRODS.reduce((a,p)=>a+p[2],0);document.getElementById('pTotal').textContent='$'+fmt(t);document.getElementById('pUnits').textContent=fmt(u);document.getElementById('pCount').textContent=PRODS.length+' products';const d=(t-1997000)/1997000*100;const c=document.getElementById('pCheck');c.innerHTML=Math.abs(d)<10?`<span class="pill good">Looks right</span> Your products total <b class="num">$${fmt(t)}</b>, ${d>=0?'+':''}${d.toFixed(1)}% on last year. That's a believable starting point.`:`<span class="pill warn">Check this</span> Your products total <b class="num">$${fmt(t)}</b> — ${d>=0?'+':''}${d.toFixed(0)}% against last year's $1,997,000. Missing a product, or did the business change a lot?`;}
+function addProd(){PRODS.unshift(['',0,0]);renderProds();const tr=document.querySelector('#prodTable tbody tr');tr.classList.add('new');const inp=tr.querySelector('input');inp.placeholder='Type the product or service name';inp.focus();document.querySelector('.tbl-scroll').scrollTop=0;}
+
+/* ---------- what-if engine (Year 1, simplified for the mockup) ---------- */
+const B={rev:2119240,vcogs:1245410,fcogs:45450,oh:834393,dep:1750,dd:42,sd:5,cd:15,ncf:520501,units:255,low:18400,ebit:-7763};
+const money=n=>(n<0?'−':'')+'$'+fmt(Math.abs(n));
+const pct=(x,d=1)=>(x>0?'+':'')+x.toFixed(d).replace(/\.0$/,'')+'%';
+const LEV=[['price','Price'],['vol','Volume'],['cogs','Cost of goods'],['oh','Overheads'],['dd','Debtor days'],['sd','Stock days'],['cd','Creditor days']];
+let last={}; const num=id=>parseFloat(String(document.getElementById(id).value).replace(/[^0-9.-]/g,''))||0;
+function setL(k,v){document.querySelector(`[data-k="${k}"]`).value=v;}
+function wi(){
+  const g=k=>parseFloat(document.querySelector(`[data-k="${k}"]`).value);
+  const p=g('price')/100,v=g('vol')/100,c=g('cogs')/100,o=g('oh')/100,dd=g('dd'),sd=g('sd'),cd=g('cd');
+  document.getElementById('v-price').textContent=pct(p*100);document.getElementById('v-vol').textContent=pct(v*100,0);document.getElementById('v-cogs').textContent=pct(c*100);document.getElementById('v-oh').textContent=pct(o*100);
+  document.getElementById('v-dd').textContent=dd;document.getElementById('v-sd').textContent=sd;document.getElementById('v-cd').textContent=cd;
+  const rev=B.rev*(1+p)*(1+v), vc=B.vcogs*(1+v)*(1+c), oh=B.oh*(1+o);
+  const ebitB=B.rev-B.vcogs-B.fcogs-B.oh-B.dep, ebitA=rev-vc-B.fcogs-oh-B.dep, dE=ebitA-ebitB;
+  const arB=B.rev*B.dd/365, arA=rev*dd/365, invB=B.vcogs*B.sd/365, invA=vc*sd/365, apB=(B.vcogs+B.oh)*B.cd/365, apA=(vc+oh)*cd/365;
+  const dAR=arA-arB,dInv=invA-invB,dAP=apA-apB, dWC=-dAR-dInv+dAP, dCash=dE*(1-0.25)+dWC, low=B.low+dWC+dE*0.75/6;
+  const eb={price:B.rev*p,vol:(B.rev-B.vcogs)*v,cogs:-B.vcogs*c,oh:-B.oh*o};
+  const ddOnly=-(rev*(dd-B.dd)/365), sdOnly=-(vc*(sd-B.sd)/365), cdOnly=(vc+oh)*(cd-B.cd)/365; const growthWC=dWC-ddOnly-sdOnly-cdOnly;
+  const cs={price:eb.price*0.75/6,vol:eb.vol*0.75/6,cogs:eb.cogs*0.75/6,oh:eb.oh*0.75/6,dd:ddOnly,sd:sdOnly,cd:cdOnly,growth:growthWC};
+  last={p,v,c,o,dd,sd,cd,rev,vc,oh,ebitA,ebitB,dE,dCash,low};
+  const T=(id,txt)=>document.getElementById(id).textContent=txt;
+  T('t-price', p? `${money(7400*p)} on an average driveway · ${money(31500*p)} on a house slab · ${money(B.rev*p)} a year`:'' );
+  T('t-vol', v? `${Math.abs(Math.round(B.units*v))} ${v>0?'more':'fewer'} jobs a year — about ${Math.max(1,Math.abs(Math.round(B.units*v/12)))} a month`:'' );
+  T('t-cogs', c? `${money(-B.vcogs*c)} a year on materials, subbies and crew`:'' );
+  T('t-oh', o? `${money(-B.oh*o)} a year · ${money(-B.oh*o/12)} a month`:'' );
+  T('t-dd', dd!==B.dd? `Customers pay ${Math.abs(dd-B.dd)} days ${dd<B.dd?'sooner':'later'} — ${money(-dAR)} ${dd<B.dd?'back in the bank':'tied up'}`:'' );
+  T('t-sd', sd!==B.sd? `${money(-dInv)} of materials ${sd<B.sd?'released':'tied up'}`:'' );
+  T('t-cd', cd!==B.cd? `${money(dAP)} ${cd>B.cd?'kept in the bank longer':'paid out sooner'}`:'' );
+  // outcome tiles
+  const tile=(pre,val,now,delta,parts,target,unit)=>{
+    const V=document.getElementById(pre+'-val');V.textContent=money(val);V.className='out-big num '+(val>=0?'':'neg');
+    document.getElementById(pre+'-delta').innerHTML=delta?`<b class="${delta>0?'pos':'neg'}">${delta>0?'+':''}${money(delta)}</b> with these changes`:'With these changes';
+    document.getElementById(pre+'-parts').innerHTML=[...LEV,['growth','Growth ties up cash']].filter(([k])=>Math.abs(parts[k]||0)>0.5).map(([k,n])=>`<span>${n} <b class="${parts[k]>0?'pos':'neg'}">${parts[k]>0?'+':''}${money(parts[k])}</b></span>`).join('');
+    const st=document.getElementById(pre+'-status');
+    if(!delta){st.textContent='No change yet';st.className='pill neutral';}
+    else if(target!==null){const ok=val>=target;st.textContent=ok?`Target reached · ${money(val-target)} to spare`:`${money(target-val)} short of target`;st.className='pill '+(ok?'good':'warn');}
+    else{st.textContent=delta>0?'Better':'Worse';st.className='pill '+(delta>0?'good':'bad');}
+  };
+  tile('p',ebitA,B.ebit,dE,eb,num('p-target'));
+  tile('c',low,B.low,low-B.low,cs,num('c-target'));
+  // insight
+  let msg='';
+  if(ebitA>=0&&ebitB<0)msg+='<b>Year 1 goes from an operating loss to a profit.</b> ';
+  if(v>0.08)msg+=`<span style="color:var(--warn)">Reality check: ${Math.round(B.units*v)} extra jobs needs a third crew — yours are at capacity from March.</span> `;
+  if(dd<30)msg+='<span style="color:var(--warn)">Reality check: builders rarely pay under 30 days.</span> ';
+  if(p>0.05)msg+='<span style="color:var(--warn)">Reality check: over 5% on price usually costs jobs — try pairing with volume −2%.</span> ';
+  document.getElementById('r-insight').innerHTML=msg;
+  // advanced
+  const rc=document.getElementById('r-cash'),re=document.getElementById('r-ebit');
+  rc.textContent=(dCash>=0?'+':'')+money(dCash);rc.className='num '+(dCash>0?'pos':dCash<0?'neg':'');re.textContent=(dE>=0?'+':'')+money(dE);re.className='num '+(dE>0?'pos':dE<0?'neg':'');
+  document.getElementById('r-rev').textContent=money(rev);document.getElementById('r-ebitabs').textContent=money(ebitA);document.getElementById('r-low').textContent=money(low)+' · Feb';
+  const rows=[['Revenue',B.rev,rev],['Variable COGS',B.vcogs,vc],['Gross profit',B.rev-B.vcogs-B.fcogs,rev-vc-B.fcogs],['Overheads',B.oh,oh],['Operating profit',ebitB,ebitA],['Accounts receivable',arB,arA],['Inventory / WIP',invB,invA],['Accounts payable',apB,apA],['Net cash flow',B.ncf,B.ncf+dCash]];
+  document.getElementById('wiTable').innerHTML=rows.map(r=>{const d=r[2]-r[1];return `<tr><td>${r[0]}</td><td class="r">${money(r[1])}</td><td class="r">${money(r[2])}</td><td class="r ${d>0?'pos':d<0?'neg':''}">${d?((d>0?'+':'')+money(d)):'—'}</td></tr>`}).join('');
+}
+// Suggest: smallest, most realistic lever set that reaches the target (mockup solver)
+function suggest(which){
+  if(which==='p'){const need=num('p-target')-B.ebit; if(need<=0){toast('Already there — target is below current profit.');return;}
+    let price=Math.min(5,Math.ceil(need/B.rev*100*2)/2); let got=B.rev*price/100; let oh=0,cogs=0;
+    if(got<need){oh=-Math.min(5,Math.ceil((need-got)/B.oh*100*2)/2);got+= -B.oh*oh/100;}
+    if(got<need){cogs=-Math.min(3,Math.ceil((need-got)/B.vcogs*100*2)/2);}
+    setL('price',price);setL('oh',oh);setL('cogs',cogs);wi();
+    toast(`Suggested: price ${pct(price)}${oh?`, overheads ${pct(oh)}`:''}${cogs?`, cost of goods ${pct(cogs)}`:''} — price first, because it costs nothing to try.`);
+  } else {const need=num('c-target')-B.low; if(need<=0){toast('Already there — cash never drops below that.');return;}
+    const perDay=B.rev/365; let days=Math.ceil(need/perDay); let dd=Math.max(30,B.dd-days); let got=(B.dd-dd)*perDay; let cd=B.cd,sd=B.sd;
+    if(got<need){cd=Math.min(45,B.cd+Math.ceil((need-got)/((B.vcogs+B.oh)/365)));got+=(cd-B.cd)*(B.vcogs+B.oh)/365;}
+    if(got<need){sd=Math.max(0,B.sd-Math.ceil((need-got)/(B.vcogs/365)));}
+    setL('dd',dd);setL('cd',cd);setL('sd',sd);wi();
+    toast(`Suggested: debtor days ${B.dd} → ${dd}${cd!==B.cd?`, creditor days ${B.cd} → ${cd}`:''}${sd!==B.sd?`, stock days → ${sd}`:''} — no price or cost change needed.`);
+  }
+}
+function resetWI(){const d={price:0,vol:0,cogs:0,oh:0,dd:42,sd:5,cd:15};for(const k in d)setL(k,d[k]);wi();}
+/* exits */
+let exitKind='plan';
+function changes(){const L=last,out=[];
+  if(L.p)out.push({lever:'Price',what:`Sales → all 10 product prices ${pct(L.p*100)}`,goal:`Raise prices ${pct(L.p*100)} across the range`,cat:'Sales'});
+  if(L.v)out.push({lever:'Volume',what:`Sales → units ${pct(L.v*100,0)} on every product`,goal:`Win ${Math.abs(Math.round(B.units*L.v))} ${L.v>0?'more':'fewer'} jobs this year`,cat:'Sales'});
+  if(L.c)out.push({lever:'Cost of goods',what:`COGS → every variable cost line ${pct(L.c*100)}`,goal:`Cut cost of goods ${pct(-L.c*100).replace('+','')} — renegotiate concrete and steel`,cat:'Operational'});
+  if(L.o)out.push({lever:'Overheads',what:`Overheads → every expense line ${pct(L.o*100)}`,goal:`Reduce overheads by ${money(-B.oh*L.o)} a year`,cat:'Financial'});
+  if(L.dd!==B.dd)out.push({lever:'Debtor days',what:`Settings → Year 1 debtor days ${B.dd} → ${L.dd}`,goal:`Bring debtor days from ${B.dd} to ${L.dd}`,cat:'Financial'});
+  if(L.sd!==B.sd)out.push({lever:'Stock days',what:`Settings → Year 1 inventory days ${B.sd} → ${L.sd}`,goal:`Hold ${L.sd} days of materials, not ${B.sd}`,cat:'Operational'});
+  if(L.cd!==B.cd)out.push({lever:'Creditor days',what:`Settings → Year 1 creditor days ${B.cd} → ${L.cd}`,goal:`Move suppliers to ${L.cd}-day terms`,cat:'Financial'});
+  return out;}
+function openExit(kind){exitKind=kind;const ch=changes();const m=document.getElementById('exitModal');const body=document.getElementById('exitBody');
+  if(!ch.length){toast('Nothing has changed yet — pick a goal or move a slider.');return;}
+  if(kind==='plan'){document.getElementById('exitTitle').textContent='Make this the plan';body.innerHTML=`<p style="font-size:13px;color:var(--muted);margin-bottom:10px">These records will be updated. Your current plan is saved as a version first, so you can go back.</p>`+ch.map(c=>`<div class="chg"><div><b>${c.lever}</b><div class="c-w">${c.what}</div></div><span class="pill info">will change</span><span></span></div>`).join('')+`<div style="margin-top:12px;font-size:13px">Result: operating profit <b class="num">${money(last.ebitB)}</b> → <b class="num ${last.ebitA>=0?'pos':'neg'}">${money(last.ebitA)}</b>, Year 1 cash <b class="num pos">${(last.dCash>=0?'+':'')+money(last.dCash)}</b>.</div>`;document.getElementById('exitConfirm').textContent=`Update ${ch.length} record${ch.length>1?'s':''}`;}
+  else{document.getElementById('exitTitle').textContent='Turn into goals';body.innerHTML=`<p style="font-size:13px;color:var(--muted);margin-bottom:10px">One goal per lever. They appear on the dashboard under this quarter's goals and in the Goals section.</p>`+ch.map(c=>`<div class="chg"><div><b>${c.goal}</b><div class="c-w">${c.cat}</div></div><select><option>Q1 FY26</option><option selected>Q2 FY26</option><option>Q3 FY26</option><option>Q4 FY26</option></select><select><option>Nic Clark</option><option selected>Dave (owner)</option><option>Office manager</option></select></div>`).join('');document.getElementById('exitConfirm').textContent=`Create ${ch.length} goal${ch.length>1?'s':''}`;}
+  m.hidden=false;}
+function closeExit(){document.getElementById('exitModal').hidden=true;}
+function confirmExit(){const n=changes().length;closeExit();toast(exitKind==='plan'?`Plan updated — ${n} record${n>1?'s':''} changed. Version 3 saved.`:`${n} goal${n>1?'s':''} created — see the dashboard.`);if(exitKind==='goals')setTimeout(()=>go('dashboard'),1400);}
+
+/* ---------- reports ---------- */
+const TPL=[
+ {name:'Bank or lender',secs:[['Executive summary',1],['Business overview',1],['Ownership & key people',1],['Products & services',1],['Market & competitors',1],['Marketing plan',1],['Operations & assets',1],['SWOT',1],['Goals & milestones',1],['Historic financials',1],['Funding request & security',1],['5-year P&L',1],['Cash flow & serviceability',1],['Balance sheet',1],['Unit economics',0],['Cap table',0],['Mentor sign-off',0]],
+  intro:'DesignOne Concreting seeks a <span class="mf">$400,000</span> term facility from Westpac Business to fund a second slab crew and replace ageing plant. Revenue of <span class="mf">$1,997,000</span> in the last financial year is forecast to reach <span class="mf">$2,119,240</span> in Year 1 and <span class="mf">$2,804,000</span> by Year 5. Forecast cash cover on the facility is <span class="mf">4.7×</span> in Year 1 rising to <span class="mf">9.3×</span> in Year 3.'},
+ {name:'Government loan application',secs:[['Executive summary',1],['Company description',1],['Market analysis',1],['Organization & management',1],['Service or product line',1],['Marketing & sales',1],['Funding request',1],['Financial projections (3-yr)',1],['Monthly Year 1 cash flow',1],['Historic financials',1],['Appendix',1],['SWOT',0],['Goals & milestones',0],['Unit economics',0],['Cap table',0],['Mentor sign-off',0],['Balance sheet',1]],
+  intro:'DesignOne Concreting requests an SBA 7(a) loan of <span class="mf">$400,000</span> to expand residential concrete capacity in the Illawarra region. The company recorded revenue of <span class="mf">$1,997,000</span> last year and projects <span class="mf">$2,472,000</span> by Year 3, with the loan fully serviced from operating cash flow. Use of funds, three-year projections and a month-by-month Year 1 cash flow follow.'},
+ {name:'Self-Employment Assistance',secs:[['Business idea & summary',1],['About the owner',1],['Products & services',1],['Target market',1],['Competitors',1],['Marketing plan',1],['Operations & location',1],['SWOT',1],['Goals — first 12 months',1],['Start-up costs & funding',1],['12-month cash flow',1],['Mentor sign-off',1],['5-year P&L',0],['Balance sheet',0],['Unit economics',0],['Cap table',0],['Historic financials',0]],
+  intro:'This plan is submitted under the Self-Employment Assistance program. DesignOne Concreting will provide residential and light-commercial concreting across Wollongong and the South Coast. Start-up and working-capital funding of <span class="mf">$400,000</span> is described in Section 10; the 12-month cash flow shows the business self-funding from month <span class="mf">3</span>. The mentor sign-off page confirms plan viability.'},
+ {name:'Investor pack',secs:[['Executive summary',1],['The opportunity',1],['Products & unit economics',1],['Market & competitors',1],['Growth strategy',1],['Team',1],['Traction & historic financials',1],['5-year P&L',1],['Cash flow',1],['Balance sheet',1],['Use of funds',1],['Cap table & terms',1],['Risks & SWOT',1],['Mentor sign-off',0],['Marketing plan',0],['Goals & milestones',0],['Operations & assets',0]],
+  intro:'DesignOne Concreting is raising <span class="mf">$400,000</span> to scale a profitable regional concreting business from <span class="mf">$2.1M</span> to <span class="mf">$2.8M</span> revenue over five years. Contribution margin per job is <span class="mf">$4,180</span>; customer acquisition cost is <span class="mf">$310</span>, giving an LTV:CAC of <span class="mf">6.4×</span>. Net profit grows from <span class="mf">$80,735</span> in Year 1 to <span class="mf">$161,475</span> in Year 5.'}
+];
+function setTpl(i){document.querySelectorAll('#tpl button').forEach((b,j)=>b.classList.toggle('on',i===j));const t=TPL[i];document.getElementById('tplName').textContent=t.name;
+  document.getElementById('toc').innerHTML=t.secs.map((s,j)=>`<li class="${s[1]?'':'off'}"><span>${s[1]?(t.secs.slice(0,j).filter(x=>x[1]).length+1)+'. ':''}${s[0]}</span><span class="st">${s[1]?'auto':'excluded'}</span></li>`).join('');
+  document.getElementById('doc').innerHTML=`<div class="eyebrow">Business plan · ${t.name} · Australia</div><h1><span class="mf">DesignOne Concreting</span></h1><p style="color:var(--muted)">Prepared <span class="mf">4 September 2026</span> · Plan year <span class="mf">FY2026</span> · Prepared with <span class="mf">Nic Clark, Advisor</span></p>
+  <h2>1. ${t.secs[0][0]}</h2><p>${t.intro}</p><p><span class="mf">Vision:</span> To be the Illawarra's first-choice concreter for residential slabs and decorative work — known for turning up on the day we said, at the price we quoted.</p>
+  <h2>Financial summary</h2><table class="num"><thead><tr><th></th><th class="r">Historic</th><th class="r">Year 1</th><th class="r">Year 2</th><th class="r">Year 3</th></tr></thead><tbody><tr><td>Revenue</td><td class="r">1,997,000</td><td class="r">2,119,240</td><td class="r">2,289,000</td><td class="r">2,472,000</td></tr><tr><td>Gross margin</td><td class="r">767,473</td><td class="r">828,380</td><td class="r">911,000</td><td class="r">1,002,000</td></tr><tr><td>Net profit</td><td class="r">−71,000</td><td class="r">80,735</td><td class="r">18,525</td><td class="r">71,625</td></tr><tr><td>Closing cash</td><td class="r">21,315</td><td class="r">541,816</td><td class="r">598,000</td><td class="r">661,000</td></tr></tbody></table>
+  <p style="margin-top:18px;color:var(--faint);font-size:12px">Highlighted values are merge fields — they update whenever the plan changes. Sections ${t.secs.filter(s=>s[1]).length} of ${t.secs.length} included for this audience.</p>`;
+}
+
+/* ---------- init ---------- */
+renderNav(); renderProto(); renderProds(); wi(); setTpl(0); go('dashboard');
+</script>
