@@ -75,14 +75,34 @@ never `user_id` — the single biggest change from APeX, and what makes the prod
 ## Row-level security (all tables)
 
 ```
-can_read_plan(p)  := exists plan_members (p, auth.uid())
-                  or exists organisation_members (org of p, auth.uid()) with role in (admin, advisor)
-can_write_plan(p) := exists plan_members (p, auth.uid()) with role in (owner, advisor)
-                  or exists organisation_members (org of p, auth.uid()) with role in (admin, advisor)
+is_org_admin(org)   := member of org with role admin
+is_org_advisor(org) := member of org with role admin or advisor
+is_org_member(org)  := any member of org
+can_read_plan(p)    := plan_member of p, or is_org_advisor(org of p)
+can_write_plan(p)   := plan_member of p with role owner/advisor, or is_org_advisor(org of p)
 ```
-Plan-level tables: `select` using `can_read_plan(plan_id)`; `insert/update/delete` using `can_write_plan(plan_id)`.
-Organisation tables: members read their own org; admins write. `profiles`: users read/write their own row.
-Service-role (server routes only) bypasses RLS for report generation, AI calls and invitations.
+
+| Table group | select | insert / update / delete |
+|---|---|---|
+| Plan-level tables (settings, foundations, financials, cache, scenarios, actuals, versions) | `can_read_plan` | `can_write_plan` |
+| `organisations` | `is_org_member` | insert: any signed-in user (becomes admin); update: **admin only** |
+| `organisation_members` | `is_org_member` | **admin only** — advisors cannot add, remove or promote members |
+| `cohorts` | `is_org_member` | `is_org_advisor` |
+| `plans` | `can_read_plan` | insert: org member; update: `can_write_plan`; delete: `is_org_advisor` |
+| `plan_members` | `can_read_plan` | `can_write_plan` |
+| `plan_invitations` | `can_write_plan` (see pending invites) | **server only** (secret key) |
+| `plan_reports` | `can_read_plan` | **server only** |
+| `ai_calls`, `audit_log` | `can_read_plan` | **server only** |
+| `report_templates` | global rows: everyone; org rows: `is_org_member` | org rows: **admin only**; global rows: server only |
+| `profiles` | own row | own row |
+
+**Creator rule (trigger):** creating an organisation makes you its admin. Creating a plan adds you as *advisor* if you are an admin/advisor of a coach / consultant / accounting-firm organisation, otherwise as *owner*.
+
+**Tenant boundaries enforced by the schema, not the app:** `plans (cohort_id, organisation_id)` is a composite FK to `cohorts (id, organisation_id)` — a plan cannot sit in another organisation's cohort; `plan_goals (parent_id, plan_id)` is a composite FK to `plan_goals (id, plan_id)` — a quarterly goal cannot hang off a goal in another plan; one annual goal per area per plan (partial unique index).
+
+**Tests:** `supabase/tests/tenant_isolation.sql` exercises admin / advisor / member / owner / solo owner / stranger across all of the above and both boundary constraints. `npm run test:db` (with `DATABASE_URL` pointing at any Postgres superuser connection, e.g. `supabase start`) applies all migrations to a throwaway database and runs it. Run before every migration change.
+
+**Keys:** browser code uses `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; server routes use `SUPABASE_SECRET_KEY` (bypasses RLS — never `NEXT_PUBLIC_`). Legacy anon/service_role names are not used.
 
 ## Migration order
 1. `0001_core.sql` — extensions, profiles, organisations, members, cohorts, plans, plan_members, invitations, helper functions, RLS.

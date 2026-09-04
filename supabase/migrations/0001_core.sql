@@ -68,7 +68,8 @@ create table cohorts (
   starts_on       date,
   ends_on         date,
   created_at      timestamptz not null default now(),
-  updated_at      timestamptz not null default now()
+  updated_at      timestamptz not null default now(),
+  unique (id, organisation_id)                      -- lets plans reference (cohort_id, organisation_id)
 );
 create index on cohorts (organisation_id);
 create trigger cohorts_updated before update on cohorts for each row execute function set_updated_at();
@@ -77,13 +78,15 @@ create trigger cohorts_updated before update on cohorts for each row execute fun
 create table plans (
   id              uuid primary key default gen_random_uuid(),
   organisation_id uuid not null references organisations(id) on delete cascade,
-  cohort_id       uuid references cohorts(id) on delete set null,
+  cohort_id       uuid,
   business_name   text not null,
   status          plan_status not null default 'draft',
   plan_year       int not null default extract(year from now())::int,
   created_by      uuid references auth.users(id),
   created_at      timestamptz not null default now(),
-  updated_at      timestamptz not null default now()
+  updated_at      timestamptz not null default now(),
+  -- a plan's cohort must belong to the plan's own organisation (tenant boundary enforced by the database)
+  foreign key (cohort_id, organisation_id) references cohorts(id, organisation_id) on delete set null (cohort_id)
 );
 create index on plans (organisation_id);
 create index on plans (cohort_id);
@@ -121,6 +124,14 @@ language sql stable security definer set search_path = public as $$
   );
 $$;
 
+create or replace function is_org_admin(org uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from organisation_members m
+    where m.organisation_id = org and m.user_id = auth.uid() and m.role = 'admin'
+  );
+$$;
+
 create or replace function is_org_member(org uuid) returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (
@@ -154,10 +165,10 @@ create policy "own profile"        on profiles for all using (id = auth.uid()) w
 
 create policy "org read"           on organisations for select using (is_org_member(id));
 create policy "org insert"         on organisations for insert with check (auth.uid() is not null);
-create policy "org update"         on organisations for update using (is_org_advisor(id));
+create policy "org update"         on organisations for update using (is_org_admin(id));
 
 create policy "org members read"   on organisation_members for select using (is_org_member(organisation_id));
-create policy "org members write"  on organisation_members for all using (is_org_advisor(organisation_id)) with check (is_org_advisor(organisation_id));
+create policy "org members write"  on organisation_members for all using (is_org_admin(organisation_id)) with check (is_org_admin(organisation_id));
 
 create policy "cohorts read"       on cohorts for select using (is_org_member(organisation_id));
 create policy "cohorts write"      on cohorts for all using (is_org_advisor(organisation_id)) with check (is_org_advisor(organisation_id));
@@ -170,7 +181,8 @@ create policy "plans delete"       on plans for delete using (is_org_advisor(org
 create policy "plan members read"  on plan_members for select using (can_read_plan(plan_id));
 create policy "plan members write" on plan_members for all using (can_write_plan(plan_id)) with check (can_write_plan(plan_id));
 
-create policy "invitations"        on plan_invitations for all using (can_write_plan(plan_id)) with check (can_write_plan(plan_id));
+-- invitations are created, accepted and revoked by server routes (secret key). Plan writers may only see them.
+create policy "invitations read"   on plan_invitations for select using (can_write_plan(plan_id));
 
 -- When a user creates an organisation, make them its admin; when they create a plan, make them its owner.
 create or replace function on_org_created() returns trigger language plpgsql security definer set search_path = public as $$

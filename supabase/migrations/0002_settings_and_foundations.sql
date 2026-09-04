@@ -34,7 +34,7 @@ create table plan_settings (
   updated_at                  timestamptz not null default now()
 );
 create trigger plan_settings_updated before update on plan_settings for each row execute function set_updated_at();
-select apply_plan_rls('plan_settings');
+do $$ begin perform apply_plan_rls('plan_settings'); end $$;
 
 -- create settings row with the plan
 create or replace function on_plan_created_settings() returns trigger language plpgsql security definer set search_path = public as $$
@@ -48,7 +48,7 @@ create table plan_framework (
   updated_at    timestamptz not null default now()
 );
 create trigger plan_framework_updated before update on plan_framework for each row execute function set_updated_at();
-select apply_plan_rls('plan_framework');
+do $$ begin perform apply_plan_rls('plan_framework'); end $$;
 
 -- ---------- Assets (descriptive registers) ----------
 create table plan_outlets (
@@ -132,7 +132,7 @@ create type goal_source as enum ('manual','ai','whatif');
 create table plan_goals (
   id              uuid primary key default gen_random_uuid(),
   plan_id         uuid not null references plans(id) on delete cascade,
-  parent_id       uuid references plan_goals(id) on delete cascade,   -- null = annual goal
+  parent_id       uuid,                                                -- null = annual goal
   area            goal_area not null,
   title           text not null,
   detail          text,
@@ -144,7 +144,10 @@ create table plan_goals (
   source          goal_source not null default 'manual',
   sort_order      int not null default 0,
   created_at      timestamptz not null default now(),
-  updated_at      timestamptz not null default now()
+  updated_at      timestamptz not null default now(),
+  unique (id, plan_id),
+  -- a quarterly goal's parent must be a goal in the same plan
+  foreign key (parent_id, plan_id) references plan_goals(id, plan_id) on delete cascade
 );
 -- one annual goal per area per plan
 create unique index plan_goals_one_annual_per_area on plan_goals (plan_id, area) where parent_id is null;

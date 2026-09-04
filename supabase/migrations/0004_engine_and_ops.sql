@@ -96,7 +96,7 @@ create index on audit_log (plan_id, created_at);
 do $$
 declare t text;
 begin
-  foreach t in array array['plan_forecast_cache','plan_scenarios','plan_actuals','plan_versions','plan_reports'] loop
+  foreach t in array array['plan_forecast_cache','plan_scenarios','plan_actuals','plan_versions'] loop
     if t not in ('plan_forecast_cache') then
       execute format('create index if not exists %I on %I (plan_id)', t || '_plan_idx', t);
     end if;
@@ -105,10 +105,15 @@ begin
 end $$;
 create trigger plan_scenarios_updated before update on plan_scenarios for each row execute function set_updated_at();
 
+-- generated reports are written by server routes only; plan readers may see them
+create index plan_reports_plan_idx on plan_reports (plan_id);
+alter table plan_reports enable row level security;
+create policy "reports read" on plan_reports for select using (can_read_plan(plan_id));
+
 alter table report_templates enable row level security;
 create policy "templates read"  on report_templates for select using (organisation_id is null or is_org_member(organisation_id));
-create policy "templates write" on report_templates for all using (organisation_id is not null and is_org_advisor(organisation_id))
-  with check (organisation_id is not null and is_org_advisor(organisation_id));
+create policy "templates write" on report_templates for all using (organisation_id is not null and is_org_admin(organisation_id))
+  with check (organisation_id is not null and is_org_admin(organisation_id));
 
 alter table ai_calls enable row level security;
 create policy "ai calls read" on ai_calls for select using (plan_id is not null and can_read_plan(plan_id));

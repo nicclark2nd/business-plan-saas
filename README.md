@@ -20,3 +20,22 @@ npm run lint
 npm run build
 ```
 Copy `.env.example` to `.env.local` and fill in values. Never commit `.env*` files.
+
+## Supabase setup
+
+Use the publishable key in browser code and the secret key only in server-side code. The secret key bypasses Row Level Security and must never use a `NEXT_PUBLIC_` prefix.
+
+```sh
+cp .env.example .env.local
+npx supabase@latest login
+npx supabase@latest link --project-ref yzhdbikjsngqpyjhnnui
+npx supabase@latest db push --dry-run
+```
+
+Review the dry run before applying migrations:
+
+```sh
+npx supabase@latest db push
+```
+
+In Vercel, configure the same variable names for Production. Do not give Preview deployments access to the Production Supabase project unless that access is explicitly required.
