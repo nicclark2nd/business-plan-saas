@@ -44,6 +44,13 @@ insert into plans (id,organisation_id,business_name,created_by) values ('2000000
 insert into plan_framework (plan_id,vision) values ('20000000-0000-0000-0000-000000000005','solo');
 reset role;
 
+-- ---------- 0. the app's own insert pattern (INSERT ... RETURNING) must work ----------
+set role authenticated;
+select _as('a0000000-0000-0000-0000-00000000000a');
+select _assert(_allowed($q$insert into organisations (name,kind,created_by) values ('Returning Co','coach','a0000000-0000-0000-0000-00000000000a') returning id$q$), 'insert organisation with RETURNING (creator can read it immediately)');
+select _assert(_allowed($q$insert into plans (organisation_id,business_name,created_by) select id,'Returning Plan','a0000000-0000-0000-0000-00000000000a' from organisations where name='Returning Co' returning id$q$), 'insert plan with RETURNING');
+reset role;
+
 -- ---------- 1. creator roles ----------
 select _assert((select role from plan_members where plan_id='20000000-0000-0000-0000-000000000001' and user_id='a0000000-0000-0000-0000-00000000000b')='advisor', 'coach creating a client plan joins as advisor');
 select _assert((select role from plan_members where plan_id='20000000-0000-0000-0000-000000000005' and user_id='00000000-0000-0000-0000-000000000005')='owner', 'solo owner creating own plan joins as owner');
