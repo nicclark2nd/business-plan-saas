@@ -25,7 +25,7 @@ export async function savePerson(planId: string, formData: FormData): Promise<{ 
   const row = {
     plan_id: planId,
     name: String(formData.get("name") ?? "").trim(),
-    position: txt(formData.get("position")),
+    position: txt(formData.get("job_title")),
     pct_shareholding: num(formData.get("pct_shareholding")),
     annual_salary: num(formData.get("annual_salary")),
     salary_by_year,
