@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormError } from "@/components/FormMessage";
-import { StepFooter } from "@/components/guided/GuidedStep";
+import { useStep } from "@/components/guided/StepFrame";
 import { cn } from "@/lib/utils";
 import { savePerson, deletePerson, continueFromPeople, type Person } from "./actions";
 
@@ -24,6 +24,10 @@ function blank(): Row {
 export function PeopleList({ planId, initial }: { planId: string; initial: Person[] }) {
   const [rows, setRows] = useState<Row[]>(initial);
   const [pending, start] = useTransition();
+  const { setPending, setNote } = useStep();
+  useEffect(() => setPending(pending), [pending, setPending]);
+  const anyOpen = rows.some((r) => r._open);
+  useEffect(() => setNote(anyOpen ? "Finish the open person first — unsaved rows won't be kept." : undefined), [anyOpen, setNote]);
   const shareTotal = rows.reduce((a, r) => a + (r.pct_shareholding ?? 0), 0);
   const patch = (i: number, p: Partial<Row>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...p } : r)));
 
@@ -104,9 +108,7 @@ export function PeopleList({ planId, initial }: { planId: string; initial: Perso
         </div>
       </div>
 
-      <form action={(fd) => start(() => continueFromPeople(planId, fd.get("intent") === "next" ? "next" : "later"))}>
-        <StepFooter planId={planId} prevId="vision" pending={pending} note={rows.some((r) => r._open) ? "Finish the open person first — unsaved rows won't be kept." : undefined} />
-      </form>
+      <form id="people-form" action={(fd) => start(() => continueFromPeople(planId, fd.get("intent") === "next" ? "next" : "later"))} />
     </>
   );
 }

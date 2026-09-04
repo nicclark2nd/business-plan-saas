@@ -9,7 +9,7 @@ export default async function PeoplePage({ params }: { params: Promise<{ planId:
   const { data } = await supabase.from("plan_people").select("*").eq("plan_id", planId).order("sort_order").order("created_at");
   return (
     <GuidedStep
-      step={2} group="People · Key People" wide
+      planId={planId} formId="people-form" prevId="vision" step={2} group="People · Key People" wide
       title="Who runs the business?"
       why="Owners, directors and the people a lender or investor would ask about. Name, role, and how much of their time is spent selling — the rest is optional and can wait."
       aside={<>

@@ -5,7 +5,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { FormError } from "@/components/FormMessage";
-import { StepFooter } from "@/components/guided/GuidedStep";
+import { useStep } from "@/components/guided/StepFrame";
+import { useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { saveVision } from "./actions";
 import { VISION_FIELDS, type VisionValues } from "./fields";
@@ -14,6 +15,8 @@ export function VisionForm({ planId, initial }: { planId: string; initial: Visio
   const action = saveVision.bind(null, planId);
   const [state, formAction, pending] = useActionState(action, undefined);
   const [values, setValues] = useState<VisionValues>(initial);
+  const { setPending } = useStep();
+  useEffect(() => setPending(pending), [pending, setPending]);
   const written = useMemo(() => VISION_FIELDS.filter((f) => values[f.key].trim()).length, [values]);
 
   return (
@@ -44,7 +47,6 @@ export function VisionForm({ planId, initial }: { planId: string; initial: Visio
           </div>
         ))}
         <FormError>{state?.error}</FormError>
-        <StepFooter planId={planId} prevId="dashboard" pending={pending} />
       </form>
     </>
   );

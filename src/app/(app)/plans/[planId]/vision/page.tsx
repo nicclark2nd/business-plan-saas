@@ -11,7 +11,7 @@ export default async function VisionPage({ params }: { params: Promise<{ planId:
 
   return (
     <GuidedStep
-      step={1} group="Strategy & Direction · Vision & Purpose"
+      planId={planId} formId="vision-form" prevId="dashboard" step={1} group="Strategy & Direction · Vision & Purpose"
       title="What is this business for?"
       why="Six short statements. They open your business plan, and every lender, grant assessor and investor reads them first. Rough is fine — you can polish later."
       aside={<>
