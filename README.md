@@ -14,7 +14,7 @@ Next.js (App Router, TypeScript) · Tailwind · shadcn/ui · Supabase · Vitest 
 ## Develop
 ```
 npm install
-npm run dev      # http://localhost:3000
+npm run dev      # http://localhost:3100
 npm test         # engine tests
 npm run lint
 npm run build
