@@ -73,7 +73,7 @@ export function PeopleList({ planId, initial }: { planId: string; initial: Perso
                   <div className="grid grid-cols-[minmax(160px,1.4fr)_minmax(150px,1.2fr)_130px_150px] gap-3">
                     <div className="space-y-1"><Label htmlFor={`person-${i}-name`}>Name</Label><Input id={`person-${i}-name`} name="name" defaultValue={r.name} required placeholder="Full name" /></div>
                     <div className="space-y-1"><Label>Position</Label><Input name="position" defaultValue={r.position ?? ""} placeholder="e.g. Owner" /></div>
-                                        <div className="space-y-1"><Label className="whitespace-nowrap">Shareholding %</Label><Input name="pct_shareholding" type="number" min={0} max={100} className="num text-right" defaultValue={r.pct_shareholding ?? 0} /></div>
+                                        <div className="space-y-1"><Label className="whitespace-nowrap">Shareholding %</Label><Input name="pct_shareholding" inputMode="decimal" className="num text-right" defaultValue={r.pct_shareholding || ""} placeholder="0" /></div>
                     <div className="space-y-1"><Label className="whitespace-nowrap">Annual salary ($)</Label><Input name="annual_salary" inputMode="numeric" className="num text-right" defaultValue={r.annual_salary || ""} placeholder="0" /></div>
                   </div>
 
