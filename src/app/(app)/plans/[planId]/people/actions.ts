@@ -37,9 +37,9 @@ export async function savePerson(planId: string, formData: FormData): Promise<{ 
   if (!row.name) return { error: "Give this person a name." };
   const q = id
     ? supabase.from("plan_people").update(row).eq("id", id).eq("plan_id", planId).select("id").single()
-    : supabase.from("plan_people").insert({ ...row, sort_order: -Date.now() }).select("id").single();
+    : supabase.from("plan_people").insert({ ...row, sort_order: -Math.floor(Date.now() / 1000) }).select("id").single();
   const { data, error } = await q;
-  if (error) return { error: "Couldn't save. Check your connection and try again." };
+  if (error) { console.error("savePerson", error); return { error: `Couldn't save: ${error.message}` }; }
   revalidatePath(`/plans/${planId}`, "layout");
   return { id: data.id };
 }
