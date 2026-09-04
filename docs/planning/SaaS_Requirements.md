@@ -242,7 +242,9 @@ Source: screenshot of the legacy planning system APeX was derived from (ActionCO
 
 ---
 
-## 7.3 Build & deployment pipeline (Nic, 4 Sep 2026)
+## 7.3 Build & deployment pipeline (Nic, 4 Sep 2026) — LIVE
+
+**Status 4 Sep 2026:** repo `github.com/nicclark2nd/business-plan-saas` (local copy `Biz_Plan_New/app`), Vercel project `business-plan-saas` deploying green from `main` at **business-plan-saas-beta.vercel.app**. Dev server on port 3100. Same first-build failure was a transient Vercel-side issue — the redeploy of the identical commit succeeded.
 
 - **Local git repo** in the project folder on Nic's Mac — every change committed locally first.
 - **GitHub** as the remote (Nic's account — github.com/dashboard). Main branch protected; feature branches → pull request → merge.

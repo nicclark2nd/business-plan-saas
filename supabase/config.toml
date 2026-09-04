@@ -1,0 +1,5 @@
+# Supabase CLI project config. Linked project ref is stored by `npx supabase link`.
+project_id = "business-plan-saas"
+
+[db]
+major_version = 17
