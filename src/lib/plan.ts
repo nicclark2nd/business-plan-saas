@@ -37,7 +37,7 @@ export async function getCompleteness(planId: string) {
   ]);
   const sections = [
     { id: "vision", label: "Vision & Purpose", done: fw, total: 6 },
-    { id: "people", label: "Management Team", done: Math.min(people, 1), total: 1 },
+    { id: "people", label: "Leadership Team", done: Math.min(people, 1), total: 1 },
     { id: "marketing", label: "Marketing", done: marketing, total: 5 },
     { id: "swot", label: "SWOT", done: Math.min(swot, 4), total: 4 },
     { id: "historic", label: "Historic", done: historic, total: 4 },
