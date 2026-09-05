@@ -24,7 +24,7 @@ const GRID = "grid-cols-[minmax(140px,1fr)_minmax(140px,1fr)_minmax(160px,1.2fr)
 type Row = Person & { _key: string; _dirty?: boolean; _state?: "saving" | "saved" | "error"; _error?: string };
 
 export function PeopleModule({ planId, initial, currency }: { planId: string; initial: PeopleData; currency: string }) {
-  const [people, setPeople] = useState<Row[]>(() => initial.people.map((p) => ({ ...p, _key: p.id })));
+  const [people, setPeople] = useState<Row[]>(() => initial.people.map((p) => ({ ...p, first_name: p.first_name ?? "", last_name: p.last_name ?? "", salary_start_year: p.salary_start_year ?? 1, salary_adjustments: p.salary_adjustments ?? {}, _key: p.id })));
   const [lists, setLists] = useState({ duties: initial.duties, qualities: initial.qualities, education: initial.education, focus: initial.focus });
   const [selected, setSelected] = useState<string | null>(initial.people[0]?.id ?? null);
   const [pending, start] = useTransition();
@@ -49,7 +49,7 @@ export function PeopleModule({ planId, initial, currency }: { planId: string; in
   };
   const commitPerson = (key: string) => {
     const row = peopleRef.current.find((r) => r._key === key);
-    if (!row || !row._dirty || !row.first_name.trim()) return;
+    if (!row || !row._dirty || !(row.first_name ?? "").trim()) return;
     patch(key, { _state: "saving", _dirty: false });
     start(async () => {
       const res = await upsertPerson(planId, { ...row, id: row.id || undefined });
@@ -128,7 +128,7 @@ export function PeopleModule({ planId, initial, currency }: { planId: string; in
         {people.map((r) => (
           <div key={r._key} data-row={r._key} onClick={() => setSelected(r._key)} onBlur={(e) => { if (left(e)) commitPerson(r._key); }}
             className={cn("grid cursor-pointer items-center gap-3 border-b border-border px-4 py-2 last:border-b-0", GRID, selected === r._key && "bg-accent/50")}>
-            <Input name="first_name" defaultValue={r.first_name} placeholder="First name" aria-label="First name" onChange={(e) => savePerson(r._key, { first_name: e.target.value })} />
+            <Input name="first_name" defaultValue={r.first_name ?? ""} placeholder="First name" aria-label="First name" onChange={(e) => savePerson(r._key, { first_name: e.target.value })} />
             <Input name="last_name" defaultValue={r.last_name ?? ""} placeholder="Last name" aria-label="Last name" onChange={(e) => savePerson(r._key, { last_name: e.target.value })} />
             <Input name="job_title" defaultValue={r.position ?? ""} placeholder="e.g. Managing Director" aria-label="Position" onChange={(e) => savePerson(r._key, { position: e.target.value })} />
             <Input name="pct_shareholding" inputMode="decimal" className="num text-right" defaultValue={r.pct_shareholding || ""} placeholder="0" aria-label="Shareholding %" onChange={(e) => savePerson(r._key, { pct_shareholding: Number(e.target.value) || 0 })} />
@@ -152,7 +152,7 @@ export function PeopleModule({ planId, initial, currency }: { planId: string; in
       {sel && sel.id && (
         <div className="mt-3 rounded-md border border-border bg-card" onBlur={(e) => { if (left(e)) commitPerson(sel._key); }}>
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <div><span className="font-semibold">{sel.first_name} {sel.last_name}</span>{sel.position && <span className="text-muted-foreground"> · {sel.position}</span>}</div>
+            <div><span className="font-semibold">{sel.first_name} {sel.last_name ?? ""}</span>{sel.position && <span className="text-muted-foreground"> · {sel.position}</span>}</div>
             <span className="text-xs text-muted-foreground">Optional detail — saved when you leave a field</span>
           </div>
           <Tabs defaultValue="salary" className="px-4 pb-4 pt-2">
