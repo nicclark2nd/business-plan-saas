@@ -40,6 +40,7 @@ function Input({ className, type, autoComplete, onClickCapture, ...props }: Reac
   }
   return (
     <input
+      suppressHydrationWarning
       ref={ref}
       onClickCapture={handleClickCapture}
       type={type}

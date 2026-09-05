@@ -143,14 +143,14 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
                   <Td><CellInput value={r.position ?? ""} placeholder="Job title" onChange={(e) => edit(r._key, { position: e.target.value })} /></Td>
                   <Td><CellSelect value={r.role} options={PERSON_ROLES.map((v) => ({ value: v, label: ROLE_LABEL[v] }))} onValueChange={(v) => edit(r._key, { role: v as Person["role"] }, true)} /></Td>
                   <Td right><CellInput numeric value={String(r.pct_shareholding ?? 0)} onChange={(e) => edit(r._key, { pct_shareholding: Number(e.target.value.replace(/[^\d.-]/g, "")) || 0 })} /></Td>
-                  <Td><CellInput value={r.started_text} placeholder="Mar 2020" onChange={(e) => edit(r._key, { started_text: e.target.value, started_on: r.started_on })} /></Td>
+                  <Td><CellInput value={r.started_text} placeholder="month year" onChange={(e) => edit(r._key, { started_text: e.target.value, started_on: r.started_on })} /></Td>
                   <Td right className={cn("num text-muted-foreground", r.started_on && new Date(r.started_on) > new Date() && "text-warn")}>{tenureLabel(r.started_on, fyStart)}</Td>
                   <Td><RemoveButton onClick={() => removePerson(r)} /></Td>
                 </Row>
               ))}
             </tbody>
             <FootRow>
-              <Td colSpan={4}>Total <span className="ml-2 font-normal text-muted-foreground">{people.length} people{people.filter((p) => startYear(p) > 1).length ? ` · ${people.filter((p) => startYear(p) > 1).length} planned hire${people.filter((p) => startYear(p) > 1).length === 1 ? "" : "s"}` : ""}</span></Td>
+              <Td colSpan={4}>Total <span className="ml-2 font-normal text-muted-foreground">{people.length} {people.length === 1 ? "person" : "people"}{people.filter((p) => startYear(p) > 1).length ? ` · ${people.filter((p) => startYear(p) > 1).length} planned hire${people.filter((p) => startYear(p) > 1).length === 1 ? "" : "s"}` : ""}</span></Td>
               <Td right className={cn("num", Math.round(shareTotal(people)) === 100 ? "text-good" : "text-warn")}>{num(shareTotal(people))}%</Td>
               <Td colSpan={3} />
             </FootRow>
