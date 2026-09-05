@@ -26,7 +26,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
   const waiting = <Badge variant="outline" className="text-muted-foreground">Waiting for data</Badge>;
 
   return (
-    <div className="mx-auto max-w-[1180px]">
+    <div className="mx-auto max-w-[1180px] px-7 pt-6">
       <div className="mb-4">
         <div className="eyebrow">Dashboard</div>
         <h1 className="text-[22px] font-semibold leading-tight">{plan.business_name} — Year 1 plan</h1>

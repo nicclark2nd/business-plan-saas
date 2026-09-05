@@ -109,3 +109,11 @@ can_write_plan(p)   := plan_member of p with role owner/advisor, or is_org_advis
 2. `0002_plan_settings_and_foundations.sql` — settings, framework, registers, people, marketing, competitors, SWOT, goals.
 3. `0003_financials.sql` — products, COGS, overheads, funding ×5, extraordinary, historic periods.
 4. `0004_engine_and_ops.sql` — forecast cache, scenarios, actuals, versions, reports, templates, ai_calls, audit_log.
+
+## Change note — Key People four areas (5 Sep 2026, migration 0007)
+
+- `plan_people`: add `role` (enum `person_role`: owner, director, employee, contractor), `started_on` (date, month precision), drop `salary_start_year` (derived from `started_on` vs plan FY start). `salary_adjustments` jsonb unchanged.
+- `plan_people_capabilities` replaces `plan_people_duties`, `plan_people_qualities`, `plan_people_education`: `kind` (enum `capability_kind`: responsibility, skill, strength, expertise, licence, education, development), `description`, `internal` (bool, default true for development), `sort_order`. Composite FK `(person_id, plan_id) → plan_people(id, plan_id)`; RLS via `apply_plan_rls()`.
+- `plan_people_succession` (phase 2, created now, unused): `person_id` PK-ish unique per plan, `dependency` (low/medium/high), `successor_person_id` nullable FK, `successor_external` bool, `cover` (none/quoted/insured), `cover_amount` numeric nullable, `notes` text.
+- `plan_people_focus` dropped — focus becomes goal ownership (`plan_goals.owner_person_id`, added when Goals is built). Productivity columns dropped.
+- Overheads (later): `key_people_salaries` is computed, not stored; `other_wages` per year and `oncost_rate` are plan-level inputs.

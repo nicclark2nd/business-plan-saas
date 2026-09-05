@@ -124,10 +124,12 @@ reset role;
 set role authenticated;
 select _as('a0000000-0000-0000-0000-00000000000b');
 select _assert(_allowed($q$insert into plan_people (id,plan_id,first_name) values ('40000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','Sam')$q$), 'advisor adds a person');
-select _assert(_allowed($q$insert into plan_people_duties (plan_id,person_id,duty) values ('20000000-0000-0000-0000-000000000001','40000000-0000-0000-0000-000000000001','Invoicing')$q$), 'duty under same-plan person');
+select _assert(_allowed($q$insert into plan_people_capabilities (plan_id,person_id,kind,description) values ('20000000-0000-0000-0000-000000000001','40000000-0000-0000-0000-000000000001','responsibility','Invoicing')$q$), 'capability under same-plan person');
+select _assert(_allowed($q$insert into plan_people_succession (plan_id,person_id,dependency) values ('20000000-0000-0000-0000-000000000001','40000000-0000-0000-0000-000000000001','high')$q$), 'succession row under same-plan person');
 select _as('00000000-0000-0000-0000-000000000005');
-select _assert(not _allowed($q$insert into plan_people_duties (plan_id,person_id,duty) values ('20000000-0000-0000-0000-000000000005','40000000-0000-0000-0000-000000000001','cross')$q$), 'duty cannot point at a person in another plan');
-select _assert((select count(*) from plan_people_duties)=0, 'other tenant cannot read duties');
+select _assert(not _allowed($q$insert into plan_people_capabilities (plan_id,person_id,kind,description) values ('20000000-0000-0000-0000-000000000005','40000000-0000-0000-0000-000000000001','skill','cross')$q$), 'capability cannot point at a person in another plan');
+select _assert((select count(*) from plan_people_capabilities)=0, 'other tenant cannot read capabilities');
+select _assert((select count(*) from plan_people_succession)=0, 'other tenant cannot read succession');
 reset role;
 
 select 'ALL TENANT TESTS PASSED' as result;

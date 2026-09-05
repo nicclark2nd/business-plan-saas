@@ -36,7 +36,7 @@ export function StepFrame({
 
   return (
     <StepCtx.Provider value={{ pending, setPending, note, setNote }}>
-      <div className="flex min-h-full flex-col">
+      <div className="flex min-h-full flex-col px-7 pt-6">
         {/* compact header: one row */}
         <div className="flex items-end justify-between gap-4">
           <div>

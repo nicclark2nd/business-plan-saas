@@ -2,47 +2,42 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useStep } from "@/components/guided/StepFrame";
+import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
+import { Grid, Th, Td, Row, FootRow, GroupRow, Toolbar, Meta, Note, NameLink, LinkButton, RemoveButton, CellInput, CellSelect } from "@/components/module/DataGrid";
 import { cn } from "@/lib/utils";
-import { salarySchedule, scheduleChangeFromBase, totalSalariesByYear, SALARY_YEARS } from "@/engine/people/salary";
-import { upsertPerson, deletePerson, upsertListItem, deleteListItem, continueFromPeople, type PeopleData, type Person, type ListKind } from "./actions";
+import { GUIDED_STEPS } from "@/lib/nav";
+import { SALARY_YEARS, planYearStart, startYearFromDate, tenureLabel, salarySchedule, scheduleChangeFromBase, totalSalariesByYear } from "@/engine/people/salary";
+import { upsertPerson, deletePerson, upsertCapability, deleteCapability, continueFromPeople } from "./actions";
+import { PERSON_ROLES, ROLE_LABEL, CAPABILITY_KINDS, KIND_LABEL, formatMonth, type Person, type Capability, type CapabilityKind, type PeopleData } from "./model";
 
-const money = (n: number | null | undefined, currency = "AUD") => new Intl.NumberFormat("en-AU", { style: "currency", currency, maximumFractionDigits: 0 }).format(Number(n) || 0);
-const PRODUCTIVITY = ["1 - Avoiding", "2 - Distracted", "3 - Appropriate", "4 - Deliberate", "5 - Important", "6 - Inspired Work"];
-const QUALITY_KINDS = ["skill", "strength", "development", "expertise", "certification"];
-const EDUCATION_KINDS = ["degree", "certification", "training", "course", "workshop", "seminar", "conference"];
-const PRIORITIES = ["high", "medium", "low"];
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const fmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
+const num = (n: number | null | undefined) => fmt.format(Number(n) || 0);
+type Row = Person & { _key: string; started_text: string; _dirty?: boolean; _state?: "saving" | "saved" | "error"; _error?: string };
+type Cap = Capability & { _dirty?: boolean };
+type AreaKey = "people" | "salary" | "cap" | "risk";
 
-type Row = Person & { _key: string; _dirty?: boolean; _state?: "saving" | "saved" | "error"; _error?: string };
-
-export function PeopleModule({ planId, initial, currency }: { planId: string; initial: PeopleData; currency: string }) {
-  const [people, setPeople] = useState<Row[]>(() => initial.people.map((p) => ({ ...p, first_name: p.first_name ?? "", last_name: p.last_name ?? "", salary_start_year: p.salary_start_year ?? 1, salary_adjustments: p.salary_adjustments ?? {}, _key: p.id })));
-  const [lists, setLists] = useState({ duties: initial.duties, qualities: initial.qualities, education: initial.education, focus: initial.focus });
-  const [selected, setSelected] = useState<string | null>(initial.people[0]?.id ?? null);
+export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndMonth }: {
+  planId: string; initial: PeopleData; mode: "guided" | "advanced"; currency: string; planYear: number; fyEndMonth: number;
+}) {
+  void currency;
+  const fyStart = useMemo(() => planYearStart(planYear, fyEndMonth), [planYear, fyEndMonth]);
+  const [people, setPeople] = useState<Row[]>(() => initial.people.map((p) => ({ ...p, first_name: p.first_name ?? "", last_name: p.last_name ?? "", role: p.role ?? "employee", salary_adjustments: p.salary_adjustments ?? {}, started_text: formatMonth(p.started_on), _key: p.id })));
+  const [caps, setCaps] = useState<Cap[]>(initial.capabilities);
+  const [area, setArea] = useState<AreaKey>("people");
+  const [scope, setScope] = useState<string | null>(null);        // a person's _key, or everyone
   const [pending, start] = useTransition();
-  const { setPending, setNote } = useStep();
-  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  useEffect(() => setPending(pending), [pending, setPending]);
-  useEffect(() => setNote(people.some((p) => p._state === "saving") ? "Saving…" : undefined), [people, setNote]);
+  const peopleRef = useRef(people); useEffect(() => { peopleRef.current = people; }, [people]);
+  const capsRef = useRef(caps); useEffect(() => { capsRef.current = caps; }, [caps]);
 
+  const startYear = (p: Row) => startYearFromDate(p.started_on, fyStart);
+  const visible = scope ? people.filter((p) => p._key === scope) : people;
+  const scoped = people.find((p) => p._key === scope);
+  const capsFor = (key: string) => caps.filter((c) => c.person_id === people.find((p) => p._key === key)?.id);
+  const capCount = scope ? capsFor(scope).length : caps.length;
+
+  // ----- save policy (§6.10): typing marks dirty; one request when focus leaves the row; selects save at once -----
   const patch = (key: string, p: Partial<Row>) => setPeople((ps) => ps.map((r) => (r._key === key ? { ...r, ...p } : r)));
-  const shareTotal = people.reduce((a, p) => a + (Number(p.pct_shareholding) || 0), 0);
-  const totals = useMemo(() => totalSalariesByYear(people), [people]);
-  const sel = people.find((p) => p._key === selected) ?? null;
-
-  /**
-   * Save policy: typing only updates local state and marks the row dirty; the save happens once when focus
-   * leaves the row (or the detail panel), when a dropdown is chosen, or when Continue is pressed.
-   * No per-keystroke traffic — one request per edit session, per person.
-   */
-  const savePerson = (key: string, changes: Partial<Person>, immediate = false) => {
+  const edit = (key: string, changes: Partial<Row>, immediate = false) => {
     setPeople((ps) => ps.map((r) => (r._key === key ? { ...r, ...changes, _dirty: true, _state: undefined } : r)));
     if (immediate) queueMicrotask(() => commitPerson(key));
   };
@@ -52,242 +47,220 @@ export function PeopleModule({ planId, initial, currency }: { planId: string; in
     patch(key, { _state: "saving", _dirty: false });
     start(async () => {
       const res = await upsertPerson(planId, { ...row, id: row.id || undefined });
-      if (res.ok) patch(key, { id: res.data!.id, _state: "saved" }); else patch(key, { _state: "error", _error: res.error, _dirty: true });
+      if (res.ok) patch(key, { id: res.data!.id, started_on: res.data!.started_on, started_text: formatMonth(res.data!.started_on), _state: "saved" });
+      else patch(key, { _state: "error", _error: res.error, _dirty: true });
     });
   };
-  /** True when focus has left the element's subtree entirely. */
   const left = (e: React.FocusEvent<HTMLElement>) => !e.currentTarget.contains(e.relatedTarget as Node);
-  // Latest-value refs, read only inside event handlers (never during render).
-  const peopleRef = useRef(people);
-  useEffect(() => { peopleRef.current = people; }, [people]);
 
   const addPerson = () => {
-    const r: Row = { _key: crypto.randomUUID(), id: "", plan_id: planId, first_name: "", last_name: "", name: "", position: "", pct_shareholding: 0, annual_salary: 0, salary_start_year: 1, salary_adjustments: {}, productivity_level: null, productivity_comments: null, sort_order: 0 };
-    setPeople((ps) => [r, ...ps]); setSelected(r._key);
+    const r: Row = { _key: crypto.randomUUID(), id: "", plan_id: planId, first_name: "", last_name: "", name: "", position: "", role: "employee", pct_shareholding: 0, annual_salary: 0, started_on: null, started_text: "", salary_adjustments: {}, sort_order: 0 };
+    setPeople((ps) => [r, ...ps]); setScope(null); setArea("people");
     setTimeout(() => document.querySelector<HTMLInputElement>(`[data-row="${r._key}"] input[name=first_name]`)?.focus(), 0);
   };
   const removePerson = (r: Row) => {
-    clearTimeout(timers.current[r._key]);
     setPeople((ps) => ps.filter((x) => x._key !== r._key));
-    if (selected === r._key) setSelected(null);
+    if (scope === r._key) setScope(null);
     if (r.id) start(async () => { await deletePerson(planId, r.id); });
   };
 
-  /** Generic per-person list helpers */
-  type AnyItem = { id: string; person_id: string; sort_order: number } & Record<string, unknown>;
-  const items = (kind: ListKind, personId: string) => (lists[kind] as AnyItem[]).filter((i) => i.person_id === personId);
-  const setItems = (kind: ListKind, fn: (xs: AnyItem[]) => AnyItem[]) => setLists((l) => ({ ...l, [kind]: fn(l[kind] as AnyItem[]) }));
-  const addItem = (kind: ListKind, personId: string, blank: Record<string, unknown>) => {
-    const tmp = `tmp-${crypto.randomUUID()}`;
-    setItems(kind, (xs) => [{ id: tmp, person_id: personId, sort_order: 0, ...blank }, ...xs]);
-    setTimeout(() => document.querySelector<HTMLInputElement>(`[data-item="${tmp}"] input, [data-item="${tmp}"] textarea`)?.focus(), 0);
+  // ----- capabilities -----
+  const editCap = (id: string, changes: Partial<Cap>, immediate = false) => {
+    setCaps((cs) => cs.map((c) => (c.id === id ? { ...c, ...changes, _dirty: true } : c)));
+    if (immediate) queueMicrotask(() => commitCap(id));
   };
-  const dirtyItems = useRef(new Set<string>());
-  const saveItem = (kind: ListKind, item: AnyItem, changes: Record<string, unknown>, immediate = false) => {
-    const next = { ...item, ...changes };
-    setItems(kind, (xs) => xs.map((x) => (x.id === item.id ? next : x)));
-    dirtyItems.current.add(`${kind}:${item.id}`);
-    if (immediate) queueMicrotask(() => commitItem(kind, item.id));
-  };
-  const commitItem = (kind: ListKind, itemId: string) => {
-    const k = `${kind}:${itemId}`; if (!dirtyItems.current.has(k)) return;
-    const next = (listsRef.current[kind] as AnyItem[]).find((x) => x.id === itemId); if (!next) return;
-    const required = kind === "duties" ? next.duty : kind === "qualities" ? next.description : kind === "education" ? next.institution : next.focus_area;
-    if (!String(required ?? "").trim()) return;
-    dirtyItems.current.delete(k);
-    const { id, person_id, sort_order, ...fields } = next; void sort_order;
+  const commitCap = (id: string) => {
+    const c = capsRef.current.find((x) => x.id === id);
+    if (!c || !c._dirty || !c.description.trim()) return;
+    setCaps((cs) => cs.map((x) => (x.id === id ? { ...x, _dirty: false } : x)));
     start(async () => {
-      const res = await upsertListItem(planId, kind, person_id, { ...fields, id: id.startsWith("tmp-") ? undefined : id });
-      if (res.ok && id.startsWith("tmp-")) setItems(kind, (xs) => xs.map((x) => (x.id === id ? { ...x, id: res.data!.id } : x)));
+      const res = await upsertCapability(planId, { ...c, id: c.id.startsWith("tmp-") ? undefined : c.id });
+      if (res.ok && c.id.startsWith("tmp-")) setCaps((cs) => cs.map((x) => (x.id === id ? { ...x, id: res.data!.id } : x)));
     });
   };
-  const listsRef = useRef(lists); useEffect(() => { listsRef.current = lists; }, [lists]);
-  const removeItem = (kind: ListKind, item: AnyItem) => {
-    setItems(kind, (xs) => xs.filter((x) => x.id !== item.id));
-    if (!item.id.startsWith("tmp-")) start(async () => { await deleteListItem(planId, kind, item.id); });
+  const addCap = (person: Row) => {
+    if (!person.id) return;
+    const tmp = `tmp-${crypto.randomUUID()}`;
+    setCaps((cs) => [{ id: tmp, person_id: person.id, kind: "responsibility", description: "", internal: false, sort_order: 0 }, ...cs]);
+    setTimeout(() => document.querySelector<HTMLInputElement>(`[data-cap="${tmp}"] input`)?.focus(), 0);
+  };
+  const removeCap = (c: Cap) => {
+    setCaps((cs) => cs.filter((x) => x.id !== c.id));
+    if (!c.id.startsWith("tmp-")) start(async () => { await deleteCapability(planId, c.id); });
   };
 
+  const flush = () => { peopleRef.current.forEach((r) => r._dirty && commitPerson(r._key)); capsRef.current.forEach((c) => c._dirty && commitCap(c.id)); };
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const intent = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value === "later" ? "later" : "next";
+    flush();
+    start(async () => { await continueFromPeople(planId, intent); });
+  };
+
+  const areas = [
+    { key: "people", label: "People" },
+    { key: "salary", label: "Salaries" },
+    { key: "cap", label: "Roles & Capability", count: capCount },
+    { key: "risk", label: "Risk & Succession", tag: "Phase 2" },
+  ];
+
+  return (
+    <ModuleFrame
+      step={2} total={GUIDED_STEPS.length} group="People" title="Key People" subtitle="Owners, directors and the people a lender asks about" mode={mode}
+      areas={areas} area={area} onArea={(k) => setArea(k as AreaKey)}
+      scope={{ label: scoped ? scoped.name || `${scoped.first_name} ${scoped.last_name ?? ""}`.trim() || "New person" : "All people", onClear: scope ? () => setScope(null) : undefined }}
+      primaryAction={<Button size="sm" type="button" onClick={addPerson}>+ New person</Button>}
+      footer={<ModuleFooter planId={planId} prevId="vision" formId="people-form" />}
+      help={<>
+        <h3>What good looks like</h3>
+        <p>Three to six people. Start with the owner; add anyone whose absence would change the plan — including hires you&apos;re planning (give them a future Started date).</p>
+        <p>Salaries feed Overheads. A $0 owner salary flatters the profit and every bank knows it.</p>
+        <div className="mb-4 mt-2 rounded-r border-l-[3px] border-primary bg-card px-2.5 py-1.5 text-xs text-muted-foreground">Shareholding should add to 100%. If it doesn&apos;t, the ownership table in the report will look wrong to an investor.</div>
+        <h3>Where this goes</h3>
+        <p><b>People</b> → ownership table and management team. <b>Salaries</b> → Overheads, in full or summarised depending on the report. <b>Roles &amp; Capability</b> → management bios (development areas stay internal). <b>Risk &amp; Succession</b> → key-person risk in funding, SBA and sale reports.</p>
+        <p>12-month focus for each person lives under <b>Goals</b>, where every goal has an owner.</p>
+      </>}
+    >
+      <PendingBridge pending={pending} saving={people.some((p) => p._state === "saving")} error={people.find((p) => p._state === "error")?._error} />
+      <form id="people-form" onSubmit={onSubmit} className="hidden" />
+
+      {area === "people" && (
+        <>
+          <Toolbar>
+            <Meta className="ml-0">{people.length} {people.length === 1 ? "person" : "people"} · shareholding <b className={cn("num", Math.round(shareTotal(people)) === 100 ? "text-good" : "text-warn")}>{num(shareTotal(people))}%</b> · click a name to focus every area on that person</Meta>
+          </Toolbar>
+          <Grid>
+            <thead><tr><Th style={{ width: 130 }}>First name</Th><Th style={{ width: 130 }}>Last name</Th><Th>Position</Th><Th style={{ width: 130 }}>Role</Th><Th right style={{ width: 90 }}>Share %</Th><Th style={{ width: 115 }}>Started</Th><Th right style={{ width: 95 }}>Tenure</Th><Th style={{ width: 36 }} /></tr></thead>
+            <tbody>
+              {visible.length === 0 && <tr><Td colSpan={8} className="py-6 text-center text-muted-foreground">Start with the owner. Add anyone whose absence would change the plan.</Td></tr>}
+              {visible.map((r) => (
+                <Row key={r._key} data-row={r._key} onBlur={(e) => left(e) && commitPerson(r._key)} className={cn(r._state === "error" && "[&>td]:bg-bad-soft")} title={r._error}>
+                  <Td>{r.id && scope !== r._key
+                    ? <NameLink onClick={() => setScope(r._key)}>{r.first_name || "—"}</NameLink>
+                    : <CellInput name="first_name" value={r.first_name} placeholder="First name" onChange={(e) => edit(r._key, { first_name: e.target.value })} />}
+                  </Td>
+                  <Td><CellInput value={r.last_name ?? ""} placeholder="Last name" onChange={(e) => edit(r._key, { last_name: e.target.value })} /></Td>
+                  <Td><CellInput value={r.position ?? ""} placeholder="Job title" onChange={(e) => edit(r._key, { position: e.target.value })} /></Td>
+                  <Td><CellSelect value={r.role} options={PERSON_ROLES.map((v) => ({ value: v, label: ROLE_LABEL[v] }))} onValueChange={(v) => edit(r._key, { role: v as Person["role"] }, true)} /></Td>
+                  <Td right><CellInput numeric value={String(r.pct_shareholding ?? 0)} onChange={(e) => edit(r._key, { pct_shareholding: Number(e.target.value.replace(/[^\d.-]/g, "")) || 0 })} /></Td>
+                  <Td><CellInput value={r.started_text} placeholder="Mar 2020" onChange={(e) => edit(r._key, { started_text: e.target.value, started_on: r.started_on })} /></Td>
+                  <Td right className={cn("num text-muted-foreground", r.started_on && new Date(r.started_on) > new Date() && "text-warn")}>{tenureLabel(r.started_on, fyStart)}</Td>
+                  <Td><RemoveButton onClick={() => removePerson(r)} /></Td>
+                </Row>
+              ))}
+            </tbody>
+            <FootRow>
+              <Td colSpan={4}>Total <span className="ml-2 font-normal text-muted-foreground">{people.length} people{people.filter((p) => startYear(p) > 1).length ? ` · ${people.filter((p) => startYear(p) > 1).length} planned hire${people.filter((p) => startYear(p) > 1).length === 1 ? "" : "s"}` : ""}</span></Td>
+              <Td right className={cn("num", Math.round(shareTotal(people)) === 100 ? "text-good" : "text-warn")}>{num(shareTotal(people))}%</Td>
+              <Td colSpan={3} />
+            </FootRow>
+          </Grid>
+          <Note>Fields save when you leave them. Tenure is calculated from Started against the plan&apos;s first year (from {formatMonth(fyStart.toISOString())}). A future date shows the plan year the person joins — their salary starts in that year automatically.</Note>
+        </>
+      )}
+
+      {area === "salary" && (
+        <>
+          <Toolbar><Meta className="ml-0">Adjustment % compounds on the year before; negative for a cut. The Salary row calculates. The total feeds Overheads as a locked line — Overheads keeps its own &quot;Other wages&quot; input; on-costs are one % rate applied there. Contractors have no salary row.</Meta></Toolbar>
+          <Grid>
+            <thead><tr><Th style={{ width: "20%" }}>Name</Th><Th right style={{ width: 120 }}>Base</Th><Th style={{ width: 100 }} />{SALARY_YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}<Th right style={{ width: 150 }} className="max-[1280px]:hidden">Y5 vs base</Th></tr></thead>
+            <tbody>
+              {visible.map((r) => {
+                const sy = startYear(r);
+                if (r.role === "contractor") return (
+                  <Row key={r._key}><Td><NameLink onClick={() => setScope(r._key)}>{r.name || r.first_name}</NameLink><div className="text-[11.5px] text-muted-foreground">Contractor</div></Td><Td colSpan={8} className="text-muted-foreground">Costed in COGS or Overheads, not here.</Td></Row>
+                );
+                const sched = salarySchedule(r.annual_salary ?? 0, r.salary_adjustments, sy);
+                const change = scheduleChangeFromBase(r.annual_salary ?? 0, r.salary_adjustments, sy);
+                return [
+                  <tr key={r._key + "a"} data-row={r._key} onBlur={(e) => left(e) && commitPerson(r._key)} className="[&>td]:border-b-0 [&>td]:h-[34px]">
+                    <Td rowSpan={2} className="!border-b border-border align-middle">
+                      <NameLink onClick={() => setScope(r._key)}>{r.name || r.first_name || "New person"}</NameLink>
+                      <div className={cn("text-[11.5px]", sy > 1 ? "text-warn" : "text-muted-foreground")}>{sy > 5 ? "starts after Year 5" : sy > 1 ? `joins Year ${sy} · ${r.started_text}` : "from Year 1"}</div>
+                    </Td>
+                    <Td rowSpan={2} right className="!border-b border-border align-middle"><CellInput numeric value={num(r.annual_salary)} onChange={(e) => edit(r._key, { annual_salary: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} /></Td>
+                    <Td className="text-[11px] font-semibold uppercase tracking-[.04em] text-muted-foreground">Adjust %</Td>
+                    {SALARY_YEARS.map((y) => <Td key={y} right className="text-muted-foreground">{y < sy ? "—" : <CellInput numeric value={String(r.salary_adjustments?.[String(y)] ?? "")} placeholder="0" onChange={(e) => edit(r._key, { salary_adjustments: { ...r.salary_adjustments, [String(y)]: Number(e.target.value.replace(/[^\d.-]/g, "")) || 0 } })} />}</Td>)}
+                    <Td rowSpan={2} right className={cn("num !border-b border-border align-middle max-[1280px]:hidden", change.delta < 0 ? "text-bad" : change.delta > 0 ? "text-good" : "text-muted-foreground")}>{change.delta >= 0 ? "+" : "−"}{num(Math.abs(change.delta))} ({change.percent >= 0 ? "+" : ""}{change.percent.toFixed(1)}%)</Td>
+                  </tr>,
+                  <tr key={r._key + "b"} className="[&>td]:h-[30px] [&>td]:font-semibold">
+                    <Td className="text-[11px] font-semibold uppercase tracking-[.04em] text-muted-foreground">Salary</Td>
+                    {sched.map((s) => <Td key={s.year} right className={cn("num", s.year < sy && "text-muted-foreground")}>{s.year < sy ? "—" : num(s.value)}</Td>)}
+                  </tr>,
+                ];
+              })}
+            </tbody>
+            <FootRow>
+              <Td>Total → Overheads</Td>
+              <Td right className="num">{num(people.filter((p) => p.role !== "contractor").reduce((a, p) => a + (Number(p.annual_salary) || 0), 0))}</Td>
+              <Td />
+              {totalSalariesByYear(people.map((p) => ({ ...p, startYear: startYear(p) }))).map((t) => <Td key={t.year} right className="num">{num(t.value)}</Td>)}
+              <Td className="max-[1280px]:hidden" />
+            </FootRow>
+          </Grid>
+        </>
+      )}
+
+      {area === "cap" && <CapabilityArea people={visible} caps={caps} onScope={setScope} onAdd={addCap} onEdit={editCap} onCommit={commitCap} onRemove={removeCap} left={left} />}
+
+      {area === "risk" && (
+        <>
+          <Toolbar><Meta className="ml-0">What happens to the business if this person is unavailable for six months. Used in funding, SBA and sale reports.</Meta></Toolbar>
+          <Grid>
+            <thead><tr><Th style={{ width: "18%" }}>Name</Th><Th style={{ width: 120 }}>Dependency</Th><Th style={{ width: 170 }}>Successor</Th><Th style={{ width: 150 }}>Key-person cover</Th><Th>Notes</Th></tr></thead>
+            <tbody>{visible.map((r) => <Row key={r._key}><Td><NameLink onClick={() => setScope(r._key)}>{r.name || r.first_name}</NameLink></Td><Td colSpan={4} className="text-muted-foreground">Phase 2 — after the forecast is live.</Td></Row>)}</tbody>
+          </Grid>
+        </>
+      )}
+    </ModuleFrame>
+  );
+}
+
+const shareTotal = (ps: Row[]) => ps.reduce((a, p) => a + (Number(p.pct_shareholding) || 0), 0);
+
+/** Reports saving state up to the frame (footer text + disabled buttons). */
+function PendingBridge({ pending, saving, error }: { pending: boolean; saving: boolean; error?: string }) {
+  const { setPending, setNote } = useModule();
+  useEffect(() => setPending(pending), [pending, setPending]);
+  useEffect(() => setNote(error ? error : saving ? "Saving…" : undefined), [saving, error, setNote]);
+  return null;
+}
+
+function CapabilityArea({ people, caps, onScope, onAdd, onEdit, onCommit, onRemove, left }: {
+  people: Row[]; caps: Cap[]; onScope: (k: string) => void; onAdd: (p: Row) => void;
+  onEdit: (id: string, c: Partial<Cap>, immediate?: boolean) => void; onCommit: (id: string) => void; onRemove: (c: Cap) => void;
+  left: (e: React.FocusEvent<HTMLElement>) => boolean;
+}) {
+  const [kind, setKind] = useState<string>("all");
+  const kinds = CAPABILITY_KINDS.map((k) => ({ value: k, label: KIND_LABEL[k] }));
   return (
     <>
-      <div className="grid grid-cols-[minmax(340px,38%)_minmax(0,1fr)] gap-3 items-start">
-        {/* ---------- master: people list ---------- */}
-        <div className="rounded-md border border-border bg-card">
-          <div className="flex items-center justify-between border-b border-border px-3 py-2">
-            <Button size="sm" type="button" onClick={addPerson}>+ Add a person</Button>
-            <span className="text-xs text-muted-foreground">{people.length} {people.length === 1 ? "person" : "people"}</span>
-          </div>
-          {people.length === 0 && <div className="px-4 py-8 text-center text-[13px] text-muted-foreground">Start with the owner. Add anyone whose absence would change the plan.</div>}
-          <div className="max-h-[calc(100vh-330px)] overflow-y-auto">
-            {people.map((r) => (
-              <div key={r._key} data-row={r._key} onClick={() => setSelected(r._key)} onBlur={(e) => { if (left(e)) commitPerson(r._key); }}
-                className={cn("cursor-pointer border-b border-border px-3 py-2.5 last:border-b-0 hover:bg-secondary/60", selected === r._key && "bg-accent/60 border-l-[3px] border-l-primary pl-[9px]")}>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 truncate text-[13px] font-semibold">{(r.first_name || r.last_name) ? `${r.first_name} ${r.last_name ?? ""}`.trim() : <span className="font-normal text-muted-foreground">New person</span>}</div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[11px] text-muted-foreground">{r._state === "saving" ? "Saving…" : r._state === "error" ? <span className="text-bad" title={r._error}>Error</span> : r._dirty ? "Editing" : ""}</span>
-                    <Button type="button" variant="ghost" size="icon-xs" className="text-muted-foreground" title="Remove this person" onClick={(e) => { e.stopPropagation(); removePerson(r); }}>×</Button>
-                  </div>
-                </div>
-                <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                  <span className="truncate">{r.position || "—"}</span>
-                  <span className="num whitespace-nowrap">{r.pct_shareholding ? `${r.pct_shareholding}% · ` : ""}{money(r.annual_salary, currency)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-          {people.length > 0 && (
-            <div className="border-t border-input bg-secondary px-3 py-2 text-[11px] text-muted-foreground">
-              <div className="flex justify-between"><span>Shareholding</span><span className={cn("num", shareTotal !== 100 && "text-warn")}>{shareTotal}%{shareTotal !== 100 && " · should be 100%"}</span></div>
-              <div className="mt-0.5 flex justify-between gap-2"><span>Salaries Y1→Y5</span><span className="num truncate">{totals.map((t) => money(t.value, currency)).join(" · ")}</span></div>
-            </div>
-          )}
-        </div>
-
-        {/* ---------- detail: selected person ---------- */}
-        <div key={sel?._key ?? "none"} className="min-w-0 rounded-md border border-border bg-card" onBlur={(e) => { if (sel && left(e)) commitPerson(sel._key); }}>
-          {!sel ? (
-            <div className="px-6 py-14 text-center text-[13px] text-muted-foreground">{people.length ? "Select a person on the left." : "Add a person to begin."}</div>
-          ) : (
-            <>
-              <div className="border-b border-border px-4 py-3">
-                <div className="grid grid-cols-[1fr_1fr_1.2fr_110px_140px] gap-3">
-                  <div className="space-y-1"><Label>First name</Label><Input name="first_name" defaultValue={sel.first_name ?? ""} placeholder="First name" onChange={(e) => savePerson(sel._key, { first_name: e.target.value })} /></div>
-                  <div className="space-y-1"><Label>Last name</Label><Input name="last_name" defaultValue={sel.last_name ?? ""} placeholder="Last name" onChange={(e) => savePerson(sel._key, { last_name: e.target.value })} /></div>
-                  <div className="space-y-1"><Label>Position</Label><Input name="job_title" defaultValue={sel.position ?? ""} placeholder="e.g. Managing Director" onChange={(e) => savePerson(sel._key, { position: e.target.value })} /></div>
-                  <div className="space-y-1"><Label>Shareholding %</Label><Input name="pct_shareholding" inputMode="decimal" className="num text-right" defaultValue={sel.pct_shareholding || ""} placeholder="0" onChange={(e) => savePerson(sel._key, { pct_shareholding: Number(e.target.value) || 0 })} /></div>
-                  <div className="space-y-1"><Label>Annual salary</Label><Input name="annual_salary" inputMode="numeric" className="num text-right" defaultValue={sel.annual_salary || ""} placeholder="0" onChange={(e) => savePerson(sel._key, { annual_salary: Number(String(e.target.value).replace(/[^0-9.]/g, "")) || 0 })} /></div>
-                </div>
-              </div>
-              {sel.id ? (
-                <Tabs defaultValue="salary" className="px-4 pb-4 pt-2">
-                  <TabsList>
-                    {["salary", "productivity", "duties", "qualities", "education", "focus"].map((t) => <TabsTrigger key={t} value={t}>{cap(t)}{["duties", "qualities", "education", "focus"].includes(t) && items(t as ListKind, sel.id).length > 0 && <Badge variant="secondary" className="ml-1.5 px-1.5">{items(t as ListKind, sel.id).length}</Badge>}</TabsTrigger>)}
-                  </TabsList>
-            <TabsContent value="salary" className="pt-3">
-              <SalaryTab person={sel} currency={currency} onChange={(c, now) => savePerson(sel._key, c, now)} />
-            </TabsContent>
-
-            <TabsContent value="productivity" className="pt-3">
-              <div className="grid grid-cols-[280px_1fr] gap-4">
-                <div className="space-y-1.5"><Label>Productivity level</Label>
-                  <Select value={sel.productivity_level ?? undefined} onValueChange={(v) => v && savePerson(sel._key, { productivity_level: v }, true)}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Choose a level…" /></SelectTrigger>
-                    <SelectContent>{PRODUCTIVITY.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select>
-                  <p className="text-xs text-muted-foreground">1 = Avoiding · 3 = Appropriate · 6 = Inspired work. How this person spends their time relative to what the plan needs.</p></div>
-                <div className="space-y-1.5"><Label>Comments</Label><Textarea defaultValue={sel.productivity_comments ?? ""} placeholder="e.g. Accurate invoicing, supplier payments, debtor follow-up, cashflow control." onChange={(e) => savePerson(sel._key, { productivity_comments: e.target.value })} /></div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="duties" className="pt-3">
-              <ItemList title="Duties" hint="One responsibility per line — what this person is accountable for." onAdd={() => addItem("duties", sel.id, { duty: "" })} empty={items("duties", sel.id).length === 0}>
-                {items("duties", sel.id).map((it) => (
-                  <ItemRow key={it.id} id={it.id} onBlur={(e) => { if (left(e)) commitItem("duties", it.id); }} onRemove={() => removeItem("duties", it)}>
-                    <Input defaultValue={String(it.duty ?? "")} placeholder="e.g. Accounts payable processing and supplier payment scheduling" onChange={(e) => saveItem("duties", it, { duty: e.target.value })} />
-                  </ItemRow>))}
-              </ItemList>
-            </TabsContent>
-
-            <TabsContent value="qualities" className="pt-3">
-              <ItemList title="Qualities" hint="Skills, strengths, expertise, certifications — and areas for development." onAdd={() => addItem("qualities", sel.id, { kind: "skill", description: "" })} empty={items("qualities", sel.id).length === 0}>
-                {items("qualities", sel.id).map((it) => (
-                  <ItemRow key={it.id} id={it.id} onBlur={(e) => { if (left(e)) commitItem("qualities", it.id); }} onRemove={() => removeItem("qualities", it)} lead={
-                    <Select value={String(it.kind)} onValueChange={(v) => v && saveItem("qualities", it, { kind: v }, true)}><SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger><SelectContent>{QUALITY_KINDS.map((k) => <SelectItem key={k} value={k}>{cap(k)}</SelectItem>)}</SelectContent></Select>}>
-                    <Input defaultValue={String(it.description ?? "")} placeholder="e.g. MYOB and Xero proficiency" onChange={(e) => saveItem("qualities", it, { description: e.target.value })} />
-                  </ItemRow>))}
-              </ItemList>
-            </TabsContent>
-
-            <TabsContent value="education" className="pt-3">
-              <ItemList title="Education & training" hint="Degrees, certifications, courses, workshops — with where and when." onAdd={() => addItem("education", sel.id, { kind: "course", institution: "", year_completed: "", description: "" })} empty={items("education", sel.id).length === 0}>
-                {items("education", sel.id).map((it) => (
-                  <ItemRow key={it.id} id={it.id} onBlur={(e) => { if (left(e)) commitItem("education", it.id); }} onRemove={() => removeItem("education", it)} lead={
-                    <Select value={String(it.kind)} onValueChange={(v) => v && saveItem("education", it, { kind: v }, true)}><SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger><SelectContent>{EDUCATION_KINDS.map((k) => <SelectItem key={k} value={k}>{cap(k)}</SelectItem>)}</SelectContent></Select>}>
-                    <div className="grid grid-cols-[1fr_90px_1.4fr] gap-2">
-                      <Input defaultValue={String(it.institution ?? "")} placeholder="Institution" onChange={(e) => saveItem("education", it, { institution: e.target.value })} />
-                      <Input defaultValue={String(it.year_completed ?? "")} placeholder="Year" inputMode="numeric" className="num" onChange={(e) => saveItem("education", it, { year_completed: e.target.value })} />
-                      <Input defaultValue={String(it.description ?? "")} placeholder="What it was" onChange={(e) => saveItem("education", it, { description: e.target.value })} />
-                    </div>
-                  </ItemRow>))}
-              </ItemList>
-            </TabsContent>
-
-            <TabsContent value="focus" className="pt-3">
-              <ItemList title="Focus this year" hint="The one to three things this person will concentrate on, with a priority and a target date." onAdd={() => addItem("focus", sel.id, { focus_area: "", description: "", priority: "medium", target_date: null })} empty={items("focus", sel.id).length === 0}>
-                {items("focus", sel.id).map((it) => (
-                  <ItemRow key={it.id} id={it.id} onBlur={(e) => { if (left(e)) commitItem("focus", it.id); }} onRemove={() => removeItem("focus", it)} lead={
-                    <Select value={String(it.priority)} onValueChange={(v) => v && saveItem("focus", it, { priority: v }, true)}><SelectTrigger className={cn("w-[120px]", it.priority === "high" && "text-bad", it.priority === "medium" && "text-warn")}><SelectValue /></SelectTrigger><SelectContent>{PRIORITIES.map((k) => <SelectItem key={k} value={k}>{cap(k)}</SelectItem>)}</SelectContent></Select>}>
-                    <div className="grid grid-cols-[1fr_150px] gap-2">
-                      <Input defaultValue={String(it.focus_area ?? "")} placeholder="e.g. Debtor follow-up cadence" onChange={(e) => saveItem("focus", it, { focus_area: e.target.value })} />
-                      <Input type="date" defaultValue={String(it.target_date ?? "")} aria-label="Target date" onChange={(e) => saveItem("focus", it, { target_date: e.target.value || null })} />
-                      <Textarea className="col-span-2 min-h-[56px]" defaultValue={String(it.description ?? "")} placeholder="What done looks like" onChange={(e) => saveItem("focus", it, { description: e.target.value })} />
-                    </div>
-                  </ItemRow>))}
-              </ItemList>
-            </TabsContent>
-                </Tabs>
-              ) : (
-                <p className="px-4 py-6 text-xs text-muted-foreground">Type a first name and tab out — the salary schedule, duties, qualities, education and focus tabs open once the person is saved.</p>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      <form id="people-form" action={(fd) => { peopleRef.current.forEach((r) => commitPerson(r._key)); Array.from(dirtyItems.current).forEach((k) => { const [kind, id] = k.split(":") as [ListKind, string]; commitItem(kind, id); }); start(() => continueFromPeople(planId, fd.get("intent") === "next" ? "next" : "later")); }} />
+      <Toolbar>
+        <div className="w-[200px]"><CellSelect value={kind} onValueChange={setKind} options={[{ value: "all", label: "All types" }, ...kinds]} className="border-input" /></div>
+        <Meta>Hatched rows (Development areas) are internal — never printed in an external report</Meta>
+      </Toolbar>
+      <Grid>
+        <thead><tr><Th style={{ width: 200 }}>Type</Th><Th>Description</Th><Th style={{ width: 36 }} /></tr></thead>
+        <tbody>
+          {people.map((p) => {
+            const rows = caps.filter((c) => c.person_id === p.id && (kind === "all" || c.kind === kind));
+            return [
+              <GroupRow key={p._key} colSpan={3}>
+                <NameLink onClick={() => onScope(p._key)}>{p.name || p.first_name || "New person"}</NameLink>
+                <span className="font-normal text-muted-foreground">{[p.position, ROLE_LABEL[p.role]].filter(Boolean).join(" · ")}</span>
+                <span className="ml-auto">{p.id ? <LinkButton onClick={() => onAdd(p)}>+ Add</LinkButton> : <span className="text-xs font-normal text-muted-foreground">save the person first</span>}</span>
+              </GroupRow>,
+              ...rows.map((c) => (
+                <Row key={c.id} data-cap={c.id} onBlur={(e) => left(e) && onCommit(c.id)} className={cn(c.internal && "[&>td]:bg-[repeating-linear-gradient(135deg,transparent_0_6px,rgba(0,0,0,.025)_6px_8px)] [&_input]:italic [&_input]:text-muted-foreground")}>
+                  <Td><CellSelect value={c.kind} options={kinds} onValueChange={(v) => onEdit(c.id, { kind: v as CapabilityKind, internal: v === "development" }, !!c.description.trim())} className={cn(c.internal && "italic text-muted-foreground")} /></Td>
+                  <Td><CellInput value={c.description} placeholder={c.kind === "education" || c.kind === "licence" ? "What, where, year — e.g. Diploma of Accounting, TAFE Queensland, 2008" : "One line"} onChange={(e) => onEdit(c.id, { description: e.target.value })} /></Td>
+                  <Td>{c.internal && <span className="mr-1.5 text-[9.5px] uppercase tracking-[.06em] text-muted-foreground/70">internal</span>}<RemoveButton onClick={() => onRemove(c)} /></Td>
+                </Row>
+              )),
+            ];
+          })}
+        </tbody>
+      </Grid>
     </>
-  );
-}
-
-function SalaryTab({ person, currency, onChange }: { person: Person; currency: string; onChange: (c: Partial<Person>, immediate?: boolean) => void }) {
-  const adj = person.salary_adjustments ?? {};
-  const schedule = salarySchedule(person.annual_salary ?? 0, adj, person.salary_start_year);
-  const change = scheduleChangeFromBase(person.annual_salary ?? 0, adj, person.salary_start_year);
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-[1fr_200px] gap-4">
-        <div className="space-y-1.5"><Label>Annual salary (base)</Label><Input inputMode="numeric" className="num" value={person.annual_salary || ""} placeholder="0" onChange={(e) => onChange({ annual_salary: Number(String(e.target.value).replace(/[^0-9.]/g, "")) || 0 })} /></div>
-        <div className="space-y-1.5"><Label>Starts in</Label>
-          <Select value={String(person.salary_start_year)} onValueChange={(v) => v && onChange({ salary_start_year: Number(v) }, true)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{SALARY_YEARS.map((y) => <SelectItem key={y} value={String(y)}>Year {y}</SelectItem>)}</SelectContent></Select></div>
-      </div>
-      <div>
-        <Label className="mb-1.5">Adjustment % each year <span className="font-normal text-muted-foreground">— compounds on the year before; negative for a cut</span></Label>
-        <div className="grid grid-cols-5 gap-2">
-          {SALARY_YEARS.map((y) => (
-            <div key={y} className="space-y-1">
-              <div className="text-xs font-semibold text-muted-foreground">Year {y}</div>
-              <Input inputMode="decimal" className="num text-right" value={adj[String(y)] ?? ""} placeholder="0" disabled={y < person.salary_start_year}
-                onChange={(e) => onChange({ salary_adjustments: { ...adj, [String(y)]: e.target.value === "" ? undefined : Number(e.target.value) } })} />
-              <div className="num text-right text-xs text-muted-foreground">{y < person.salary_start_year ? "—" : money(schedule[y - 1].value, currency)}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="rounded-md bg-secondary px-4 py-3 text-center text-[13px]">
-        <div className="font-semibold">Change from base by Year 5</div>
-        <div className={cn("num", change.delta < 0 ? "text-bad" : change.delta > 0 ? "text-good" : "text-muted-foreground")}>{change.delta >= 0 ? "+" : "−"}{money(Math.abs(change.delta), currency)} ({change.percent >= 0 ? "+" : ""}{change.percent}%)</div>
-      </div>
-    </div>
-  );
-}
-
-function ItemList({ title, hint, onAdd, empty, children }: { title: string; hint: string; onAdd: () => void; empty: boolean; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="mb-2 flex items-center justify-between">
-        <div><div className="text-[13px] font-semibold">{title}</div><div className="text-xs text-muted-foreground">{hint}</div></div>
-        <Button type="button" size="sm" variant="outline" onClick={onAdd}>+ Add</Button>
-      </div>
-      {empty ? <div className="rounded-md border border-dashed border-border px-4 py-5 text-center text-xs text-muted-foreground">Nothing here yet.</div> : <div className="space-y-2">{children}</div>}
-    </div>
-  );
-}
-
-function ItemRow({ id, lead, children, onRemove, onBlur }: { id: string; lead?: React.ReactNode; children: React.ReactNode; onRemove: () => void; onBlur?: React.FocusEventHandler<HTMLElement> }) {
-  return (
-    <div data-item={id} onBlur={onBlur} className="flex items-start gap-2 rounded-md border border-border bg-secondary/40 p-2">
-      {lead}
-      <div className="flex-1">{children}</div>
-      <Button type="button" variant="ghost" size="icon-sm" className="text-muted-foreground" title="Remove" onClick={onRemove}>×</Button>
-    </div>
   );
 }

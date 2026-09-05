@@ -1,0 +1,295 @@
+<title>PlanWell Record Pattern</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap">
+<style>
+:root{
+  --nav:#1C2B3A;--nav-text:#C9D3DE;--nav-muted:#7F8FA3;--nav-active:#25384B;--nav-line:#2C3F54;
+  --bg:#F2F4F7;--surface:#FFFFFF;--surface-2:#F7F9FB;--line:#D9DEE5;--line-strong:#B9C2CD;
+  --text:#1F2933;--muted:#6B7A8C;--faint:#98A4B3;
+  --primary:#1F6FCB;--primary-ink:#fff;--primary-soft:#E6F0FB;
+  --good:#2E7D32;--good-soft:#E8F3E9;--warn:#C77800;--warn-soft:#FCF1E0;--bad:#C62828;--bad-soft:#FBE9E9;
+  --font:"Open Sans","Segoe UI",Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:13px/1.45 var(--font);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.eyebrow{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+/* shell */
+.app{display:grid;grid-template-rows:48px 1fr;grid-template-columns:240px 1fr;height:100vh;min-height:600px}
+.topbar{grid-column:1/3;background:var(--nav);color:var(--nav-text);display:flex;align-items:center;padding:0 16px;gap:16px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;color:#fff;width:224px}
+.brand .mark{width:26px;height:26px;border-radius:5px;background:var(--primary);display:grid;place-items:center;font-size:12px;color:#fff}
+.plan-name{color:var(--nav-muted)}.plan-name b{color:var(--nav-text);font-weight:600}
+.spacer{flex:1}
+.mode{display:flex;background:var(--nav-active);border:1px solid var(--nav-line);border-radius:20px;padding:2px}
+.mode button{border:0;background:transparent;color:var(--nav-muted);padding:4px 14px;border-radius:16px;font-size:12px;font-weight:600}
+.mode button.on{background:var(--primary);color:#fff}
+.avatar{width:28px;height:28px;border-radius:50%;background:#3E5A78;display:grid;place-items:center;font-size:11px;font-weight:700;color:#fff}
+.sidebar{background:var(--nav);color:var(--nav-text);overflow-y:auto;padding:8px 0 24px;border-right:1px solid var(--nav-line)}
+.grp-h{padding:10px 16px 4px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--nav-muted);font-weight:700}
+.item{display:flex;align-items:center;gap:10px;padding:7px 16px 7px 18px;font-size:13px;border-left:3px solid transparent;cursor:pointer}
+.item:hover{background:var(--nav-active)}.item.active{background:var(--nav-active);border-left-color:var(--primary);color:#fff}
+.stepno{width:18px;height:18px;border-radius:50%;background:var(--nav-active);border:1px solid var(--nav-line);display:grid;place-items:center;font-size:10px;font-weight:700;color:var(--nav-muted)}
+.item.done .stepno{background:var(--good);border-color:var(--good);color:#fff}.item.active .stepno{background:var(--primary);border-color:var(--primary);color:#fff}
+/* work surface */
+.main{display:grid;grid-template-rows:auto auto 1fr auto;overflow:hidden;background:var(--surface)}
+/* module bar: fixed strip under the top bar, spans the work area, reflects the left-nav selection */
+.modulebar{display:flex;align-items:stretch;height:40px;padding:0 8px 0 12px;background:#E9EDF2;border-bottom:1px solid var(--line-strong)}
+.modulebar button{border:0;background:transparent;padding:0 14px;font-weight:600;color:#3B4A5A;border-bottom:3px solid transparent;white-space:nowrap;font-size:13px}
+.modulebar button:hover{color:var(--text);background:#DFE5EC}
+.modulebar button.on{color:var(--primary);border-bottom-color:var(--primary);background:var(--surface)}
+.modulebar .scope{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;padding-right:8px}
+.chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line-strong);background:var(--surface);border-radius:4px;padding:3px 4px 3px 9px;color:var(--text);font-weight:600}
+.chip .x{font-size:14px;padding:0 4px;line-height:1}
+.chip.all .x{display:none}.chip.all{padding-right:9px}
+.pagehead{border-bottom:1px solid var(--line);padding:10px 20px 0}
+.pagehead .row{display:flex;align-items:center;gap:14px;min-height:36px}
+.pagehead h1{margin:0;font-size:18px;font-weight:600;line-height:1.2}
+.pagehead .sub{color:var(--muted)}
+.pagehead .actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+.progress{height:3px;background:var(--line);margin:8px -20px 0}
+.progress i{display:block;height:100%;background:var(--primary)}
+.body{display:grid;grid-template-columns:minmax(0,1fr) 300px;overflow:hidden}
+.body.nohelp{grid-template-columns:minmax(0,1fr)}
+.body.nohelp .help{display:none}
+.work{overflow:auto;min-width:0}
+.tablewrap{overflow-x:auto}
+.help{border-left:1px solid var(--line);background:var(--surface-2);overflow:auto;padding:16px 18px}
+.help h3{margin:0 0 8px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.help p{margin:0 0 8px;font-size:12.5px}
+.help .ex{border-left:3px solid var(--primary);background:var(--surface);padding:6px 10px;color:var(--muted);font-size:12px;border-radius:0 4px 4px 0;margin:8px 0 16px}
+.footer{border-top:1px solid var(--line);background:var(--surface);padding:10px 20px;display:flex;align-items:center;justify-content:space-between}
+/* controls */
+.btn{border:1px solid var(--line-strong);background:var(--surface);color:var(--text);padding:6px 12px;border-radius:4px;font-weight:600;font-size:13px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{background:var(--surface-2)}.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}.btn.primary:hover{filter:brightness(1.07)}
+.btn.sm{padding:3px 9px;font-size:12px}.btn.ghost{border-color:transparent;background:transparent}.btn.ghost:hover{background:var(--surface-2)}
+.btn.on{background:var(--primary-soft);border-color:var(--primary);color:var(--primary)}
+.link{background:none;border:0;color:var(--primary);font-weight:600;padding:0}
+.pill{display:inline-flex;align-items:center;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}.pill.good{background:var(--good-soft);color:var(--good)}.pill.bad{background:var(--bad-soft);color:var(--bad)}.pill.neutral{background:var(--surface-2);border:1px solid var(--line);color:var(--muted)}
+.count{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:var(--surface-2);border:1px solid var(--line);font-size:10.5px;color:var(--muted);text-align:center;margin-left:6px}
+/* toolbar + dense editable grid */
+.toolbar{display:flex;align-items:center;gap:8px;padding:10px 20px;border-bottom:1px solid var(--line)}
+.toolbar .meta{color:var(--muted);font-size:12px;margin-left:auto}
+.search{border:1px solid var(--line-strong);border-radius:4px;padding:5px 9px;width:220px;background:var(--surface)}
+table.list{width:100%;border-collapse:collapse;font-size:13px}
+.list th{position:sticky;top:0;z-index:1;background:var(--surface-2);text-align:left;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:7px 12px;border-bottom:1px solid var(--line-strong);white-space:nowrap}
+.list th:first-child,.list td:first-child{padding-left:20px}
+.list th:last-child,.list td:last-child{padding-right:20px}
+.list td{padding:0 12px;height:36px;border-bottom:1px solid var(--line);white-space:nowrap}
+.list tbody tr:hover td{background:var(--surface-2)}
+.list td.r,.list th.r{text-align:right}
+.list td a,.list td .link{color:var(--primary);font-weight:600;text-decoration:none;cursor:pointer}
+.list tfoot td{background:var(--surface-2);font-weight:700;border-top:2px solid var(--line-strong)}
+.list .dim{color:var(--muted)}
+.list .calc{color:var(--muted)}
+.list input,.list select{border:1px solid transparent;background:transparent;padding:4px 6px;border-radius:3px;width:100%;min-width:56px;height:28px}
+.list select{appearance:none;-webkit-appearance:none;padding-right:18px;background:transparent url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%2398A4B3'/></svg>") no-repeat right 6px center}
+.list input:hover,.list select:hover{border-color:var(--line-strong)}
+.list input:focus,.list select:focus{border-color:var(--primary);background:var(--surface);outline:0;box-shadow:0 0 0 2px var(--primary-soft)}
+.list input.r{text-align:right}
+.list tr.grp td{background:var(--surface-2);height:32px;font-weight:600;border-bottom:1px solid var(--line)}
+.list tr.grp td .link{font-weight:600;font-size:12px;margin-left:12px}
+.list tr.grp td .link:first-child{margin-left:0;font-size:13px}
+.list tr.grp td .link:last-child{float:right}
+.x{color:var(--faint);border:0;background:none;font-size:15px;padding:0 4px}.x:hover{color:var(--bad)}
+/* salaries: two rows per person */
+.list tr.sal-a td{border-bottom:0;height:34px}
+.list tr.sal-b td{height:30px;font-weight:600}
+.list td.lbl{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.list td.span{border-bottom:1px solid var(--line)}
+.list tr.sal-a:hover td,.list tr.sal-b:hover td{background:transparent}
+.neg{color:var(--bad)}.pos{color:var(--good)}
+.note{padding:10px 20px;color:var(--muted);font-size:12px}
+/* internal-only rows (development areas) */
+.list tr.internal td{background:repeating-linear-gradient(135deg,transparent 0 6px,rgba(0,0,0,.025) 6px 8px)}
+.list tr.internal select,.list tr.internal input{color:var(--muted);font-style:italic}
+.list tr.internal td:last-child::before{content:"internal";font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-right:6px}
+.list td.wrap{white-space:normal;padding-top:4px;padding-bottom:4px;height:auto}
+.list textarea{width:100%;border:1px solid transparent;background:transparent;border-radius:3px;padding:4px 6px;resize:none;line-height:1.4;display:block}
+.list textarea:hover{border-color:var(--line-strong)}.list textarea:focus{border-color:var(--primary);background:var(--surface);outline:0;box-shadow:0 0 0 2px var(--primary-soft)}
+#p-risk .list td{vertical-align:top;padding-top:6px}
+/* severity selects */
+.list select.sev.high{color:var(--bad);font-weight:600}.list select.sev.med{color:var(--warn);font-weight:600}.list select.sev.low{color:var(--good);font-weight:600}
+/* proto */
+.proto{position:fixed;left:254px;bottom:64px;z-index:50;display:flex;gap:6px;background:var(--surface);border:1px solid var(--line-strong);border-radius:6px;padding:4px;box-shadow:0 6px 20px rgba(0,0,0,.15);font-size:12px}
+.proto span{color:var(--muted);padding:3px 6px}
+.pane{display:none}.pane.on{display:block}
+/* scope filter: click a name → every area shows only that person */
+.scoped tr[data-p]:not(.keep){display:none}
+/* responsive */
+@media (max-width:1280px){.list .opt{display:none}}
+@media (max-width:1100px){.body{grid-template-columns:minmax(0,1fr)}.help{position:fixed;right:0;top:48px;bottom:0;width:300px;box-shadow:-8px 0 24px rgba(0,0,0,.12)}.body.nohelp .help{display:none}.app{grid-template-columns:200px 1fr}.modulebar button{padding:0 10px}}
+</style>
+
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><span class="mark">▲</span> PlanWell</div>
+    <div class="plan-name">Plan: <b>DesignOne Concreting</b> · FY2026</div>
+    <div class="spacer"></div>
+    <div class="mode"><button class="on">Guided</button><button>Advanced</button></div>
+    <div class="avatar">NC</div>
+  </div>
+  <nav class="sidebar">
+    <div class="item"><span style="width:18px;text-align:center;opacity:.7">▦</span>Dashboard</div>
+    <div class="grp-h">Strategy &amp; Direction</div><div class="item done"><span class="stepno">1</span>Vision &amp; Purpose</div>
+    <div class="grp-h">People</div><div class="item active"><span class="stepno">2</span>Key People</div>
+    <div class="grp-h">Market</div><div class="item"><span class="stepno">3</span>Marketing</div>
+    <div class="grp-h">Goals</div><div class="item"><span class="stepno">4</span>SWOT</div><div class="item"><span class="stepno">11</span>Goals</div>
+    <div class="grp-h">Financials</div><div class="item"><span class="stepno">5</span>Historic</div><div class="item"><span class="stepno">6</span>Sales</div><div class="item"><span class="stepno">7</span>COGS</div><div class="item"><span class="stepno">8</span>Overheads</div><div class="item"><span class="stepno">9</span>Funding</div><div class="item"><span style="width:18px;text-align:center;opacity:.7">⇄</span>What-If Planner</div>
+    <div class="grp-h">Forecasts</div><div class="item"><span class="stepno">10</span>Review forecast</div>
+    <div class="grp-h">Reports</div><div class="item"><span class="stepno">12</span>Business plan</div>
+  </nav>
+
+  <main class="main">
+    <!-- module bar: belongs to the left-nav selection (Key People). Same position on every screen. Each item is a data area. -->
+    <div class="modulebar" id="modulebar">
+      <button class="on" data-key="people" onclick="go('people')">People</button>
+      <button data-key="salary" onclick="go('salary')">Salaries</button>
+      <button data-key="cap" onclick="go('cap')">Roles &amp; Capability<span class="count" data-c="cap">23</span></button>
+      <button data-key="risk" onclick="go('risk')">Risk &amp; Succession<span class="pill warn" style="margin-left:8px;font-size:10px">Phase 2</span></button>
+      <span class="scope">Showing <span class="chip all" id="chip"><span id="chipName">All people</span><button class="x" title="Show all people" onclick="scopeTo(null)">×</button></span></span>
+    </div>
+
+    <div class="pagehead">
+      <div class="row">
+        <div><div class="eyebrow">Step 2 of 12 · People</div><h1>Key People <span class="sub" style="font-weight:400;font-size:13px;margin-left:8px">Owners, directors and the people a lender asks about</span></h1></div>
+        <div class="actions">
+          <button class="btn sm" id="helpBtn" onclick="toggleHelp()"><span style="display:inline-grid;place-items:center;width:14px;height:14px;border-radius:50%;border:1px solid currentColor;font-size:9px;font-weight:700">?</span> Help</button>
+          <button class="btn sm primary" onclick="go('people')">+ New person</button>
+        </div>
+      </div>
+      <div class="progress"><i style="width:16.6%"></i></div>
+    </div>
+
+    <div class="body" id="body">
+      <div class="work" id="work">
+
+        <!-- PEOPLE: who they are. Editable grid. -->
+        <div class="pane on" id="p-people">
+          <div class="toolbar"><input class="search" placeholder="Find a person…"><span class="meta">4 people · shareholding <b class="num" style="color:var(--good)">100%</b> · click a name to focus every area on that person</span></div>
+          <div class="tablewrap"><table class="list">
+            <thead><tr><th style="width:120px">First name</th><th style="width:120px">Last name</th><th>Position</th><th style="width:120px">Role</th><th class="r" style="width:80px">Share %</th><th style="width:105px">Started</th><th class="r" style="width:90px">Tenure</th><th style="width:36px"></th></tr></thead>
+            <tbody>
+              <tr data-p="1"><td><button class="link" onclick="scopeTo(1)">Samantha</button></td><td><input value="John-Jones"></td><td><input value="Accounts Receivable/Payable"></td><td><select><option>Owner</option><option>Director</option><option selected>Employee</option><option>Contractor</option></select></td><td><input class="r num" value="0"></td><td><input value="Mar 2020"></td><td class="r num calc">6 yrs</td><td><button class="x" title="Remove">×</button></td></tr>
+              <tr data-p="2"><td><button class="link" onclick="scopeTo(2)">James</button></td><td><input value="Scott"></td><td><input value="Head of Tender &amp; Construction"></td><td><select><option>Owner</option><option selected>Director</option><option>Employee</option><option>Contractor</option></select></td><td><input class="r num" value="10"></td><td><input value="Jul 2015"></td><td class="r num calc">11 yrs</td><td><button class="x">×</button></td></tr>
+              <tr data-p="3"><td><button class="link" onclick="scopeTo(3)">Simon</button></td><td><input value="Scott"></td><td><input value="Director and CEO"></td><td><select><option selected>Owner</option><option>Director</option><option>Employee</option><option>Contractor</option></select></td><td><input class="r num" value="90"></td><td><input value="Feb 2004"></td><td class="r num calc">22 yrs</td><td><button class="x">×</button></td></tr>
+              <tr data-p="4"><td><button class="link" onclick="scopeTo(4)">Priya</button></td><td><input value="Nair"></td><td><input value="Site Supervisor (planned hire)"></td><td><select><option>Owner</option><option>Director</option><option selected>Employee</option><option>Contractor</option></select></td><td><input class="r num" value="0"></td><td><input value="Jul 2029"></td><td class="r num calc" style="color:var(--warn)">Joins Y4</td><td><button class="x">×</button></td></tr>
+            </tbody>
+            <tfoot><tr><td colspan="4">Total <span class="dim" style="font-weight:400;margin-left:8px">4 people · 1 planned hire</span></td><td class="r num" style="color:var(--good)">100%</td><td colspan="3"></td></tr></tfoot>
+          </table></div>
+          <div class="note">Fields save when you leave them. Tenure is calculated from Started against the plan year (FY2026). A future date shows the plan year the person joins — their salary starts in that year automatically.</div>
+        </div>
+
+        <!-- SALARIES: what they cost. Two rows per person. -->
+        <div class="pane" id="p-salary">
+          <div class="toolbar"><span class="meta" style="margin-left:0">Adjustment % compounds on the year before; negative for a cut. The Salary row calculates. The total feeds Overheads as a locked line — Overheads keeps a separate "Other wages" input, and on-costs are one % rate applied there. People with Role = Contractor have no salary row; they are costed in COGS or Overheads.</span></div>
+          <div class="tablewrap"><table class="list">
+            <thead><tr><th style="width:20%">Name</th><th class="r" style="width:110px">Base</th><th style="width:100px"></th><th class="r">Year 1</th><th class="r">Year 2</th><th class="r">Year 3</th><th class="r">Year 4</th><th class="r">Year 5</th><th class="r opt" style="width:150px">Y5 vs base</th></tr></thead>
+            <tbody>
+              <tr class="sal-a" data-p="1"><td rowspan="2" class="span"><button class="link" onclick="scopeTo(1)">Samantha John-Jones</button><div class="dim" style="font-size:11.5px">from Year 1</div></td><td rowspan="2" class="r span"><input class="r num" value="55,000"></td><td class="lbl">Adjust %</td><td><input class="r num" value="-50"></td><td><input class="r num" value="2"></td><td><input class="r num" value="2"></td><td><input class="r num" value="2"></td><td><input class="r num" value="2"></td><td rowspan="2" class="r num neg opt span">−25,233 (−45.9%)</td></tr>
+              <tr class="sal-b" data-p="1"><td class="lbl">Salary</td><td class="r num">27,500</td><td class="r num">28,050</td><td class="r num">28,611</td><td class="r num">29,183</td><td class="r num">29,767</td></tr>
+              <tr class="sal-a" data-p="2"><td rowspan="2" class="span"><button class="link" onclick="scopeTo(2)">James Scott</button><div class="dim" style="font-size:11.5px">from Year 1</div></td><td rowspan="2" class="r span"><input class="r num" value="145,000"></td><td class="lbl">Adjust %</td><td><input class="r num" value="0"></td><td><input class="r num" value="2"></td><td><input class="r num" value="2"></td><td><input class="r num" value="2"></td><td><input class="r num" value="2"></td><td rowspan="2" class="r num pos opt span">+11,953 (+8.2%)</td></tr>
+              <tr class="sal-b" data-p="2"><td class="lbl">Salary</td><td class="r num">145,000</td><td class="r num">147,900</td><td class="r num">150,858</td><td class="r num">153,875</td><td class="r num">156,953</td></tr>
+              <tr class="sal-a" data-p="3"><td rowspan="2" class="span"><button class="link" onclick="scopeTo(3)">Simon Scott</button><div class="dim" style="font-size:11.5px">from Year 1</div></td><td rowspan="2" class="r span"><input class="r num" value="182,500"></td><td class="lbl">Adjust %</td><td><input class="r num" value="0"></td><td><input class="r num" value="2"></td><td><input class="r num" value="2"></td><td><input class="r num" value="2"></td><td><input class="r num" value="2"></td><td rowspan="2" class="r num pos opt span">+15,044 (+8.2%)</td></tr>
+              <tr class="sal-b" data-p="3"><td class="lbl">Salary</td><td class="r num">182,500</td><td class="r num">186,150</td><td class="r num">189,873</td><td class="r num">193,670</td><td class="r num">197,544</td></tr>
+              <tr class="sal-a" data-p="4"><td rowspan="2" class="span"><button class="link" onclick="scopeTo(4)">Priya Nair</button><div style="font-size:11.5px;color:var(--warn)">joins Year 4 · Jul 2029</div></td><td rowspan="2" class="r span"><input class="r num" value="95,000"></td><td class="lbl">Adjust %</td><td class="r dim">—</td><td class="r dim">—</td><td class="r dim">—</td><td><input class="r num" value="0"></td><td><input class="r num" value="3"></td><td rowspan="2" class="r num pos opt span">+2,850 (+3.0%)</td></tr>
+              <tr class="sal-b" data-p="4"><td class="lbl">Salary</td><td class="r num dim">—</td><td class="r num dim">—</td><td class="r num dim">—</td><td class="r num">95,000</td><td class="r num">97,850</td></tr>
+            </tbody>
+            <tfoot><tr><td>Total → Overheads</td><td class="r num">477,500</td><td></td><td class="r num">355,000</td><td class="r num">362,100</td><td class="r num">369,342</td><td class="r num">471,728</td><td class="r num">482,114</td><td class="r num opt"></td></tr></tfoot>
+          </table></div>
+        </div>
+
+
+        <!-- ROLES & CAPABILITY: one list per person, Type column carries what used to be Duties / Qualities / Education -->
+        <div class="pane" id="p-cap">
+          <div class="toolbar"><input class="search" placeholder="Find…"><select class="search" style="width:190px"><option>All types</option><option>Responsibility</option><option>Skill</option><option>Strength</option><option>Expertise</option><option>Licence &amp; certification</option><option>Education</option><option>Development area</option></select><span class="meta">Hatched rows (Development areas) are internal — never printed in an external report</span></div>
+          <div class="tablewrap"><table class="list">
+            <thead><tr><th style="width:190px">Type</th><th>Description</th><th style="width:36px"></th></tr></thead>
+            <tbody>
+              <tr class="grp" data-p="1"><td colspan="3"><button class="link" onclick="scopeTo(1)">Samantha John-Jones</button><span class="dim" style="font-weight:400;margin-left:10px">Accounts Receivable/Payable · Employee</span><button class="link">+ Add</button></td></tr>
+              <tr data-p="1"><td><select><option selected>Responsibility</option><option>Skill</option><option>Strength</option><option>Expertise</option><option>Licence &amp; certification</option><option>Education</option><option>Development area</option></select></td><td><input value="Accounts payable, supplier payment scheduling and receivables / credit control"></td><td><button class="x">×</button></td></tr>
+              <tr data-p="1"><td><select><option selected>Responsibility</option><option>Skill</option><option>Strength</option><option>Expertise</option><option>Licence &amp; certification</option><option>Education</option><option>Development area</option></select></td><td><input value="Daily bank reconciliation and cash position reporting"></td><td><button class="x">×</button></td></tr>
+              <tr data-p="1"><td><select><option>Responsibility</option><option selected>Skill</option><option>Strength</option><option>Expertise</option><option>Licence &amp; certification</option><option>Education</option><option>Development area</option></select></td><td><input value="MYOB and Xero proficiency"></td><td><button class="x">×</button></td></tr>
+              <tr data-p="1"><td><select><option>Responsibility</option><option>Skill</option><option selected>Strength</option><option>Expertise</option><option>Licence &amp; certification</option><option>Education</option><option>Development area</option></select></td><td><input value="Detail-focused and highly reliable"></td><td><button class="x">×</button></td></tr>
+              <tr data-p="1"><td><select><option>Responsibility</option><option>Skill</option><option>Strength</option><option>Expertise</option><option selected>Licence &amp; certification</option><option>Education</option><option>Development area</option></select></td><td><input value="Diploma of Accounting, TAFE Queensland, 2008"></td><td><button class="x">×</button></td></tr>
+              <tr data-p="1"><td><select><option>Responsibility</option><option>Skill</option><option>Strength</option><option>Expertise</option><option>Licence &amp; certification</option><option selected>Education</option><option>Development area</option></select></td><td><input value="Bachelor of Business (Finance), QUT — part-time, completing 2027"></td><td><button class="x">×</button></td></tr>
+              <tr data-p="1" class="internal"><td><select><option>Responsibility</option><option>Skill</option><option>Strength</option><option>Expertise</option><option>Licence &amp; certification</option><option>Education</option><option selected>Development area</option></select></td><td><input value="Broader strategic financial planning"></td><td><button class="x">×</button></td></tr>
+              <tr class="grp" data-p="2"><td colspan="3"><button class="link" onclick="scopeTo(2)">James Scott</button><span class="dim" style="font-weight:400;margin-left:10px">Head of Tender &amp; Construction · Director</span><button class="link">+ Add</button></td></tr>
+              <tr data-p="2"><td><select><option selected>Responsibility</option><option>Skill</option><option>Strength</option><option>Expertise</option><option>Licence &amp; certification</option><option>Education</option><option>Development area</option></select></td><td><input value="Tender preparation, pricing and submission"></td><td><button class="x">×</button></td></tr>
+              <tr data-p="2"><td><select><option selected>Responsibility</option><option>Skill</option><option>Strength</option><option>Expertise</option><option>Licence &amp; certification</option><option>Education</option><option>Development area</option></select></td><td><input value="Site programme, subcontractor coordination, quality and safety"></td><td><button class="x">×</button></td></tr>
+              <tr data-p="2"><td><select><option selected>Responsibility</option><option>Skill</option><option>Strength</option><option>Expertise</option><option>Licence &amp; certification</option><option>Education</option><option>Development area</option></select></td><td><input value="Client variations and progress claims"></td><td><button class="x">×</button></td></tr>
+              <tr data-p="2"><td><select><option>Responsibility</option><option>Skill</option><option>Strength</option><option selected>Expertise</option><option>Licence &amp; certification</option><option>Education</option><option>Development area</option></select></td><td><input value="Commercial concrete estimating — 11 years, estimates within 3% of actuals"></td><td><button class="x">×</button></td></tr>
+              <tr data-p="2"><td><select><option>Responsibility</option><option>Skill</option><option>Strength</option><option>Expertise</option><option selected>Licence &amp; certification</option><option>Education</option><option>Development area</option></select></td><td><input value="Cert IV Building and Construction, TAFE Queensland, 2012"></td><td><button class="x">×</button></td></tr>
+              <tr data-p="2"><td><select><option>Responsibility</option><option>Skill</option><option>Strength</option><option>Expertise</option><option selected>Licence &amp; certification</option><option>Education</option><option>Development area</option></select></td><td><input value="Procore Certified Project Manager, 2023"></td><td><button class="x">×</button></td></tr>
+              <tr data-p="2"><td><select><option>Responsibility</option><option>Skill</option><option>Strength</option><option>Expertise</option><option>Licence &amp; certification</option><option selected>Education</option><option>Development area</option></select></td><td><input value="Estimating for Commercial Projects, Master Builders QLD, 2019"></td><td><button class="x">×</button></td></tr>
+              <tr data-p="2" class="internal"><td><select><option>Responsibility</option><option>Skill</option><option>Strength</option><option>Expertise</option><option>Licence &amp; certification</option><option>Education</option><option selected>Development area</option></select></td><td><input value="Delegation to site supervisors"></td><td><button class="x">×</button></td></tr>
+              <tr class="grp" data-p="3"><td colspan="3"><button class="link" onclick="scopeTo(3)">Simon Scott</button><span class="dim" style="font-weight:400;margin-left:10px">Director and CEO · Owner 90%</span><button class="link">+ Add</button></td></tr>
+              <tr data-p="3"><td><select><option selected>Responsibility</option><option>Skill</option><option>Strength</option><option>Expertise</option><option>Licence &amp; certification</option><option>Education</option><option>Development area</option></select></td><td><input value="Company strategy, annual plan and hiring decisions"></td><td><button class="x">×</button></td></tr>
+              <tr data-p="3"><td><select><option selected>Responsibility</option><option>Skill</option><option>Strength</option><option>Expertise</option><option>Licence &amp; certification</option><option>Education</option><option>Development area</option></select></td><td><input value="Key client and builder relationships; bank, insurer and accountant liaison"></td><td><button class="x">×</button></td></tr>
+              <tr data-p="3"><td><select><option>Responsibility</option><option>Skill</option><option>Strength</option><option selected>Expertise</option><option>Licence &amp; certification</option><option>Education</option><option>Development area</option></select></td><td><input value="22 years in civil and commercial concreting"></td><td><button class="x">×</button></td></tr>
+              <tr data-p="3"><td><select><option>Responsibility</option><option>Skill</option><option selected>Strength</option><option>Expertise</option><option>Licence &amp; certification</option><option>Education</option><option>Development area</option></select></td><td><input value="Relationship builder and negotiator"></td><td><button class="x">×</button></td></tr>
+              <tr data-p="3"><td><select><option>Responsibility</option><option>Skill</option><option>Strength</option><option>Expertise</option><option selected>Licence &amp; certification</option><option>Education</option><option>Development area</option></select></td><td><input value="QBCC Open Builder Licence, 2004"></td><td><button class="x">×</button></td></tr>
+              <tr data-p="3"><td><select><option>Responsibility</option><option>Skill</option><option>Strength</option><option>Expertise</option><option>Licence &amp; certification</option><option selected>Education</option><option>Development area</option></select></td><td><input value="Bachelor of Engineering (Civil), Griffith University, 2001"></td><td><button class="x">×</button></td></tr>
+              <tr data-p="3" class="internal"><td><select><option>Responsibility</option><option>Skill</option><option>Strength</option><option>Expertise</option><option>Licence &amp; certification</option><option>Education</option><option selected>Development area</option></select></td><td><input value="Reading the monthly financials without the accountant"></td><td><button class="x">×</button></td></tr>
+              <tr class="grp" data-p="4"><td colspan="3"><button class="link" onclick="scopeTo(4)">Priya Nair</button><span class="dim" style="font-weight:400;margin-left:10px">Site Supervisor · planned hire, Jul 2029</span><button class="link">+ Add</button></td></tr>
+              <tr data-p="4"><td><select><option selected>Responsibility</option><option>Skill</option><option>Strength</option><option>Expertise</option><option>Licence &amp; certification</option><option>Education</option><option>Development area</option></select></td><td><input value="Run crew 2 day to day; daily pre-starts and pour schedules"></td><td><button class="x">×</button></td></tr>
+            </tbody>
+          </table></div>
+        </div>
+
+        <!-- RISK & SUCCESSION: four fields per person (phase 2) -->
+        <div class="pane" id="p-risk">
+          <div class="toolbar"><span class="meta" style="margin-left:0">What happens to the business if this person is unavailable for six months. Used in funding, SBA and sale reports.</span></div>
+          <div class="tablewrap"><table class="list">
+            <thead><tr><th style="width:18%">Name</th><th style="width:120px">Dependency</th><th style="width:170px">Successor</th><th style="width:150px">Key-person cover</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr data-p="3"><td><button class="link" onclick="scopeTo(3)">Simon Scott</button><div class="dim" style="font-size:11.5px">Owner 90% · CEO</div></td><td><select class="sev high"><option>Low</option><option>Medium</option><option selected>High</option></select></td><td><select><option>— none identified —</option><option selected>James Scott</option><option>Samantha John-Jones</option><option>Priya Nair</option><option>External hire</option></select></td><td><select><option>None</option><option selected>Insured — $1.5M</option><option>Insured</option><option>Quoted</option></select></td><td class="wrap"><textarea rows="2">Holds all builder relationships and the bank. James to shadow client reviews from Q2.</textarea></td></tr>
+              <tr data-p="2"><td><button class="link" onclick="scopeTo(2)">James Scott</button><div class="dim" style="font-size:11.5px">Director 10%</div></td><td><select class="sev high"><option>Low</option><option>Medium</option><option selected>High</option></select></td><td><select><option selected>— none identified —</option><option>Simon Scott</option><option>Samantha John-Jones</option><option>Priya Nair</option><option>External hire</option></select></td><td><select><option selected>None</option><option>Insured</option><option>Quoted</option></select></td><td class="wrap"><textarea rows="2">Only estimator. Priya's hire (Y4) is the first step; no cover before then.</textarea></td></tr>
+              <tr data-p="1"><td><button class="link" onclick="scopeTo(1)">Samantha John-Jones</button><div class="dim" style="font-size:11.5px">Employee</div></td><td><select class="sev med"><option>Low</option><option selected>Medium</option><option>High</option></select></td><td><select><option>— none identified —</option><option>Simon Scott</option><option>James Scott</option><option>Priya Nair</option><option selected>External hire</option></select></td><td><select><option selected>None</option><option>Insured</option><option>Quoted</option></select></td><td class="wrap"><textarea rows="2">Bookkeeper could cover payables within a fortnight; debtor relationships would slip.</textarea></td></tr>
+              <tr data-p="4"><td><button class="link" onclick="scopeTo(4)">Priya Nair</button><div style="font-size:11.5px;color:var(--warn)">planned hire · Jul 2029</div></td><td><select class="sev low"><option selected>Low</option><option>Medium</option><option>High</option></select></td><td><select><option selected>— none identified —</option><option>Simon Scott</option><option>James Scott</option><option>Samantha John-Jones</option><option>External hire</option></select></td><td><select><option selected>None</option><option>Insured</option><option>Quoted</option></select></td><td class="wrap"><textarea rows="2" placeholder="Optional for a planned hire"></textarea></td></tr>
+            </tbody>
+          </table></div>
+          <div class="note">Two people rated High with one successor between them — the report will say so plainly. That's the point.</div>
+        </div>
+      </div>
+
+      <aside class="help">
+        <h3>What good looks like</h3>
+        <p>Three to six people. Start with the owner; add anyone whose absence would change the plan — including hires you're planning.</p>
+        <p>Salaries feed Overheads. A $0 owner salary flatters the profit and every bank knows it.</p>
+        <div class="ex">Shareholding should add to 100%. If it doesn't, the ownership table in the report will look wrong to an investor.</div>
+        <h3>Where this goes</h3>
+        <p><b>People</b> → ownership table and management team. <b>Salaries</b> → Overheads, shown in full or summarised depending on the report. <b>Roles &amp; Capability</b> → management bios (development areas stay internal). <b>Risk &amp; Succession</b> → key-person risk section in funding, SBA and sale reports.</p>
+        <p>12-month focus for each person now lives under <b>Goals</b>, where every goal has an owner.</p>
+      </aside>
+    </div>
+
+    <div class="footer">
+      <button class="btn">← Back</button>
+      <span style="color:var(--muted);font-size:12px">All changes saved</span>
+      <div style="display:flex;gap:8px"><button class="btn">Save and finish later</button><button class="btn primary">Save and continue →</button></div>
+    </div>
+  </main>
+</div>
+
+<div class="proto"><span>Prototype</span><button class="btn sm on" id="pa" onclick="scopeTo(null)">All people</button><button class="btn sm" id="p1" onclick="scopeTo(1)">Samantha</button><button class="btn sm" id="p4" onclick="scopeTo(4)">Priya (planned)</button><button class="btn sm" onclick="toggleHelp()">Help on/off</button></div>
+
+<script>
+const names={1:'Samantha John-Jones',2:'James Scott',3:'Simon Scott',4:'Priya Nair'};
+const counts={all:{cap:23},1:{cap:7},2:{cap:8},3:{cap:7},4:{cap:1}};
+let key='people', scope=null;
+function go(k){key=k;document.querySelectorAll('#modulebar button').forEach(b=>b.classList.toggle('on',b.dataset.key===k));document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id==='p-'+k));document.querySelectorAll('#p-'+k+' textarea').forEach(fit);}
+function scopeTo(id){scope=id;const w=document.getElementById('work');w.classList.toggle('scoped',!!id);
+  document.querySelectorAll('tr[data-p]').forEach(tr=>tr.classList.toggle('keep',String(tr.dataset.p)===String(id)));
+  const chip=document.getElementById('chip');chip.classList.toggle('all',!id);document.getElementById('chipName').textContent=id?names[id]:'All people';
+  const c=counts[id||'all'];for(const k in c)document.querySelector('[data-c="'+k+'"]').textContent=c[k];
+  ['pa','p1','p4'].forEach(b=>document.getElementById(b).classList.toggle('on',(b==='pa'&&!id)||(b==='p'+id)));}
+function toggleHelp(){const b=document.getElementById('body');b.classList.toggle('nohelp');document.getElementById('helpBtn').classList.toggle('on',!b.classList.contains('nohelp'));}
+document.getElementById('helpBtn').classList.add('on');
+if(window.innerWidth<=1100){toggleHelp();}
+// notes grow to fit (min two lines)
+function fit(t){t.style.height='auto';t.style.height=Math.max(t.scrollHeight,38)+'px';}
+document.querySelectorAll('textarea').forEach(t=>{fit(t);t.addEventListener('input',()=>fit(t));});
+</script>

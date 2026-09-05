@@ -33,7 +33,7 @@ export default async function PlanLayout({ children, params }: { children: React
         </form>
       </header>
       <Sidebar planId={planId} mode={mode} doneSteps={doneSteps} />
-      <main className="overflow-y-auto px-7 pt-6">{children}</main>
+      <main className="min-h-0 overflow-y-auto">{children}</main>
     </div>
   );
 }

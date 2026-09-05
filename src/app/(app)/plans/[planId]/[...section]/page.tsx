@@ -9,7 +9,7 @@ export default async function SectionPage({ params }: { params: Promise<{ planId
   const id = section[0];
   const step = GUIDED_STEPS.find((s) => s.id === id)?.step;
   return (
-    <div className="mx-auto max-w-[860px]">
+    <div className="mx-auto max-w-[860px] px-7 pt-6">
       <div className="eyebrow">{step ? `Step ${step} of 12 · ` : ""}{navLabel(id)}</div>
       <h1 className="mt-1 text-2xl font-semibold">{navLabel(id)}</h1>
       <Card className="mt-5 border-dashed">
