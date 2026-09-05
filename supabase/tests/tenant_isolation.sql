@@ -120,4 +120,14 @@ select _assert(not _allowed($q$insert into plan_goals (plan_id,area,title) value
 select _assert(_allowed($q$insert into plan_goals (plan_id,parent_id,area,title,quarter) values ('20000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000001','sales','Q1 goal',1)$q$), 'quarterly goal under same-plan parent');
 reset role;
 
+-- ---------- 7. people child tables respect the plan boundary ----------
+set role authenticated;
+select _as('a0000000-0000-0000-0000-00000000000b');
+select _assert(_allowed($q$insert into plan_people (id,plan_id,first_name) values ('40000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','Sam')$q$), 'advisor adds a person');
+select _assert(_allowed($q$insert into plan_people_duties (plan_id,person_id,duty) values ('20000000-0000-0000-0000-000000000001','40000000-0000-0000-0000-000000000001','Invoicing')$q$), 'duty under same-plan person');
+select _as('00000000-0000-0000-0000-000000000005');
+select _assert(not _allowed($q$insert into plan_people_duties (plan_id,person_id,duty) values ('20000000-0000-0000-0000-000000000005','40000000-0000-0000-0000-000000000001','cross')$q$), 'duty cannot point at a person in another plan');
+select _assert((select count(*) from plan_people_duties)=0, 'other tenant cannot read duties');
+reset role;
+
 select 'ALL TENANT TESTS PASSED' as result;
