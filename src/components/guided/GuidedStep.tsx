@@ -1,39 +1,23 @@
 import { GUIDED_STEPS } from "@/lib/nav";
+import { getSession } from "@/lib/plan";
 import { StepFrame, StepFooter } from "./StepFrame";
 
 /**
- * The one frame for all 12 Guided steps: eyebrow, progress bar, title + why, body with a coach aside,
- * and the footer pinned to the bottom of the pane. Steps only supply content, an aside, and the id of
- * the form the footer buttons submit. Nothing important below the fold — Requirements "Closed" 9.
+ * The one frame for all 12 Guided steps. Steps supply: title, a one-line subtitle, the working content,
+ * optional help (coach panels, shown in a toggleable right column), and the id of the form the footer submits.
  */
-export function GuidedStep({
-  planId, step, group, title, why, children, aside, wide, formId, prevId, nextLabel,
+export async function GuidedStep({
+  planId, step, group, title, subtitle, children, help, formId, prevId, nextLabel,
 }: {
-  planId: string; step: number; group: string; title: string; why: string;
-  children: React.ReactNode; aside?: React.ReactNode; wide?: boolean;
-  formId: string; prevId?: string; nextLabel?: string;
+  planId: string; step: number; group: string; title: string; subtitle?: string;
+  children: React.ReactNode; help?: React.ReactNode; formId: string; prevId?: string; nextLabel?: string;
 }) {
-  const total = GUIDED_STEPS.length;
+  const session = await getSession();
+  const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
   return (
-    <StepFrame footer={<StepFooter planId={planId} prevId={prevId} formId={formId} nextLabel={nextLabel} />}>
-      <div className="mx-auto max-w-[1180px]">
-        <span className="eyebrow">Step {step} of {total} · {group}</span>
-        <div className="mb-5 mt-2.5 h-1 overflow-hidden rounded bg-border"><i className="block h-full bg-primary" style={{ width: `${(step / total) * 100}%` }} /></div>
-        <h1 className="text-2xl font-semibold leading-tight text-balance">{title}</h1>
-        <p className="mt-1.5 max-w-[72ch] text-[13px] text-muted-foreground">{why}</p>
-        {wide ? (
-          // Table-style steps: coach panels sit above the table as a compact row so the table gets the full width.
-          <>
-            {aside && <div className="mt-5 grid grid-cols-2 gap-3 [&>*]:mb-0">{aside}</div>}
-            <div className="mt-4">{children}</div>
-          </>
-        ) : (
-          <div className={aside ? "mt-5 grid grid-cols-[minmax(0,1fr)_300px] items-start gap-[18px]" : "mt-5"}>
-            <div className="min-w-0">{children}</div>
-            {aside && <aside className="space-y-3">{aside}</aside>}
-          </div>
-        )}
-      </div>
+    <StepFrame step={step} total={GUIDED_STEPS.length} group={group} title={title} subtitle={subtitle} mode={mode} help={help}
+      footer={<StepFooter planId={planId} prevId={prevId} formId={formId} nextLabel={nextLabel} />}>
+      {children}
     </StepFrame>
   );
 }

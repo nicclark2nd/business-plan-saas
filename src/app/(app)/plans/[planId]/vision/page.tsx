@@ -12,9 +12,11 @@ export default async function VisionPage({ params }: { params: Promise<{ planId:
   return (
     <GuidedStep
       planId={planId} formId="vision-form" prevId="dashboard" step={1} group="Strategy & Direction · Vision & Purpose"
-      title="What is this business for?"
-      why="Six short statements. They open your business plan, and every lender, grant assessor and investor reads them first. Rough is fine — you can polish later."
-      aside={<>
+      title="What is this business for?" subtitle="Six short statements that open your plan"
+      help={<>
+        <CoachPanel title="Why this matters">
+          <p>These six statements open your business plan; every lender, grant assessor and investor reads them first. Rough is fine — you can polish later.</p>
+        </CoachPanel>
         <CoachPanel title="What good looks like">
           <p>Specific beats grand. A vision a competitor could also claim isn&apos;t a vision.</p>
           <p>A grant assessor is checking that you know exactly what you sell and to whom. Name the customer and the area.</p>

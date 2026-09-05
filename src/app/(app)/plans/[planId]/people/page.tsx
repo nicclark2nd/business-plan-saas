@@ -18,10 +18,9 @@ export default async function PeoplePage({ params }: { params: Promise<{ planId:
 
   return (
     <GuidedStep
-      planId={planId} formId="people-form" prevId="vision" step={2} group="People · Key People" wide
-      title="Who runs the business?"
-      why="Owners, directors and the people a lender or investor would ask about. Name, role, shareholding and salary are the essentials; open a person's details for their salary schedule, duties, qualities, education and focus."
-      aside={<>
+      planId={planId} formId="people-form" prevId="vision" step={2} group="People · Key People"
+      title="Who runs the business?" subtitle="Owners, directors and the people a lender would ask about"
+      help={<>
         <CoachPanel title="What good looks like">
           <p>Three to six people is typical. Start with the owner; add anyone whose absence would change the plan.</p>
           <p>Salaries feed Overheads and the forecast, so put real numbers in — a $0 owner salary flatters the profit and every bank knows it. Use the salary schedule for planned rises, cuts or a later start.</p>

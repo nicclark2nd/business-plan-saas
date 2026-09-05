@@ -19,7 +19,6 @@ const QUALITY_KINDS = ["skill", "strength", "development", "expertise", "certifi
 const EDUCATION_KINDS = ["degree", "certification", "training", "course", "workshop", "seminar", "conference"];
 const PRIORITIES = ["high", "medium", "low"];
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const GRID = "grid-cols-[minmax(140px,1fr)_minmax(140px,1fr)_minmax(160px,1.2fr)_110px_130px_150px]";
 
 type Row = Person & { _key: string; _dirty?: boolean; _state?: "saving" | "saved" | "error"; _error?: string };
 
@@ -110,56 +109,60 @@ export function PeopleModule({ planId, initial, currency }: { planId: string; in
 
   return (
     <>
-      {/* ---------- people list ---------- */}
-      <div className="rounded-md border border-border bg-card">
-        <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
-          <Button size="sm" type="button" onClick={addPerson}>+ Add a person</Button>
-          <span className="text-xs text-muted-foreground">
-            {people.length} {people.length === 1 ? "person" : "people"} · rows save when you leave them
-            {shareTotal > 0 && <> · shareholding {shareTotal}%{shareTotal !== 100 && <span className="text-warn"> (should total 100%)</span>}</>}
-          </span>
-        </div>
-        {people.length === 0 && <div className="px-4 py-8 text-center text-[13px] text-muted-foreground">Start with the owner. Add anyone whose role matters to the plan — a bank or investor will want to know who runs the business.</div>}
-        {people.length > 0 && (
-          <div className={cn("grid gap-3 border-b border-input px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground whitespace-nowrap", GRID)}>
-            <span>First name</span><span>Last name</span><span>Position</span><span>Shareholding %</span><span>Annual salary</span><span />
+      <div className="grid grid-cols-[minmax(340px,38%)_minmax(0,1fr)] gap-3 items-start">
+        {/* ---------- master: people list ---------- */}
+        <div className="rounded-md border border-border bg-card">
+          <div className="flex items-center justify-between border-b border-border px-3 py-2">
+            <Button size="sm" type="button" onClick={addPerson}>+ Add a person</Button>
+            <span className="text-xs text-muted-foreground">{people.length} {people.length === 1 ? "person" : "people"}</span>
           </div>
-        )}
-        {people.map((r) => (
-          <div key={r._key} data-row={r._key} onClick={() => setSelected(r._key)} onBlur={(e) => { if (left(e)) commitPerson(r._key); }}
-            className={cn("grid cursor-pointer items-center gap-3 border-b border-border px-4 py-2 last:border-b-0", GRID, selected === r._key && "bg-accent/50")}>
-            <Input name="first_name" defaultValue={r.first_name ?? ""} placeholder="First name" aria-label="First name" onChange={(e) => savePerson(r._key, { first_name: e.target.value })} />
-            <Input name="last_name" defaultValue={r.last_name ?? ""} placeholder="Last name" aria-label="Last name" onChange={(e) => savePerson(r._key, { last_name: e.target.value })} />
-            <Input name="job_title" defaultValue={r.position ?? ""} placeholder="e.g. Managing Director" aria-label="Position" onChange={(e) => savePerson(r._key, { position: e.target.value })} />
-            <Input name="pct_shareholding" inputMode="decimal" className="num text-right" defaultValue={r.pct_shareholding || ""} placeholder="0" aria-label="Shareholding %" onChange={(e) => savePerson(r._key, { pct_shareholding: Number(e.target.value) || 0 })} />
-            <Input name="annual_salary" inputMode="numeric" className="num text-right" defaultValue={r.annual_salary || ""} placeholder="0" aria-label="Annual salary" onChange={(e) => savePerson(r._key, { annual_salary: Number(String(e.target.value).replace(/[^0-9.]/g, "")) || 0 })} />
-            <div className="flex items-center justify-end gap-1">
-              <span className="w-14 text-right text-[11px] text-muted-foreground">{r._state === "saving" ? "Saving…" : r._state === "error" ? <span className="text-bad" title={r._error}>Error</span> : r._dirty ? "Editing" : r.id ? "Saved" : ""}</span>
-              <Button type="button" variant={selected === r._key ? "secondary" : "ghost"} size="sm" onClick={(e) => { e.stopPropagation(); setSelected(r._key); }}>Details</Button>
-              <Button type="button" variant="ghost" size="icon-sm" className="text-muted-foreground" title="Remove this person" onClick={(e) => { e.stopPropagation(); removePerson(r); }}>×</Button>
+          {people.length === 0 && <div className="px-4 py-8 text-center text-[13px] text-muted-foreground">Start with the owner. Add anyone whose absence would change the plan.</div>}
+          <div className="max-h-[calc(100vh-330px)] overflow-y-auto">
+            {people.map((r) => (
+              <div key={r._key} data-row={r._key} onClick={() => setSelected(r._key)} onBlur={(e) => { if (left(e)) commitPerson(r._key); }}
+                className={cn("cursor-pointer border-b border-border px-3 py-2.5 last:border-b-0 hover:bg-secondary/60", selected === r._key && "bg-accent/60 border-l-[3px] border-l-primary pl-[9px]")}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 truncate text-[13px] font-semibold">{(r.first_name || r.last_name) ? `${r.first_name} ${r.last_name ?? ""}`.trim() : <span className="font-normal text-muted-foreground">New person</span>}</div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] text-muted-foreground">{r._state === "saving" ? "Saving…" : r._state === "error" ? <span className="text-bad" title={r._error}>Error</span> : r._dirty ? "Editing" : ""}</span>
+                    <Button type="button" variant="ghost" size="icon-xs" className="text-muted-foreground" title="Remove this person" onClick={(e) => { e.stopPropagation(); removePerson(r); }}>×</Button>
+                  </div>
+                </div>
+                <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span className="truncate">{r.position || "—"}</span>
+                  <span className="num whitespace-nowrap">{r.pct_shareholding ? `${r.pct_shareholding}% · ` : ""}{money(r.annual_salary, currency)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          {people.length > 0 && (
+            <div className="border-t border-input bg-secondary px-3 py-2 text-[11px] text-muted-foreground">
+              <div className="flex justify-between"><span>Shareholding</span><span className={cn("num", shareTotal !== 100 && "text-warn")}>{shareTotal}%{shareTotal !== 100 && " · should be 100%"}</span></div>
+              <div className="mt-0.5 flex justify-between gap-2"><span>Salaries Y1→Y5</span><span className="num truncate">{totals.map((t) => money(t.value, currency)).join(" · ")}</span></div>
             </div>
-          </div>
-        ))}
-        {people.length > 1 && (
-          <div className={cn("grid gap-3 border-t border-input bg-secondary px-4 py-2 text-xs", GRID)}>
-            <span className="col-span-4 font-semibold text-muted-foreground">Total salaries, Year 1 → 5</span>
-            <span className="num col-span-2 text-right text-muted-foreground">{totals.map((t) => money(t.value, currency)).join(" · ")}</span>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
 
-      {/* ---------- selected person detail ---------- */}
-      {sel && sel.id && (
-        <div className="mt-3 rounded-md border border-border bg-card" onBlur={(e) => { if (left(e)) commitPerson(sel._key); }}>
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <div><span className="font-semibold">{sel.first_name} {sel.last_name ?? ""}</span>{sel.position && <span className="text-muted-foreground"> · {sel.position}</span>}</div>
-            <span className="text-xs text-muted-foreground">Optional detail — saved when you leave a field</span>
-          </div>
-          <Tabs defaultValue="salary" className="px-4 pb-4 pt-2">
-            <TabsList>
-              {["salary", "productivity", "duties", "qualities", "education", "focus"].map((t) => <TabsTrigger key={t} value={t}>{cap(t)}{["duties", "qualities", "education", "focus"].includes(t) && items(t as ListKind, sel.id).length > 0 && <Badge variant="secondary" className="ml-1.5 px-1.5">{items(t as ListKind, sel.id).length}</Badge>}</TabsTrigger>)}
-            </TabsList>
-
+        {/* ---------- detail: selected person ---------- */}
+        <div key={sel?._key ?? "none"} className="min-w-0 rounded-md border border-border bg-card" onBlur={(e) => { if (sel && left(e)) commitPerson(sel._key); }}>
+          {!sel ? (
+            <div className="px-6 py-14 text-center text-[13px] text-muted-foreground">{people.length ? "Select a person on the left." : "Add a person to begin."}</div>
+          ) : (
+            <>
+              <div className="border-b border-border px-4 py-3">
+                <div className="grid grid-cols-[1fr_1fr_1.2fr_110px_140px] gap-3">
+                  <div className="space-y-1"><Label>First name</Label><Input name="first_name" defaultValue={sel.first_name ?? ""} placeholder="First name" onChange={(e) => savePerson(sel._key, { first_name: e.target.value })} /></div>
+                  <div className="space-y-1"><Label>Last name</Label><Input name="last_name" defaultValue={sel.last_name ?? ""} placeholder="Last name" onChange={(e) => savePerson(sel._key, { last_name: e.target.value })} /></div>
+                  <div className="space-y-1"><Label>Position</Label><Input name="job_title" defaultValue={sel.position ?? ""} placeholder="e.g. Managing Director" onChange={(e) => savePerson(sel._key, { position: e.target.value })} /></div>
+                  <div className="space-y-1"><Label>Shareholding %</Label><Input name="pct_shareholding" inputMode="decimal" className="num text-right" defaultValue={sel.pct_shareholding || ""} placeholder="0" onChange={(e) => savePerson(sel._key, { pct_shareholding: Number(e.target.value) || 0 })} /></div>
+                  <div className="space-y-1"><Label>Annual salary</Label><Input name="annual_salary" inputMode="numeric" className="num text-right" defaultValue={sel.annual_salary || ""} placeholder="0" onChange={(e) => savePerson(sel._key, { annual_salary: Number(String(e.target.value).replace(/[^0-9.]/g, "")) || 0 })} /></div>
+                </div>
+              </div>
+              {sel.id ? (
+                <Tabs defaultValue="salary" className="px-4 pb-4 pt-2">
+                  <TabsList>
+                    {["salary", "productivity", "duties", "qualities", "education", "focus"].map((t) => <TabsTrigger key={t} value={t}>{cap(t)}{["duties", "qualities", "education", "focus"].includes(t) && items(t as ListKind, sel.id).length > 0 && <Badge variant="secondary" className="ml-1.5 px-1.5">{items(t as ListKind, sel.id).length}</Badge>}</TabsTrigger>)}
+                  </TabsList>
             <TabsContent value="salary" className="pt-3">
               <SalaryTab person={sel} currency={currency} onChange={(c, now) => savePerson(sel._key, c, now)} />
             </TabsContent>
@@ -221,10 +224,14 @@ export function PeopleModule({ planId, initial, currency }: { planId: string; in
                   </ItemRow>))}
               </ItemList>
             </TabsContent>
-          </Tabs>
+                </Tabs>
+              ) : (
+                <p className="px-4 py-6 text-xs text-muted-foreground">Type a first name and tab out — the salary schedule, duties, qualities, education and focus tabs open once the person is saved.</p>
+              )}
+            </>
+          )}
         </div>
-      )}
-      {sel && !sel.id && <p className="mt-3 text-xs text-muted-foreground">Type a first name and the detail tabs (salary schedule, duties, qualities, education, focus) will open for this person.</p>}
+      </div>
 
       <form id="people-form" action={(fd) => { peopleRef.current.forEach((r) => commitPerson(r._key)); Array.from(dirtyItems.current).forEach((k) => { const [kind, id] = k.split(":") as [ListKind, string]; commitItem(kind, id); }); start(() => continueFromPeople(planId, fd.get("intent") === "next" ? "next" : "later")); }} />
     </>
