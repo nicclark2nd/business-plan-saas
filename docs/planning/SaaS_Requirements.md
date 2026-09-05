@@ -294,3 +294,7 @@ All UI is built from **shadcn/ui** components in `src/components/ui` (Button, In
 - **No `type="number"` inputs anywhere.** Numeric fields are text inputs with `inputMode="numeric"` / `"decimal"`, right-aligned, tabular figures. No spinner arrows. (Nic: spinners are annoying; they also make fat-finger edits easy.)
 - **Password managers are told to ignore every field** except sign-in/sign-up (autoComplete off + the ignore attributes for Keeper, 1Password, LastPass, Bitwarden). Set once in the Input and Textarea components.
 - Plain text fields are plain text fields — no dropdown unless the values are a fixed list.
+
+## 6.10 Save policy for editable lists (5 Sep 2026)
+
+Typing never hits the server. A row (or detail panel) saves **once, when focus leaves it**; dropdown choices save on selection; *Save and continue* flushes anything still dirty. Status per row: Editing → Saving… → Saved / Error. This keeps traffic to one request per edit session per row, so a plan with 200 people or 300 overhead lines costs the same per edit as one with three. (Nic, People step.)
