@@ -178,14 +178,16 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
                       <NameLink onClick={() => setScope(r._key)}>{r.name || r.first_name || "New person"}</NameLink>
                       <div className={cn("text-[11.5px]", sy > 1 ? "text-warn" : "text-muted-foreground")}>{sy > 5 ? "starts after Year 5" : sy > 1 ? `joins Year ${sy} · ${r.started_text}` : "from Year 1"}</div>
                     </Td>
-                    <Td rowSpan={2} right className="!border-b border-border align-middle"><CellInput numeric value={num(r.annual_salary)} onChange={(e) => edit(r._key, { annual_salary: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} /></Td>
+                    <Td />
                     <Td className="text-[11px] font-semibold uppercase tracking-[.04em] text-muted-foreground">Adjust %</Td>
                     {SALARY_YEARS.map((y) => <Td key={y} right className="text-muted-foreground">{y < sy ? "—" : <CellInput numeric value={String(r.salary_adjustments?.[String(y)] ?? "")} placeholder="0" onChange={(e) => edit(r._key, { salary_adjustments: { ...r.salary_adjustments, [String(y)]: Number(e.target.value.replace(/[^\d.-]/g, "")) || 0 } })} />}</Td>)}
-                    <Td rowSpan={2} right className={cn("num !border-b border-border align-middle max-[1280px]:hidden", change.delta < 0 ? "text-bad" : change.delta > 0 ? "text-good" : "text-muted-foreground")}>{change.delta >= 0 ? "+" : "−"}{num(Math.abs(change.delta))} ({change.percent >= 0 ? "+" : ""}{change.percent.toFixed(1)}%)</Td>
+                    <Td className="max-[1280px]:hidden" />
                   </tr>,
-                  <tr key={r._key + "b"} className="[&>td]:h-[30px] [&>td]:font-semibold">
+                  <tr key={r._key + "b"} data-row={r._key} onBlur={(e) => left(e) && commitPerson(r._key)} className="[&>td]:h-[30px] [&>td]:font-semibold">
+                    <Td right className="!font-normal"><CellInput numeric value={num(r.annual_salary)} onChange={(e) => edit(r._key, { annual_salary: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} /></Td>
                     <Td className="text-[11px] font-semibold uppercase tracking-[.04em] text-muted-foreground">Salary</Td>
                     {sched.map((s) => <Td key={s.year} right className={cn("num", s.year < sy && "text-muted-foreground")}>{s.year < sy ? "—" : num(s.value)}</Td>)}
+                    <Td right className={cn("num max-[1280px]:hidden", change.delta < 0 ? "text-bad" : change.delta > 0 ? "text-good" : "text-muted-foreground")}>{change.delta >= 0 ? "+" : "−"}{num(Math.abs(change.delta))} ({change.percent >= 0 ? "+" : ""}{change.percent.toFixed(1)}%)</Td>
                   </tr>,
                 ];
               })}
