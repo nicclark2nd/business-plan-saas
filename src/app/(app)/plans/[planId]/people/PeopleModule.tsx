@@ -106,7 +106,7 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
 
   return (
     <ModuleFrame
-      step={2} total={GUIDED_STEPS.length} group="People" title="Key People" subtitle="Owners, directors and the people a lender asks about" mode={mode}
+      step={2} total={GUIDED_STEPS.length} group="People" title="Management Team" subtitle="Owners, directors and the key people a lender asks about — not the whole payroll" mode={mode}
       areas={areas} area={area} onArea={(k) => setArea(k as AreaKey)}
       scope={{ label: scoped ? scoped.name || `${scoped.first_name} ${scoped.last_name ?? ""}`.trim() || "New person" : "All people", onClear: scope ? () => setScope(null) : undefined }}
       primaryAction={<Button size="sm" type="button" onClick={addPerson}>+ New person</Button>}

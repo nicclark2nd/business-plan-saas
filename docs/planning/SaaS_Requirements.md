@@ -74,7 +74,7 @@ Rationale: "Foundations" mixed setup, identity, people and market into one group
 | **Dashboard** | Dashboard | See §3. |
 | **Strategy & Direction** | **Vision & Purpose** (was "Framework" — renamed 4 Sep 2026: Vision, Mission, Purpose, Brand Promise, AI Direction, Field of Play) | "Who we are and where we're going." Primary qualitative input to the AI layer alongside Goals/SWOT. **"Outcomes" removed as a menu item 4 Sep 2026** — its six statements become the annual level of Goals (see Goals row and §6.7). |
 | **Assets** | Outlets, Social Media, Membership, Intellectual Property, Capital Equipment | Registers — "what we own." **Descriptive only; does not touch the financials.** Assets enter the numbers via Historic (opening balances) and Funding (capital loans / purchases). |
-| **People** | Key People (List, Salaries, Productivity, Duties, Qualities, Education, Focus) | Renamed from "Key People" to leave room for org structure / hiring plans. |
+| **People** | Management Team (People, Salaries, Roles & Capability, Risk & Succession — §6.11) | Renamed from "Key People" 5 Sep 2026: it is the management structure, not a shortlist — but still a subset, never the whole payroll. Room for *Advisors* later. |
 | **Market** | Marketing (7 tabs), Competitors | Competitors moves in beside Market Research. |
 | **Goals** | SWOT, Goals | **SWOT sits here (decided).** SWOT is early in the Guided path (step 4); **Goals moves late (step 11, after the forecast review)** so targets are set with the numbers in hand. Goals is **two-level**: one annual goal per area (Financial, Management, Marketing, Sales, Operational, AI — the former "Outcomes") with quarterly goals beneath. AI drafts the annual goals from the forecast + SWOT; the owner edits. See §6.7. |
 | **Financials** | Sales, COGS, Overheads, Funding, Extraordinary, Historic, **What-If Planner** (renamed 7 Key Drivers — §4); Plan Check-in (§6) added in phase 2 | |
@@ -261,7 +261,7 @@ The two-day, 4–10 business, coach-facilitated workshop is a core v1 use case a
 
 - **Both the coach and each client log in.** The coach owns a *cohort*; each business owns its own plan inside it. The client keeps their plan (and login) after the workshop; the coach keeps visibility for the mentoring period.
 - **Coach cohort view:** all plans in the room on one screen — completion % per section per business, who is stuck, who is finished. Lets the coach spend time on direction rather than data entry.
-- **Guided path is the workshop path.** The 12 steps: 1 Vision & Purpose → 2 Key People → 3 Marketing → 4 SWOT → 5 Historic → 6 Sales → 7 COGS → 8 Overheads → 9 Funding → 10 Review forecast → 11 Goals (AI-drafted) → 12 Report. Each step must be completable by a novice in the time a facilitator would allow (target: no single step > 20 min unaided).
+- **Guided path is the workshop path.** The 12 steps: 1 Vision & Purpose → 2 Management Team → 3 Marketing → 4 SWOT → 5 Historic → 6 Sales → 7 COGS → 8 Overheads → 9 Funding → 10 Review forecast → 11 Goals (AI-drafted) → 12 Report. Each step must be completable by a novice in the time a facilitator would allow (target: no single step > 20 min unaided).
 - **Coach can step into any plan** to demonstrate or correct, with an audit trail of who changed what.
 - **Facilitator content hooks:** each step has a short "what good looks like" prompt the coach can present (and the AI can echo for solo users).
 - **End of day two:** every business generates a Report. That is the success metric of the workshop and of the product.
@@ -299,20 +299,20 @@ All UI is built from **shadcn/ui** components in `src/components/ui` (Button, In
 
 Typing never hits the server. A row (or detail panel) saves **once, when focus leaves it**; dropdown choices save on selection; *Save and continue* flushes anything still dirty. Status per row: Editing → Saving… → Saved / Error. This keeps traffic to one request per edit session per row, so a plan with 200 people or 300 overhead lines costs the same per edit as one with three. (Nic, People step.)
 
-## 6.11 Key People — four areas, and the module-bar pattern (5 Sep 2026)
+## 6.11 Management Team (formerly Key People) — four areas, and the module-bar pattern (5 Sep 2026)
 
 Validated in mockup `docs/mockup/record-pattern.html` (artifact v5.1). Supersedes the People master–detail build.
 
 **Layout pattern (applies to every module, not just People).** A *module bar* sits directly under the top bar, spanning the work area, in the same place on every screen. Its items belong to whatever is selected in the left nav and each item is a **data area** — a dense, editable grid — not a form or a tab hidden inside the data. A *scope chip* on the right of the bar shows "All people" or one person; clicking a name anywhere sets the scope and every area filters to that person (counts on the bar follow). There is no separate record page. Page title strip (Help toggle, + New) sits under the bar; the pinned footer stays.
 
-**The four areas of Key People**
+**The four areas of Management Team** (left menu: PEOPLE → Management Team; page subtitle carries "not the whole payroll")
 1. **People** — First name, Last name, Position (free-text job title), Role (Owner / Director / Employee / Contractor — the legal relationship; decides which report table the person appears in), Share %, **Started** (month-year), Tenure (calculated). Footer totals shareholding. A future Started date shows "Joins Y*n*" and *derives* the salary start year — there is no separate "starts in" field. Planned hires are simply people with a future Started date.
 2. **Salaries** — two rows per person: *Adjust %* (five inputs, compounding, negative = cut) over *Salary* (calculated); Base on the left; "Total → Overheads" footer. Years before a future Started date show "—". Contractors have no salary row.
 3. **Roles & Capability** — one list per person with a Type column: Responsibility, Skill, Strength, Expertise, Licence & certification, Education, Development area. Replaces the Duties / Qualities / Education tables. Institution and year live in the description. **Development areas are internal** (hatched, never printed in an external report). Reports write the management-team bio from this list.
 4. **Risk & Succession (phase 2, after forecast is live)** — per person: Dependency (Low / Medium / High), Successor (another person / external hire / none identified), Key-person cover (None / Quoted / Insured [+ amount]), Notes (multi-line, grows). Feeds the key-person risk section of funding, SBA and sale reports.
 
-**Removed from Key People.** *12-Month Focus* moves to Goals (§6.7): every goal has an owner from Key People. *Productivity* (six-level scale) is dropped from the product — it is a coaching construct, not plan content; if coaches want it later it belongs in the advisor workspace (§7.1) as a coach-private note.
+**Removed from Management Team.** *12-Month Focus* moves to Goals (§6.7): every goal has an owner from the Management Team. *Productivity* (six-level scale) is dropped from the product — it is a coaching construct, not plan content; if coaches want it later it belongs in the advisor workspace (§7.1) as a coach-private note.
 
-**Financial treatment — the double-count rule.** Overheads shows **"Key people salaries — from People"** as a locked, calculated line and **"Other wages"** as a separate input beside it. On-costs (superannuation, pension, payroll tax) are **one % rate applied in Overheads to both lines**, never per person. Role = Contractor: identity in People only; costed in COGS or Overheads like any other contract cost.
+**Financial treatment — the double-count rule.** Overheads shows **"Management team salaries — from Management Team"** as a locked, calculated line and **"Other wages"** as a separate input beside it. On-costs (superannuation, pension, payroll tax) are **one % rate applied in Overheads to both lines**, never per person. Role = Contractor: identity in People only; costed in COGS or Overheads like any other contract cost.
 
 **Report detail by template.** Government / SBA: full key-person salary schedule. Bank / investor: remuneration when material. Business sale: summarised management cost, detail reserved for due diligence. Internal growth plan: full schedule.

@@ -1,6 +1,6 @@
 import type { SalaryAdjustments } from "@/engine/people/salary";
 
-/** Key People — four data areas (SaaS §6.11): People · Salaries · Roles & Capability · Risk & Succession. */
+/** Management Team (was Key People) — four data areas (SaaS §6.11): People · Salaries · Roles & Capability · Risk & Succession. */
 export const PERSON_ROLES = ["owner", "director", "employee", "contractor"] as const;
 export type PersonRole = (typeof PERSON_ROLES)[number];
 export const ROLE_LABEL: Record<PersonRole, string> = { owner: "Owner", director: "Director", employee: "Employee", contractor: "Contractor" };

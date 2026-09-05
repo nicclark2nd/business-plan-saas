@@ -9,7 +9,7 @@ export const NAV: NavGroup[] = [
     { id: "outlets", label: "Outlets" }, { id: "social", label: "Social Media" }, { id: "memberships", label: "Membership" },
     { id: "ip", label: "Intellectual Property" }, { id: "equipment", label: "Capital Equipment" },
   ] },
-  { group: "People", items: [{ id: "people", label: "Key People", step: 2 }] },
+  { group: "People", items: [{ id: "people", label: "Management Team", step: 2 }] },
   { group: "Market", items: [{ id: "marketing", label: "Marketing", step: 3 }, { id: "competitors", label: "Competitors" }] },
   { group: "Goals", items: [{ id: "swot", label: "SWOT", step: 4 }, { id: "goals", label: "Goals", step: 11, tag: "AI-drafted" }] },
   { group: "Financials", items: [
