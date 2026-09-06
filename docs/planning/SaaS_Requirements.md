@@ -415,3 +415,19 @@ APeX: COGS Variable / Fixed / Combined / Monthly / Charts, with a per-product Co
 **Boundary:** anything that would still be there with no sales, and is not part of making the product, belongs in Overheads — said in the help rail and the Fixed costs toolbar, because Overheads already carries locked lines for Leadership Team salaries and Marketing spend and must not double-count. No migration: `plan_products.cost_per_unit` / `yearly_cost_increase` and `plan_fixed_cogs` all exist from 0003.
 
 *Known gap:* a one-off cost of **winning** a client (a referral fee, a sales commission) has nowhere to go on an ongoing line — it folds into the monthly cost for now, and belongs with Unit Economics (CAC) when that is built.
+
+## 6.19 Overheads — one list, two locked lines (6 Sep 2026)
+
+APeX: an Overheads list with a per-item growth dialog and a monthly dialog, plus a separate Monthly view. Rebuilt as **one** area, *Expenses*, on the list → dialogs pattern: Expense · This year · Years 1-5, footer *Total overheads*. Nothing is typed into the list; the pencil opens the **Expense dialog** (name, cost a year, starts in, *this is wages — add on-costs to it*, % change each year with the resulting figure under each box) and the grid icon opens the **Monthly split dialog** (twelve boxes, presets, the dollar guarantee in the footer — the §6.17 weight model).
+
+**Two lines are filled in from the modules that own them** and cannot be typed over: **Leadership Team salaries** (`source = 'people'`) and **Marketing spend** (`source = 'marketing'`), each carrying the chain (`LinkMark`) that opens its own step. They appear whether or not a row exists yet; the row is created on demand the first time a monthly split is saved, which is all a synced line owns here. `upsertOverhead` and `deleteOverhead` both guard on `source = 'entered'`, so the two can never be edited or removed from this screen — they exist as long as their source does.
+
+**A synced figure is never grown here.** APeX takes Marketing's 5,000 as a "current value" and then applies this screen's 50 % Year 1 rise to make it 7,500 — a number the client deliberately set on the Marketing page silently becomes something else two steps later. That is the same class of error as the rounding leak (§6.17): a figure the user owns, quietly changed. All five years are locked to what the source says, and the growth boxes are gone from those lines entirely. Leadership Team already models each person's start year and rises, so its five years are real; Marketing sets one budget that holds until they change it there.
+
+**On-costs are one percentage, set once** — superannuation, payroll tax, workers' compensation — in the toolbar (`plan_settings.on_cost_pct`), applied to every line flagged as wages and to the Leadership Team line automatically. It is stated under the total (*including 11.5 % on-costs*) and spelled out beneath the list: what it adds each year, and the wage base it was added to. The "This year" cell computes the same way as the year columns; an on-cost included in one and not the other is a footer that lies.
+
+**A cost can start later.** `start_year` holds the first year a line exists; earlier years read 0 and the % rise compounds only from the year after it starts — except a Year 1 line, where the box marked Year 1 is a rise *on* the current figure, matching how every other module reads its first year.
+
+**Boundary:** production costs that scale with volume are COGS (§6.18); overheads are what would still be there in a month with no sales. Said in the help rail on both sides, because the two locked lines are exactly where a double-count would hide.
+
+Migration 0015: `overhead_source` enum with `source`, `start_year`, `on_cost` on `plan_overheads`, a unique partial index enforcing one synced row per source per plan, and `on_cost_pct` on `plan_settings`. Engine `engine/overheads/expenses.ts`.
