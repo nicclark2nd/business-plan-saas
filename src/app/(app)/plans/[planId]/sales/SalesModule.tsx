@@ -27,7 +27,7 @@ const undescribed = (r: Row) => !(r.description ?? "").trim();
 const START_OPTIONS = [{ value: "1", label: "Now" }, ...YEARS.map((y) => ({ value: String(y + 1), label: `Year ${y}` }))];
 const COLS = [0, ...YEARS] as const;            // 0 = this year
 const firstYear = (r: Row) => Math.min(5, Math.max(0, (r.start_selling_year || 1) - 1));
-const lab = "text-[11px] font-semibold uppercase tracking-[.04em] text-muted-foreground";
+const lab = "text-right text-[11px] font-semibold uppercase tracking-[.04em] text-muted-foreground";
 
 export function SalesModule({ planId, initial, mode, initialArea, historicRevenue, historicEnd, productWord }: {
   planId: string; initial: Product[]; mode: "guided" | "advanced"; initialArea: AreaKey; historicRevenue: number | null; historicEnd: string | null; productWord: string;
@@ -145,7 +145,7 @@ export function SalesModule({ planId, initial, mode, initialArea, historicRevenu
             {named.length > 10 && <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a product" className="ml-auto h-7 w-56 text-[13px]" />}
           </Toolbar>
           <Grid>
-            <thead><tr><Th style={{ width: "17%" }}>Product</Th><Th style={{ width: 100 }}>Starts</Th><Th style={{ width: 70 }} /><Th right>This year</Th>{YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}</tr></thead>
+            <thead><tr><Th style={{ width: "17%" }}>Product</Th><Th style={{ width: 100 }}>Starts</Th><Th right style={{ width: 70 }}>Line</Th><Th right>This year</Th>{YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}</tr></thead>
             <tbody>
               {visibleNamed.map((r) => {
                 const fy = firstYear(r);
