@@ -73,7 +73,7 @@ export function CellSelect({ value, onValueChange, options, className, placehold
   return (
     <Select value={value ?? null} onValueChange={(v) => v !== null && onValueChange(String(v))} disabled={disabled}>
       <SelectTrigger size="sm" className={cn("w-full", cell, className)}>
-        <SelectValue placeholder={placeholder}>{options.find((o) => o.value === value)?.label ?? placeholder}</SelectValue>
+        <SelectValue placeholder={placeholder}>{options.find((o) => o.value === value)?.label ?? value ?? placeholder}</SelectValue>
       </SelectTrigger>
       <SelectContent>{options.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
     </Select>

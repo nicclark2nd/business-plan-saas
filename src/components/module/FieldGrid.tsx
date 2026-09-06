@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 /**
@@ -37,13 +37,26 @@ export function FieldInput({ className, numeric, ...props }: React.ComponentProp
 export function FieldTextarea({ className, ...props }: React.ComponentProps<typeof Textarea>) {
   return <Textarea {...props} className={cn("min-h-[64px]", className)} />;
 }
-export function FieldSelect({ value, onValueChange, options, placeholder, className }: {
-  value: string | null | undefined; onValueChange: (v: string) => void; options: { value: string; label: string }[]; placeholder?: string; className?: string;
+export type SelectOption = { value: string; label: string };
+export type SelectGroupDef = { group: string; note?: string; items: SelectOption[] };
+export function FieldSelect({ value, onValueChange, options, groups, placeholder, className }: {
+  value: string | null | undefined; onValueChange: (v: string) => void; options?: SelectOption[]; groups?: SelectGroupDef[]; placeholder?: string; className?: string;
 }) {
+  const all = groups ? groups.flatMap((g) => g.items) : (options ?? []);
   return (
     <Select value={value ?? null} onValueChange={(v) => v !== null && onValueChange(String(v))}>
-      <SelectTrigger className={cn("h-8 w-full", className)}><SelectValue placeholder={placeholder}>{options.find((o) => o.value === value)?.label ?? placeholder}</SelectValue></SelectTrigger>
-      <SelectContent>{options.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+      <SelectTrigger className={cn("h-8 w-full", className)}><SelectValue placeholder={placeholder}>{all.find((o) => o.value === value)?.label ?? value ?? placeholder}</SelectValue></SelectTrigger>
+      <SelectContent className="max-h-[420px]">
+        {groups
+          ? groups.map((g, i) => (
+              <SelectGroup key={g.group}>
+                {i > 0 && <SelectSeparator />}
+                <SelectLabel className="text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">{g.group}{g.note && <span className="ml-2 font-normal normal-case tracking-normal text-faint">— {g.note}</span>}</SelectLabel>
+                {g.items.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+              </SelectGroup>
+            ))
+          : all.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+      </SelectContent>
     </Select>
   );
 }

@@ -6,7 +6,7 @@ import { Section, FieldGrid, Field, FieldInput, FieldTextarea, FieldSelect } fro
 import { Toolbar, Meta } from "@/components/module/DataGrid";
 import { formatMonth } from "../people/model";
 import { saveProfile, saveFinancial } from "./actions";
-import { LEGAL_STRUCTURES, CUSTOMER_TYPES, PRODUCT_TYPES, COUNTRIES, CURRENCIES, MONTHS, profileMissing, type Settings, type Profile, type Financial } from "./model";
+import { legalStructuresFor, CUSTOMER_TYPES, PRODUCT_TYPES, COUNTRIES, CURRENCIES, MONTHS, profileMissing, type Settings, type Profile, type Financial } from "./model";
 
 type AreaKey = "profile" | "financial" | "branding";
 const opts = (xs: string[]) => xs.map((x) => ({ value: x, label: x }));
@@ -71,7 +71,7 @@ export function SettingsModule({ planId, initial, mode, initialArea }: { planId:
               <Field label="Industry" span={2}><FieldInput value={s.industry ?? ""} placeholder="e.g. Commercial concreting" onChange={(e) => edit({ industry: e.target.value }, "profile")} /></Field>
               <Field label="Date established"><FieldInput value={established} placeholder="month year" onChange={(e) => { setEstablished(e.target.value); setDirty("profile"); }} /></Field>
               <Field label="Main country of operation"><FieldSelect value={s.country} options={opts(COUNTRIES)} placeholder="Choose" onValueChange={(v) => edit({ country: v }, "profile", true)} /></Field>
-              <Field label="Legal structure" span={2}><FieldSelect value={s.legal_structure} options={opts(LEGAL_STRUCTURES)} placeholder="Choose" onValueChange={(v) => edit({ legal_structure: v }, "profile", true)} /></Field>
+              <Field label="Legal structure" span={2} hint="Grouped by liability; your country's names come first."><FieldSelect value={s.legal_structure} groups={legalStructuresFor(s.country)} placeholder="Choose" onValueChange={(v) => edit({ legal_structure: v }, "profile", true)} /></Field>
               <Field label="Type of customer" span={2} hint="Changes the word the app uses for the people you sell to."><FieldSelect value={s.customer_type} options={opts(CUSTOMER_TYPES)} placeholder="Choose" onValueChange={(v) => edit({ customer_type: v }, "profile", true)} /></Field>
               <Field label="Type of product sold" span={2}><FieldSelect value={s.product_type} options={PRODUCT_TYPES} placeholder="Choose" onValueChange={(v) => edit({ product_type: v }, "profile", true)} /></Field>
               <Field label="Products & services statement" span={6} hint="Two or three sentences: what you sell, to whom, and why they choose you. Opens the business overview in the report."><FieldTextarea value={s.products_services_statement ?? ""} onChange={(e) => edit({ products_services_statement: e.target.value }, "profile")} /></Field>
