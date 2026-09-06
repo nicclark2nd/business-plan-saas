@@ -70,7 +70,7 @@ Rationale: "Foundations" mixed setup, identity, people and market into one group
 
 | New group | Items | Notes |
 |---|---|---|
-| *(Setup — out of nav)* | Plan Settings | First-login wizard + gear icon. Configuration, not content. |
+| **Plan** (last group, bottom of the left menu) | Plan settings — Business profile · Financial year & tax · Branding | **Changed 6 Sep 2026.** Was "gear icon, out of nav"; never built, and business name / industry / country / legal structure / customer & product type had no screen at all. Findability wins: settings sit at the bottom of the left menu like every accounting product. See §6.12. |
 | **Dashboard** | Dashboard | See §3. |
 | **Strategy & Direction** | **Vision & Purpose** (was "Framework" — renamed 4 Sep 2026: Vision, Mission, Purpose, Brand Promise, AI Direction, Field of Play) | "Who we are and where we're going." Primary qualitative input to the AI layer alongside Goals/SWOT. **"Outcomes" removed as a menu item 4 Sep 2026** — its six statements become the annual level of Goals (see Goals row and §6.7). |
 | **Assets** | Outlets, Social Media, Membership, Intellectual Property, Capital Equipment | Registers — "what we own." **Descriptive only; does not touch the financials.** Assets enter the numbers via Historic (opening balances) and Funding (capital loans / purchases). |
@@ -327,3 +327,15 @@ Reviewed an alternative concept (read-only grid + edit drawer, summary tiles und
 4. **Help rail: open on first visit to a step, then remembers the user's choice per step.** Advanced mode still defaults off.
 
 Rejected, with reasons: edit-in-a-drawer (two clicks per change, covers the data being compared, and it destroys the Excel-style Salaries schedule); summary tiles and charts under a data grid (that is the Dashboard's job; on a data screen it pushes the data up and reads as a landing page); a persistent right-hand "person overview" panel (the scope chip does this with less chrome); rounded-card, 16px, whitespace-heavy styling (reads as a website — §6.6 flat enterprise stands); native month picker for Started (calendar glyph in a cell; free text with the month parser stays).
+
+
+## 6.12 Plan settings (6 Sep 2026)
+
+APeX put 62 inputs on one Plan Settings page. Split by what the field *is*:
+
+- **Business profile** (Plan settings → first area): business name, industry, date established, main country of operation, legal structure, type of customer, type of product sold, products & services statement. One place — the client who needs to change "who we are" goes to settings. The dashboard shows a nudge with a link while the fields a report's business overview needs (name, industry, country, legal structure, statement) are blank; the area's count on the module bar shows the same number. Type of customer / product only change the words the app uses ("clients" vs "customers") — kept because that wording is what makes a physio or a law firm feel the product fits them.
+- **Financial year & tax**: financial year end month, first projected year (blank = plan year), currency, company tax rate %, dividend %. The toolbar states in words which twelve months Year 1 covers. *Months projecting* dropped: the plan is five years; monthly detail is a later Advanced concern, never a workshop question.
+- **Branding**: logo, for the report cover and headers. Built with the Reports step so it lands where it is seen.
+- **Not settings, deferred to where they are used:** customer acquisition cost and monthly churn → Unit Economics inputs; working-capital days, tax timing, prepaid/accrued balances, maintenance CapEx and disposals → a *Forecast assumptions* area under Review forecast, defaulted from Historic ("use historical for all years" is the default, not a button), with What-If's "Make this the plan" writing back there.
+
+Same ModuleFrame as the steps (no step number, no progress line), same save policy (§6.10), same FieldGrid primitive as any one-record area.

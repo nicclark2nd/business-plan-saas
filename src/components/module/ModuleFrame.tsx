@@ -30,7 +30,7 @@ export const useModule = () => {
 export function ModuleFrame({
   step, total, group, title, subtitle, mode, help, areas, area, onArea, scope, primaryAction, footer, children,
 }: {
-  step: number; total: number; group: string; title: string; subtitle?: string; mode: "guided" | "advanced";
+  step?: number; total?: number; group: string; title: string; subtitle?: string; mode: "guided" | "advanced";
   help?: React.ReactNode; areas: ModuleArea[]; area: string; onArea: (key: string) => void; scope: ModuleScope;
   primaryAction?: React.ReactNode; footer: React.ReactNode; children: React.ReactNode;
 }) {
@@ -40,16 +40,16 @@ export function ModuleFrame({
   useEffect(() => {
     const id = requestAnimationFrame(() => {
       try {
-        const key = `step-help:${step}`; const v = localStorage.getItem(key);
+        const key = `step-help:${step ?? group}`; const v = localStorage.getItem(key);
         if (v !== null) setHelpOpen(v === "1");                       // remembered choice for this step
-        else if (localStorage.getItem("step-help:seen:" + step)) setHelpOpen(false); // been here before: data first
-        localStorage.setItem("step-help:seen:" + step, "1");
+        else if (localStorage.getItem("step-help:seen:" + (step ?? group))) setHelpOpen(false); // been here before: data first
+        localStorage.setItem("step-help:seen:" + (step ?? group), "1");
       } catch {}
       if (window.innerWidth <= 1100) setHelpOpen(false);   // narrow screens: data first, help on demand
     });
     return () => cancelAnimationFrame(id);
-  }, [step]);
-  const toggleHelp = () => setHelpOpen((h) => { try { localStorage.setItem(`step-help:${step}`, h ? "0" : "1"); } catch {} return !h; });
+  }, [step, group]);
+  const toggleHelp = () => setHelpOpen((h) => { try { localStorage.setItem(`step-help:${step ?? group}`, h ? "0" : "1"); } catch {} return !h; });
 
   return (
     <ModuleCtx.Provider value={{ pending, setPending, note, setNote }}>
@@ -80,7 +80,7 @@ export function ModuleFrame({
         <div className="border-b border-border px-5 pt-2.5">
           <div className="flex min-h-9 items-center gap-3.5">
             <div>
-              <span className="eyebrow">Step {step} of {total} · {group}</span>
+              <span className="eyebrow">{step ? `Step ${step} of ${total} · ${group}` : group}</span>
               <h1 className="text-lg font-semibold leading-tight">{title}{subtitle && <span className="ml-2 text-[13px] font-normal text-muted-foreground">{subtitle}</span>}</h1>
             </div>
             <div className="ml-auto flex items-center gap-2">
@@ -92,7 +92,7 @@ export function ModuleFrame({
               {primaryAction}
             </div>
           </div>
-          <div className="-mx-5 mt-2 h-[3px] bg-border"><i className="block h-full bg-primary" style={{ width: `${(step / total) * 100}%` }} /></div>
+          <div className="-mx-5 mt-2 h-[3px] bg-border">{step && total ? <i className="block h-full bg-primary" style={{ width: `${(step / total) * 100}%` }} /> : null}</div>
         </div>
 
         {/* body */}
@@ -120,6 +120,18 @@ export function ModuleFooter({ planId, prevId = "dashboard", formId, nextLabel =
         <Button variant="outline" type="submit" form={formId} name="intent" value="later" disabled={pending}>Save and finish later</Button>
         <Button type="submit" form={formId} name="intent" value="next" disabled={pending}>{pending ? "Saving…" : nextLabel}</Button>
       </div>
+    </div>
+  );
+}
+
+/** Footer for a module that is not a Guided step (e.g. Plan settings): status only, plus a way back. */
+export function ModuleStatusFooter({ planId }: { planId: string }) {
+  const { note } = useModule();
+  return (
+    <div className="flex items-center justify-between border-t border-border bg-card px-5 py-2.5">
+      <Button variant="outline" render={<Link href={`/plans/${planId}/dashboard`} />}>← Dashboard</Button>
+      <span className="text-xs text-muted-foreground">{note ?? "All changes saved"}</span>
+      <span />
     </div>
   );
 }

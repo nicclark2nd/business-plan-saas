@@ -28,7 +28,7 @@ export function Sidebar({ planId, mode, doneSteps }: { planId: string; mode: "gu
                   <span className={cn("grid size-[18px] place-items-center rounded-full border text-[10px] font-bold",
                     active ? "border-sidebar-primary bg-sidebar-primary text-sidebar-primary-foreground" : done ? "border-good bg-good text-white" : "border-sidebar-border bg-sidebar-accent text-sidebar-muted")}>{it.step}</span>
                 ) : (
-                  <span className="w-[18px] text-center text-xs opacity-70">{it.tool ? "▦" : "▸"}</span>
+                  <span className="w-[18px] text-center text-xs opacity-70">{it.id === "settings" ? "⚙" : it.tool ? "▦" : "▸"}</span>
                 )}
                 <span>{label}</span>
                 {it.tag && <span className="ml-auto text-[10px] text-sidebar-muted">{it.tag}</span>}

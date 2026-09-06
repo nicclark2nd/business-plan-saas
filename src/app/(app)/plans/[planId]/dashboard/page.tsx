@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/server";
+import { profileMissing } from "../settings/model";
 
 function Panel({ title, badge, children, className }: { title: string; badge?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
@@ -20,6 +22,9 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
   const session = await getSession();
   const plan = session!.plans.find((p) => p.id === planId)!;
   const c = await getCompleteness(planId);
+  const supabase = await createClient();
+  const { data: ps } = await supabase.from("plan_settings").select("industry, country, legal_structure, products_services_statement").eq("plan_id", planId).maybeSingle();
+  const missingProfile = profileMissing({ business_name: plan.business_name, ...(ps ?? {}) });
   const nextStep = GUIDED_STEPS.find((s) => { const sec = c.sections.find((x) => x.id === s.id); return sec && sec.done < sec.total; }) ?? GUIDED_STEPS[GUIDED_STEPS.length - 1];
   const hasNumbers = c.sections.filter((s) => ["sales", "overheads"].includes(s.id)).every((s) => s.done >= s.total);
   const base = `/plans/${planId}`;
@@ -32,6 +37,13 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
         <h1 className="text-[22px] font-semibold leading-tight">{plan.business_name} — Year 1 plan</h1>
         <div className="mt-1 text-[13px] text-muted-foreground">{hasNumbers ? "Plan figures shown." : "Add Sales and Overheads to see your plan's numbers here."}</div>
       </div>
+      {missingProfile.length > 0 && (
+        <div className="mb-3 flex items-center gap-3 rounded border border-warn/40 bg-warn-soft px-4 py-2.5 text-[13px]">
+          <i className="size-2 rounded-full bg-warn" />
+          <span>The business profile is missing <b>{missingProfile.map((k) => k.replace(/_/g, " ").replace("products services statement", "products & services statement")).join(", ")}</b> — reports open with this page.</span>
+          <Link href={`${base}/settings`} className="ml-auto font-semibold text-primary hover:underline">Complete the profile →</Link>
+        </div>
+      )}
 
       <div className="mb-3 grid grid-cols-5 gap-3">
         {["Revenue", "Gross margin", "Net profit", "Cash at year end", "Debtor days"].map((k) => (

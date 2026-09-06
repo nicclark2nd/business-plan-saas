@@ -24,6 +24,7 @@ export const NAV: NavGroup[] = [
   ] },
   { group: "Strategy (AI)", items: [{ id: "strategy", label: "Recommendations", tag: "soon" }] },
   { group: "Reports", items: [{ id: "reports", label: "Business plan", step: 12, tool: true }] },
+  { group: "Plan", items: [{ id: "settings", label: "Plan settings", tool: true }] },
 ];
 
 export const GUIDED_STEPS = NAV.flatMap((g) => g.items).filter((i) => i.step).sort((a, b) => a.step! - b.step!);
