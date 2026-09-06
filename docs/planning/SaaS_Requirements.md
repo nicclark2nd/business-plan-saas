@@ -294,6 +294,7 @@ All UI is built from **shadcn/ui** components in `src/components/ui` (Button, In
 - **No `type="number"` inputs anywhere.** Numeric fields are text inputs with `inputMode="numeric"` / `"decimal"`, right-aligned, tabular figures. No spinner arrows. (Nic: spinners are annoying; they also make fat-finger edits easy.)
 - **Password managers are told to ignore every field** except sign-in/sign-up (autoComplete off + the ignore attributes for Keeper, 1Password, LastPass, Bitwarden). Set once in the Input and Textarea components.
 - Plain text fields are plain text fields — no dropdown unless the values are a fixed list.
+- **Grid cells (added 6 Sep 2026, Marketing review).** Short things — names, titles, amounts, dates, choices — are one-line cells. Anything that is a sentence — an approach, a strength, a finding, a note — is a *growing cell*: two lines tall from the start so it reads as a place to write, fixed column width, grows downward as you type. Columns never widen to fit content (`table-layout: fixed`); a row gets taller, the row beside it never moves. One rule, every grid — Nic: "an entirely different UI/UX for the user" between two areas is not acceptable.
 
 ## 6.10 Save policy for editable lists (5 Sep 2026)
 

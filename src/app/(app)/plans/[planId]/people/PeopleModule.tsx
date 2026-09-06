@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
-import { Grid, Th, Td, Row, FootRow, GroupRow, Toolbar, Meta, Note, NameLink, LinkButton, RemoveButton, CellInput, CellSelect, focusRow } from "@/components/module/DataGrid";
+import { Grid, Th, Td, Row, FootRow, GroupRow, Toolbar, Meta, Note, NameLink, LinkButton, RemoveButton, CellInput, CellSelect, CellTextarea, focusRow } from "@/components/module/DataGrid";
 import { cn } from "@/lib/utils";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { SALARY_YEARS, planYearStart, startYearFromDate, tenureLabel, salarySchedule, scheduleChangeFromBase, totalSalariesByYear } from "@/engine/people/salary";
@@ -263,7 +263,7 @@ function CapabilityArea({ people, caps, onScope, onAdd, onEdit, onCommit, onRemo
               ...rows.map((c) => (
                 <Row key={c.id} data-cap={c.id} onBlur={(e) => left(e) && onCommit(c.id)} className={cn(c.internal && "[&>td]:bg-[repeating-linear-gradient(135deg,transparent_0_6px,rgba(0,0,0,.025)_6px_8px)] [&_input]:italic [&_input]:text-muted-foreground")}>
                   <Td><CellSelect value={c.kind} options={kinds} onValueChange={(v) => onEdit(c.id, { kind: v as CapabilityKind, internal: v === "development" }, !!c.description.trim())} className={cn(c.internal && "italic text-muted-foreground")} /></Td>
-                  <Td><CellInput value={c.description} placeholder={c.kind === "education" || c.kind === "licence" ? "What, where, year — e.g. Diploma of Accounting, TAFE Queensland, 2008" : "One line"} onChange={(e) => onEdit(c.id, { description: e.target.value })} /></Td>
+                  <Td wrap><CellTextarea value={c.description} placeholder={c.kind === "education" || c.kind === "licence" ? "What, where, year — e.g. Diploma of Accounting, TAFE Queensland, 2008" : "A sentence or two"} onChange={(e) => onEdit(c.id, { description: e.target.value })} /></Td>
                   <Td>{c.internal && <span className="mr-1.5 text-[9.5px] uppercase tracking-[.06em] text-muted-foreground/70">internal</span>}<RemoveButton onClick={() => onRemove(c)} /></Td>
                 </Row>
               )),

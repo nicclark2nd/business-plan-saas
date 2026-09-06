@@ -20,7 +20,7 @@ export function Note({ children }: { children: React.ReactNode }) {
 }
 
 export function Grid({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className="overflow-x-auto"><table className={cn("w-full border-collapse text-[13px]", className)}>{children}</table></div>;
+  return <div className="overflow-x-auto"><table className={cn("w-full table-fixed border-collapse text-[13px]", className)}>{children}</table></div>;
 }
 export function Th({ children, className, right, style }: { children?: React.ReactNode; className?: string; right?: boolean; style?: React.CSSProperties }) {
   return (
@@ -85,11 +85,11 @@ export function CellSelect({ value, onValueChange, options, className, placehold
   );
 }
 
-/** In-place multi-line cell: two lines minimum, grows with content. */
+/** In-place multi-line cell for anything that is a sentence: two lines tall from the start, fixed width, grows down (§6.9). */
 export function CellTextarea({ className, ...props }: React.ComponentProps<"textarea">) {
   return (
     <textarea rows={2} autoComplete="off" data-1p-ignore="" data-lpignore="true" data-bwignore="" data-form-type="other" data-keeper-ignore=""
-      className={cn("block w-full resize-none rounded-[3px] border border-transparent bg-transparent px-1.5 py-1 text-[13px] leading-[1.4] outline-none field-sizing-content min-h-[38px] hover:border-input focus-visible:border-ring focus-visible:bg-card focus-visible:ring-3 focus-visible:ring-ring/50", className)}
+      className={cn("block w-full resize-none rounded-[3px] border border-transparent bg-transparent px-1.5 py-1 text-[13px] leading-[1.4] outline-none field-sizing-content min-h-[46px] hover:border-input focus-visible:border-ring focus-visible:bg-card focus-visible:ring-3 focus-visible:ring-ring/50", className)}
       {...props} />
   );
 }

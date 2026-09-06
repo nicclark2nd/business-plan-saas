@@ -135,7 +135,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
               {rows.competitors.length === 0 && <tr><Td colSpan={5} className="py-6 text-center text-muted-foreground">No competitors yet. Add the two or three a {customerWord} would compare you with.</Td></tr>}
               {rows.competitors.map((c) => (
                 <Row key={c.id} data-row={c.id} onBlur={(e) => left(e) && commit("competitors", c.id)} className={cn(c._error && "[&>td]:bg-bad-soft")} title={c._error}>
-                  <Td><CellInput value={c.name} placeholder="Name" onChange={(e) => edit("competitors", c.id, { name: e.target.value })} /></Td>
+                  <Td className="align-top pt-[9px]"><CellInput value={c.name} placeholder="Name" onChange={(e) => edit("competitors", c.id, { name: e.target.value })} /></Td>
                   <Td wrap><CellTextarea value={c.strengths ?? ""} placeholder="e.g. Cheapest quote in the area; big fleet" onChange={(e) => edit("competitors", c.id, { strengths: e.target.value })} /></Td>
                   <Td wrap><CellTextarea value={c.weaknesses ?? ""} placeholder="e.g. Late; finish quality complaints" onChange={(e) => edit("competitors", c.id, { weaknesses: e.target.value })} /></Td>
                   <Td wrap><CellTextarea value={c.how_we_win ?? ""} placeholder="e.g. Fixed quote, fixed date, photo sign-off" onChange={(e) => edit("competitors", c.id, { how_we_win: e.target.value })} /></Td>
@@ -157,7 +157,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
               {rows.spend.map((s) => (
                 <Row key={s.id} data-row={s.id} onBlur={(e) => left(e) && commit("spend", s.id)} className={cn(s._error && "[&>td]:bg-bad-soft")} title={s._error}>
                   <Td><CellSelect value={s.kind} options={SPEND_KINDS.map((k) => ({ value: k, label: SPEND_LABEL[k] }))} onValueChange={(v) => edit("spend", s.id, { kind: v as SpendKind }, !!s.approach.trim())} /></Td>
-                  <Td><CellInput value={s.approach} placeholder="e.g. Google Ads on 'concreter Wollongong'; referral fee to builders" onChange={(e) => edit("spend", s.id, { approach: e.target.value })} /></Td>
+                  <Td wrap><CellTextarea value={s.approach} placeholder="e.g. Google Ads on 'concreter Wollongong'; referral fee to builders" onChange={(e) => edit("spend", s.id, { approach: e.target.value })} /></Td>
                   <Td right><CellInput numeric value={s.annual_budget ? fmt.format(s.annual_budget) : ""} placeholder="0" onChange={(e) => edit("spend", s.id, { annual_budget: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} /></Td>
                   <Td><RemoveButton onClick={() => remove("spend", s.id)} /></Td>
                 </Row>
