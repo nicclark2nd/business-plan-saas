@@ -16,7 +16,7 @@ export default async function SalesPage({ params, searchParams }: { params: Prom
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
   const rows = (products.data ?? []).map((p) => ({ ...p, average_price: Number(p.average_price), units_sold: Number(p.units_sold) })) as Product[];
   return (
-    <SalesModule planId={planId} initial={rows} mode={mode} initialArea={area === "growth" || area === "season" || area === "plan" ? area : "products"}
+    <SalesModule planId={planId} initial={rows} mode={mode} initialArea={area === "sales" || area === "season" ? area : "products"}
       historicRevenue={historic.data ? Number(historic.data.revenue) : null} historicEnd={historic.data?.period_end ?? null}
       productWord={(settings.data?.product_type ?? "Products and services").toLowerCase()} />
   );

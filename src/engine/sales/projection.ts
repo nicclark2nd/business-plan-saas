@@ -2,7 +2,7 @@
  * Sales projection — ported from APeX `salesGrowthUtils` / `salesProductUtils`, with one deliberate change:
  * NO default growth. APeX silently assumed +5 % price / +10 % units when a year was blank; here a blank year is 0.
  * Growth may be negative. Year 1 = current × (1 + g1); each later year compounds on the one before.
- * Units compound unrounded but are shown and multiplied at two decimals (APeX parity); sales before the start-selling year are 0.
+ * Units compound unrounded but are shown and multiplied at two decimals (APeX parity).
  */
 export const YEARS = [1, 2, 3, 4, 5] as const;
 export type Year = (typeof YEARS)[number];
@@ -12,16 +12,24 @@ export type MonthlyDistribution = Record<string, number>;   // {"1": 8.3333, …
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 const r2 = (v: number) => Math.round(v * 100) / 100;
 
+/**
+ * Base price and units belong to the year the line starts selling. "Now" (start 1) means this year's actuals, and
+ * Year 1 = base × (1 + g₁). A line starting in Year N sells base × units in Year N — no growth applied to its own
+ * first year — and compounds from Year N+1. Earlier years are 0 and nothing compounds through them.
+ */
 export function yearlyProjection(basePrice: number, baseUnits: number, growth: Growth | null | undefined, startYear = 1) {
   let price = num(basePrice), units = num(baseUnits);
-  const start = Math.min(5, Math.max(1, Math.trunc(num(startYear)) || 1));
+  const start = Math.min(6, Math.max(1, Math.trunc(num(startYear)) || 1));   // 1 = now; 2–6 = Year 1–5
+  const firstYear = start - 1;                                                 // plan year whose column holds the base
   return YEARS.map((year) => {
-    const g = growth?.[String(year)] ?? {};
-    price = price * (1 + num(g.price) / 100);
-    units = units * (1 + num(g.units) / 100);        // carried unrounded (APeX), shown and multiplied at 2 dp
+    if (year < firstYear) return { year, price: 0, units: 0, sales: 0 };
+    if (year > firstYear) {
+      const g = growth?.[String(year)] ?? {};
+      price = price * (1 + num(g.price) / 100);
+      units = units * (1 + num(g.units) / 100);      // carried unrounded (APeX), shown and multiplied at 2 dp
+    }
     const shownUnits = r2(units);
-    const sales = year >= start ? price * shownUnits : 0;
-    return { year, price, units: shownUnits, sales };
+    return { year, price, units: shownUnits, sales: price * shownUnits };
   });
 }
 
@@ -33,7 +41,8 @@ export function revenueByYear(products: ProductLike[]) {
   for (const p of products) yearlyProjection(p.average_price ?? 0, p.units_sold ?? 0, p.yearly_growth, p.start_selling_year ?? 1).forEach((y, i) => { totals[i] += y.sales; });
   return YEARS.map((year, i) => ({ year, value: Math.round(totals[i] * 100) / 100 }));
 }
-export const currentSales = (products: ProductLike[]) => products.reduce((t, p) => t + num(p.average_price) * num(p.units_sold), 0);
+/** This year's sales — only lines already selling ("Now"); a line starting in a plan year has nothing to reconcile against Historic. */
+export const currentSales = (products: ProductLike[]) => products.reduce((t, p) => t + ((p.start_selling_year ?? 1) <= 1 ? num(p.average_price) * num(p.units_sold) : 0), 0);
 
 // ---------- monthly distribution (Year 1 → the twelve months of cash flow) ----------
 const fix4 = (v: number) => parseFloat(v.toFixed(4));

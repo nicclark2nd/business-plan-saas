@@ -27,7 +27,7 @@ export async function upsertProduct(planId: string, p: {
     plan_id: planId, name, description: p.description?.trim() || null, notes: p.notes?.trim() || null,
     lifecycle: LIFECYCLES.includes(p.lifecycle ?? "") ? p.lifecycle : null,
     average_price: Math.max(0, Number(p.average_price) || 0), units_sold: Math.max(0, Number(p.units_sold) || 0),
-    start_selling_year: Math.min(5, Math.max(1, Math.trunc(Number(p.start_selling_year)) || 1)),
+    start_selling_year: Math.min(6, Math.max(1, Math.trunc(Number(p.start_selling_year)) || 1)),   // 1 = now, 2–6 = plan Year 1–5
     yearly_growth: growth, monthly_distribution: p.monthly_distribution ?? null,
   };
   const q = p.id

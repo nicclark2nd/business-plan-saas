@@ -21,9 +21,9 @@ describe("sales projection (APeX Annual Projections parity, DesignOne)", () => {
     const p = yearlyProjection(1000, 100, { "1": { price: -10, units: -20 } }, 1);
     expect(p[0].sales).toBe(72000);
   });
-  it("a product starting in Year 3 has no sales before it", () => {
-    const p = yearlyProjection(500, 10, {}, 3);
-    expect(p.map((y) => y.sales)).toEqual([0, 0, 5000, 5000, 5000]);
+  it("a line starting in Year 3 sells its base in Year 3 and compounds from Year 4; nothing before", () => {
+    const p = yearlyProjection(500, 10, { "3": { price: 50, units: 50 }, "4": { price: 10, units: 10 } }, 4);   // start 4 = Year 3
+    expect(p.map((y) => y.sales)).toEqual([0, 0, 5000, 6050, 6050]);   // Year 3's own growth is ignored; Year 4 = 550 × 11
   });
   it("totals across products give the forecast's revenue line", () => {
     const t = revenueByYear([
