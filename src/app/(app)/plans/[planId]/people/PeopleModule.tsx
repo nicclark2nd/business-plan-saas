@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
-import { Grid, Th, Td, Row, FootRow, GroupRow, Toolbar, Meta, Note, NameLink, LinkButton, RemoveButton, CellInput, CellSelect } from "@/components/module/DataGrid";
+import { Grid, Th, Td, Row, FootRow, GroupRow, Toolbar, Meta, Note, NameLink, LinkButton, RemoveButton, CellInput, CellSelect, focusRow } from "@/components/module/DataGrid";
 import { cn } from "@/lib/utils";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { SALARY_YEARS, planYearStart, startYearFromDate, tenureLabel, salarySchedule, scheduleChangeFromBase, totalSalariesByYear } from "@/engine/people/salary";
@@ -56,7 +56,7 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
   const addPerson = () => {
     const r: Row = { _key: crypto.randomUUID(), id: "", plan_id: planId, first_name: "", last_name: "", name: "", position: "", role: "employee", pct_shareholding: 0, annual_salary: 0, started_on: null, started_text: "", salary_adjustments: {}, sort_order: 0 };
     setPeople((ps) => [r, ...ps]); setScope(null); setArea("people");
-    setTimeout(() => document.querySelector<HTMLInputElement>(`[data-row="${r._key}"] input[name=first_name]`)?.focus(), 0);
+    focusRow(`[data-row="${r._key}"]`);
   };
   const removePerson = (r: Row) => {
     setPeople((ps) => ps.filter((x) => x._key !== r._key));
@@ -82,7 +82,7 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
     if (!person.id) return;
     const tmp = `tmp-${crypto.randomUUID()}`;
     setCaps((cs) => [{ id: tmp, person_id: person.id, kind: "responsibility", description: "", internal: false, sort_order: 0 }, ...cs]);
-    setTimeout(() => document.querySelector<HTMLInputElement>(`[data-cap="${tmp}"] input`)?.focus(), 0);
+    focusRow(`[data-cap="${tmp}"]`);
   };
   const removeCap = (c: Cap) => {
     setCaps((cs) => cs.filter((x) => x.id !== c.id));

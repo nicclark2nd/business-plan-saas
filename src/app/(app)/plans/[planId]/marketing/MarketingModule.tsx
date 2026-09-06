@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
-import { Grid, Th, Td, Row, FootRow, Toolbar, Meta, Note, RemoveButton, CellInput, CellSelect, CellTextarea } from "@/components/module/DataGrid";
+import { Grid, Th, Td, Row, FootRow, Toolbar, Meta, Note, RemoveButton, CellInput, CellSelect, CellTextarea, focusRow } from "@/components/module/DataGrid";
 import { Section, FieldGrid, Field, FieldTextarea } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
@@ -60,7 +60,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
   const add = (k: RowKind, blank: Record<string, unknown>) => {
     const tmp = `tmp-${crypto.randomUUID()}`;
     setList(k, (xs) => [{ id: tmp, sort_order: 0, ...blank }, ...xs]);
-    setTimeout(() => document.querySelector<HTMLInputElement>(`[data-row="${tmp}"] input, [data-row="${tmp}"] textarea`)?.focus(), 0);
+    focusRow(`[data-row="${tmp}"]`);
   };
   const remove = (k: RowKind, id: string) => {
     setList(k, (xs) => xs.filter((x) => x.id !== id));

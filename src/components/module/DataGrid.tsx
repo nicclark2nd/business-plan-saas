@@ -58,6 +58,11 @@ export function RemoveButton({ onClick, title = "Remove" }: { onClick: () => voi
   return <button type="button" onClick={onClick} title={title} aria-label={title} className="px-1 text-[15px] leading-none text-muted-foreground/70 hover:text-bad">×</button>;
 }
 
+/** Focus the first real text control in a new row (skips the hidden inputs shadcn Select renders). */
+export function focusRow(selector: string) {
+  setTimeout(() => document.querySelector<HTMLElement>(`${selector} input:not([type="hidden"]):not([aria-hidden="true"]), ${selector} textarea`)?.focus(), 0);
+}
+
 const cell = "h-7 rounded-[3px] border-transparent bg-transparent px-1.5 py-1 text-[13px] shadow-none hover:border-input focus-visible:bg-card";
 
 /** In-place text cell. `numeric` → right-aligned, tabular figures, numeric keyboard, no spinner (§6.9). */
