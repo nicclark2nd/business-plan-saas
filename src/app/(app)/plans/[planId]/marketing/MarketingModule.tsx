@@ -9,7 +9,7 @@ import { GUIDED_STEPS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { formatMonth } from "../people/model";
 import { saveMarket, upsertRow, deleteRow, continueFromMarketing, type RowKind } from "./actions";
-import { MARKET_FIELDS, SPEND_KINDS, SPEND_LABEL, type Market, type MarketingData, type Competitor, type Spend, type Evidence, type SpendKind } from "./model";
+import { MARKET_FIELDS, POSITION_FIELDS, SPEND_KINDS, SPEND_LABEL, COMPETITOR_KIND, COMPETITOR_REACH, COMPETITOR_PRICING, COMPETITOR_THREAT, type Market, type Position, type MarketingData, type Competitor, type Spend, type Evidence, type SpendKind } from "./model";
 
 const fmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
 type AreaKey = "market" | "competitors" | "spend" | "evidence";
@@ -19,7 +19,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
   planId: string; initial: MarketingData; mode: "guided" | "advanced"; initialArea: AreaKey; customerWord: string;
 }) {
   const [area, setArea] = useState<AreaKey>(initialArea);
-  const [market, setMarket] = useState<Market>(initial.market);
+  const [market, setMarket] = useState<Market & Position>({ ...initial.market, ...initial.position });
   const [marketDirty, setMarketDirty] = useState(false);
   const [rows, setRows] = useState<{ competitors: WithMeta<Competitor>[]; spend: WithMeta<Spend>[]; evidence: WithMeta<Evidence & { when_text: string }>[] }>({
     competitors: initial.competitors, spend: initial.spend, evidence: initial.evidence.map((e) => ({ ...e, when_text: formatMonth(e.occurred_on) })),
@@ -73,7 +73,8 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
     flush(); start(async () => { await continueFromMarketing(planId, intent); });
   };
 
-  const written = MARKET_FIELDS.filter((f) => f.key !== "positioning" && market[f.key].trim()).length;
+  const written = MARKET_FIELDS.filter((f) => market[f.key].trim()).length;
+  const positioned = POSITION_FIELDS.filter((f) => market[f.key].trim()).length;
   const spendTotal = rows.spend.reduce((a, s) => a + (Number(s.annual_budget) || 0), 0);
   const anyDirty = marketDirty || (["competitors", "spend", "evidence"] as RowKind[]).some((k) => (rows[k] as AnyRow[]).some((r) => r._dirty));
   const rowError = (["competitors", "spend", "evidence"] as RowKind[]).flatMap((k) => rows[k] as AnyRow[]).find((r) => r._error)?._error;
@@ -84,14 +85,14 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
       step={3} total={GUIDED_STEPS.length} group="Market" title="Marketing" subtitle={`Who your ${plural} are, who else wants them, and what you will spend to win them`} mode={mode}
       areas={[
         { key: "market", label: "Market", count: written },
-        { key: "competitors", label: "Competitors", count: rows.competitors.length },
+        { key: "competitors", label: "Competitors", count: rows.competitors.length + positioned },
         { key: "spend", label: "Channels & spend", count: rows.spend.length },
         { key: "evidence", label: "Evidence", count: rows.evidence.length },
       ]}
       area={area} onArea={(k) => { flush(); setArea(k as AreaKey); }}
       scope={{ label: "This plan" }}
       primaryAction={
-        area === "competitors" ? <Button size="sm" type="button" onClick={() => add("competitors", { name: "", strengths: "", weaknesses: "", how_we_win: "" })}>+ Competitor</Button>
+        area === "competitors" ? <Button size="sm" type="button" onClick={() => add("competitors", { name: "", kind: "direct", reach: null, pricing: null, threat: "medium", strengths: "", weaknesses: "", how_we_win: "" })}>+ Competitor</Button>
         : area === "spend" ? <Button size="sm" type="button" onClick={() => add("spend", { kind: "advertising", approach: "", annual_budget: 0 })}>+ Channel</Button>
         : area === "evidence" ? <Button size="sm" type="button" onClick={() => add("evidence", { source: "", finding: "", occurred_on: null, when_text: "" })}>+ Evidence</Button>
         : undefined}
@@ -99,7 +100,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
       help={<>
         <h3>What good looks like</h3>
         <p>Specific beats big. &quot;Builders within 90 minutes of Wollongong&quot; is a market; &quot;the construction industry&quot; is not. Name the {customerWord}, the area and roughly how many.</p>
-        <p>Three or four competitors, honestly described, and one line each on how you win. A grant assessor is checking that you know who else wants your {plural}.</p>
+        <p>Competitors: three or four direct rivals and at least one indirect one (solves the same problem a different way). Type, reach, pricing and threat are one click each and become the comparison table in the report. &quot;Our position&quot; is the SBA&apos;s competitive-advantage section: your edge, what stops it being copied, and what could change.</p>
         <p>Channels &amp; spend: only the channels you will actually use, with a real annual number. The total feeds Overheads as a locked &quot;Marketing&quot; line — don&apos;t enter it again there.</p>
         <p>Evidence is how you show the numbers weren&apos;t invented: a survey you ran, a report you read, approvals data from council. Three rows from a real business beats a page of prose.</p>
         <h3>Where this goes</h3>
@@ -116,8 +117,8 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
           <Section title="Market">
             <FieldGrid>
               {MARKET_FIELDS.map((f) => (
-                <Field key={f.key} label={f.label} span={f.key === "positioning" ? 6 : 3} hint={f.hint}>
-                  <FieldTextarea value={market[f.key]} placeholder={f.placeholder} className={f.key === "positioning" ? "min-h-[40px]" : "min-h-[84px]"}
+                <Field key={f.key} label={f.label} span={3} hint={f.hint}>
+                  <FieldTextarea value={market[f.key]} placeholder={f.placeholder} className="min-h-[84px]"
                     onChange={(e) => { setMarket((m) => ({ ...m, [f.key]: e.target.value })); setMarketDirty(true); setError(undefined); }} />
                 </Field>
               ))}
@@ -128,17 +129,37 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
 
       {area === "competitors" && (
         <>
-          <Toolbar><Meta className="ml-0">One row per competitor a {customerWord} would actually consider instead of you.</Meta></Toolbar>
+          <div onBlur={(e) => left(e) && commitMarket()}>
+            <Toolbar><Meta className="ml-0">Direct and indirect rivals, how they compare, and why a {customerWord} picks you. The report builds the comparison table from this grid.</Meta></Toolbar>
+            <Section title="Our position">
+              <FieldGrid>
+                {POSITION_FIELDS.map((f) => (
+                  <Field key={f.key} label={f.label} span={2} hint={f.hint}>
+                    <FieldTextarea value={market[f.key]} placeholder={f.placeholder} className="min-h-[64px]"
+                      onChange={(e) => { setMarket((m) => ({ ...m, [f.key]: e.target.value })); setMarketDirty(true); setError(undefined); }} />
+                  </Field>
+                ))}
+              </FieldGrid>
+            </Section>
+          </div>
+          <Section title="Competitors"><span /></Section>
           <Grid>
-            <thead><tr><Th style={{ width: "20%" }}>Competitor</Th><Th>What they do well</Th><Th>Where they&apos;re weak</Th><Th>How we win</Th><Th style={{ width: 36 }} /></tr></thead>
+            <thead><tr>
+              <Th style={{ width: 150 }}>Competitor</Th><Th style={{ width: 96 }}>Type</Th><Th style={{ width: 104 }}>Reach</Th><Th style={{ width: 130 }}>Pricing vs us</Th><Th style={{ width: 100 }}>Threat</Th>
+              <Th>What they do well</Th><Th>Where they&apos;re weak</Th><Th>How we win</Th><Th style={{ width: 36 }} />
+            </tr></thead>
             <tbody>
-              {rows.competitors.length === 0 && <tr><Td colSpan={5} className="py-6 text-center text-muted-foreground">No competitors yet. Add the two or three a {customerWord} would compare you with.</Td></tr>}
+              {rows.competitors.length === 0 && <tr><Td colSpan={9} className="py-6 text-center text-muted-foreground">No competitors yet. Add the two or three a {customerWord} would compare you with — and one indirect one that solves the same problem another way.</Td></tr>}
               {rows.competitors.map((c) => (
-                <Row key={c.id} data-row={c.id} onBlur={(e) => left(e) && commit("competitors", c.id)} className={cn(c._error && "[&>td]:bg-bad-soft")} title={c._error}>
-                  <Td className="align-top pt-[9px]"><CellInput value={c.name} placeholder="Name" onChange={(e) => edit("competitors", c.id, { name: e.target.value })} /></Td>
-                  <Td wrap><CellTextarea value={c.strengths ?? ""} placeholder="e.g. Cheapest quote in the area; big fleet" onChange={(e) => edit("competitors", c.id, { strengths: e.target.value })} /></Td>
-                  <Td wrap><CellTextarea value={c.weaknesses ?? ""} placeholder="e.g. Late; finish quality complaints" onChange={(e) => edit("competitors", c.id, { weaknesses: e.target.value })} /></Td>
-                  <Td wrap><CellTextarea value={c.how_we_win ?? ""} placeholder="e.g. Fixed quote, fixed date, photo sign-off" onChange={(e) => edit("competitors", c.id, { how_we_win: e.target.value })} /></Td>
+                <Row key={c.id} data-row={c.id} onBlur={(e) => left(e) && commit("competitors", c.id)} className={cn("[&>td]:align-top [&>td]:pt-[6px]", c._error && "[&>td]:bg-bad-soft")} title={c._error}>
+                  <Td><CellInput value={c.name} placeholder="Name" onChange={(e) => edit("competitors", c.id, { name: e.target.value })} /></Td>
+                  <Td><CellSelect value={c.kind} options={COMPETITOR_KIND} onValueChange={(v) => edit("competitors", c.id, { kind: v }, !!c.name.trim())} /></Td>
+                  <Td><CellSelect value={c.reach} options={COMPETITOR_REACH} placeholder="—" onValueChange={(v) => edit("competitors", c.id, { reach: v }, !!c.name.trim())} /></Td>
+                  <Td><CellSelect value={c.pricing} options={COMPETITOR_PRICING} placeholder="—" onValueChange={(v) => edit("competitors", c.id, { pricing: v }, !!c.name.trim())} /></Td>
+                  <Td><CellSelect value={c.threat} options={COMPETITOR_THREAT} className={cn("font-semibold", c.threat === "critical" || c.threat === "high" ? "text-bad" : c.threat === "medium" ? "text-warn" : "text-good")} onValueChange={(v) => edit("competitors", c.id, { threat: v }, !!c.name.trim())} /></Td>
+                  <Td wrap><CellTextarea value={c.strengths ?? ""} placeholder="Reputation, market position, what clients say they like" onChange={(e) => edit("competitors", c.id, { strengths: e.target.value })} /></Td>
+                  <Td wrap><CellTextarea value={c.weaknesses ?? ""} placeholder="What their reviews complain about; where they can't follow" onChange={(e) => edit("competitors", c.id, { weaknesses: e.target.value })} /></Td>
+                  <Td wrap><CellTextarea value={c.how_we_win ?? ""} placeholder="The specific reason a client picks you over them" onChange={(e) => edit("competitors", c.id, { how_we_win: e.target.value })} /></Td>
                   <Td><RemoveButton onClick={() => remove("competitors", c.id)} /></Td>
                 </Row>
               ))}

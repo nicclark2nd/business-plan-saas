@@ -4,16 +4,16 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseMonth } from "../people/model";
-import { MARKET_FIELDS, SPEND_KINDS, type Market } from "./model";
+import { MARKET_FIELDS, POSITION_FIELDS, SPEND_KINDS, type Market, type Position } from "./model";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const fail = (e: { message: string }, what: string): Result<never> => { console.error(what, e); return { ok: false, error: `Couldn't save ${what}: ${e.message}` }; };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
 
-export async function saveMarket(planId: string, m: Partial<Market>): Promise<Result> {
+export async function saveMarket(planId: string, m: Partial<Market & Position>): Promise<Result> {
   const supabase = await createClient();
   const row: Record<string, string | null> = { plan_id: planId };
-  for (const f of MARKET_FIELDS) if (f.key in m) row[f.key] = (m[f.key] ?? "").trim() || null;
+  for (const f of [...MARKET_FIELDS, ...POSITION_FIELDS]) if (f.key in m) row[f.key] = (m[f.key as keyof typeof m] ?? "").trim() || null;
   const { error } = await supabase.from("plan_marketing").upsert(row, { onConflict: "plan_id" });
   if (error) return fail(error, "market");
   touch(planId); return { ok: true };
@@ -21,7 +21,7 @@ export async function saveMarket(planId: string, m: Partial<Market>): Promise<Re
 
 /** One save path for the three row grids. Column whitelist per table; nothing else reaches the database. */
 const TABLES = {
-  competitors: { table: "plan_competitors", cols: ["name", "strengths", "weaknesses", "how_we_win"], required: "name" },
+  competitors: { table: "plan_competitors", cols: ["name", "kind", "reach", "pricing", "threat", "strengths", "weaknesses", "how_we_win"], required: "name" },
   spend: { table: "plan_marketing_spend", cols: ["kind", "approach", "annual_budget"], required: "approach" },
   evidence: { table: "plan_marketing_evidence", cols: ["source", "finding", "occurred_on"], required: "source" },
 } as const;
@@ -35,7 +35,11 @@ export async function upsertRow(planId: string, kind: RowKind, row: Record<strin
     if (!(c in row)) continue;
     const v = row[c];
     if (c === "annual_budget") clean[c] = Math.max(0, Number(v) || 0);
-    else if (c === "kind") clean[c] = (SPEND_KINDS as readonly string[]).includes(String(v)) ? v : "advertising";
+    else if (c === "kind" && kind === "spend") clean[c] = (SPEND_KINDS as readonly string[]).includes(String(v)) ? v : "advertising";
+    else if (c === "kind") clean[c] = v === "indirect" ? "indirect" : "direct";
+    else if (c === "reach") clean[c] = ["local", "regional", "national", "online"].includes(String(v)) ? v : null;
+    else if (c === "pricing") clean[c] = ["much_lower", "lower", "same", "higher", "much_higher"].includes(String(v)) ? v : null;
+    else if (c === "threat") clean[c] = ["low", "medium", "high", "critical"].includes(String(v)) ? v : "medium";
     else if (c === "occurred_on") { const d = parseMonth(v as string); if (d === undefined) return { ok: false, error: "When should be a month and year, e.g. Mar 2026." }; clean[c] = d; }
     else clean[c] = typeof v === "string" ? (v.trim() || null) : v;
   }

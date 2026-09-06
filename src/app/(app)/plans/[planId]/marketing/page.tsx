@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { MarketingModule } from "./MarketingModule";
-import { MARKET_FIELDS, type MarketingData, type Market } from "./model";
+import { MARKET_FIELDS, POSITION_FIELDS, type MarketingData, type Market, type Position } from "./model";
 
 export default async function MarketingPage({ params, searchParams }: { params: Promise<{ planId: string }>; searchParams: Promise<{ area?: string }> }) {
   const { planId } = await params;
@@ -17,6 +17,7 @@ export default async function MarketingPage({ params, searchParams }: { params: 
   ]);
   const data: MarketingData = {
     market: Object.fromEntries(MARKET_FIELDS.map((f) => [f.key, (market.data?.[f.key] as string | null) ?? ""])) as Market,
+    position: Object.fromEntries(POSITION_FIELDS.map((f) => [f.key, (market.data?.[f.key] as string | null) ?? ""])) as Position,
     competitors: competitors.data ?? [], spend: (spend.data ?? []).map((s) => ({ ...s, annual_budget: Number(s.annual_budget) })), evidence: evidence.data ?? [],
   };
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";

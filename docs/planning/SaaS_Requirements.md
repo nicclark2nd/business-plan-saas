@@ -351,3 +351,13 @@ APeX had seven tabs. Reduced to four data areas on the module bar, same pattern 
 4. **Evidence** — Source or method · What it showed · When. Replaces the four Research essays. Kept because grant and SBA templates ask "what market research did you do" by name; a grid of real sources answers it better than prose.
 
 Removed: **Branding** (brand purpose duplicates step 1; values/personality appear in no lender's or broker's checklist; visual identity is the logo, in Settings). **Action Plan** → Goals (marketing actions are goals with owners and dates; rows kept in `plan_marketing_actions` until Goals absorbs them). Migration 0008 carries existing distribution/promotion rows into the spend grid and research text into one evidence row.
+
+### 6.13.1 Competitors to SBA depth (6 Sep 2026)
+
+The SBA competitive-analysis section asks for five things; the Competitors area now answers all five without a matrix being typed by hand:
+
+- **Per competitor** (grid): Competitor · Type (Direct / Indirect) · Reach (Local / Regional / National / Online) · Pricing vs us (five steps) · Threat (Low → Critical) · What they do well · Where they're weak · How we win. The four choice columns are one click each; **the report generates the SBA comparison matrix from them**, with the plan's own business as the first column (from Business profile and "Our advantage").
+- **Plan-level "Our position"** (three growing fields above the grid): *Our advantage* (the USP — absorbs "Positioning" from Market), *Barriers to entry*, *What could change* (new entrants, regulation, technology — pre-fills SWOT Threats in step 4).
+- **Deliberately left out:** competitor revenue vs yours, market share %, financial health. A small business rarely knows these; a guessed number in a lender's document is worse than none. If known, it goes in words under "What they do well".
+
+Migration 0009: enums on `plan_competitors` (kind, reach, pricing, threat); `plan_marketing.positioning` → `our_advantage`, plus `barriers_to_entry`, `future_threats`.
