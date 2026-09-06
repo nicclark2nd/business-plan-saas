@@ -28,7 +28,11 @@ const fmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
 const num = (v: number | null | undefined) => fmt.format(Number(v) || 0);
 const parseNum = (s: string) => { const n = Number(s.replace(/[,\s]/g, "")); return Number.isFinite(n) ? n : 0; };
 const parseSigned = (s: string) => { const t = s.replace(/[,\s%]/g, ""); if (t === "-" || t === "") return null; const n = Number(t); return Number.isFinite(n) ? n : null; };
-const pct = (v: number | undefined) => v === undefined || v === null ? "" : String(Math.round(v * 100) / 100);
+/**
+ * Month shares are STORED to four decimals, so they are shown to four. A twelfth is 8.3333, not 8.33 — showing
+ * the rounded figure taught people to type it back, and twelve of those add to 99.96 %, not 100.
+ */
+const pct = (v: number | undefined) => v === undefined || v === null ? "" : String(Math.round(v * 10000) / 10000);
 
 type Row = Product & { _key: string; _error?: string };
 type AreaKey = "products" | "annual" | "monthly";
@@ -423,7 +427,7 @@ function MonthlyDialog({ r, onSave, onClose }: { r: Row; onSave: (r: Row) => voi
             ))}
           </div>
           <div className="flex items-center gap-2 border-t border-border pt-3 text-[13px]">
-            <span>Total <b className={cn("num", ok ? "text-good" : "text-bad")}>{pct(total)}%</b></span>
+            <span>Total <b className={cn("num", ok ? "text-good" : "text-bad")}>{pct(total)}%</b>{ok && total !== 100 && <span className="ml-2 text-muted-foreground">— squared up to exactly 100 % when you save</span>}</span>
             <span className="ml-auto flex gap-1.5">
               <Button type="button" size="sm" variant="outline" onClick={() => preset(evenDistribution())}>Even</Button>
               <Button type="button" size="sm" variant="outline" onClick={() => preset(moderateDistribution())}>Moderate rise</Button>

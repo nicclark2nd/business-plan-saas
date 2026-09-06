@@ -56,6 +56,13 @@ describe("a split that is a hair short of 100", () => {
     expect(distributionTotal(typed)).toBe(99.996);
     expect(distributionTotal(exactHundred(typed))).toBe(100);
   });
+  it("every preset already lands on exactly 100, so nothing leaks before a hand edit", () => {
+    for (const d of [evenDistribution(), moderateDistribution(), rampUpDistribution()]) {
+      expect(distributionTotal(d)).toBe(100);
+      expect(distributionValid(d)).toBe(true);
+    }
+    expect(evenDistribution()["1"]).toBe(8.3333);          // a twelfth, not 8.33
+  });
   it("leaves an exact split alone", () => {
     const even = Object.fromEntries(Array.from({ length: 11 }, (_, i) => [String(i + 1), 8.3333]));
     const d = { ...even, "12": 8.3337 };

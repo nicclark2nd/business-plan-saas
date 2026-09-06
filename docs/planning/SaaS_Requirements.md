@@ -395,7 +395,7 @@ A product is **sold as** a one-off job (invoiced when delivered) or an **ongoing
 
 An ongoing line may take its clients **from another line** (`clients_from_product_id`, one level deep so nothing loops): a franchisor's royalty follows the licences sold, a service plan follows the equipment, support follows the software licence, a membership follows the joining fee. Its acquisition, timing and growth all come from the line that feeds it, and its monthly dialog is read-only. Migrations 0013 and 0014; engine `engine/sales/recurring.ts` and `engine/sales/product.ts`.
 
-**Monthly splits are scaled to exactly 100 % on save** (`exactHundred`). Twelve boxes of 8.33 total 99.996, which passed the ±0.01 tolerance and displayed as 100 while losing a slice of the year — a 600,000 line read 599,976. Nothing in a financial model may leak to rounding.
+**Monthly splits are shown and stored to four decimals, and scaled to exactly 100 % on save.** The root cause of a leak found on 6 Sep: a twelfth is 8.3333, the box displayed the 2-decimal rounding `8.33`, and a user who typed back what they were shown got twelve boxes totalling 99.996 % — which passed the ±0.01 tolerance and *displayed* as 100 while a 600,000 line quietly read 599,976. Two fixes, both needed: `pct()` shows the stored precision so the field never lies about what it holds, and `exactHundred()` squares any within-tolerance split to exactly 100 on save (the dialog says so when the two differ). Presets always landed on exactly 100 and are covered by a test. Nothing in a financial model may leak to rounding.
 
 ## 6.18 COGS — two lists, three dialogs (6 Sep 2026)
 
