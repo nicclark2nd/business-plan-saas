@@ -29,9 +29,9 @@ export function Th({ children, className, right, style }: { children?: React.Rea
     </th>
   );
 }
-export function Td({ children, className, right, wrap, colSpan, rowSpan, style }: { children?: React.ReactNode; className?: string; right?: boolean; wrap?: boolean; colSpan?: number; rowSpan?: number; style?: React.CSSProperties }) {
+export function Td({ children, className, right, wrap, colSpan, rowSpan, style, title }: { children?: React.ReactNode; className?: string; right?: boolean; wrap?: boolean; colSpan?: number; rowSpan?: number; style?: React.CSSProperties; title?: string }) {
   return (
-    <td colSpan={colSpan} rowSpan={rowSpan} style={style} className={cn("h-9 border-b border-border px-3 first:pl-5 last:pr-5", wrap ? "whitespace-normal py-1" : "whitespace-nowrap", right && "text-right", className)}>
+    <td colSpan={colSpan} rowSpan={rowSpan} style={style} title={title} className={cn("h-9 border-b border-border px-3 first:pl-5 last:pr-5", wrap ? "whitespace-normal py-1" : "whitespace-nowrap", right && "text-right", className)}>
       {children}
     </td>
   );
