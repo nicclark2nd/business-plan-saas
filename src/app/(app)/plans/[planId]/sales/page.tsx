@@ -22,6 +22,7 @@ export default async function SalesPage({ params, searchParams }: { params: Prom
     client_life_months: Number(p.client_life_months ?? 12) || 12,
     life_mode: p.life_mode === "fixed" ? "fixed" : "average",
     monthly_new_clients: p.monthly_new_clients ?? null,
+    clients_from_product_id: p.clients_from_product_id ?? null,
   })) as Product[];
   return (
     <SalesModule planId={planId} initial={rows} mode={mode} initialArea={area === "annual" || area === "monthly" ? area : "products"} hasHistory={settings.data?.has_history ?? null}

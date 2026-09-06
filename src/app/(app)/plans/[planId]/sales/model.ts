@@ -24,5 +24,7 @@ export type Product = {
   /** Ongoing lines (§6.17): revenue comes from active clients, not from clients won. */
   sold_as: "one_off" | "recurring"; opening_clients: number; client_life_months: number;
   life_mode: "average" | "fixed"; monthly_new_clients: Record<string, number> | null;
+  /** Ongoing lines: every unit this product sells becomes a client here (a royalty following licence sales). */
+  clients_from_product_id: string | null;
 };
 export const isRecurring = (p: Pick<Product, "sold_as">) => p.sold_as === "recurring";

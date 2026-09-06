@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { productYears, productYear1Months, planRevenueByYear, bookNow } from "./product";
+import { productYears, productYear1Months, planRevenueByYear, planYear1Months, newClientsYear1, sourceOf, bookNow } from "./product";
 
 const oneOff = { average_price: 16800, units_sold: 36, start_selling_year: 1, yearly_growth: {}, monthly_distribution: null, sold_as: "one_off" };
 const coach = {
@@ -44,5 +44,46 @@ describe("product dispatch", () => {
   it("a plan mixing both kinds adds up", () => {
     const total = planRevenueByYear([oneOff, coach]);
     expect(total[0].value).toBeCloseTo(604800 + productYears(coach)[0].revenue, 0);
+  });
+});
+
+describe("a line fed by another line (§6.17)", () => {
+  // A master franchisor: six licences a year at $50,000, each becoming a $2,000-a-month royalty payer.
+  const licences = { id: "L", average_price: 50000, units_sold: 6, start_selling_year: 1, yearly_growth: {}, monthly_distribution: null, sold_as: "one_off" };
+  const royalty = {
+    id: "R", average_price: 24000, units_sold: 0, start_selling_year: 1, yearly_growth: {}, sold_as: "recurring",
+    opening_clients: 40, client_life_months: 120, life_mode: "average", monthly_new_clients: null, clients_from_product_id: "L",
+  };
+  const plan = [licences, royalty];
+
+  it("takes its clients from the line that feeds it, not from its own count", () => {
+    const won = newClientsYear1(royalty, sourceOf(royalty, plan));
+    expect(won.reduce((a, b) => a + b, 0)).toBeCloseTo(6, 6);      // six licences sold, six royalty payers
+    expect(productYears(royalty, sourceOf(royalty, plan))[0].newClients).toBeCloseTo(6, 6);
+  });
+
+  it("ignores its own units_sold, which is derived", () => {
+    const linked = productYears(royalty, sourceOf(royalty, plan))[0].revenue;
+    const same = productYears({ ...royalty, units_sold: 999 }, sourceOf(royalty, plan))[0].revenue;
+    expect(same).toBe(linked);
+  });
+
+  it("grows on its own when the line feeding it sells more", () => {
+    const faster = [{ ...licences, yearly_growth: { "2": { price: 0, units: 50 }, "3": { price: 0, units: 50 } } }, royalty];
+    const base = planRevenueByYear(plan)[2].value;
+    expect(planRevenueByYear(faster)[2].value).toBeGreaterThan(base);
+  });
+
+  it("bills the opening book plus everyone who arrives", () => {
+    const y = productYears(royalty, sourceOf(royalty, plan));
+    expect(y[0].revenue).toBeGreaterThan(40 * 24000 * 0.9);        // forty licensees, lightly decayed
+    expect(y[0].clients).toBeGreaterThan(40);                       // and six more by December
+    expect(planYear1Months(plan).reduce((a, b) => a + b, 0)).toBeCloseTo(300000 + y[0].revenue, 0);
+  });
+
+  it("an unlinked ongoing line is unaffected", () => {
+    const solo = { ...royalty, clients_from_product_id: null, units_sold: 6, monthly_new_clients: null };
+    expect(sourceOf(solo, plan)).toBe(null);
+    expect(productYears(solo, null)[0].newClients).toBeCloseTo(6, 6);
   });
 });
