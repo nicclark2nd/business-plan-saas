@@ -15,38 +15,40 @@ const num = (v: number | null | undefined) => fmt.format(Number(v) || 0);
 const parseNum = (s: string) => { const n = Number(s.replace(/[,\s]/g, "")); return Number.isFinite(n) ? n : 0; };
 const parseSigned = (s: string) => { const t = s.replace(/[,\s%]/g, ""); if (t === "-" || t === "") return null; const n = Number(t); return Number.isFinite(n) ? n : null; };
 type AreaKey = "products" | "growth" | "season";
-type Row = Product & { _dirty?: boolean; _error?: string; _gtext?: Record<string, string>; _mtext?: Record<string, string> };
+type Row = Product & { _key: string; _dirty?: boolean; _error?: string; _gtext?: Record<string, string>; _mtext?: Record<string, string> };
+/** Month shares are stored to four decimals (so presets total exactly 100) but shown to two. */
+const pct = (v: number | undefined) => v === undefined || v === null ? "" : String(Math.round(v * 100) / 100);
 const STEP = GUIDED_STEPS.find((s) => s.id === "sales")?.step ?? 7;
-const blank = (id = "tmp-new-product"): Row => ({ id, name: "", description: "", notes: "", lifecycle: null, average_price: 0, units_sold: 0, start_selling_year: 1, yearly_growth: {}, monthly_distribution: null, sort_order: 0 });
+const blank = (id = "tmp-new-product"): Row => ({ id, _key: id, name: "", description: "", notes: "", lifecycle: null, average_price: 0, units_sold: 0, start_selling_year: 1, yearly_growth: {}, monthly_distribution: null, sort_order: 0 });
 
 export function SalesModule({ planId, initial, mode, initialArea, historicRevenue, historicEnd, productWord }: {
   planId: string; initial: Product[]; mode: "guided" | "advanced"; initialArea: AreaKey; historicRevenue: number | null; historicEnd: string | null; productWord: string;
 }) {
   const [area, setArea] = useState<AreaKey>(initialArea);
-  const [rows, setRows] = useState<Row[]>(initial.length ? initial : [blank()]);
+  const [rows, setRows] = useState<Row[]>(initial.length ? initial.map((p) => ({ ...p, _key: p.id })) : [blank()]);
   const [pending, start] = useTransition();
   const ref = useRef(rows); useEffect(() => { ref.current = rows; }, [rows]);
   const left = (e: React.FocusEvent<HTMLElement>) => !e.currentTarget.contains(e.relatedTarget as Node);
 
-  const edit = (id: string, changes: Partial<Row>, immediate = false) => {
-    setRows((xs) => xs.map((x) => (x.id === id ? { ...x, ...changes, _dirty: true, _error: undefined } : x)));
-    if (immediate) queueMicrotask(() => commit(id));
+  const edit = (key: string, changes: Partial<Row>, immediate = false) => {
+    setRows((xs) => xs.map((x) => (x._key === key ? { ...x, ...changes, _dirty: true, _error: undefined } : x)));
+    if (immediate) queueMicrotask(() => commit(key));
   };
-  const commit = (id: string) => {
-    const r = ref.current.find((x) => x.id === id);
+  const commit = (key: string) => {
+    const r = ref.current.find((x) => x._key === key);
     if (!r || !r._dirty || !r.name.trim()) return;
-    setRows((xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: false } : x)));
+    setRows((xs) => xs.map((x) => (x._key === key ? { ...x, _dirty: false } : x)));
     start(async () => {
-      const res = await upsertProduct(planId, { ...r, id: id.startsWith("tmp-") ? undefined : id });
-      setRows((xs) => xs.map((x) => (x.id === id ? (res.ok ? { ...x, id: res.data!.id } : { ...x, _dirty: true, _error: res.error }) : x)));
+      const res = await upsertProduct(planId, { ...r, id: r.id.startsWith("tmp-") ? undefined : r.id });
+      setRows((xs) => xs.map((x) => (x._key === key ? (res.ok ? { ...x, id: res.data!.id } : { ...x, _dirty: true, _error: res.error }) : x)));
     });
   };
   const add = () => { const id = `tmp-${crypto.randomUUID()}`; setRows((xs) => [blank(id), ...xs]); setArea("products"); focusRow(`[data-row="${id}"]`); };
   const remove = (r: Row) => {
-    setRows((xs) => { const rest = xs.filter((x) => x.id !== r.id); return rest.length ? rest : [blank(`tmp-${crypto.randomUUID()}`)]; });
+    setRows((xs) => { const rest = xs.filter((x) => x._key !== r._key); return rest.length ? rest : [blank(`tmp-${crypto.randomUUID()}`)]; });
     if (!r.id.startsWith("tmp-")) start(async () => { await deleteProduct(planId, r.id); });
   };
-  const flush = () => ref.current.forEach((r) => r._dirty && commit(r.id));
+  const flush = () => ref.current.forEach((r) => r._dirty && commit(r._key));
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const intent = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value === "later" ? "later" : "next";
@@ -85,18 +87,18 @@ export function SalesModule({ planId, initial, mode, initialArea, historicRevenu
             <thead><tr><Th style={{ width: "26%" }}>Product</Th><Th style={{ width: 130 }}>Lifecycle</Th><Th right style={{ width: 120 }}>Average price</Th><Th right style={{ width: 110 }}>Units this year</Th><Th right style={{ width: 130 }}>Annual sales</Th><Th style={{ width: 100 }}>Starts</Th><Th style={{ width: 36 }} /></tr></thead>
             <tbody>
               {rows.map((r) => [
-                <tr key={r.id + "a"} data-row={r.id} onBlur={(e) => left(e) && commit(r.id)} className={cn("[&>td]:border-b-0 [&>td]:pt-1.5", r._error && "[&>td]:bg-bad-soft")} title={r._error}>
-                  <Td><CellInput value={r.name} placeholder="Product or service" className="font-semibold" onChange={(e) => edit(r.id, { name: e.target.value })} /></Td>
-                  <Td><CellSelect value={r.lifecycle} options={LIFECYCLE} placeholder="Stage —" onValueChange={(v) => edit(r.id, { lifecycle: v }, !!r.name.trim())} /></Td>
-                  <Td right><CellInput numeric value={r.average_price ? num(r.average_price) : ""} placeholder="0" onChange={(e) => edit(r.id, { average_price: parseNum(e.target.value) })} /></Td>
-                  <Td right><CellInput numeric value={r.units_sold ? String(r.units_sold) : ""} placeholder="0" onChange={(e) => edit(r.id, { units_sold: parseNum(e.target.value) })} /></Td>
+                <tr key={r._key + "a"} data-row={r._key} onBlur={(e) => left(e) && commit(r._key)} className={cn("[&>td]:border-b-0 [&>td]:pt-1.5", r._error && "[&>td]:bg-bad-soft")} title={r._error}>
+                  <Td><CellInput value={r.name} placeholder="Product or service" className="font-semibold" onChange={(e) => edit(r._key, { name: e.target.value })} /></Td>
+                  <Td><CellSelect value={r.lifecycle} options={LIFECYCLE} placeholder="Stage —" onValueChange={(v) => edit(r._key, { lifecycle: v }, !!r.name.trim())} /></Td>
+                  <Td right><CellInput numeric value={r.average_price ? num(r.average_price) : ""} placeholder="0" onChange={(e) => edit(r._key, { average_price: parseNum(e.target.value) })} /></Td>
+                  <Td right><CellInput numeric value={r.units_sold ? String(r.units_sold) : ""} placeholder="0" onChange={(e) => edit(r._key, { units_sold: parseNum(e.target.value) })} /></Td>
                   <Td right className="num font-semibold">{num(r.average_price * r.units_sold)}</Td>
-                  <Td><CellSelect value={String(r.start_selling_year)} options={YEARS.map((y) => ({ value: String(y), label: y === 1 ? "Now" : `Year ${y}` }))} onValueChange={(v) => edit(r.id, { start_selling_year: Number(v) }, !!r.name.trim())} /></Td>
+                  <Td><CellSelect value={String(r.start_selling_year)} options={YEARS.map((y) => ({ value: String(y), label: y === 1 ? "Now" : `Year ${y}` }))} onValueChange={(v) => edit(r._key, { start_selling_year: Number(v) }, !!r.name.trim())} /></Td>
                   <Td><RemoveButton onClick={() => remove(r)} /></Td>
                 </tr>,
-                <tr key={r.id + "b"} data-row={r.id} onBlur={(e) => left(e) && commit(r.id)} className={cn("[&>td]:align-top [&>td]:pb-2", r._error && "[&>td]:bg-bad-soft")}>
-                  <Td colSpan={3} wrap><div className="mb-0.5 pl-1.5 text-[10.5px] font-semibold uppercase tracking-[.05em] text-muted-foreground">What it is</div><CellTextarea value={r.description ?? ""} placeholder="One or two sentences a lender would understand" onChange={(e) => edit(r.id, { description: e.target.value })} /></Td>
-                  <Td colSpan={4} wrap><div className="mb-0.5 pl-1.5 text-[10.5px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Notes — why they buy it, margin, weaknesses</div><CellTextarea value={r.notes ?? ""} placeholder="e.g. Lower margin than we need; shifting effort to decorative work" onChange={(e) => edit(r.id, { notes: e.target.value })} /></Td>
+                <tr key={r._key + "b"} data-row={r._key} onBlur={(e) => left(e) && commit(r._key)} className={cn("[&>td]:align-top [&>td]:pb-2", r._error && "[&>td]:bg-bad-soft")}>
+                  <Td colSpan={3} wrap><div className="mb-0.5 pl-1.5 text-[10.5px] font-semibold uppercase tracking-[.05em] text-muted-foreground">What it is</div><CellTextarea value={r.description ?? ""} placeholder="One or two sentences a lender would understand" onChange={(e) => edit(r._key, { description: e.target.value })} /></Td>
+                  <Td colSpan={4} wrap><div className="mb-0.5 pl-1.5 text-[10.5px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Notes — why they buy it, margin, weaknesses</div><CellTextarea value={r.notes ?? ""} placeholder="e.g. Lower margin than we need; shifting effort to decorative work" onChange={(e) => edit(r._key, { notes: e.target.value })} /></Td>
                 </tr>,
               ])}
             </tbody>
@@ -118,21 +120,21 @@ export function SalesModule({ planId, initial, mode, initialArea, historicRevenu
                 const setG = (y: number, k: "price" | "units", raw: string) => {
                   const v = parseSigned(raw);
                   const yg = { ...(r.yearly_growth ?? {}) }; yg[String(y)] = { ...(yg[String(y)] ?? {}), [k]: v ?? 0 };
-                  edit(r.id, { yearly_growth: yg, _gtext: { ...(r._gtext ?? {}), [`${y}${k}`]: raw } });
+                  edit(r._key, { yearly_growth: yg, _gtext: { ...(r._gtext ?? {}), [`${y}${k}`]: raw } });
                 };
                 return [
-                  <tr key={r.id + "p"} data-row={r.id} onBlur={(e) => left(e) && commit(r.id)} className="[&>td]:border-b-0 [&>td]:h-[30px] [&>td]:pt-1.5">
+                  <tr key={r._key + "p"} data-row={r._key} onBlur={(e) => left(e) && commit(r._key)} className="[&>td]:border-b-0 [&>td]:h-[30px] [&>td]:pt-1.5">
                     <Td rowSpan={3} className="!border-b border-border align-top pt-2"><span className="font-semibold">{r.name}</span><div className="text-[11.5px] text-muted-foreground">{r.start_selling_year > 1 ? `starts Year ${r.start_selling_year}` : `${num(r.average_price)} × ${r.units_sold}`}</div></Td>
                     <Td className="text-[11px] font-semibold uppercase tracking-[.04em] text-muted-foreground">Price %</Td>
                     <Td right className="num text-muted-foreground">{num(r.average_price)}</Td>
                     {YEARS.map((y) => <Td key={y} right><CellInput numeric inputMode="text" value={g(y, "price")} placeholder="0" onChange={(e) => setG(y, "price", e.target.value)} /></Td>)}
                   </tr>,
-                  <tr key={r.id + "u"} data-row={r.id} onBlur={(e) => left(e) && commit(r.id)} className="[&>td]:border-b-0 [&>td]:h-[30px]">
+                  <tr key={r._key + "u"} data-row={r._key} onBlur={(e) => left(e) && commit(r._key)} className="[&>td]:border-b-0 [&>td]:h-[30px]">
                     <Td className="text-[11px] font-semibold uppercase tracking-[.04em] text-muted-foreground">Units %</Td>
                     <Td right className="num text-muted-foreground">{r.units_sold}</Td>
                     {YEARS.map((y) => <Td key={y} right><CellInput numeric inputMode="text" value={g(y, "units")} placeholder="0" onChange={(e) => setG(y, "units", e.target.value)} /></Td>)}
                   </tr>,
-                  <tr key={r.id + "s"} className="[&>td]:h-[30px] [&>td]:font-semibold">
+                  <tr key={r._key + "s"} className="[&>td]:h-[30px] [&>td]:font-semibold">
                     <Td className="text-[11px] font-semibold uppercase tracking-[.04em] text-muted-foreground">Sales</Td>
                     <Td right className="num">{num(r.average_price * r.units_sold)}</Td>
                     {proj.map((y) => <Td key={y.year} right className={cn("num", y.sales === 0 && "text-muted-foreground")} title={`${num(y.price)} × ${y.units}`}>{y.sales ? num(y.sales) : "—"}</Td>)}
@@ -157,16 +159,16 @@ export function SalesModule({ planId, initial, mode, initialArea, historicRevenu
                 const total = distributionTotal(d);
                 const y1 = yearlyProjection(r.average_price, r.units_sold, r.yearly_growth, r.start_selling_year)[0].sales;
                 const months = monthlySales(y1, d);
-                const setD = (m: number, raw: string) => { const nd: MonthlyDistribution = { ...d, [String(m)]: parseSigned(raw) ?? 0 }; edit(r.id, { monthly_distribution: nd, _mtext: { ...(r._mtext ?? {}), [m]: raw } }); };
-                const preset = (nd: MonthlyDistribution) => edit(r.id, { monthly_distribution: nd, _mtext: {} }, true);
+                const setD = (m: number, raw: string) => { const nd: MonthlyDistribution = { ...d, [String(m)]: parseSigned(raw) ?? 0 }; edit(r._key, { monthly_distribution: nd, _mtext: { ...(r._mtext ?? {}), [m]: raw } }); };
+                const preset = (nd: MonthlyDistribution) => edit(r._key, { monthly_distribution: nd, _mtext: {} }, true);
                 return [
-                  <tr key={r.id + "d"} data-row={r.id} onBlur={(e) => left(e) && commit(r.id)} className="[&>td]:border-b-0 [&>td]:h-[30px] [&>td]:pt-1.5">
+                  <tr key={r._key + "d"} data-row={r._key} onBlur={(e) => left(e) && commit(r._key)} className="[&>td]:border-b-0 [&>td]:h-[30px] [&>td]:pt-1.5">
                     <Td rowSpan={2} className="!border-b border-border align-top pt-2"><span className="font-semibold">{r.name}</span><div className="text-[11.5px] text-muted-foreground">Year 1 {num(y1)}</div></Td>
-                    {MONTHS.map((_, i) => <Td key={i} right><CellInput numeric inputMode="decimal" className="px-1" value={r._mtext?.[i + 1] ?? String(d[String(i + 1)])} onChange={(e) => setD(i + 1, e.target.value)} /></Td>)}
-                    <Td right className={cn("num font-semibold", Math.abs(total - 100) > 0.01 ? "text-bad" : "text-good")}>{total}%</Td>
+                    {MONTHS.map((_, i) => <Td key={i} right><CellInput numeric inputMode="decimal" className="px-1" value={r._mtext?.[i + 1] ?? pct(d[String(i + 1)])} onChange={(e) => setD(i + 1, e.target.value)} /></Td>)}
+                    <Td right className={cn("num font-semibold", Math.abs(total - 100) > 0.01 ? "text-bad" : "text-good")}>{pct(total)}%</Td>
                     <Td className="whitespace-nowrap text-xs"><LinkButton onClick={() => preset(evenDistribution())}>Even</LinkButton><span className="mx-1.5 text-border">·</span><LinkButton onClick={() => preset(moderateDistribution())}>Moderate</LinkButton><span className="mx-1.5 text-border">·</span><LinkButton onClick={() => preset(rampUpDistribution())}>Ramp-up</LinkButton></Td>
                   </tr>,
-                  <tr key={r.id + "m"} className="[&>td]:h-[26px] [&>td]:text-xs [&>td]:text-muted-foreground">
+                  <tr key={r._key + "m"} className="[&>td]:h-[26px] [&>td]:text-xs [&>td]:text-muted-foreground">
                     {months.map((v, i) => <Td key={i} right className="num">{num(v)}</Td>)}
                     <Td right className="num">{num(y1)}</Td><Td />
                   </tr>,

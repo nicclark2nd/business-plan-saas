@@ -13,7 +13,7 @@ import { PERSON_ROLES, ROLE_LABEL, CAPABILITY_KINDS, KIND_LABEL, formatMonth, ty
 const fmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
 const num = (n: number | null | undefined) => fmt.format(Number(n) || 0);
 type Row = Person & { _key: string; started_text: string; _dirty?: boolean; _state?: "saving" | "saved" | "error"; _error?: string };
-type Cap = Capability & { _dirty?: boolean };
+type Cap = Capability & { _key: string; _dirty?: boolean };
 type AreaKey = "people" | "salary" | "cap" | "risk";
 
 export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndMonth }: {
@@ -23,12 +23,12 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
   const fyStart = useMemo(() => planYearStart(planYear, fyEndMonth), [planYear, fyEndMonth]);
   // Empty grids start with a blank row ready to type in (closed decision 8). Starter ids are fixed so server and client match.
   const blankPerson = (key = "tmp-new-person"): Row => ({ _key: key, id: "", plan_id: planId, first_name: "", last_name: "", name: "", position: "", role: "employee", pct_shareholding: 0, annual_salary: 0, started_on: null, started_text: "", salary_adjustments: {}, sort_order: 0 });
-  const blankCap = (personId: string, id = `tmp-new-cap-${personId}`): Cap => ({ id, person_id: personId, kind: "responsibility", description: "", internal: false, sort_order: 0 });
+  const blankCap = (personId: string, id = `tmp-new-cap-${personId}`): Cap => ({ id, _key: id, person_id: personId, kind: "responsibility", description: "", internal: false, sort_order: 0 });
   const [people, setPeople] = useState<Row[]>(() => initial.people.length
     ? initial.people.map((p) => ({ ...p, first_name: p.first_name ?? "", last_name: p.last_name ?? "", role: p.role ?? "employee", salary_adjustments: p.salary_adjustments ?? {}, started_text: formatMonth(p.started_on), _key: p.id }))
     : [blankPerson()]);
   const [caps, setCaps] = useState<Cap[]>(() => [
-    ...initial.capabilities,
+    ...initial.capabilities.map((c) => ({ ...c, _key: c.id })),
     ...initial.people.filter((p) => !initial.capabilities.some((c) => c.person_id === p.id)).map((p) => blankCap(p.id)),
   ]);
   const [area, setArea] = useState<AreaKey>("people");
@@ -78,16 +78,16 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
 
   // ----- capabilities -----
   const editCap = (id: string, changes: Partial<Cap>, immediate = false) => {
-    setCaps((cs) => cs.map((c) => (c.id === id ? { ...c, ...changes, _dirty: true } : c)));
+    setCaps((cs) => cs.map((c) => (c._key === id ? { ...c, ...changes, _dirty: true } : c)));
     if (immediate) queueMicrotask(() => commitCap(id));
   };
   const commitCap = (id: string) => {
-    const c = capsRef.current.find((x) => x.id === id);
+    const c = capsRef.current.find((x) => x._key === id);
     if (!c || !c._dirty || !c.description.trim()) return;
-    setCaps((cs) => cs.map((x) => (x.id === id ? { ...x, _dirty: false } : x)));
+    setCaps((cs) => cs.map((x) => (x._key === id ? { ...x, _dirty: false } : x)));
     start(async () => {
       const res = await upsertCapability(planId, { ...c, id: c.id.startsWith("tmp-") ? undefined : c.id });
-      if (res.ok && c.id.startsWith("tmp-")) setCaps((cs) => cs.map((x) => (x.id === id ? { ...x, id: res.data!.id } : x)));
+      if (res.ok && c.id.startsWith("tmp-")) setCaps((cs) => cs.map((x) => (x._key === id ? { ...x, id: res.data!.id } : x)));
     });
   };
   const addCap = (person: Row) => {
@@ -97,11 +97,11 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
     focusRow(`[data-cap="${tmp}"]`);
   };
   const removeCap = (c: Cap) => {
-    setCaps((cs) => { const rest = cs.filter((x) => x.id !== c.id); return rest.some((x) => x.person_id === c.person_id) ? rest : [...rest, blankCap(c.person_id, `tmp-${crypto.randomUUID()}`)]; });
+    setCaps((cs) => { const rest = cs.filter((x) => x._key !== c._key); return rest.some((x) => x.person_id === c.person_id) ? rest : [...rest, blankCap(c.person_id, `tmp-${crypto.randomUUID()}`)]; });
     if (!c.id.startsWith("tmp-")) start(async () => { await deleteCapability(planId, c.id); });
   };
 
-  const flush = () => { peopleRef.current.forEach((r) => r._dirty && commitPerson(r._key)); capsRef.current.forEach((c) => c._dirty && commitCap(c.id)); };
+  const flush = () => { peopleRef.current.forEach((r) => r._dirty && commitPerson(r._key)); capsRef.current.forEach((c) => c._dirty && commitCap(c._key)); };
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const intent = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value === "later" ? "later" : "next";
@@ -272,9 +272,9 @@ function CapabilityArea({ people, caps, onScope, onAdd, onEdit, onCommit, onRemo
                 <span className="ml-auto">{p.id ? <LinkButton onClick={() => onAdd(p)}>+ Add</LinkButton> : <span className="text-xs font-normal text-muted-foreground">save the person first</span>}</span>
               </GroupRow>,
               ...rows.map((c) => (
-                <Row key={c.id} data-cap={c.id} onBlur={(e) => left(e) && onCommit(c.id)} className={cn(c.internal && "[&>td]:bg-[repeating-linear-gradient(135deg,transparent_0_6px,rgba(0,0,0,.025)_6px_8px)] [&_input]:italic [&_input]:text-muted-foreground")}>
-                  <Td><CellSelect value={c.kind} options={kinds} onValueChange={(v) => onEdit(c.id, { kind: v as CapabilityKind, internal: v === "development" }, !!c.description.trim())} className={cn(c.internal && "italic text-muted-foreground")} /></Td>
-                  <Td wrap><CellTextarea value={c.description} placeholder={c.kind === "education" || c.kind === "licence" ? "What, where, year — e.g. Diploma of Accounting, TAFE Queensland, 2008" : "A sentence or two"} onChange={(e) => onEdit(c.id, { description: e.target.value })} /></Td>
+                <Row key={c._key} data-cap={c._key} onBlur={(e) => left(e) && onCommit(c._key)} className={cn(c.internal && "[&>td]:bg-[repeating-linear-gradient(135deg,transparent_0_6px,rgba(0,0,0,.025)_6px_8px)] [&_input]:italic [&_input]:text-muted-foreground")}>
+                  <Td><CellSelect value={c.kind} options={kinds} onValueChange={(v) => onEdit(c._key, { kind: v as CapabilityKind, internal: v === "development" }, !!c.description.trim())} className={cn(c.internal && "italic text-muted-foreground")} /></Td>
+                  <Td wrap><CellTextarea value={c.description} placeholder={c.kind === "education" || c.kind === "licence" ? "What, where, year — e.g. Diploma of Accounting, TAFE Queensland, 2008" : "A sentence or two"} onChange={(e) => onEdit(c._key, { description: e.target.value })} /></Td>
                   <Td>{c.internal && <span className="mr-1.5 text-[9.5px] uppercase tracking-[.06em] text-muted-foreground/70">internal</span>}<RemoveButton onClick={() => onRemove(c)} /></Td>
                 </Row>
               )),
