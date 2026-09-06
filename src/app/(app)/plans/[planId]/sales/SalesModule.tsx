@@ -27,7 +27,7 @@ const undescribed = (r: Row) => !(r.description ?? "").trim();
 const START_OPTIONS = [{ value: "1", label: "Now" }, ...YEARS.map((y) => ({ value: String(y + 1), label: `Year ${y}` }))];
 const COLS = [0, ...YEARS] as const;            // 0 = this year
 const firstYear = (r: Row) => Math.min(5, Math.max(0, (r.start_selling_year || 1) - 1));
-const lab = "text-right text-[11px] font-semibold uppercase tracking-[.04em] text-muted-foreground";
+const lab = "text-[11px] font-semibold uppercase tracking-[.04em] text-muted-foreground";
 
 export function SalesModule({ planId, initial, mode, initialArea, historicRevenue, historicEnd, productWord }: {
   planId: string; initial: Product[]; mode: "guided" | "advanced"; initialArea: AreaKey; historicRevenue: number | null; historicEnd: string | null; productWord: string;
@@ -145,7 +145,7 @@ export function SalesModule({ planId, initial, mode, initialArea, historicRevenu
             {named.length > 10 && <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a product" className="ml-auto h-7 w-56 text-[13px]" />}
           </Toolbar>
           <Grid>
-            <thead><tr><Th style={{ width: "17%" }}>Product</Th><Th style={{ width: 100 }}>Starts</Th><Th right style={{ width: 70 }}>Line</Th><Th right>This year</Th>{YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}</tr></thead>
+            <thead><tr><Th style={{ width: "17%" }}>Product</Th><Th style={{ width: 100 }}>Starts</Th><Th style={{ width: 170 }} /><Th right>This year</Th>{YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}</tr></thead>
             <tbody>
               {visibleNamed.map((r) => {
                 const fy = firstYear(r);
@@ -158,11 +158,11 @@ export function SalesModule({ planId, initial, mode, initialArea, historicRevenu
                 };
                 const dash = <Td right className="text-muted-foreground/60">—</Td>;
                 const priceCell = (c: number) => c < fy ? dash
-                  : c === fy ? <Td right><CellInput numeric value={r.average_price ? num(r.average_price) : ""} placeholder="price" onChange={(e) => edit(r._key, { average_price: parseNum(e.target.value) })} /></Td>
-                  : <Td right><CellInput numeric inputMode="text" value={g(c, "price")} placeholder="0 %" onChange={(e) => setG(c, "price", e.target.value)} /></Td>;
+                  : c === fy ? <Td right><CellInput numeric className="font-semibold" value={r.average_price ? num(r.average_price) : ""} placeholder="price" onChange={(e) => edit(r._key, { average_price: parseNum(e.target.value) })} /></Td>
+                  : <Td right><CellInput numeric inputMode="text" value={g(c, "price")} placeholder="0" suffix="%" onChange={(e) => setG(c, "price", e.target.value)} /></Td>;
                 const unitsCell = (c: number) => c < fy ? dash
-                  : c === fy ? <Td right><CellInput numeric value={r.units_sold ? String(r.units_sold) : ""} placeholder="units" onChange={(e) => edit(r._key, { units_sold: parseNum(e.target.value) })} /></Td>
-                  : <Td right><CellInput numeric inputMode="text" value={g(c, "units")} placeholder="0 %" onChange={(e) => setG(c, "units", e.target.value)} /></Td>;
+                  : c === fy ? <Td right><CellInput numeric className="font-semibold" value={r.units_sold ? String(r.units_sold) : ""} placeholder="units" onChange={(e) => edit(r._key, { units_sold: parseNum(e.target.value) })} /></Td>
+                  : <Td right><CellInput numeric inputMode="text" value={g(c, "units")} placeholder="0" suffix="%" onChange={(e) => setG(c, "units", e.target.value)} /></Td>;
                 const salesCell = (c: number) => {
                   if (c < fy) return <Td right className="text-muted-foreground/60">—</Td>;
                   const y = c === 0 ? { price: r.average_price, units: r.units_sold, sales: r.average_price * r.units_sold } : proj[c - 1];
@@ -176,11 +176,11 @@ export function SalesModule({ planId, initial, mode, initialArea, historicRevenu
                       <div className="text-[11.5px] text-muted-foreground">{fy === 0 ? "selling now" : `from Year ${fy}`}</div>
                     </Td>
                     <Td rowSpan={3} className="!border-b border-border align-top pt-1"><CellSelect value={String(r.start_selling_year || 1)} options={START_OPTIONS} onValueChange={(v) => edit(r._key, { start_selling_year: Number(v) }, true)} /></Td>
-                    <Td className={lab}>Price</Td>
+                    <Td className={lab}>Price, then % change</Td>
                     {COLS.map((c) => <Fragment key={c}>{priceCell(c)}</Fragment>)}
                   </tr>,
                   <tr key={r._key + "u"} data-row={r._key} onBlur={(e) => left(e) && commit(r._key)} className={cn("[&>td]:border-b-0 [&>td]:h-[30px]", r._error && "[&>td]:bg-bad-soft")}>
-                    <Td className={lab}>Units</Td>
+                    <Td className={lab}>Units, then % change</Td>
                     {COLS.map((c) => <Fragment key={c}>{unitsCell(c)}</Fragment>)}
                   </tr>,
                   <tr key={r._key + "s"} className="[&>td]:h-[30px] [&>td]:font-semibold">

@@ -79,8 +79,11 @@ export function focusRow(selector: string) {
 const cell = "h-7 rounded-[3px] border-transparent bg-transparent px-1.5 py-1 text-[13px] shadow-none hover:border-input focus-visible:bg-card";
 
 /** In-place text cell. `numeric` → right-aligned, tabular figures, numeric keyboard, no spinner (§6.9). */
-export function CellInput({ className, numeric, ...props }: React.ComponentProps<typeof Input> & { numeric?: boolean }) {
-  return <Input {...props} inputMode={numeric ? (props.inputMode ?? "decimal") : props.inputMode} className={cn(cell, numeric && "num text-right", className)} />;
+export function CellInput({ className, numeric, suffix, ...props }: React.ComponentProps<typeof Input> & { numeric?: boolean; suffix?: string }) {
+  const input = <Input {...props} inputMode={numeric ? (props.inputMode ?? "decimal") : props.inputMode} className={cn(cell, numeric && "num text-right", suffix && "pr-5", className)} />;
+  if (!suffix) return input;
+  // A unit the user can see without reading instructions ("%"), sitting inside the cell after the number.
+  return <span className="relative block">{input}<span aria-hidden className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{suffix}</span></span>;
 }
 
 /** In-place choice cell. Saves on selection (the module passes onValueChange). */
