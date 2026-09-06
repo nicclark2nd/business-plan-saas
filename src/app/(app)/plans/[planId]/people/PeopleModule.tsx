@@ -21,8 +21,16 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
 }) {
   void currency;
   const fyStart = useMemo(() => planYearStart(planYear, fyEndMonth), [planYear, fyEndMonth]);
-  const [people, setPeople] = useState<Row[]>(() => initial.people.map((p) => ({ ...p, first_name: p.first_name ?? "", last_name: p.last_name ?? "", role: p.role ?? "employee", salary_adjustments: p.salary_adjustments ?? {}, started_text: formatMonth(p.started_on), _key: p.id })));
-  const [caps, setCaps] = useState<Cap[]>(initial.capabilities);
+  // Empty grids start with a blank row ready to type in (closed decision 8). Starter ids are fixed so server and client match.
+  const blankPerson = (key = "tmp-new-person"): Row => ({ _key: key, id: "", plan_id: planId, first_name: "", last_name: "", name: "", position: "", role: "employee", pct_shareholding: 0, annual_salary: 0, started_on: null, started_text: "", salary_adjustments: {}, sort_order: 0 });
+  const blankCap = (personId: string, id = `tmp-new-cap-${personId}`): Cap => ({ id, person_id: personId, kind: "responsibility", description: "", internal: false, sort_order: 0 });
+  const [people, setPeople] = useState<Row[]>(() => initial.people.length
+    ? initial.people.map((p) => ({ ...p, first_name: p.first_name ?? "", last_name: p.last_name ?? "", role: p.role ?? "employee", salary_adjustments: p.salary_adjustments ?? {}, started_text: formatMonth(p.started_on), _key: p.id }))
+    : [blankPerson()]);
+  const [caps, setCaps] = useState<Cap[]>(() => [
+    ...initial.capabilities,
+    ...initial.people.filter((p) => !initial.capabilities.some((c) => c.person_id === p.id)).map((p) => blankCap(p.id)),
+  ]);
   const [area, setArea] = useState<AreaKey>("people");
   const [scope, setScope] = useState<string | null>(null);        // a person's _key, or everyone
   const [pending, start] = useTransition();
@@ -32,8 +40,9 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
   const startYear = (p: Row) => startYearFromDate(p.started_on, fyStart);
   const visible = scope ? people.filter((p) => p._key === scope) : people;
   const scoped = people.find((p) => p._key === scope);
+  const real = (c: Cap) => c.description.trim().length > 0;
   const capsFor = (key: string) => caps.filter((c) => c.person_id === people.find((p) => p._key === key)?.id);
-  const capCount = scope ? capsFor(scope).length : caps.length;
+  const capCount = (scope ? capsFor(scope) : caps).filter(real).length;
 
   // ----- save policy (§6.10): typing marks dirty; one request when focus leaves the row; selects save at once -----
   const patch = (key: string, p: Partial<Row>) => setPeople((ps) => ps.map((r) => (r._key === key ? { ...r, ...p } : r)));
@@ -47,19 +56,22 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
     patch(key, { _state: "saving", _dirty: false });
     start(async () => {
       const res = await upsertPerson(planId, { ...row, id: row.id || undefined });
-      if (res.ok) patch(key, { id: res.data!.id, started_on: res.data!.started_on, started_text: formatMonth(res.data!.started_on), _state: "saved" });
+      if (res.ok) {
+        patch(key, { id: res.data!.id, started_on: res.data!.started_on, started_text: formatMonth(res.data!.started_on), name: `${row.first_name.trim()} ${(row.last_name ?? "").trim()}`.trim(), _state: "saved" });
+        if (!row.id) setCaps((cs) => cs.some((c) => c.person_id === res.data!.id) ? cs : [...cs, blankCap(res.data!.id, `tmp-${crypto.randomUUID()}`)]);
+      }
       else patch(key, { _state: "error", _error: res.error, _dirty: true });
     });
   };
   const left = (e: React.FocusEvent<HTMLElement>) => !e.currentTarget.contains(e.relatedTarget as Node);
 
   const addPerson = () => {
-    const r: Row = { _key: crypto.randomUUID(), id: "", plan_id: planId, first_name: "", last_name: "", name: "", position: "", role: "employee", pct_shareholding: 0, annual_salary: 0, started_on: null, started_text: "", salary_adjustments: {}, sort_order: 0 };
+    const r = blankPerson(crypto.randomUUID());
     setPeople((ps) => [r, ...ps]); setScope(null); setArea("people");
     focusRow(`[data-row="${r._key}"]`);
   };
   const removePerson = (r: Row) => {
-    setPeople((ps) => ps.filter((x) => x._key !== r._key));
+    setPeople((ps) => { const rest = ps.filter((x) => x._key !== r._key); return rest.length ? rest : [blankPerson(crypto.randomUUID())]; });
     if (scope === r._key) setScope(null);
     if (r.id) start(async () => { await deletePerson(planId, r.id); });
   };
@@ -81,11 +93,11 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
   const addCap = (person: Row) => {
     if (!person.id) return;
     const tmp = `tmp-${crypto.randomUUID()}`;
-    setCaps((cs) => [{ id: tmp, person_id: person.id, kind: "responsibility", description: "", internal: false, sort_order: 0 }, ...cs]);
+    setCaps((cs) => [blankCap(person.id, tmp), ...cs]);
     focusRow(`[data-cap="${tmp}"]`);
   };
   const removeCap = (c: Cap) => {
-    setCaps((cs) => cs.filter((x) => x.id !== c.id));
+    setCaps((cs) => { const rest = cs.filter((x) => x.id !== c.id); return rest.some((x) => x.person_id === c.person_id) ? rest : [...rest, blankCap(c.person_id, `tmp-${crypto.randomUUID()}`)]; });
     if (!c.id.startsWith("tmp-")) start(async () => { await deleteCapability(planId, c.id); });
   };
 
@@ -127,12 +139,11 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
       {area === "people" && (
         <>
           <Toolbar>
-            <Meta className="ml-0">{people.length} {people.length === 1 ? "person" : "people"} · shareholding <b className={cn("num", Math.round(shareTotal(people)) === 100 ? "text-good" : "text-warn")}>{num(shareTotal(people))}%</b> · click a name to focus every area on that person</Meta>
+            <Meta className="ml-0">{people.filter((p) => p.id).length} {people.filter((p) => p.id).length === 1 ? "person" : "people"} · shareholding <b className={cn("num", Math.round(shareTotal(people)) === 100 ? "text-good" : "text-warn")}>{num(shareTotal(people))}%</b> · click a name to focus every area on that person</Meta>
           </Toolbar>
           <Grid>
             <thead><tr><Th style={{ width: 130 }}>First name</Th><Th style={{ width: 130 }}>Last name</Th><Th>Position</Th><Th style={{ width: 130 }}>Role</Th><Th right style={{ width: 90 }}>Share %</Th><Th style={{ width: 115 }}>Started</Th><Th right style={{ width: 95 }}>Tenure</Th><Th style={{ width: 36 }} /></tr></thead>
             <tbody>
-              {visible.length === 0 && <tr><Td colSpan={8} className="py-6 text-center text-muted-foreground">Start with the owner. Add anyone whose absence would change the plan.</Td></tr>}
               {visible.map((r) => (
                 <Row key={r._key} data-row={r._key} onBlur={(e) => left(e) && commitPerson(r._key)} className={cn(r._state === "error" && "[&>td]:bg-bad-soft")} title={r._error}>
                   <Td className="relative">
@@ -152,7 +163,7 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
               ))}
             </tbody>
             <FootRow>
-              <Td colSpan={4}>Total <span className="ml-2 font-normal text-muted-foreground">{people.length} {people.length === 1 ? "person" : "people"}{people.filter((p) => startYear(p) > 1).length ? ` · ${people.filter((p) => startYear(p) > 1).length} planned hire${people.filter((p) => startYear(p) > 1).length === 1 ? "" : "s"}` : ""}</span></Td>
+              <Td colSpan={4}>Total <span className="ml-2 font-normal text-muted-foreground">{people.filter((p) => p.id).length} {people.filter((p) => p.id).length === 1 ? "person" : "people"}{people.filter((p) => startYear(p) > 1).length ? ` · ${people.filter((p) => startYear(p) > 1).length} planned hire${people.filter((p) => startYear(p) > 1).length === 1 ? "" : "s"}` : ""}</span></Td>
               <Td right className={cn("num", Math.round(shareTotal(people)) === 100 ? "text-good" : "text-warn")}>{num(shareTotal(people))}%</Td>
               <Td colSpan={3} />
             </FootRow>
