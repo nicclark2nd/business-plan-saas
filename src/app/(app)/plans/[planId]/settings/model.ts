@@ -1,7 +1,8 @@
 /** Plan settings — three small areas (SaaS §6.12): Business profile · Financial year & tax · Branding. */
 export const LEGAL_STRUCTURES = ["Sole trader", "Partnership", "Company", "Trust", "Not-for-profit", "LLC", "Corporation", "Other"];
-export const CUSTOMER_TYPES = ["Customer", "Client", "Patient", "Member", "Student", "Guest", "Resident", "Tenant", "Other"];
-export const PRODUCT_TYPES = [{ value: "products", label: "Products" }, { value: "services", label: "Services" }, { value: "products and services", label: "Products and services" }];
+/** Same lists as APeX, so existing plans read across unchanged. */
+export const CUSTOMER_TYPES = ["Agent", "Client", "Customer", "Distributor", "Franchisee", "Licensee", "Member", "Patient", "Patron", "Reseller", "Subscriber"];
+export const PRODUCT_TYPES = ["Access", "Applications", "Goods", "Intellectual Property", "Livestock", "Memberships", "Produce", "Products", "Products and services", "Services"].map((x) => ({ value: x, label: x }));
 export const COUNTRIES = ["Australia", "New Zealand", "United States", "United Kingdom", "Canada", "Singapore", "Ireland", "South Africa", "India", "Philippines", "Thailand", "Malaysia", "Indonesia", "Other"];
 export const CURRENCIES = ["AUD", "NZD", "USD", "GBP", "CAD", "SGD", "EUR", "ZAR", "INR", "PHP", "THB", "MYR", "IDR"];
 export const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
