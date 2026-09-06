@@ -24,8 +24,8 @@ const endText = (iso: string | null, fyEnd: number) => {
   return m === fyEnd ? String(y) : `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m - 1]} ${y}`;
 };
 
-export function HistoricModule({ planId, initial, hasHistory, mode, initialArea, fyEndMonth }: {
-  planId: string; initial: Period[]; hasHistory: boolean | null; mode: "guided" | "advanced"; initialArea: AreaKey; fyEndMonth: number;
+export function HistoricModule({ planId, initial, hasHistory, mode, initialArea, fyEndMonth, loadError }: {
+  planId: string; initial: Period[]; hasHistory: boolean | null; mode: "guided" | "advanced"; initialArea: AreaKey; fyEndMonth: number; loadError?: string | null;
 }) {
   const [area, setArea] = useState<AreaKey>(initialArea);
   const [cols, setCols] = useState<Col[]>(() => PERIODS.map((n) => {
@@ -88,6 +88,7 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
       <PendingBridge pending={pending} dirty={cols.some((c) => c._dirty)} error={err} />
       <form id="historic-form" onSubmit={onSubmit} className="hidden" />
 
+      {loadError && <div className="border-b border-border bg-bad-soft px-5 py-2 text-[13px] text-bad">Couldn&apos;t read this plan&apos;s history: {loadError}</div>}
       {newBusiness && <div className="flex items-center gap-3 border-b border-border bg-warn-soft px-5 py-2 text-[13px]"><i className="size-2 rounded-full bg-warn" />Marked as a new business — this step counts as complete and the forecast opens from Funding. You can still enter figures below if you have any.</div>}
 
       {(area === "pnl" || area === "bs") && (

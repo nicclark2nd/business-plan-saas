@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { deriveFromComponents, deriveFromTotals, PERIOD_FIELDS, type PeriodInput, type PeriodValues } from "@/engine/historic/derive";
+import { deriveFromComponents, deriveFromTotals, type PeriodInput, type PeriodValues } from "@/engine/historic/derive";
 import { parseMonth } from "../people/model";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
@@ -33,8 +33,9 @@ export async function savePeriod(planId: string, periodNumber: number, input: { 
   if (end === undefined) return { ok: false, error: "Period end should be a year (2026) or a month and year (Jun 2026)." };
   const values = deriveFromComponents(input);
   const row = { plan_id: planId, period_number: periodNumber, period_end: end, period_length: Math.min(24, Math.max(1, Math.trunc(Number(input.period_length)) || 12)), source: "manual", ...values };
-  const { error } = await supabase.from("plan_historic_periods").upsert(row, { onConflict: "plan_id,period_number" });
+  const { data, error, status } = await supabase.from("plan_historic_periods").upsert(row, { onConflict: "plan_id,period_number" }).select("period_number, revenue");
   if (error) { console.error("historic", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }
+  if (!data?.length) return { ok: false, error: `Saved nothing (status ${status}) — the row was rejected silently. Check plan access.` };
   touch(planId);
   return { ok: true, data: { values, period_end: end } };
 }
@@ -77,4 +78,3 @@ export async function continueFromHistoric(planId: string, intent: "next" | "lat
   redirect(intent === "next" ? `/plans/${planId}/sales` : `/plans/${planId}/dashboard`);
 }
 
-export { PERIOD_FIELDS };
