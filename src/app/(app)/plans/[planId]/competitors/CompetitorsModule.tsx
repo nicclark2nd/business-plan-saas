@@ -21,7 +21,8 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
   const [area, setArea] = useState<AreaKey>(initialArea);
   const [position, setPosition] = useState<Position>(initialPosition);
   const [positionDirty, setPositionDirty] = useState(false);
-  const [rows, setRows] = useState<Row_[]>(initialCompetitors);
+  const blank = (id = "tmp-new-competitor"): Row_ => ({ id, name: "", kind: "direct", reach: null, pricing: null, threat: "medium", strengths: "", weaknesses: "", how_we_win: "", sort_order: 0 });
+  const [rows, setRows] = useState<Row_[]>(initialCompetitors.length ? initialCompetitors : [blank()]);   // empty grid starts with a blank row
   const [error, setError] = useState<string | undefined>();
   const [pending, start] = useTransition();
   const posRef = useRef(position); useEffect(() => { posRef.current = position; }, [position]);
@@ -49,11 +50,11 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
   };
   const add = () => {
     const tmp = `tmp-${crypto.randomUUID()}`;
-    setRows((xs) => [{ id: tmp, name: "", kind: "direct", reach: null, pricing: null, threat: "medium", strengths: "", weaknesses: "", how_we_win: "", sort_order: 0 }, ...xs]);
+    setRows((xs) => [blank(tmp), ...xs]);
     setArea("competitors"); focusRow(`[data-row="${tmp}"]`);
   };
   const remove = (id: string) => {
-    setRows((xs) => xs.filter((x) => x.id !== id));
+    setRows((xs) => { const rest = xs.filter((x) => x.id !== id); return rest.length ? rest : [blank(`tmp-${crypto.randomUUID()}`)]; });
     if (!id.startsWith("tmp-")) start(async () => { await deleteRow(planId, "competitors", id); });
   };
   const flush = () => { commitPosition(); rowsRef.current.forEach((r) => r._dirty && commit(r.id)); };
@@ -64,13 +65,14 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
   };
 
   const positioned = POSITION_FIELDS.filter((f) => position[f.key].trim()).length;
-  const direct = rows.filter((r) => r.kind === "direct").length, indirect = rows.length - direct;
+  const named = rows.filter((r) => r.name.trim());
+  const direct = named.filter((r) => r.kind === "direct").length, indirect = named.length - direct;
   const rowError = rows.find((r) => r._error)?._error;
 
   return (
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group="Market" title="Competitors" subtitle={`Who else a ${customerWord} would consider, how they compare, and why they choose you`} mode={mode}
-      areas={[{ key: "competitors", label: "Competitors", count: rows.length }, { key: "position", label: "Our position", count: positioned }]}
+      areas={[{ key: "competitors", label: "Competitors", count: rows.filter((r) => r.name.trim()).length }, { key: "position", label: "Our position", count: positioned }]}
       area={area} onArea={(k) => { flush(); setArea(k as AreaKey); }}
       scope={{ label: "This plan" }}
       primaryAction={area === "competitors" ? <Button size="sm" type="button" onClick={add}>+ Competitor</Button> : undefined}
@@ -89,13 +91,12 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
 
       {area === "competitors" && (
         <>
-          <Toolbar><Meta className="ml-0">{rows.length ? <>{direct} direct · {indirect} indirect{indirect === 0 && rows.length > 0 ? " — add one indirect rival: someone who solves the same problem another way" : ""}</> : "One row per rival. Facts left, words right."}</Meta></Toolbar>
+          <Toolbar><Meta className="ml-0">{named.length ? <>{direct} direct · {indirect} indirect{indirect === 0 ? " — add one indirect rival: someone who solves the same problem another way" : ""}</> : "One block per rival: facts on the first line, your words on the second."}</Meta></Toolbar>
           <Grid>
             <thead><tr>
               <Th style={{ width: "22%" }}>Competitor</Th><Th style={{ width: "15%" }}>Type</Th><Th style={{ width: "15%" }}>Reach</Th><Th style={{ width: "20%" }}>Pricing vs us</Th><Th style={{ width: "15%" }}>Threat</Th><Th style={{ width: 36 }} />
             </tr></thead>
             <tbody>
-              {rows.length === 0 && <tr><Td colSpan={6} className="py-6 text-center text-muted-foreground">No competitors yet. Add the two or three a {customerWord} would compare you with.</Td></tr>}
               {rows.map((c) => [
                 <tr key={c.id + "a"} data-row={c.id} onBlur={(e) => left(e) && commit(c.id)} className={cn("[&>td]:border-b-0 [&>td]:pt-2", c._error && "[&>td]:bg-bad-soft")} title={c._error}>
                   <Td><CellInput value={c.name} placeholder="Name" className="font-semibold" onChange={(e) => edit(c.id, { name: e.target.value })} /></Td>

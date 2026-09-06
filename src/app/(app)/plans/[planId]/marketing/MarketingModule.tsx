@@ -21,8 +21,13 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
   const [area, setArea] = useState<AreaKey>(initialArea);
   const [market, setMarket] = useState<Market>(initial.market);
   const [marketDirty, setMarketDirty] = useState(false);
+  // An empty grid starts with one blank row ready to type in (it only saves once its first column is filled).
+  // The starter row has a fixed id so server and client render the same HTML; rows added later get random ids.
+  const blankSpend = (id = "tmp-new-spend"): WithMeta<Spend> => ({ id, kind: "advertising", approach: "", annual_budget: 0, sort_order: 0 });
+  const blankEvidence = (id = "tmp-new-evidence"): WithMeta<Evidence & { when_text: string }> => ({ id, source: "", finding: "", occurred_on: null, when_text: "", sort_order: 0 });
   const [rows, setRows] = useState<{ spend: WithMeta<Spend>[]; evidence: WithMeta<Evidence & { when_text: string }>[] }>({
-    spend: initial.spend, evidence: initial.evidence.map((e) => ({ ...e, when_text: formatMonth(e.occurred_on) })),
+    spend: initial.spend.length ? initial.spend : [blankSpend()],
+    evidence: initial.evidence.length ? initial.evidence.map((e) => ({ ...e, when_text: formatMonth(e.occurred_on) })) : [blankEvidence()],
   });
   const [error, setError] = useState<string | undefined>();
   const [pending, start] = useTransition();
@@ -64,7 +69,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
     focusRow(`[data-row="${tmp}"]`);
   };
   const remove = (k: GridKind, id: string) => {
-    setList(k, (xs) => xs.filter((x) => x.id !== id));
+    setList(k, (xs) => { const rest = xs.filter((x) => x.id !== id); return rest.length ? rest : [k === "spend" ? blankSpend(`tmp-${crypto.randomUUID()}`) as unknown as AnyRow : blankEvidence(`tmp-${crypto.randomUUID()}`) as unknown as AnyRow]; });
     if (!id.startsWith("tmp-")) start(async () => { await deleteRow(planId, k, id); });
   };
   const flush = () => { commitMarket(); (["spend", "evidence"] as GridKind[]).forEach((k) => list(k).forEach((r) => r._dirty && commit(k, r.id))); };
@@ -85,8 +90,8 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
       step={3} total={GUIDED_STEPS.length} group="Market" title="Marketing" subtitle={`Who your ${plural} are and what you will spend to win them`} mode={mode}
       areas={[
         { key: "market", label: "Market", count: written },
-        { key: "spend", label: "Channels & spend", count: rows.spend.length },
-        { key: "evidence", label: "Evidence", count: rows.evidence.length },
+        { key: "spend", label: "Channels & spend", count: rows.spend.filter((r) => r.approach.trim()).length },
+        { key: "evidence", label: "Evidence", count: rows.evidence.filter((r) => r.source.trim()).length },
       ]}
       area={area} onArea={(k) => { flush(); setArea(k as AreaKey); }}
       scope={{ label: "This plan" }}
@@ -130,7 +135,6 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
           <Grid>
             <thead><tr><Th style={{ width: 220 }}>Type</Th><Th>Approach</Th><Th right style={{ width: 140 }}>Annual budget</Th><Th style={{ width: 36 }} /></tr></thead>
             <tbody>
-              {rows.spend.length === 0 && <tr><Td colSpan={4} className="py-6 text-center text-muted-foreground">No channels yet. Add each way you reach {plural}, with what it costs a year.</Td></tr>}
               {rows.spend.map((s) => (
                 <Row key={s.id} data-row={s.id} onBlur={(e) => left(e) && commit("spend", s.id)} className={cn(s._error && "[&>td]:bg-bad-soft")} title={s._error}>
                   <Td><CellSelect value={s.kind} options={SPEND_KINDS.map((k) => ({ value: k, label: SPEND_LABEL[k] }))} onValueChange={(v) => edit("spend", s.id, { kind: v as SpendKind }, !!s.approach.trim())} /></Td>
@@ -152,7 +156,6 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
           <Grid>
             <thead><tr><Th style={{ width: "30%" }}>Source or method</Th><Th>What it showed</Th><Th style={{ width: 120 }}>When</Th><Th style={{ width: 36 }} /></tr></thead>
             <tbody>
-              {rows.evidence.length === 0 && <tr><Td colSpan={4} className="py-6 text-center text-muted-foreground">No evidence yet. A survey, a report, council data, a trial — anything that backs the Market numbers.</Td></tr>}
               {rows.evidence.map((ev) => (
                 <Row key={ev.id} data-row={ev.id} onBlur={(e) => left(e) && commit("evidence", ev.id)} className={cn(ev._error && "[&>td]:bg-bad-soft")} title={ev._error}>
                   <Td wrap><CellTextarea value={ev.source} placeholder="e.g. Phone survey of 40 builders" onChange={(e) => edit("evidence", ev.id, { source: e.target.value })} /></Td>
