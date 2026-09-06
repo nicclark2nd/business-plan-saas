@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NAV } from "@/lib/nav";
+import { NAV, GUIDED_STEPS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 export function Sidebar({ planId, mode, doneSteps }: { planId: string; mode: "guided" | "advanced"; doneSteps: number[] }) {
@@ -39,7 +39,7 @@ export function Sidebar({ planId, mode, doneSteps }: { planId: string; mode: "gu
         </div>
       ))}
       <div className="mt-4 border-t border-sidebar-border px-4 pt-3.5 text-[11px] text-sidebar-muted">
-        {mode === "guided" ? <><b className="text-sidebar-foreground">Guided path</b> — 12 steps, {doneSteps.length} done.</> : <><b className="text-sidebar-foreground">Advanced</b> — every module and assumption.</>}
+        {mode === "guided" ? <><b className="text-sidebar-foreground">Guided path</b> — {GUIDED_STEPS.length} steps, {doneSteps.length} done.</> : <><b className="text-sidebar-foreground">Advanced</b> — every module and assumption.</>}
       </div>
     </nav>
   );

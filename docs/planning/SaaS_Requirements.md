@@ -261,7 +261,7 @@ The two-day, 4–10 business, coach-facilitated workshop is a core v1 use case a
 
 - **Both the coach and each client log in.** The coach owns a *cohort*; each business owns its own plan inside it. The client keeps their plan (and login) after the workshop; the coach keeps visibility for the mentoring period.
 - **Coach cohort view:** all plans in the room on one screen — completion % per section per business, who is stuck, who is finished. Lets the coach spend time on direction rather than data entry.
-- **Guided path is the workshop path.** The 12 steps: 1 Vision & Purpose → 2 Leadership Team → 3 Marketing → 4 SWOT → 5 Historic → 6 Sales → 7 COGS → 8 Overheads → 9 Funding → 10 Review forecast → 11 Goals (AI-drafted) → 12 Report. Each step must be completable by a novice in the time a facilitator would allow (target: no single step > 20 min unaided).
+- **Guided path is the workshop path.** The 13 steps (Competitors added 6 Sep 2026): 1 Vision & Purpose → 2 Leadership Team → 3 Marketing → 4 Competitors → 5 SWOT → 6 Historic → 7 Sales → 8 COGS → 9 Overheads → 10 Funding → 11 Review forecast → 12 Goals (AI-drafted) → 13 Report. Each step must be completable by a novice in the time a facilitator would allow (target: no single step > 20 min unaided).
 - **Coach can step into any plan** to demonstrate or correct, with an audit trail of who changed what.
 - **Facilitator content hooks:** each step has a short "what good looks like" prompt the coach can present (and the AI can echo for solo users).
 - **End of day two:** every business generates a Report. That is the success metric of the workshop and of the product.
@@ -352,12 +352,12 @@ APeX had seven tabs. Reduced to four data areas on the module bar, same pattern 
 
 Removed: **Branding** (brand purpose duplicates step 1; values/personality appear in no lender's or broker's checklist; visual identity is the logo, in Settings). **Action Plan** → Goals (marketing actions are goals with owners and dates; rows kept in `plan_marketing_actions` until Goals absorbs them). Migration 0008 carries existing distribution/promotion rows into the spend grid and research text into one evidence row.
 
-### 6.13.1 Competitors to SBA depth (6 Sep 2026)
+### 6.13.1 Competitors — its own module, step 4 (6 Sep 2026)
 
-The SBA competitive-analysis section asks for five things; the Competitors area now answers all five without a matrix being typed by hand:
+Started as an area under Marketing; Nic: cramming facts, three written columns and the position fields under one tab looked messy. Competitors is now **its own left-menu module in both modes and step 4 of the Guided path** (SWOT → Reports shift to 5–13). Marketing is back to three areas: Market · Channels & spend · Evidence. The SBA competitive-analysis section asks for five things; the module answers all five without a matrix being typed by hand:
 
-- **Per competitor** (grid): Competitor · Type (Direct / Indirect) · Reach (Local / Regional / National / Online) · Pricing vs us (five steps) · Threat (Low → Critical) · What they do well · Where they're weak · How we win. The four choice columns are one click each; **the report generates the SBA comparison matrix from them**, with the plan's own business as the first column (from Business profile and "Our advantage").
-- **Plan-level "Our position"** (three growing fields above the grid): *Our advantage* (the USP — absorbs "Positioning" from Market), *Barriers to entry*, *What could change* (new entrants, regulation, technology — pre-fills SWOT Threats in step 4).
+- **Competitors area** — one block per rival, two lines: facts on the first (Competitor · Type Direct/Indirect · Reach · Pricing vs us · Threat), the three written columns on the second at a third of the width each (What they do well · Where they're weak · How we win). Nine columns on one line squeezed the words to nothing at 1400px. The four choice columns are one click each; **the report generates the SBA comparison matrix from them**, with the plan's own business as the first column (from Business profile and "Our advantage").
+- **Our position area** (three growing fields, plan-level): *Our advantage* (the USP — absorbs "Positioning" from Market), *Barriers to entry*, *What could change* (new entrants, regulation, technology — pre-fills SWOT Threats in step 4).
 - **Deliberately left out:** competitor revenue vs yours, market share %, financial health. A small business rarely knows these; a guessed number in a lender's document is worse than none. If known, it goes in words under "What they do well".
 
 Migration 0009: enums on `plan_competitors` (kind, reach, pricing, threat); `plan_marketing.positioning` → `our_advantage`, plus `barriers_to_entry`, `future_threats`.

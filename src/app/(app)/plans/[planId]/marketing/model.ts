@@ -1,4 +1,4 @@
-/** Marketing — four data areas (SaaS §6.13): Market · Competitors · Channels & spend · Evidence. */
+/** Marketing — three data areas (SaaS §6.13): Market · Channels & spend · Evidence. Competitors is its own module (step 4). */
 export const MARKET_FIELDS = [
   { key: "target_market", label: "Target market", hint: "Who buys, where, and what they have in common. Name the customer and the area.", placeholder: "e.g. Residential builders and owner-builders within 90 minutes of Wollongong pouring 20–200 m² slabs." },
   { key: "market_size", label: "Market size", hint: "How many of them, and roughly what they spend a year. A sourced estimate beats a precise guess.", placeholder: "e.g. ~1,400 residential slab approvals a year in the Illawarra; ~$28M of concreting work." },
@@ -34,4 +34,4 @@ export type Competitor = {
 };
 export type Spend = { id: string; kind: SpendKind; approach: string; annual_budget: number; sort_order: number };
 export type Evidence = { id: string; source: string; finding: string | null; occurred_on: string | null; sort_order: number };
-export type MarketingData = { market: Market; position: Position; competitors: Competitor[]; spend: Spend[]; evidence: Evidence[] };
+export type MarketingData = { market: Market; spend: Spend[]; evidence: Evidence[] };
