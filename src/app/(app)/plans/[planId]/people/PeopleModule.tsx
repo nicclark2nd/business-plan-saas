@@ -113,8 +113,8 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
       footer={<ModuleFooter planId={planId} prevId="vision" formId="people-form" />}
       help={<>
         <h3>What good looks like</h3>
-        <p>Three to six people. Start with the owner; add anyone whose absence would change the plan — including hires you&apos;re planning (give them a future Started date).</p>
-        <p>Salaries feed Overheads. A $0 owner salary flatters the profit and every bank knows it.</p>
+        <p>Three to six people. Start with the owner; add anyone whose absence would change the plan — including hires you&apos;re planning (give them a future Started date). Tenure is worked out from Started against the plan&apos;s first year, {formatMonth(fyStart.toISOString())}.</p>
+        <p>Salaries feed Overheads as a locked line — Overheads keeps its own &quot;Other wages&quot; input, and on-costs (super, payroll tax) are one % rate applied there. Contractors have no salary row; they are costed in COGS or Overheads. A $0 owner salary flatters the profit and every bank knows it.</p>
         <div className="mb-4 mt-2 rounded-r border-l-[3px] border-primary bg-card px-2.5 py-1.5 text-xs text-muted-foreground">Shareholding should add to 100%. If it doesn&apos;t, the ownership table in the report will look wrong to an investor.</div>
         <h3>Where this goes</h3>
         <p><b>People</b> → ownership table and management team. <b>Salaries</b> → Overheads, in full or summarised depending on the report. <b>Roles &amp; Capability</b> → management bios (development areas stay internal). <b>Risk &amp; Succession</b> → key-person risk in funding, SBA and sale reports.</p>
@@ -135,7 +135,9 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
               {visible.length === 0 && <tr><Td colSpan={8} className="py-6 text-center text-muted-foreground">Start with the owner. Add anyone whose absence would change the plan.</Td></tr>}
               {visible.map((r) => (
                 <Row key={r._key} data-row={r._key} onBlur={(e) => left(e) && commitPerson(r._key)} className={cn(r._state === "error" && "[&>td]:bg-bad-soft")} title={r._error}>
-                  <Td>{r.id && scope !== r._key
+                  <Td className="relative">
+                    {r.id && missing(r).length > 0 && <i title={`Missing: ${missing(r).join(", ")}`} className="absolute left-2 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-warn" />}
+                    {r.id && scope !== r._key
                     ? <NameLink onClick={() => setScope(r._key)}>{r.first_name || "—"}</NameLink>
                     : <CellInput name="first_name" value={r.first_name} placeholder="First name" onChange={(e) => edit(r._key, { first_name: e.target.value })} />}
                   </Td>
@@ -155,13 +157,13 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
               <Td colSpan={3} />
             </FootRow>
           </Grid>
-          <Note>Fields save when you leave them. Tenure is calculated from Started against the plan&apos;s first year (from {formatMonth(fyStart.toISOString())}). A future date shows the plan year the person joins — their salary starts in that year automatically.</Note>
+          <Note>Fields save when you leave them. A future Started date means a planned hire — their salary starts in that plan year.</Note>
         </>
       )}
 
       {area === "salary" && (
         <>
-          <Toolbar><Meta className="ml-0">Adjustment % compounds on the year before; negative for a cut. The Salary row calculates. The total feeds Overheads as a locked line — Overheads keeps its own &quot;Other wages&quot; input; on-costs are one % rate applied there. Contractors have no salary row.</Meta></Toolbar>
+          <Toolbar><Meta className="ml-0">Adjust % compounds on the year before (negative for a cut); the Salary row calculates and the total feeds Overheads.</Meta></Toolbar>
           <Grid>
             <thead><tr><Th style={{ width: "20%" }}>Name</Th><Th right style={{ width: 120 }}>Base</Th><Th style={{ width: 100 }} />{SALARY_YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}<Th right style={{ width: 150 }} className="max-[1280px]:hidden">Y5 vs base</Th></tr></thead>
             <tbody>
@@ -219,6 +221,12 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
 }
 
 const shareTotal = (ps: Row[]) => ps.reduce((a, p) => a + (Number(p.pct_shareholding) || 0), 0);
+/** What a lender would notice is blank. Contractors need no salary. */
+const missing = (p: Row) => [
+  ...(!p.position ? ["position"] : []),
+  ...(!p.started_on ? ["start date"] : []),
+  ...(p.role !== "contractor" && !(Number(p.annual_salary) > 0) ? ["salary"] : []),
+];
 
 /** Reports saving state up to the frame (footer text + disabled buttons). */
 function PendingBridge({ pending, saving, error }: { pending: boolean; saving: boolean; error?: string }) {

@@ -39,12 +39,17 @@ export function ModuleFrame({
   const [helpOpen, setHelpOpen] = useState<boolean>(mode === "guided");
   useEffect(() => {
     const id = requestAnimationFrame(() => {
-      try { const v = localStorage.getItem("step-help"); if (v !== null) setHelpOpen(v === "1"); } catch {}
+      try {
+        const key = `step-help:${step}`; const v = localStorage.getItem(key);
+        if (v !== null) setHelpOpen(v === "1");                       // remembered choice for this step
+        else if (localStorage.getItem("step-help:seen:" + step)) setHelpOpen(false); // been here before: data first
+        localStorage.setItem("step-help:seen:" + step, "1");
+      } catch {}
       if (window.innerWidth <= 1100) setHelpOpen(false);   // narrow screens: data first, help on demand
     });
     return () => cancelAnimationFrame(id);
-  }, []);
-  const toggleHelp = () => setHelpOpen((h) => { try { localStorage.setItem("step-help", h ? "0" : "1"); } catch {} return !h; });
+  }, [step]);
+  const toggleHelp = () => setHelpOpen((h) => { try { localStorage.setItem(`step-help:${step}`, h ? "0" : "1"); } catch {} return !h; });
 
   return (
     <ModuleCtx.Provider value={{ pending, setPending, note, setNote }}>

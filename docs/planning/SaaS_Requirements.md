@@ -316,3 +316,14 @@ Validated in mockup `docs/mockup/record-pattern.html` (artifact v5.1). Supersede
 **Financial treatment — the double-count rule.** Overheads shows **"Leadership team salaries — from Leadership Team"** as a locked, calculated line and **"Other wages"** as a separate input beside it. On-costs (superannuation, pension, payroll tax) are **one % rate applied in Overheads to both lines**, never per person. Role = Contractor: identity in People only; costed in COGS or Overheads like any other contract cost.
 
 **Report detail by template.** Government / SBA: full key-person salary schedule. Bank / investor: remuneration when material. Business sale: summarised management cost, detail reserved for due diligence. Internal growth plan: full schedule.
+
+### 6.11.1 Data-screen rules (6 Sep 2026, after reviewing the Codex concept)
+
+Reviewed an alternative concept (read-only grid + edit drawer, summary tiles under the data, popover help, card-and-whitespace styling). Decision: **our structure stands** — inline editing with save-on-leave, module bar, help rail, dense flat grids. Four things adopted from the review:
+
+1. **One line above a grid, no more.** Anything longer than a sentence of guidance lives in the Help rail, never in the toolbar or under the table. Data screens explain themselves through the data.
+2. **Missing-data cue per row.** A small amber dot on a person whose position, start date or salary (non-contractors) is blank, with the missing fields in the tooltip. This is the same signal the coach cohort view (§8) will roll up.
+3. **Plan status and currency in the top bar** ("● Working draft · AUD"), next to the mode toggle. Factual, always visible, costs nothing.
+4. **Help rail: open on first visit to a step, then remembers the user's choice per step.** Advanced mode still defaults off.
+
+Rejected, with reasons: edit-in-a-drawer (two clicks per change, covers the data being compared, and it destroys the Excel-style Salaries schedule); summary tiles and charts under a data grid (that is the Dashboard's job; on a data screen it pushes the data up and reads as a landing page); a persistent right-hand "person overview" panel (the scope chip does this with less chrome); rounded-card, 16px, whitespace-heavy styling (reads as a website — §6.6 flat enterprise stands); native month picker for Started (calendar glyph in a cell; free text with the month parser stays).
