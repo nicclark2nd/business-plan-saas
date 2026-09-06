@@ -26,7 +26,7 @@ export async function getCompleteness(planId: string) {
   const fw = framework.data ? Object.values(framework.data).filter(Boolean).length : 0;
   const [people, marketing, swot, annualGoals, historic, products, cogs, overheads, funding] = await Promise.all([
     count("plan_people"),
-    supabase.from("plan_marketing").select("target_market,market_size,market_trends,customer_needs,competitive_analysis").eq("plan_id", planId).maybeSingle().then((r) => (r.data ? Object.values(r.data).filter(Boolean).length : 0)),
+    supabase.from("plan_marketing").select("target_market,market_size,market_trends,customer_needs,positioning").eq("plan_id", planId).maybeSingle().then((r) => (r.data ? Object.values(r.data).filter(Boolean).length : 0)),
     count("plan_swot_items"),
     count("plan_goals", { annualOnly: true }),
     count("plan_historic_periods"),

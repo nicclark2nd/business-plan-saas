@@ -16,8 +16,9 @@ export function Sidebar({ planId, mode, doneSteps }: { planId: string; mode: "gu
         <div key={g.group || "top"} className="mt-2.5">
           {g.group && <div className="px-4 pb-1 pt-1.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-sidebar-muted">{g.group}</div>}
           {g.items.map((it) => {
-            const href = `${base}/${it.id}`;
-            const active = path === href || path.startsWith(href + "/");
+            const href = `${base}/${it.href ?? it.id}`;
+            const own = `${base}/${it.id}`;
+            const active = !it.href && (path === own || path.startsWith(own + "/"));
             const label = mode === "advanced" && it.advancedLabel ? it.advancedLabel : it.label;
             const done = it.step ? doneSteps.includes(it.step) : false;
             return (

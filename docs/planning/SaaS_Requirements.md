@@ -339,3 +339,14 @@ APeX put 62 inputs on one Plan Settings page. Split by what the field *is*:
 - **Not settings, deferred to where they are used:** customer acquisition cost and monthly churn → Unit Economics inputs; working-capital days, tax timing, prepaid/accrued balances, maintenance CapEx and disposals → a *Forecast assumptions* area under Review forecast, defaulted from Historic ("use historical for all years" is the default, not a button), with What-If's "Make this the plan" writing back there.
 
 Same ModuleFrame as the steps (no step number, no progress line), same save policy (§6.10), same FieldGrid primitive as any one-record area.
+
+## 6.13 Marketing — four areas (6 Sep 2026)
+
+APeX had seven tabs. Reduced to four data areas on the module bar, same pattern as Leadership Team:
+
+1. **Market** — target market, market size, market trends, customer needs, plus an optional one-line positioning. Field grid; the bar count shows how many of the four are written.
+2. **Competitors** — a grid: Competitor · What they do well · Where they're weak · How we win. Replaces APeX's prose "competitive analysis" plus its separate list; the Advanced left-menu item *Competitors* deep-links here.
+3. **Channels & spend** — one row per channel actually used: Type (Distribution / Advertising / Content / Sales promotion / PR / Partnerships & referrals / Retention) · Approach · Annual budget; total in the footer. Replaces Distribution + the six fixed Promotion blocks + the read-only Budget roll-up. Nic: APeX's promotion was rigid — every block had to be considered; here only the channels in use get a row. **The total feeds Overheads as a locked "Marketing — from Marketing" line** (same double-count rule as salaries, §6.11).
+4. **Evidence** — Source or method · What it showed · When. Replaces the four Research essays. Kept because grant and SBA templates ask "what market research did you do" by name; a grid of real sources answers it better than prose.
+
+Removed: **Branding** (brand purpose duplicates step 1; values/personality appear in no lender's or broker's checklist; visual identity is the logo, in Settings). **Action Plan** → Goals (marketing actions are goals with owners and dates; rows kept in `plan_marketing_actions` until Goals absorbs them). Migration 0008 carries existing distribution/promotion rows into the spend grid and research text into one evidence row.

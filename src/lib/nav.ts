@@ -1,5 +1,5 @@
 /** Left-menu model. Guided mode shows the numbered 12-step path plus tools; Advanced shows every module. */
-export type NavItem = { id: string; label: string; step?: number; advancedLabel?: string; tag?: string; tool?: boolean };
+export type NavItem = { id: string; label: string; step?: number; advancedLabel?: string; tag?: string; tool?: boolean; href?: string /* deep link into another module's area */ };
 export type NavGroup = { group: string; items: NavItem[] };
 
 export const NAV: NavGroup[] = [
@@ -10,7 +10,7 @@ export const NAV: NavGroup[] = [
     { id: "ip", label: "Intellectual Property" }, { id: "equipment", label: "Capital Equipment" },
   ] },
   { group: "People", items: [{ id: "people", label: "Leadership Team", step: 2 }] },
-  { group: "Market", items: [{ id: "marketing", label: "Marketing", step: 3 }, { id: "competitors", label: "Competitors" }] },
+  { group: "Market", items: [{ id: "marketing", label: "Marketing", step: 3 }, { id: "competitors", label: "Competitors", href: "marketing?area=competitors" }] },
   { group: "Goals", items: [{ id: "swot", label: "SWOT", step: 4 }, { id: "goals", label: "Goals", step: 11, tag: "AI-drafted" }] },
   { group: "Financials", items: [
     { id: "historic", label: "Historic", step: 5 }, { id: "sales", label: "Sales", step: 6 }, { id: "cogs", label: "COGS", step: 7 },
