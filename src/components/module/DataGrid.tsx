@@ -72,6 +72,24 @@ export function RemoveButton({ onClick, title = "Remove" }: { onClick: () => voi
 }
 
 /** Focus the first real text control in a new row (skips the hidden inputs shadcn Select renders). */
+/**
+ * A chain, drawn rather than borrowed from an emoji so it stays monochrome beside the ✎ and ▦ glyphs.
+ * Used both ways round: on a line that takes its clients from another, and on the line that feeds it.
+ */
+export function LinkMark({ title, onClick, feeds }: { title: string; onClick?: () => void; feeds?: boolean }) {
+  const icon = (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden className="size-3.5">
+      <path d="M9.5 14.5 14.5 9.5" />
+      <path d="M11 6.5 12.8 4.7a3.8 3.8 0 0 1 5.4 5.4L16.4 12" />
+      <path d="M13 17.5l-1.8 1.8a3.8 3.8 0 0 1-5.4-5.4L7.6 12" />
+    </svg>
+  );
+  const cls = cn("ml-1.5 inline-flex translate-y-[1px] align-middle", feeds ? "text-muted-foreground/70" : "text-muted-foreground");
+  return onClick
+    ? <button type="button" title={title} aria-label={title} onClick={onClick} className={cn(cls, "hover:text-primary")}>{icon}</button>
+    : <span title={title} aria-label={title} className={cls}>{icon}</span>;
+}
+
 export function focusRow(selector: string) {
   setTimeout(() => document.querySelector<HTMLElement>(`${selector} input:not([type="hidden"]):not([aria-hidden="true"]), ${selector} textarea`)?.focus(), 0);
 }

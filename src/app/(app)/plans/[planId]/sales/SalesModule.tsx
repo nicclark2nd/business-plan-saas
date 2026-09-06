@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
-import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, RemoveButton } from "@/components/module/DataGrid";
+import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
@@ -57,6 +57,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
   const [rows, setRows] = useState<Row[]>(initial.map((p) => ({ ...p, _key: p.id })));
   const [dlg, setDlg] = useState<Dlg>(null);
   const [draftNew, setDraftNew] = useState<Row | null>(null);
+  const [confirm, setConfirm] = useState<{ row: Row; fed: Row[] } | null>(null);
   const [pending, start] = useTransition();
   const ref = useRef(rows); useEffect(() => { ref.current = rows; }, [rows]);
 
@@ -70,8 +71,15 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
       setRows((xs) => xs.map((x) => (x._key === key ? (res.ok ? { ...x, id: res.data!.id } : { ...x, _error: res.error }) : x)));
     });
   };
+  /** Nothing that feeds another line is deleted silently — the line it feeds would quietly detach. */
+  const askRemove = (r: Row) => {
+    const fed = ref.current.filter((x) => x.name.trim() && x.clients_from_product_id === r.id && x._key !== r._key);
+    if (fed.length) { setConfirm({ row: r, fed }); return; }
+    remove(r);
+  };
   const remove = (r: Row) => {
-    setRows((xs) => xs.filter((x) => x._key !== r._key));
+    setConfirm(null);
+    setRows((xs) => xs.filter((x) => x._key !== r._key).map((x) => (x.clients_from_product_id === r.id ? { ...x, clients_from_product_id: null } : x)));
     if (!isNew(r)) start(async () => { await deleteProduct(planId, r.id); });
   };
   const add = () => { const b = blank(); setDraftNew({ ...b, _key: b.id }); setDlg({ kind: "product", key: b.id }); };
@@ -85,7 +93,16 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
   /** The line a row takes its clients from, and that row's numbers with the link resolved. */
   const src = (r: Row) => sourceOf(r, named) as Row | null;
   const years = (r: Row) => productYears(r, src(r));
-  const srcName = (r: Row) => src(r)?.name ?? "";
+  /** The lines that take their clients from this one — shown on the source, and guarded before deleting it. */
+  const fedBy = (r: Row) => named.filter((x) => x.clients_from_product_id === r.id);
+  /** The chain, both ways round: on the line that follows, and on the line that feeds. */
+  const mark = (r: Row) => {
+    const source = src(r);
+    if (source) return <LinkMark title={`Clients come from ${source.name} — every one sold becomes a client here. Click to open it.`} onClick={() => setDlg({ kind: "product", key: source._key })} />;
+    const fed = fedBy(r);
+    if (fed.length) return <LinkMark feeds title={`Feeds ${fed.map((f) => f.name).join(", ")} — every one sold becomes a client there. Click to open it.`} onClick={() => setDlg({ kind: "product", key: fed[0]._key })} />;
+    return null;
+  };
   const err = rows.find((r) => r._error)?._error;
   /** "This year" reconciles against Historic — only lines already earning, and for an ongoing line that is its book. */
   const current = named.reduce((a, r) => recurring(r) ? a + bookNow(r) : (firstYear(r) === 0 ? a + r.average_price * r.units_sold : a), 0);
@@ -129,13 +146,13 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
             <tbody>
               {named.map((r) => (
                 <GridRow key={r._key} className={cn(r._error && "[&>td]:bg-bad-soft")} title={r._error}>
-                  <Td><NameLink onClick={() => setDlg({ kind: "product", key: r._key })}>{r.name}</NameLink>{firstYear(r) > 0 && <span className="ml-2 text-xs text-muted-foreground">from Year {firstYear(r)}</span>}</Td>
+                  <Td><NameLink onClick={() => setDlg({ kind: "product", key: r._key })}>{r.name}</NameLink>{mark(r)}{firstYear(r) > 0 && <span className="ml-2 text-xs text-muted-foreground">from Year {firstYear(r)}</span>}</Td>
                   <Td className="text-muted-foreground">{recurring(r) ? "Ongoing client" : "One-off job"}</Td>
                   <Td className="text-muted-foreground">{LIFECYCLE.find((l) => l.value === r.lifecycle)?.label ?? "—"}</Td>
                   <Td right className="num">{recurring(r) ? <>{num(monthlyFee(r))}<span className="text-[11px] text-muted-foreground">/mo</span></> : num(r.average_price)}</Td>
-                  <Td right className="num">{recurring(r) ? <>{r.opening_clients || 0} + {isLinked(r) ? <span className="text-muted-foreground">from {srcName(r)}</span> : `${r.units_sold} new`}</> : r.units_sold}</Td>
+                  <Td right className="num">{recurring(r) ? <>{r.opening_clients || 0} + {Number((years(r)[0].newClients ?? 0).toFixed(2))} new</> : r.units_sold}</Td>
                   <Td right className="num font-semibold">{num(years(r)[0].revenue)}</Td>
-                  <Td className="whitespace-nowrap text-right"><IconButton title="Edit product" onClick={() => setDlg({ kind: "product", key: r._key })}>✎</IconButton><RemoveButton onClick={() => remove(r)} /></Td>
+                  <Td className="whitespace-nowrap text-right"><IconButton title="Edit product" onClick={() => setDlg({ kind: "product", key: r._key })}>✎</IconButton><RemoveButton onClick={() => askRemove(r)} /></Td>
                 </GridRow>
               ))}
               {named.length === 0 && <tr><Td colSpan={7} className="h-12 text-muted-foreground">Add your first product — what you sell, what it sells for, how many.</Td></tr>}
@@ -156,7 +173,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
                 const fy = firstYear(r); const p = years(r);
                 return (
                   <GridRow key={r._key}>
-                    <Td><NameLink onClick={() => setDlg({ kind: "growth", key: r._key })}>{r.name}</NameLink>{recurring(r) && <span className="ml-2 text-xs text-muted-foreground">{isLinked(r) ? `follows ${srcName(r)}` : "ongoing"}</span>}</Td>
+                    <Td><NameLink onClick={() => setDlg({ kind: "growth", key: r._key })}>{r.name}</NameLink>{mark(r)}{recurring(r) && !isLinked(r) && <span className="ml-2 text-xs text-muted-foreground">ongoing</span>}</Td>
                     <Td right className="num text-muted-foreground">{recurring(r) ? num(bookNow(r)) : fy === 0 || startup ? num(r.average_price * r.units_sold) : `Year ${fy}`}</Td>
                     {p.map((y) => <Td key={y.year} right className={cn("num", y.year < fy && "text-muted-foreground/60")} title={y.clients !== undefined ? `${y.clients} clients at the end of the year` : ""}>{y.year < fy ? "—" : num(y.revenue)}</Td>)}
                     <Td className="whitespace-nowrap text-right"><IconButton title="Edit growth" onClick={() => setDlg({ kind: "growth", key: r._key })}>✎</IconButton><IconButton title="Edit monthly split" onClick={() => setDlg({ kind: "monthly", key: r._key })}>▦</IconButton></Td>
@@ -182,7 +199,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
                 const y1 = months.reduce((a, b) => a + b, 0);
                 return (
                   <GridRow key={r._key}>
-                    <Td><NameLink onClick={() => setDlg({ kind: "monthly", key: r._key })}>{r.name}</NameLink></Td>
+                    <Td><NameLink onClick={() => setDlg({ kind: "monthly", key: r._key })}>{r.name}</NameLink>{mark(r)}</Td>
                     {fy > 1 ? <Td colSpan={13} className="text-muted-foreground">Starts in Year {fy} — nothing in the first-year cash flow.</Td>
                       : <>{months.map((v, i) => <Td key={i} right className="num">{num(v)}</Td>)}<Td right className="num font-semibold">{num(y1)}</Td></>}
                     <Td className="text-right">{fy <= 1 && <IconButton title="Edit monthly split" onClick={() => setDlg({ kind: "monthly", key: r._key })}>✎</IconButton>}</Td>
@@ -198,6 +215,24 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
 
       {open && dlg?.kind === "product" && <ProductDialog key={open._key} r={open} others={named.filter((x) => x._key !== open._key && !x.clients_from_product_id && !isNew(x))} onSave={(r) => { save(r); close(); }} onClose={close} />}
       {open && dlg?.kind === "growth" && <GrowthDialog key={open._key} r={open} source={src(open)} startup={startup} startOptions={startOptions} onSave={(r) => { save(r); close(); }} onClose={close} />}
+      {confirm && (
+        <Dialog open onOpenChange={(o) => !o && setConfirm(null)}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Delete {confirm.row.name}?</DialogTitle>
+              <DialogDescription>
+                {confirm.fed.length === 1 ? <><b>{confirm.fed[0].name}</b> takes its clients from this line.</> : <><b>{confirm.fed.map((f) => f.name).join(", ")}</b> take their clients from this line.</>}
+                {" "}Delete it and {confirm.fed.length === 1 ? "that line goes" : "those lines go"} back to winning clients on {confirm.fed.length === 1 ? "its" : "their"} own — the numbers will change.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setConfirm(null)}>Keep it</Button>
+              <Button type="button" onClick={() => remove(confirm.row)}>Delete {confirm.row.name}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {open && dlg?.kind === "monthly" && (recurring(open)
         ? <ClientsDialog key={open._key} r={open} source={src(open)} onSave={(r) => { save(r); close(); }} onClose={close} />
         : <MonthlyDialog key={open._key} r={open} onSave={(r) => { save(r); close(); }} onClose={close} />)}

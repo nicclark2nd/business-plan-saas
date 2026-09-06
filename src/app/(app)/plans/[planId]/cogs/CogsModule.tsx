@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
-import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, RemoveButton } from "@/components/module/DataGrid";
+import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { YEARS, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, distributionTotal, type MonthlyDistribution } from "@/engine/sales/projection";
@@ -53,6 +53,14 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
   const ref = useRef(rows); useEffect(() => { ref.current = rows; }, [rows]);
 
   const src = (p: CostedProduct) => sourceOf(p, rows as AnyProduct[]) as CostedProduct | null;
+  /** The same chain as Sales, both ways round — a linked line's cost still follows the clients it inherits. */
+  const mark = (p: CostedProduct) => {
+    const source = src(p);
+    if (source) return <LinkMark title={`Clients come from ${source.name} — every one sold becomes a client here. Click to open its cost.`} onClick={() => setDlg({ kind: "cost", key: source.id })} />;
+    const fed = rows.filter((x) => x.clients_from_product_id === p.id && x.name.trim());
+    if (fed.length) return <LinkMark feeds title={`Feeds ${fed.map((f) => f.name).join(", ")}. Click to open its cost.`} onClick={() => setDlg({ kind: "cost", key: fed[0].id })} />;
+    return null;
+  };
   const priced = rows.filter((p) => p.name.trim());
   const costed = priced.filter((p) => p.cost_per_unit > 0).length;
 
@@ -137,7 +145,7 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
                   <GridRow key={p.id}>
                     <Td className="relative">
                       {missing && <i title="No direct cost set" className="absolute left-2 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-warn" />}
-                      <NameLink onClick={() => setDlg({ kind: "cost", key: p.id })}>{p.name}</NameLink>
+                      <NameLink onClick={() => setDlg({ kind: "cost", key: p.id })}>{p.name}</NameLink>{mark(p)}
                     </Td>
                     <Td className="text-muted-foreground">{recurring(p) ? "Ongoing client" : "One-off job"}</Td>
                     <Td right className="num">{missing ? <span className="text-muted-foreground">—</span> : recurring(p) ? <>{num(p.cost_per_unit / 12)}<span className="text-[11px] text-muted-foreground">/mo</span></> : num(p.cost_per_unit)}</Td>
