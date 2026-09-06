@@ -12,9 +12,11 @@ export const SOLD_AS = [
   { value: "one_off", label: "One-off job" },
   { value: "recurring", label: "Ongoing client" },
 ];
+/** Default is "as a set programme": a client who signs stays the term, so the months add up the way a planner
+ *  counts them by hand. Drift is one click away for a book that genuinely churns from the first month. */
 export const LIFE_MODE = [
-  { value: "average", label: "on average" },
   { value: "fixed", label: "as a set programme" },
+  { value: "average", label: "on average" },
 ];
 
 export type Product = {
