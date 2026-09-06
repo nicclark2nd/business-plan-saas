@@ -110,6 +110,15 @@ function recurringBase(p: AnyProduct, source?: AnyProduct | null) {
   });
 }
 
+/** Client-months in each plan year — what an ongoing line's revenue AND its cost to serve are both proportional to. */
+export function clientMonthsByYear(p: AnyProduct, source?: AnyProduct | null): number[] {
+  if (!recurring(p)) return YEARS.map(() => 0);
+  const { months } = recurringBase(p, source);
+  return YEARS.map((_, i) => r2(months.slice(i * 12, i * 12 + 12).reduce((a, m) => a + m.active, 0)));
+}
+/** The plan year whose column holds the base price, cost and units. Exported for the COGS engine. */
+export const baseYear = (p: AnyProduct) => firstYearOf(p);
+
 /** Total revenue by plan year across every product — what the forecast's top line consumes. */
 export function planRevenueByYear(products: AnyProduct[]) {
   const totals = YEARS.map(() => 0);

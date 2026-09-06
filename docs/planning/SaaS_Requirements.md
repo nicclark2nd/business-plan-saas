@@ -387,4 +387,27 @@ Four grid/record cuts in one day failed the brief. Nic's call: review APeX's Pro
 
 Charts dropped (dashboard). **Start-ups** (`has_history = false`): no "Now" — Starts offers Year 1–5, defaults to Year 1, labels read "Year 1" where they would read "this year". Engine `engine/sales/projection.ts`: `start_selling_year` 1 = now, 2–6 = Year 1–5; base price and units belong to the start year, growth compounds from the year after; DesignOne parity (House Slab 604,800 → 921,484; Carports 122,400 → 201,669); units carried unrounded, shown and multiplied at 2 dp. shadcn Dialog added (`components/ui/dialog.tsx`, flat: card background, 1px border, no rounding beyond the theme).
 
-Cost per unit and cost increases stay on the COGS step (variable COGS), where the product list reappears. Migration 0012: `lifecycle`, `notes` on `plan_products`.
+Cost per unit and cost increases stay on the COGS step (§6.18), where the product list reappears. Migration 0012: `lifecycle`, `notes` on `plan_products`.
+
+## 6.17 Sales — one-off jobs and ongoing clients (6 Sep 2026)
+
+A product is **sold as** a one-off job (invoiced when delivered) or an **ongoing client** who keeps paying — coaching, bookkeeping, legal and consulting retainers, memberships, maintenance contracts. An ongoing line earns from **active clients**, so a year is not price x units: ten clients won through a year bill 138,000 against a 240,000 run rate. It carries an opening book (`opening_clients`, 0 for a new business), month-by-month acquisition (`monthly_new_clients`), and **how long a client stays** — one field covering both a set programme and average retention, read either `on average` (steady drift, the default; the opening book then needs no age, since remaining life is the same for everyone) or `as a set programme` (served out; the two readings are 25 % apart in Year 1). `average_price` holds the annual value of one client, entered as a monthly fee.
+
+An ongoing line may take its clients **from another line** (`clients_from_product_id`, one level deep so nothing loops): a franchisor's royalty follows the licences sold, a service plan follows the equipment, support follows the software licence, a membership follows the joining fee. Its acquisition, timing and growth all come from the line that feeds it, and its monthly dialog is read-only. Migrations 0013 and 0014; engine `engine/sales/recurring.ts` and `engine/sales/product.ts`.
+
+## 6.18 COGS — two lists, three dialogs (6 Sep 2026)
+
+APeX: COGS Variable / Fixed / Combined / Monthly / Charts, with a per-product Cost Details dialog and per-item growth and monthly dialogs on the fixed tab. Rebuilt as **two** areas; nothing is typed into a list.
+
+1. **By product** — one row per product from Sales: Product · Sold as · Cost · COGS Year 1 · Gross profit · Margin, amber dot on any line with no cost. Name or the pencil opens the **Cost dialog** (APeX's Cost Details): cost, price, gross profit each and margin across the top; *% cost rise each year* with the resulting unit cost beneath each box; *What that gives* — units (or client-months), revenue, COGS, gross profit and margin for Years 1-5. Footer totals are labelled *variable only* so the fixed costs are not read as missing.
+2. **Fixed costs** — production costs that do not move with volume: name · this year · Years 1-5, with an **Item dialog** (name, cost a year, % rise each year) and a **Monthly split dialog** (twelve % boxes, Even / Moderate rise / Ramp-up, must total 100). Empty is a legitimate answer and the empty state says so.
+
+**A cost follows how the line is sold** (§6.17): per job for a one-off line, **per client per month** for an ongoing one, where the volume is client-months and `cost_per_unit` stores the cost per client per *year*, mirroring `average_price`. A line with no direct cost — a royalty, a licence fee — sits honestly at zero and reads 100 % margin. Cost rises compound from the line start year, the same rule the price follows.
+
+**Margin is reconciled against Historic** in the toolbar — Year 1 gross margin against Period 1, amber beyond five points ("a cost is missing or a price is optimistic"). APeX does not do this; Historic already holds the COGS to do it with.
+
+**Dropped:** *Combined* is four numbers and becomes a footer line under both lists; *Monthly* holds no inputs at all (the fixed monthly % lives in its own dialog, variable follows the sales split) and belongs to Review forecast with the cash flow; *Charts* to the dashboard.
+
+**Boundary:** anything that would still be there with no sales, and is not part of making the product, belongs in Overheads — said in the help rail and the Fixed costs toolbar, because Overheads already carries locked lines for Leadership Team salaries and Marketing spend and must not double-count. No migration: `plan_products.cost_per_unit` / `yearly_cost_increase` and `plan_fixed_cogs` all exist from 0003.
+
+*Known gap:* a one-off cost of **winning** a client (a referral fee, a sales commission) has nowhere to go on an ongoing line — it folds into the monthly cost for now, and belongs with Unit Economics (CAC) when that is built.
