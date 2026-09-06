@@ -24,7 +24,7 @@ export async function getCompleteness(planId: string) {
   };
   const [framework] = await Promise.all([supabase.from("plan_framework").select("vision,mission,purpose,brand_promise,ai_direction,field_of_play").eq("plan_id", planId).maybeSingle()]);
   const fw = framework.data ? Object.values(framework.data).filter(Boolean).length : 0;
-  const [people, marketing, competitors, swot, annualGoals, historic, products, cogs, overheads, funding] = await Promise.all([
+  const [people, marketing, competitors, swot, annualGoals, historic, products, cogs, overheads, funding, hasHistory] = await Promise.all([
     count("plan_people"),
     supabase.from("plan_marketing").select("target_market,market_size,market_trends,customer_needs").eq("plan_id", planId).maybeSingle().then((r) => (r.data ? Object.values(r.data).filter(Boolean).length : 0)),
     Promise.all([count("plan_competitors"), supabase.from("plan_marketing").select("our_advantage").eq("plan_id", planId).maybeSingle().then((r) => (r.data?.our_advantage ? 1 : 0))]).then(([c, a]) => Math.min(c, 1) + a),
@@ -35,6 +35,7 @@ export async function getCompleteness(planId: string) {
     count("plan_fixed_cogs"),
     count("plan_overheads"),
     Promise.all([count("plan_funding_owner"), count("plan_funding_debt"), count("plan_funding_equity"), count("plan_funding_grants"), count("plan_funding_revenue_linked")]).then((a) => a.reduce((x, y) => x + y, 0)),
+    supabase.from("plan_settings").select("has_history").eq("plan_id", planId).maybeSingle().then((r) => r.data?.has_history ?? null),
   ]);
   const sections = [
     { id: "vision", label: "Vision & Purpose", done: fw, total: 6 },
@@ -42,7 +43,7 @@ export async function getCompleteness(planId: string) {
     { id: "marketing", label: "Marketing", done: marketing, total: 4 },
     { id: "competitors", label: "Competitors", done: competitors, total: 2 },
     { id: "swot", label: "SWOT", done: Math.min(swot, 4), total: 4 },
-    { id: "historic", label: "Historic", done: historic, total: 4 },
+    { id: "historic", label: "Historic", done: hasHistory === false ? 1 : Math.min(historic, 1), total: 1 },
     { id: "sales", label: "Sales", done: Math.min(products, 1), total: 1 },
     { id: "cogs", label: "COGS", done: Math.min(cogs + products, 1), total: 1 },
     { id: "overheads", label: "Overheads", done: Math.min(overheads, 1), total: 1 },
