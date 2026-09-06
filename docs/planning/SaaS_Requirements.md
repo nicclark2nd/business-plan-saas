@@ -361,3 +361,9 @@ Started as an area under Marketing; Nic: cramming facts, three written columns a
 - **Deliberately left out:** competitor revenue vs yours, market share %, financial health. A small business rarely knows these; a guessed number in a lender's document is worse than none. If known, it goes in words under "What they do well".
 
 Migration 0009: enums on `plan_competitors` (kind, reach, pricing, threat); `plan_marketing.positioning` → `our_advantage`, plus `barriers_to_entry`, `future_threats`.
+
+## 6.14 SWOT — one 2×2, half-written from the plan (6 Sep 2026)
+
+One area: Strengths · Weaknesses · Opportunities · Threats as four dense lists on one screen (2×2, stacking on narrow windows), one line per item, blank starter line in every empty quadrant, "+ Line" per quadrant. No priority columns, no implication fields, no quadrant commentary — a SWOT is a list.
+
+**Suggestions without AI.** Each quadrant shows faint lines drawn from what the plan already says, in the owner's own words, each with a *Use* link and its source: Strengths ← Our advantage, Barriers to entry, each competitor's "How we win"; Weaknesses ← team Development areas, any High-dependency person with no successor, a one-person leadership team; Opportunities ← each competitor's weaknesses, Market trends; Threats ← "What could change", competitors rated High/Critical. Nothing enters the SWOT without the click; a used suggestion (matched on a stable `source` key, migration 0010) is not offered again; an accepted line is tagged *plan*. The AI layer (§5) can add its own suggestions later on top of these, but the plan-derived ones cost nothing and are always true.
