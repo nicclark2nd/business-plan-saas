@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { distributionValid, type Growth, type MonthlyDistribution } from "@/engine/sales/projection";
+import { distributionValid, exactHundred, type Growth, type MonthlyDistribution } from "@/engine/sales/projection";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
@@ -41,7 +41,7 @@ export async function upsertProduct(planId: string, p: {
     lifecycle: LIFECYCLES.includes(p.lifecycle ?? "") ? p.lifecycle : null,
     average_price: Math.max(0, Number(p.average_price) || 0), units_sold: Math.max(0, Number(p.units_sold) || 0),
     start_selling_year: Math.min(6, Math.max(1, Math.trunc(Number(p.start_selling_year)) || 1)),   // 1 = now, 2–6 = plan Year 1–5
-    yearly_growth: growth, monthly_distribution: recurring ? null : (p.monthly_distribution ?? null),
+    yearly_growth: growth, monthly_distribution: recurring ? null : (p.monthly_distribution ? exactHundred(p.monthly_distribution) : null),
     sold_as: recurring ? "recurring" : "one_off",
     opening_clients: recurring ? Math.max(0, Number(p.opening_clients) || 0) : 0,
     client_life_months: Math.min(600, Math.max(1, Math.trunc(Number(p.client_life_months)) || 12)),

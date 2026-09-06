@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { yearlyProjection, revenueByYear, evenDistribution, moderateDistribution, rampUpDistribution, distributionTotal, distributionValid, monthlySales } from "./projection";
+import { exactHundred, yearlyProjection, revenueByYear, evenDistribution, moderateDistribution, rampUpDistribution, distributionTotal, distributionValid, monthlySales } from "./projection";
 
 describe("sales projection (APeX Annual Projections parity, DesignOne)", () => {
   it("House Slab: 16,800 × 36, price 0/1/1/1/1 %, units 0/10/10/10/10 %", () => {
@@ -47,5 +47,18 @@ describe("monthly distribution", () => {
   });
   it("splits Year-1 sales by month", () => {
     const m = monthlySales(120000, evenDistribution()); expect(m.reduce((a, b) => a + b, 0)).toBeCloseTo(120000, 0);
+  });
+});
+
+describe("a split that is a hair short of 100", () => {
+  it("is scaled to exactly 100 so no revenue leaks", () => {
+    const typed = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [String(i + 1), 8.333]));   // 99.996 %
+    expect(distributionTotal(typed)).toBe(99.996);
+    expect(distributionTotal(exactHundred(typed))).toBe(100);
+  });
+  it("leaves an exact split alone", () => {
+    const even = Object.fromEntries(Array.from({ length: 11 }, (_, i) => [String(i + 1), 8.3333]));
+    const d = { ...even, "12": 8.3337 };
+    expect(exactHundred(d)).toBe(d);
   });
 });

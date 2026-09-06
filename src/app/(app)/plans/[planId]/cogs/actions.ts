@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { distributionValid, type MonthlyDistribution } from "@/engine/sales/projection";
+import { distributionValid, exactHundred, type MonthlyDistribution } from "@/engine/sales/projection";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
@@ -41,7 +41,7 @@ export async function upsertFixedCogs(planId: string, f: {
     plan_id: planId, item_name: name,
     annual_cost: Math.max(0, Number(f.annual_cost) || 0),
     yearly_growth_rates: pctMap(f.yearly_growth_rates),
-    monthly_distribution: f.monthly_distribution ?? null,
+    monthly_distribution: f.monthly_distribution ? exactHundred(f.monthly_distribution) : null,
   };
   const q = f.id
     ? supabase.from("plan_fixed_cogs").update(row).eq("id", f.id).eq("plan_id", planId).select("id").single()

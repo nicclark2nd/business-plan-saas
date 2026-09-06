@@ -68,6 +68,20 @@ export function normalizeDistribution(raw: unknown): MonthlyDistribution {
   return d;
 }
 export const distributionTotal = (d: MonthlyDistribution) => fix4(Object.values(d).reduce((a, b) => a + num(b), 0));
+/**
+ * Scale a split so the twelve months sum to exactly 100. Someone who types 8.33 into every box means "even",
+ * not 99.96 % — and without this the missing 0.04 % quietly walks off with a slice of the year's revenue.
+ * Only ever applied to a split that already passes `distributionValid`, so the adjustment is under 0.01 %.
+ */
+export function exactHundred(d: MonthlyDistribution): MonthlyDistribution {
+  const total = distributionTotal(d);
+  if (!total || Math.abs(total - 100) < 1e-9) return d;
+  const out: MonthlyDistribution = {};
+  let sum = 0;
+  for (let m = 1; m <= 11; m++) { const v = fix4((num(d[String(m)]) * 100) / total); out[String(m)] = v; sum += v; }
+  out["12"] = fix4(100 - sum);
+  return out;
+}
 export const distributionValid = (d: MonthlyDistribution) => Object.values(d).every((v) => Number.isFinite(v) && v >= 0 && v <= 100) && Math.abs(distributionTotal(d) - 100) <= 0.01;
 
 /** Year-1 sales split by month for one product. */
