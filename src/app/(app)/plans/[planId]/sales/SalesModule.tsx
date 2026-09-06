@@ -204,14 +204,19 @@ function ProductDialog({ r, startup, onSave, onClose }: { r: Row; startup: boole
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader><DialogTitle>{isNew(r) ? "New product" : "Product"}</DialogTitle><DialogDescription>What you sell, in a lender&apos;s words, and what it earns {startup ? "in Year 1" : "this year"}.</DialogDescription></DialogHeader>
         <form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); if (ok) onSave(d); }}>
-          <div><label className={label}>Name</label><Input autoFocus value={d.name} placeholder="Product or service" onChange={(e) => set({ name: e.target.value })} className={box} /></div>
+          <div className="grid grid-cols-4 gap-3">
+            <div className="col-span-3"><label className={label}>Name</label><Input autoFocus value={d.name} placeholder="Product or service" onChange={(e) => set({ name: e.target.value })} className={box} /></div>
+            <div><label className={label}>Lifecycle</label><FieldSelect value={d.lifecycle} options={LIFECYCLE} placeholder="Choose —" onValueChange={(v) => set({ lifecycle: v })} /></div>
+          </div>
           <div><label className={label}>What it is</label><Textarea value={d.description ?? ""} placeholder="One or two plain sentences — e.g. Reinforced concrete slabs for new homes, poured and finished by our own crew" onChange={(e) => set({ description: e.target.value })} className="min-h-[64px]" /></div>
           <div><label className={label}>Why they buy it, margin, weaknesses</label><Textarea value={d.notes ?? ""} placeholder="e.g. Builders choose us on turnaround; margin is thin — shifting effort to decorative work" onChange={(e) => set({ notes: e.target.value })} className="min-h-[64px]" /></div>
-          <div className="grid grid-cols-4 gap-3">
-            <div><label className={label}>Lifecycle</label><FieldSelect value={d.lifecycle} options={LIFECYCLE} placeholder="Choose —" onValueChange={(v) => set({ lifecycle: v })} /></div>
-            <div><label className={label}>Average price</label><Input inputMode="decimal" value={d.average_price ? num(d.average_price) : ""} placeholder="0" onChange={(e) => set({ average_price: parseNum(e.target.value) })} className={cn(box, "num text-right")} /></div>
-            <div><label className={label}>Units sold {startup ? "in Year 1" : "this year"}</label><Input inputMode="decimal" value={d.units_sold ? String(d.units_sold) : ""} placeholder="0" onChange={(e) => set({ units_sold: parseNum(e.target.value) })} className={cn(box, "num text-right")} /></div>
-            <div><label className={label}>Annual sales</label><div className={cn(box, "num flex items-center justify-end rounded border border-border bg-secondary px-2.5 font-semibold")}>{num(d.average_price * d.units_sold)}</div></div>
+          <div className="border-t border-border pt-3">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Product sales baseline</div>
+            <div className="grid grid-cols-4 gap-3">
+              <div><label className={label}>Average price</label><Input inputMode="decimal" value={d.average_price ? num(d.average_price) : ""} placeholder="0" onChange={(e) => set({ average_price: parseNum(e.target.value) })} className={cn(box, "num text-right")} /></div>
+              <div><label className={label}>Base units sold (per year)</label><Input inputMode="decimal" value={d.units_sold ? String(d.units_sold) : ""} placeholder="0" onChange={(e) => set({ units_sold: parseNum(e.target.value) })} className={cn(box, "num text-right")} /></div>
+              <div><label className={label}>Base annual sales</label><div className={cn(box, "num flex items-center justify-end rounded border border-border bg-secondary px-2.5 font-semibold")}>{num(d.average_price * d.units_sold)}</div></div>
+            </div>
           </div>
           <DialogFooter className="mt-1"><Button type="button" variant="outline" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!ok}>Save</Button></DialogFooter>
         </form>
