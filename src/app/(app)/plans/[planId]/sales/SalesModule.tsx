@@ -253,7 +253,7 @@ function GrowthDialog({ r, startup, startOptions, onSave, onClose }: { r: Row; s
           </div>
 
           <div>
-            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Change each year</div>
+            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">% change each year</div>
             <div className="grid grid-cols-[110px_repeat(5,1fr)] items-center gap-x-3 gap-y-2">
               <div /> {YEARS.map((y) => <div key={y} className="text-right text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Year {y}</div>)}
               <div className="text-[12.5px] font-semibold">Price</div>{YEARS.map((y) => <div key={y}>{cell(y, "price")}</div>)}
