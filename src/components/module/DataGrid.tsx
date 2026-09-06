@@ -19,8 +19,21 @@ export function Note({ children }: { children: React.ReactNode }) {
   return <div className="px-5 py-2.5 text-xs text-muted-foreground">{children}</div>;
 }
 
-export function Grid({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className="overflow-x-auto"><table className={cn("w-full table-fixed border-collapse text-[13px]", className)}>{children}</table></div>;
+export function Grid({ children, className, enterMovesDown }: { children: React.ReactNode; className?: string; enterMovesDown?: boolean }) {
+  return <div className="overflow-x-auto"><table onKeyDown={enterMovesDown ? enterDown : undefined} className={cn("w-full table-fixed border-collapse text-[13px]", className)}>{children}</table></div>;
+}
+/** Enter in a one-line cell moves to the same column in the next row (keying a long price list without the mouse). Simple grids only — rowSpan shifts the index. */
+function enterDown(e: React.KeyboardEvent<HTMLTableElement>) {
+  if (e.key !== "Enter") return;
+  const t = e.target as HTMLElement; if (t.tagName !== "INPUT") return;
+  const td = t.closest("td"); const tr = td?.parentElement; if (!td || !tr) return;
+  const idx = Array.from(tr.children).indexOf(td);
+  let next = tr.nextElementSibling;
+  while (next) {
+    const input = (next.children[idx] as HTMLElement | undefined)?.querySelector<HTMLInputElement>('input:not([type="hidden"])');
+    if (input) { e.preventDefault(); input.focus(); input.select(); return; }
+    next = next.nextElementSibling;
+  }
 }
 export function Th({ children, className, right, style }: { children?: React.ReactNode; className?: string; right?: boolean; style?: React.CSSProperties }) {
   return (

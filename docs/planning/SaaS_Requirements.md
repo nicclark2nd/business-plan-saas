@@ -377,12 +377,16 @@ Corrected after reading APeX's `excelImport.ts` / `financialCalculations.ts` and
 - **New business:** a toggle marks the plan as having no accounts yet; the step counts complete and the opening position comes from Funding. Migration 0011 (`plan_settings.has_history`).
 - Dropped: APeX's Charts tab (trend lives on the dashboard and in reports); "Calculate Results" button (everything calculates as you type).
 
-## 6.16 Sales — three areas, no default growth (6 Sep 2026)
+## 6.16 Sales — four areas, no default growth (6 Sep 2026)
 
 APeX: Products · Annual Projections · Monthly Projections · Charts, with edit dialogs (product profile; growth rates; monthly distribution). Carried across as three areas on the module bar; Charts dropped (dashboard).
 
-1. **Products** — two-line block per product: Product · Lifecycle (Development → Decline, APeX's six stages) · Average price · Units **this year** · Annual sales (calculated) · Starts (Now / Year 2–5); second line *What it is* and *Notes* (APeX's features / strengths / weaknesses folded into one). Footer totals, and the toolbar shows **Historic Period 1 revenue** beside this year's total with a warning when they are more than 10 % apart — the reconciliation a lender does in their head.
+1. **Products** — one line per product, numbers only: Product · Average price · Units **this year** · Annual sales (calculated, last). Fifty products is fifty lines, like a price list. Enter moves down the column; a *Find a product* box appears past ten lines. Footer totals, and the toolbar shows **Historic Period 1 revenue** beside this year's total — grey when within 10 %, amber with "check price × units" when not. *(Revised 6 Sep: the first cut put Lifecycle, Starts and the two sentence fields on the same screen as two-line blocks; Nic: "my eyes don't know what I should be looking at" and it could not scale. Words moved to area 4, Starts to Growth.)*
 2. **Growth** — three lines per product: *Price %* and *Units %* inputs for Years 1–5, *Sales* calculated; "This year" column first; footer "Total revenue → forecast" by year. **Every year starts at 0 %. Negative is allowed.** APeX's silent +5 % / +10 % default is gone (Nic: "there is no default % growth rate"). Engine `engine/sales/projection.ts` matches APeX's Annual Projections for DesignOne to the dollar (House Slab 604,800 → 921,484; Carports 122,400 → 201,669): Year 1 = this year × (1 + g₁), compounding, units carried unrounded and shown at 2 dp, zero before the start year.
 3. **Seasonality** — twelve % cells per product with the computed Year-1 monthly sales beneath, total turns red until 100; presets Even / Moderate / Ramp-up (APeX's default / moderate / exponential curves, same formulas). Footer: Year 1 revenue by month — the twelve months the cash flow uses. Guided never forces anyone in here.
+
+4. **In the plan** — the writing screen: Product · Lifecycle (Development → Decline, APeX's six stages) · *What it is* · *Why they buy it, margin, weaknesses* (APeX's features / strengths / weaknesses folded into one), growing cells. Count = products described; tag "*n* to write"; amber dot on any product without a description, wherever its name appears. This text prints in the report; the numbers never need it.
+
+**Scope** as in Leadership Team: a product name is a link that scopes every area to that one product (chip on the right, × clears); the name is editable only while new or scoped. **Starts** (Now / Year 2–5) lives in Growth beside the product, because it is a question about years.
 
 Cost per unit and cost increases stay on the COGS step (variable COGS), where the product list reappears. Migration 0012: `lifecycle`, `notes` on `plan_products`.
