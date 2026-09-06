@@ -25,7 +25,6 @@ const isNew = (r: Row) => r.id.startsWith("tmp-");
 const undescribed = (r: Row) => !(r.description ?? "").trim();
 /** start_selling_year: 1 = now (this year's actuals), 2–6 = plan Year 1–5. The column that holds the base price and units. */
 const START_OPTIONS = [{ value: "1", label: "Now" }, ...YEARS.map((y) => ({ value: String(y + 1), label: `Year ${y}` }))];
-const COLS = [0, ...YEARS] as const;            // 0 = this year
 const firstYear = (r: Row) => Math.min(5, Math.max(0, (r.start_selling_year || 1) - 1));
 const lab = "text-[11px] font-semibold uppercase tracking-[.04em] text-muted-foreground";
 
@@ -145,7 +144,7 @@ export function SalesModule({ planId, initial, mode, initialArea, historicRevenu
             {named.length > 10 && <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a product" className="ml-auto h-7 w-56 text-[13px]" />}
           </Toolbar>
           <Grid>
-            <thead><tr><Th style={{ width: "17%" }}>Product</Th><Th style={{ width: 100 }}>Starts</Th><Th style={{ width: 170 }} /><Th right>This year</Th>{YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}</tr></thead>
+            <thead><tr><Th style={{ width: "15%" }}>Product</Th><Th style={{ width: 96 }}>Starts</Th><Th style={{ width: 112 }} /><Th right style={{ width: 120 }}>Base</Th>{YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}</tr></thead>
             <tbody>
               {visibleNamed.map((r) => {
                 const fy = firstYear(r);
@@ -157,43 +156,49 @@ export function SalesModule({ planId, initial, mode, initialArea, historicRevenu
                   edit(r._key, { yearly_growth: yg, _gtext: { ...(r._gtext ?? {}), [`${y}${k}`]: raw } });
                 };
                 const dash = <Td right className="text-muted-foreground/60">—</Td>;
-                const priceCell = (c: number) => c < fy ? dash
-                  : c === fy ? <Td right><CellInput numeric className="font-semibold" value={r.average_price ? num(r.average_price) : ""} placeholder="price" onChange={(e) => edit(r._key, { average_price: parseNum(e.target.value) })} /></Td>
-                  : <Td right><CellInput numeric inputMode="text" value={g(c, "price")} placeholder="0" suffix="%" onChange={(e) => setG(c, "price", e.target.value)} /></Td>;
-                const unitsCell = (c: number) => c < fy ? dash
-                  : c === fy ? <Td right><CellInput numeric className="font-semibold" value={r.units_sold ? String(r.units_sold) : ""} placeholder="units" onChange={(e) => edit(r._key, { units_sold: parseNum(e.target.value) })} /></Td>
-                  : <Td right><CellInput numeric inputMode="text" value={g(c, "units")} placeholder="0" suffix="%" onChange={(e) => setG(c, "units", e.target.value)} /></Td>;
-                const salesCell = (c: number) => {
-                  if (c < fy) return <Td right className="text-muted-foreground/60">—</Td>;
-                  const y = c === 0 ? { price: r.average_price, units: r.units_sold, sales: r.average_price * r.units_sold } : proj[c - 1];
-                  return <Td right className="num" title={`${num(y.price)} × ${y.units}`}>{num(y.sales)}</Td>;
+                /** Year cell for price/units: % change on top, what it becomes beneath. The start year shows the base itself. */
+                const yearCell = (y: number, k: "price" | "units") => {
+                  if (y < fy) return dash;
+                  const p = proj[y - 1];
+                  const becomes = k === "price" ? num(p.price) : String(p.units);
+                  if (y === fy) return <Td right className="align-top pt-1"><div className="h-7 leading-7 font-semibold">{becomes}</div><div className="text-[11px] text-muted-foreground">starts</div></Td>;
+                  return (
+                    <Td right className="align-top pt-1">
+                      <CellInput numeric inputMode="text" value={g(y, k)} placeholder="0" suffix="%" onChange={(e) => setG(y, k, e.target.value)} />
+                      <div className="pr-1.5 text-[11px] text-muted-foreground">{becomes}</div>
+                    </Td>
+                  );
                 };
+                const rowCls = "[&>td]:border-b-0";
                 return [
-                  <tr key={r._key + "p"} data-row={r._key} onBlur={(e) => left(e) && commit(r._key)} className={cn("[&>td]:border-b-0 [&>td]:h-[30px] [&>td]:pt-1.5", r._error && "[&>td]:bg-bad-soft")} title={r._error}>
+                  <tr key={r._key + "p"} data-row={r._key} onBlur={(e) => left(e) && commit(r._key)} className={cn(rowCls, "[&>td]:pt-1.5", r._error && "[&>td]:bg-bad-soft")} title={r._error}>
                     <Td rowSpan={3} className="!border-b border-border align-top pt-2 relative">
                       {undescribed(r) && <i title="No description for the plan yet" className="absolute left-2 top-[17px] size-1.5 rounded-full bg-warn" />}
                       <NameLink onClick={() => setScope(r._key)}>{r.name}</NameLink>
                       <div className="text-[11.5px] text-muted-foreground">{fy === 0 ? "selling now" : `from Year ${fy}`}</div>
                     </Td>
                     <Td rowSpan={3} className="!border-b border-border align-top pt-1"><CellSelect value={String(r.start_selling_year || 1)} options={START_OPTIONS} onValueChange={(v) => edit(r._key, { start_selling_year: Number(v) }, true)} /></Td>
-                    <Td className={lab}>Price, then % change</Td>
-                    {COLS.map((c) => <Fragment key={c}>{priceCell(c)}</Fragment>)}
+                    <Td className={cn(lab, "align-top pt-2.5")}>Average price</Td>
+                    <Td right className="align-top pt-1"><CellInput numeric className="font-semibold" value={r.average_price ? num(r.average_price) : ""} placeholder="0" onChange={(e) => edit(r._key, { average_price: parseNum(e.target.value) })} /></Td>
+                    {YEARS.map((y) => <Fragment key={y}>{yearCell(y, "price")}</Fragment>)}
                   </tr>,
-                  <tr key={r._key + "u"} data-row={r._key} onBlur={(e) => left(e) && commit(r._key)} className={cn("[&>td]:border-b-0 [&>td]:h-[30px]", r._error && "[&>td]:bg-bad-soft")}>
-                    <Td className={lab}>Units, then % change</Td>
-                    {COLS.map((c) => <Fragment key={c}>{unitsCell(c)}</Fragment>)}
+                  <tr key={r._key + "u"} data-row={r._key} onBlur={(e) => left(e) && commit(r._key)} className={cn(rowCls, r._error && "[&>td]:bg-bad-soft")}>
+                    <Td className={cn(lab, "align-top pt-2.5")}>Units sold</Td>
+                    <Td right className="align-top pt-1"><CellInput numeric className="font-semibold" value={r.units_sold ? String(r.units_sold) : ""} placeholder="0" onChange={(e) => edit(r._key, { units_sold: parseNum(e.target.value) })} /></Td>
+                    {YEARS.map((y) => <Fragment key={y}>{yearCell(y, "units")}</Fragment>)}
                   </tr>,
                   <tr key={r._key + "s"} className="[&>td]:h-[30px] [&>td]:font-semibold">
                     <Td className={lab}>Sales</Td>
-                    {COLS.map((c) => <Fragment key={c}>{salesCell(c)}</Fragment>)}
+                    <Td right className="num">{num(r.average_price * r.units_sold)}</Td>
+                    {proj.map((p) => p.year < fy ? <Td key={p.year} right className="text-muted-foreground/60">—</Td> : <Td key={p.year} right className="num">{num(p.sales)}</Td>)}
                   </tr>,
                 ];
               })}
               {visibleNamed.length === 0 && <tr><Td colSpan={9} className="text-muted-foreground">Add products first — each one gets its price, units and growth here.</Td></tr>}
             </tbody>
-            <FootRow><Td colSpan={3}>{scope ? scoped?.name : "Total revenue → forecast"}</Td><Td right className="num">{num(currentSales(visibleNamed))}</Td>{shownTotals.map((t) => <Td key={t.year} right className="num">{num(t.value)}</Td>)}</FootRow>
+            <FootRow><Td colSpan={3}>{scope ? scoped?.name : "Total revenue → forecast"}</Td><Td right className="num" title="Lines selling now — this year's sales">{num(currentSales(visibleNamed))}</Td>{shownTotals.map((t) => <Td key={t.year} right className="num">{num(t.value)}</Td>)}</FootRow>
           </Grid>
-          <Note>Price and units sit in the year they belong to — this year for a line you sell now, the start year for a new one. The years after take a growth %. Hover a Sales figure to see the price and units behind it; units compound with decimals so a 10 % rise on 36 gives 39.6, not 40.</Note>
+          <Note>Base is the price and units you know — this year&apos;s for a line you sell now, the first year&apos;s for a line that starts later. Each year after takes a % change; the grey figure beneath is what the price or units become.</Note>
         </>
       )}
 
