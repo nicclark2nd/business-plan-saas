@@ -377,22 +377,14 @@ Corrected after reading APeX's `excelImport.ts` / `financialCalculations.ts` and
 - **New business:** a toggle marks the plan as having no accounts yet; the step counts complete and the opening position comes from Funding. Migration 0011 (`plan_settings.has_history`).
 - Dropped: APeX's Charts tab (trend lives on the dashboard and in reports); "Calculate Results" button (everything calculates as you type).
 
-## 6.16 Sales — list → record (6 Sep 2026, fourth cut; this one stands)
+## 6.16 Sales — APeX's shape, rebuilt (6 Sep 2026, fifth cut; this one stands)
 
-APeX: Products · Annual Projections · Monthly Projections · Charts, with edit dialogs. Three grid cuts in one day failed the brief (Nic: "there is no real indication anything is a field … even an accounting firm partner would have no idea what to do"). What stands is the pattern from Nic's own planning system of seven years earlier: **one product at a time, showing the working.**
+Four grid/record cuts in one day failed the brief. Nic's call: review APeX's Products · Annual Projections · Monthly Projections and their dialogs, and rebuild to that shape. Lists never hold inputs; every edit is a dialog with Save and Cancel. **Dialogs are allowed** — the earlier "no popups" rule is withdrawn for calculations with several inputs and a visible result.
 
-**List** — the only tab, *Products*: one line per product — Product · Lifecycle · Sells for · Units · This year (Year 1 for a start-up) · Year 5 · "Not set up yet" when price or units are missing · ×. Footer totals; toolbar reconciles this year against **Historic Period 1 revenue** (grey within 10 %, amber beyond). Amber dot for a product with no description. Scales to fifty lines because it is only an index.
+1. **Products** (list) — Product · Lifecycle · Average price · Units sold · Annual sales · ✎ · ×; footer totals; toolbar reconciles this year against **Historic Period 1 revenue** (grey within 10 %, amber beyond). Name or ✎ → **Product dialog**: Name · What it is · Why they buy it, margin, weaknesses (APeX's features / strengths / weaknesses folded into one) · Lifecycle · Average price · Units sold · Annual sales (calculated live). *+ Product* opens the same dialog empty. APeX's eye (view) and its Edit-mode toggle are dropped — one dialog does both.
+2. **Annual projections** (list) — Product · Current · Year 1–5 · ✎ growth · ▦ monthly; footer "Total revenue → forecast". ✎ → **Growth dialog** (APeX "Edit Growth Rates"): Current values box · Starts selling (Now / Year 1–5) · *Change each year* — Price % and Units % for Years 1–5, empty = 0 %, negative allowed, % inside the box · *What that gives* — price × units = sales per year, updating as you type. Years before the start year read "—" / "starts".
+3. **Monthly projections** (list) — Product · Jan–Dec · Total · ✎; footer Year 1 by month, the twelve months the cash flow uses. ✎ → **Monthly dialog** (APeX "Monthly Sales Distribution"): twelve % boxes with the month's sales beneath each, Total (red until 100, Save disabled), Even / Moderate rise / Ramp-up presets. A line starting after Year 1 shows one line saying so.
 
-**Record** — click a name or *+ Product* and the page is that product, real boxed fields with labels (FieldGrid, as Plan settings), top to bottom:
-1. *About this line* — What it is · Why they buy it, margin, weaknesses · Lifecycle.
-2. *What it sells for* — Sells for · Units sold this year (or "in Year N") · Starts selling · "= sales this year".
-3. *Change each year* — Price change % and Units change % for Years 1–5, empty = 0 %, negative allowed, % sign inside the box; years before the start year read "—" / "starts".
-4. *What that gives* — Sells for × Units = Sales for Years 1–5, read-only, the working a lender does in their head.
-5. *Seasonality* — a Pattern select (Even / Moderate / Ramp-up / Custom); the twelve boxes appear only for Custom; a line starting after Year 1 says so instead.
-Prev / Next walk the list; the chip × or *All products* returns to it. An abandoned new record (no name) vanishes. Text saves when focus leaves its section; choices save on selection.
-
-**Start-ups** (`plan_settings.has_history = false`): nothing is "now" — Starts offers Year 1–5 only and defaults to Year 1; labels read "Year 1" where they would read "this year"; no Historic reconciliation.
-
-Engine `engine/sales/projection.ts`: `start_selling_year` 1 = now, 2–6 = Year 1–5; the base price and units belong to the start year and growth compounds from the year after, nothing compounds through the empty years; DesignOne parity holds (House Slab 604,800 → 921,484; Carports 122,400 → 201,669); units carried unrounded, shown and multiplied at 2 dp. No all-products growth or seasonality grid — side-by-side years are Review forecast's job.
+Charts dropped (dashboard). **Start-ups** (`has_history = false`): no "Now" — Starts offers Year 1–5, defaults to Year 1, labels read "Year 1" where they would read "this year". Engine `engine/sales/projection.ts`: `start_selling_year` 1 = now, 2–6 = Year 1–5; base price and units belong to the start year, growth compounds from the year after; DesignOne parity (House Slab 604,800 → 921,484; Carports 122,400 → 201,669); units carried unrounded, shown and multiplied at 2 dp. shadcn Dialog added (`components/ui/dialog.tsx`, flat: card background, 1px border, no rounding beyond the theme).
 
 Cost per unit and cost increases stay on the COGS step (variable COGS), where the product list reappears. Migration 0012: `lifecycle`, `notes` on `plan_products`.

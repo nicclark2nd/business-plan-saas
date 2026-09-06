@@ -3,9 +3,9 @@ import { getSession } from "@/lib/plan";
 import { SalesModule } from "./SalesModule";
 import type { Product } from "./model";
 
-export default async function SalesPage({ params, searchParams }: { params: Promise<{ planId: string }>; searchParams: Promise<{ area?: string }> }) {  // area kept for old links; the module has one list and a record view
+export default async function SalesPage({ params, searchParams }: { params: Promise<{ planId: string }>; searchParams: Promise<{ area?: string }> }) {
   const { planId } = await params;
-  await searchParams;
+  const { area } = await searchParams;
   const supabase = await createClient();
   const [session, products, historic, settings] = await Promise.all([
     getSession(),
@@ -16,7 +16,7 @@ export default async function SalesPage({ params, searchParams }: { params: Prom
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
   const rows = (products.data ?? []).map((p) => ({ ...p, average_price: Number(p.average_price), units_sold: Number(p.units_sold) })) as Product[];
   return (
-    <SalesModule planId={planId} initial={rows} mode={mode} hasHistory={settings.data?.has_history ?? null}
+    <SalesModule planId={planId} initial={rows} mode={mode} initialArea={area === "annual" || area === "monthly" ? area : "products"} hasHistory={settings.data?.has_history ?? null}
       historicRevenue={historic.data ? Number(historic.data.revenue) : null} historicEnd={historic.data?.period_end ?? null}
       productWord={(settings.data?.product_type ?? "Products and services").toLowerCase()} />
   );

@@ -3,19 +3,23 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
-import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkButton, RemoveButton } from "@/components/module/DataGrid";
-import { Section, FieldGrid, Field, FieldInput, FieldTextarea, FieldSelect } from "@/components/module/FieldGrid";
+import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, RemoveButton } from "@/components/module/DataGrid";
+import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
-import { YEARS, yearlyProjection, revenueByYear, currentSales, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, distributionTotal, monthlySales, type MonthlyDistribution } from "@/engine/sales/projection";
+import { YEARS, yearlyProjection, revenueByYear, currentSales, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, distributionTotal, monthlySales, type Growth, type MonthlyDistribution } from "@/engine/sales/projection";
 import { upsertProduct, deleteProduct, continueFromSales } from "./actions";
 import { LIFECYCLE, MONTHS, type Product } from "./model";
 
 /**
- * Sales — list → record (§6.16, fourth cut). The list is an index of products; a product opens as one page that
- * shows the working the way a planner would on paper: sells for × units, the % change each year, what that gives.
- * No grid of numbers across products — that is Review forecast's job.
+ * Sales — APeX's shape, rebuilt (§6.16, fifth cut): three read-only lists on the module bar and three dialogs.
+ *   Products            → Product dialog (name, what it is, why they buy it, lifecycle, price, units → annual sales)
+ *   Annual projections  → Growth dialog (current values, start year, % change per year, what that gives)
+ *   Monthly projections → Monthly dialog (twelve % boxes, presets, total must be 100)
+ * Lists never hold inputs; a dialog is a form with Save and Cancel.
  */
 const fmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
 const num = (v: number | null | undefined) => fmt.format(Number(v) || 0);
@@ -23,93 +27,82 @@ const parseNum = (s: string) => { const n = Number(s.replace(/[,\s]/g, "")); ret
 const parseSigned = (s: string) => { const t = s.replace(/[,\s%]/g, ""); if (t === "-" || t === "") return null; const n = Number(t); return Number.isFinite(n) ? n : null; };
 const pct = (v: number | undefined) => v === undefined || v === null ? "" : String(Math.round(v * 100) / 100);
 
-type Row = Product & { _key: string; _dirty?: boolean; _error?: string; _gtext?: Record<string, string>; _mtext?: Record<string, string> };
+type Row = Product & { _key: string; _error?: string };
+type AreaKey = "products" | "annual" | "monthly";
+type Dlg = { kind: "product" | "growth" | "monthly"; key: string } | null;
 const STEP = GUIDED_STEPS.find((s) => s.id === "sales")?.step ?? 7;
 const isNew = (r: Row) => r.id.startsWith("tmp-");
-const undescribed = (r: Row) => !(r.description ?? "").trim();
 /** start_selling_year: 1 = now (this year's actuals), 2–6 = plan Year 1–5. */
 const firstYear = (r: Pick<Row, "start_selling_year">) => Math.min(5, Math.max(0, (r.start_selling_year || 1) - 1));
-type Preset = "even" | "moderate" | "rampup" | "custom";
-const PRESETS: { value: Preset; label: string }[] = [{ value: "even", label: "Even through the year" }, { value: "moderate", label: "Moderate — a gentle rise" }, { value: "rampup", label: "Ramp-up — launching, small early months" }, { value: "custom", label: "Custom — I know my season" }];
-const same = (a: MonthlyDistribution, b: MonthlyDistribution) => MONTHS.every((_, i) => Math.abs((a[String(i + 1)] ?? 0) - (b[String(i + 1)] ?? 0)) < 0.001);
-const presetOf = (d: MonthlyDistribution | null | undefined): Preset => {
-  if (!d) return "even";
-  const n = normalizeDistribution(d);
-  return same(n, evenDistribution()) ? "even" : same(n, moderateDistribution()) ? "moderate" : same(n, rampUpDistribution()) ? "rampup" : "custom";
-};
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-export function SalesModule({ planId, initial, mode, hasHistory, historicRevenue, historicEnd, productWord }: {
-  planId: string; initial: Product[]; mode: "guided" | "advanced"; hasHistory: boolean | null; historicRevenue: number | null; historicEnd: string | null; productWord: string;
+const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
+const box = "h-8";
+
+export function SalesModule({ planId, initial, mode, initialArea, hasHistory, historicRevenue, historicEnd, productWord }: {
+  planId: string; initial: Product[]; mode: "guided" | "advanced"; initialArea: AreaKey; hasHistory: boolean | null; historicRevenue: number | null; historicEnd: string | null; productWord: string;
 }) {
-  const startup = hasHistory === false;                         // no accounts yet → nothing is "now"; lines start in Year 1
-  const blank = (id: string): Row => ({ id, _key: id, name: "", description: "", notes: "", lifecycle: null, average_price: 0, units_sold: 0, start_selling_year: startup ? 2 : 1, yearly_growth: {}, monthly_distribution: null, sort_order: 0 });
-  const startOptions = [...(startup ? [] : [{ value: "1", label: "Now" }]), ...YEARS.map((y) => ({ value: String(y + 1), label: `Year ${y}` }))];
-  const baseWord = (r: Row) => (firstYear(r) === 0 ? "this year" : `in Year ${firstYear(r)}`);
+  const startup = hasHistory === false;
+  const blank = (): Row => ({ id: `tmp-${crypto.randomUUID()}`, _key: "", name: "", description: "", notes: "", lifecycle: null, average_price: 0, units_sold: 0, start_selling_year: startup ? 2 : 1, yearly_growth: {}, monthly_distribution: null, sort_order: 0 });
+  const startOptions = [...(startup ? [] : [{ value: "1", label: "Now — selling today" }]), ...YEARS.map((y) => ({ value: String(y + 1), label: `Year ${y}` }))];
 
+  const [area, setArea] = useState<AreaKey>(initialArea);
   const [rows, setRows] = useState<Row[]>(initial.map((p) => ({ ...p, _key: p.id })));
-  const [open, setOpen] = useState<string | null>(null);        // the product record on screen, or the list
-  const [customSeason, setCustomSeason] = useState<Record<string, boolean>>({});
+  const [dlg, setDlg] = useState<Dlg>(null);
+  const [draftNew, setDraftNew] = useState<Row | null>(null);
   const [pending, start] = useTransition();
   const ref = useRef(rows); useEffect(() => { ref.current = rows; }, [rows]);
-  const left = (e: React.FocusEvent<HTMLElement>) => !e.currentTarget.contains(e.relatedTarget as Node);
 
-  const edit = (key: string, changes: Partial<Row>, immediate = false) => {
-    setRows((xs) => xs.map((x) => (x._key === key ? { ...x, ...changes, _dirty: true, _error: undefined } : x)));
-    if (immediate) queueMicrotask(() => commit(key));
-  };
-  const commit = (key: string) => {
-    const r = ref.current.find((x) => x._key === key);
-    if (!r || !r._dirty || !r.name.trim()) return;
-    setRows((xs) => xs.map((x) => (x._key === key ? { ...x, _dirty: false } : x)));
+  /** Save one row (from a dialog's Save). New rows are appended first so the list shows them straight away. */
+  const save = (r: Row) => {
+    const key = r._key || r.id;
+    const row = { ...r, _key: key, _error: undefined };
+    setRows((xs) => (xs.some((x) => x._key === key) ? xs.map((x) => (x._key === key ? row : x)) : [...xs, row]));
     start(async () => {
-      const res = await upsertProduct(planId, { ...r, id: isNew(r) ? undefined : r.id });
-      setRows((xs) => xs.map((x) => (x._key === key ? (res.ok ? { ...x, id: res.data!.id } : { ...x, _dirty: true, _error: res.error }) : x)));
+      const res = await upsertProduct(planId, { ...row, id: isNew(row) ? undefined : row.id });
+      setRows((xs) => xs.map((x) => (x._key === key ? (res.ok ? { ...x, id: res.data!.id } : { ...x, _error: res.error }) : x)));
     });
   };
-  const flush = () => ref.current.forEach((r) => r._dirty && commit(r._key));
-  const add = () => { flush(); const id = `tmp-${crypto.randomUUID()}`; setRows((xs) => [...xs, blank(id)]); setOpen(id); setTimeout(() => document.querySelector<HTMLInputElement>("#product-name")?.focus(), 0); };
   const remove = (r: Row) => {
     setRows((xs) => xs.filter((x) => x._key !== r._key));
-    if (open === r._key) setOpen(null);
     if (!isNew(r)) start(async () => { await deleteProduct(planId, r.id); });
   };
-  const show = (key: string | null) => { flush(); setRows((xs) => xs.filter((x) => x.name.trim() || x._key === key)); setOpen(key); };   // abandoned blank records vanish
+  const add = () => { const b = blank(); setDraftNew({ ...b, _key: b.id }); setDlg({ kind: "product", key: b.id }); };
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const intent = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value === "later" ? "later" : "next";
-    flush(); start(async () => { await continueFromSales(planId, intent); });
+    start(async () => { await continueFromSales(planId, intent); });
   };
 
   const named = rows.filter((r) => r.name.trim());
-  const record = rows.find((r) => r._key === open);
   const err = rows.find((r) => r._error)?._error;
   const current = currentSales(named);
   const gap = historicRevenue ? ((current - historicRevenue) / historicRevenue) * 100 : null;
   const totals = revenueByYear(named);
-  const toWrite = named.filter(undescribed).length;
+  const open = dlg ? (draftNew && draftNew._key === dlg.key ? draftNew : rows.find((r) => r._key === dlg.key)) ?? null : null;
+  const close = () => { setDlg(null); setDraftNew(null); };
+  const monthTotals = MONTHS.map((_, i) => named.reduce((a, r) => a + monthlySales(yearlyProjection(r.average_price, r.units_sold, r.yearly_growth, r.start_selling_year)[0].sales, normalizeDistribution(r.monthly_distribution))[i], 0));
 
   return (
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group="Financials" title="Sales" subtitle="What you sell, what each line earns and how it grows — this is where the forecast's revenue comes from" mode={mode}
-      areas={[{ key: "products", label: "Products", count: named.length, tag: toWrite ? `${toWrite} to describe` : undefined }]}
-      area="products" onArea={() => show(null)}
-      scope={{ label: record ? record.name || "New product" : "All products", onClear: record ? () => show(null) : undefined }}
+      areas={[{ key: "products", label: "Products", count: named.length }, { key: "annual", label: "Annual projections" }, { key: "monthly", label: "Monthly projections" }]}
+      area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "All products" }}
       primaryAction={<Button size="sm" type="button" onClick={add}>+ Product</Button>}
       footer={<ModuleFooter planId={planId} prevId="historic" formId="sales-form" />}
       help={<>
         <h3>What good looks like</h3>
-        <p>One product for each thing you sell that a customer would recognise on a quote. Open it and fill the page top to bottom: what it is, what it sells for, how many you sell, and how that changes each year. The bottom of the page shows the working — price × units = sales, year by year — so you can see what your numbers add up to before anyone else does.</p>
-        <p><b>Sells for</b> is the average you actually get, not the list price. <b>Units</b> is whatever you count: jobs, slabs, hours, subscriptions.</p>
-        <p><b>Change each year</b> is a decision, not a default: an empty box is 0 %. Put in what you believe — negative is fine for a line you are winding down. {startup ? "Year 2 changes from Year 1; each year builds on the one before." : "Year 1 changes from this year; each year builds on the one before."}</p>
-        <p><b>Seasonality</b> only matters for the first-year cash flow. Leave it even unless your trade genuinely has a quiet season or the line is launching mid-year.</p>
+        <p><b>Products</b> — one line for each thing you sell that a customer would recognise on a quote. Open a product to describe it and set what it sells for and how many you sell{startup ? " in Year 1" : " this year"}; annual sales calculates. Check the total against your accounts before you go further.</p>
+        <p><b>Annual projections</b> — five years of sales per product. The pencil opens the growth dialog: a % change in price and in units for each year, an empty box is 0 %, negative is fine for a line you are winding down, and the dialog shows what the numbers become before you save.</p>
+        <p><b>Monthly projections</b> — how Year 1 falls across the twelve months. Only the first-year cash flow uses it. Leave it even unless your trade genuinely has a quiet season or a line is launching mid-year.</p>
         <h3>Where this goes</h3>
-        <p>Sales by year → the forecast&apos;s top line, break-even and What-If. The Year 1 monthly split → the twelve-month cash flow. What it is and why they buy it → the {productWord} section of the report.</p>
+        <p>Sales by year → the forecast&apos;s top line, break-even and What-If. Year 1 by month → the twelve-month cash flow. Descriptions → the {productWord} section of the report.</p>
       </>}
     >
-      <PendingBridge pending={pending} dirty={rows.some((r) => r._dirty)} error={err} />
+      <PendingBridge pending={pending} error={err} />
       <form id="sales-form" onSubmit={onSubmit} className="hidden" />
 
-      {!record && (
+      {area === "products" && (
         <>
           <Toolbar>
             <Meta className="ml-0">
@@ -120,178 +113,206 @@ export function SalesModule({ planId, initial, mode, hasHistory, historicRevenue
             </Meta>
           </Toolbar>
           <Grid>
-            <thead><tr><Th style={{ width: "26%" }}>Product</Th><Th style={{ width: 130 }}>Lifecycle</Th><Th right style={{ width: 120 }}>Sells for</Th><Th right style={{ width: 110 }}>Units</Th><Th right style={{ width: 130 }}>{startup ? "Year 1" : "This year"}</Th><Th right style={{ width: 130 }}>Year 5</Th><Th /><Th style={{ width: 36 }} /></tr></thead>
+            <thead><tr><Th>Product</Th><Th style={{ width: 130 }}>Lifecycle</Th><Th right style={{ width: 140 }}>Average price</Th><Th right style={{ width: 110 }}>Units sold</Th><Th right style={{ width: 150 }}>Annual sales</Th><Th style={{ width: 70 }} /></tr></thead>
             <tbody>
-              {named.map((r) => {
-                const fy = firstYear(r); const p = yearlyProjection(r.average_price, r.units_sold, r.yearly_growth, r.start_selling_year);
-                const setUp = r.average_price > 0 && r.units_sold > 0;
-                const firstCol = startup ? p[0].sales : fy === 0 ? r.average_price * r.units_sold : 0;
-                return (
-                  <GridRow key={r._key} className={cn(r._error && "[&>td]:bg-bad-soft")} title={r._error}>
-                    <Td className="relative">
-                      {undescribed(r) && <i title="No description for the plan yet" className="absolute left-2 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-warn" />}
-                      <NameLink onClick={() => show(r._key)}>{r.name}</NameLink>
-                    </Td>
-                    <Td className="text-muted-foreground">{LIFECYCLE.find((l) => l.value === r.lifecycle)?.label ?? "—"}</Td>
-                    <Td right className="num">{setUp ? num(r.average_price) : "—"}</Td>
-                    <Td right className="num">{setUp ? r.units_sold : "—"}</Td>
-                    <Td right className="num">{setUp && (startup || fy === 0) ? num(firstCol) : "—"}</Td>
-                    <Td right className="num font-semibold">{setUp ? num(p[4].sales) : "—"}</Td>
-                    <Td className="text-xs text-muted-foreground">{!setUp ? <LinkButton onClick={() => show(r._key)}>Not set up yet</LinkButton> : fy > 0 && !startup ? `from Year ${fy}` : fy > 1 ? `from Year ${fy}` : ""}</Td>
-                    <Td><RemoveButton onClick={() => remove(r)} /></Td>
-                  </GridRow>
-                );
-              })}
-              {named.length === 0 && <tr><Td colSpan={8} className="h-12 text-muted-foreground">Add your first product — what you sell, what it sells for, how many. <LinkButton onClick={add}>+ Product</LinkButton></Td></tr>}
+              {named.map((r) => (
+                <GridRow key={r._key} className={cn(r._error && "[&>td]:bg-bad-soft")} title={r._error}>
+                  <Td><NameLink onClick={() => setDlg({ kind: "product", key: r._key })}>{r.name}</NameLink>{firstYear(r) > 0 && <span className="ml-2 text-xs text-muted-foreground">from Year {firstYear(r)}</span>}</Td>
+                  <Td className="text-muted-foreground">{LIFECYCLE.find((l) => l.value === r.lifecycle)?.label ?? "—"}</Td>
+                  <Td right className="num">{num(r.average_price)}</Td>
+                  <Td right className="num">{r.units_sold}</Td>
+                  <Td right className="num font-semibold">{num(r.average_price * r.units_sold)}</Td>
+                  <Td className="whitespace-nowrap text-right"><IconButton title="Edit product" onClick={() => setDlg({ kind: "product", key: r._key })}>✎</IconButton><RemoveButton onClick={() => remove(r)} /></Td>
+                </GridRow>
+              ))}
+              {named.length === 0 && <tr><Td colSpan={6} className="h-12 text-muted-foreground">Add your first product — what you sell, what it sells for, how many.</Td></tr>}
             </tbody>
-            {named.length > 0 && <FootRow><Td colSpan={4}>Total</Td><Td right className="num">{num(startup ? totals[0].value : current)}</Td><Td right className="num">{num(totals[4].value)}</Td><Td colSpan={2} /></FootRow>}
+            {named.length > 0 && <FootRow><Td colSpan={3}>Total</Td><Td right className="num">{named.reduce((a, r) => a + r.units_sold, 0)}</Td><Td right className="num">{num(named.reduce((a, r) => a + r.average_price * r.units_sold, 0))}</Td><Td /></FootRow>}
           </Grid>
-          <Note>Click a product to open it. Everything about that line — description, price, units, growth, season — is on its page.</Note>
+          <Note>Click a product to open it. Growth and the monthly split are on the next two tabs.</Note>
         </>
       )}
 
-      {record && (
-        <ProductRecord key={record._key} r={record} rows={named} startup={startup} startOptions={startOptions} baseWord={baseWord(record)} productWord={productWord}
-          custom={customSeason[record._key] ?? presetOf(record.monthly_distribution) === "custom"} setCustom={(v) => setCustomSeason((c) => ({ ...c, [record._key]: v }))}
-          edit={edit} commit={commit} left={left} onShow={show} onRemove={() => remove(record)} />
+      {area === "annual" && (
+        <>
+          <Toolbar><Meta className="ml-0">Sales by year. Pencil = growth; calendar = monthly split. Each year starts at 0 % change until you say otherwise.</Meta></Toolbar>
+          <Grid>
+            <thead><tr><Th>Product</Th><Th right style={{ width: 120 }}>{startup ? "Base" : "Current"}</Th>{YEARS.map((y) => <Th key={y} right style={{ width: 120 }}>Year {y}</Th>)}<Th style={{ width: 80 }} /></tr></thead>
+            <tbody>
+              {named.map((r) => {
+                const fy = firstYear(r); const p = yearlyProjection(r.average_price, r.units_sold, r.yearly_growth, r.start_selling_year);
+                return (
+                  <GridRow key={r._key}>
+                    <Td><NameLink onClick={() => setDlg({ kind: "growth", key: r._key })}>{r.name}</NameLink></Td>
+                    <Td right className="num text-muted-foreground">{fy === 0 || startup ? num(r.average_price * r.units_sold) : `Year ${fy}`}</Td>
+                    {p.map((y) => <Td key={y.year} right className={cn("num", y.year < fy && "text-muted-foreground/60")} title={y.year < fy ? "" : `${num(y.price)} × ${y.units}`}>{y.year < fy ? "—" : num(y.sales)}</Td>)}
+                    <Td className="whitespace-nowrap text-right"><IconButton title="Edit growth" onClick={() => setDlg({ kind: "growth", key: r._key })}>✎</IconButton><IconButton title="Edit monthly split" onClick={() => setDlg({ kind: "monthly", key: r._key })}>▦</IconButton></Td>
+                  </GridRow>
+                );
+              })}
+              {named.length === 0 && <tr><Td colSpan={8} className="h-12 text-muted-foreground">Add products first.</Td></tr>}
+            </tbody>
+            {named.length > 0 && <FootRow><Td>Total revenue → forecast</Td><Td right className="num">{num(startup ? 0 : current)}</Td>{totals.map((t) => <Td key={t.year} right className="num">{num(t.value)}</Td>)}<Td /></FootRow>}
+          </Grid>
+        </>
       )}
+
+      {area === "monthly" && (
+        <>
+          <Toolbar><Meta className="ml-0">Year 1 sales by month — the twelve months the cash flow uses. Pencil to change a product&apos;s split.</Meta></Toolbar>
+          <Grid>
+            <thead><tr><Th style={{ width: "16%" }}>Product</Th>{MONTHS.map((m) => <Th key={m} right>{m}</Th>)}<Th right style={{ width: 100 }}>Total</Th><Th style={{ width: 44 }} /></tr></thead>
+            <tbody>
+              {named.map((r) => {
+                const fy = firstYear(r);
+                const y1 = yearlyProjection(r.average_price, r.units_sold, r.yearly_growth, r.start_selling_year)[0].sales;
+                const months = monthlySales(y1, normalizeDistribution(r.monthly_distribution));
+                return (
+                  <GridRow key={r._key}>
+                    <Td><NameLink onClick={() => setDlg({ kind: "monthly", key: r._key })}>{r.name}</NameLink></Td>
+                    {fy > 1 ? <Td colSpan={13} className="text-muted-foreground">Starts in Year {fy} — nothing in the first-year cash flow.</Td>
+                      : <>{months.map((v, i) => <Td key={i} right className="num">{num(v)}</Td>)}<Td right className="num font-semibold">{num(y1)}</Td></>}
+                    <Td className="text-right">{fy <= 1 && <IconButton title="Edit monthly split" onClick={() => setDlg({ kind: "monthly", key: r._key })}>✎</IconButton>}</Td>
+                  </GridRow>
+                );
+              })}
+              {named.length === 0 && <tr><Td colSpan={15} className="h-12 text-muted-foreground">Add products first.</Td></tr>}
+            </tbody>
+            {named.length > 0 && <FootRow><Td>Total</Td>{monthTotals.map((v, i) => <Td key={i} right className="num">{num(v)}</Td>)}<Td right className="num">{num(totals[0].value)}</Td><Td /></FootRow>}
+          </Grid>
+        </>
+      )}
+
+      {open && dlg?.kind === "product" && <ProductDialog key={open._key} r={open} startup={startup} onSave={(r) => { save(r); close(); }} onClose={close} />}
+      {open && dlg?.kind === "growth" && <GrowthDialog key={open._key} r={open} startup={startup} startOptions={startOptions} onSave={(r) => { save(r); close(); }} onClose={close} />}
+      {open && dlg?.kind === "monthly" && <MonthlyDialog key={open._key} r={open} onSave={(r) => { save(r); close(); }} onClose={close} />}
     </ModuleFrame>
   );
 }
 
-function ProductRecord({ r, rows, startup, startOptions, baseWord, custom, setCustom, edit, commit, left, onShow, onRemove }: {
-  r: Row; rows: Row[]; startup: boolean; startOptions: { value: string; label: string }[]; baseWord: string; productWord: string; custom: boolean; setCustom: (v: boolean) => void;
-  edit: (key: string, c: Partial<Row>, immediate?: boolean) => void; commit: (key: string) => void; left: (e: React.FocusEvent<HTMLElement>) => boolean;
-  onShow: (key: string | null) => void; onRemove: () => void;
-}) {
-  const k = r._key;
-  const fy = firstYear(r);
-  const proj = yearlyProjection(r.average_price, r.units_sold, r.yearly_growth, r.start_selling_year);
-  const idx = rows.findIndex((x) => x._key === k); const prev = idx > 0 ? rows[idx - 1] : null; const next = idx >= 0 && idx < rows.length - 1 ? rows[idx + 1] : null;
-  const g = (y: number, kind: "price" | "units") => r._gtext?.[`${y}${kind}`] ?? (r.yearly_growth?.[String(y)]?.[kind] != null && r.yearly_growth![String(y)]![kind] !== 0 ? String(r.yearly_growth![String(y)]![kind]) : "");
-  const setG = (y: number, kind: "price" | "units", raw: string) => {
-    const v = parseSigned(raw);
-    const yg = { ...(r.yearly_growth ?? {}) }; yg[String(y)] = { ...(yg[String(y)] ?? {}), [kind]: v ?? 0 };
-    edit(k, { yearly_growth: yg, _gtext: { ...(r._gtext ?? {}), [`${y}${kind}`]: raw } });
-  };
-  const d = normalizeDistribution(r.monthly_distribution);
-  const total = distributionTotal(d);
-  const y1 = proj[0].sales;
-  const months = monthlySales(y1, d);
-  const setD = (m: number, raw: string) => { const nd: MonthlyDistribution = { ...d, [String(m)]: parseSigned(raw) ?? 0 }; edit(k, { monthly_distribution: nd, _mtext: { ...(r._mtext ?? {}), [m]: raw } }); };
-  const choosePreset = (p: Preset) => {
-    if (p === "custom") { setCustom(true); return; }
-    setCustom(false);
-    edit(k, { monthly_distribution: p === "even" ? evenDistribution() : p === "moderate" ? moderateDistribution() : rampUpDistribution(), _mtext: {} }, true);
-  };
-  const preset: Preset = custom ? "custom" : presetOf(r.monthly_distribution);
-  const save = (e: React.FocusEvent<HTMLElement>) => { if (left(e)) commit(k); };
-  const yearHead = (extra?: React.ReactNode) => <thead><tr><Th style={{ width: 200 }}>{extra}</Th>{YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}</tr></thead>;
-  const cellBox = "h-8 w-full num text-right pr-6";
+function IconButton({ children, title, onClick }: { children: React.ReactNode; title: string; onClick: () => void }) {
+  return <button type="button" title={title} aria-label={title} onClick={onClick} className="px-1.5 text-[14px] leading-none text-muted-foreground hover:text-primary">{children}</button>;
+}
 
+/* ---------- Product dialog (APeX "Product") ---------- */
+function ProductDialog({ r, startup, onSave, onClose }: { r: Row; startup: boolean; onSave: (r: Row) => void; onClose: () => void }) {
+  const [d, setD] = useState<Row>(r);
+  const set = (c: Partial<Row>) => setD((x) => ({ ...x, ...c }));
+  const ok = d.name.trim().length > 0;
   return (
-    <div className="pb-6">
-      <div className="flex items-center gap-3 border-b border-border px-5 py-2.5" onBlur={save}>
-        <Input id="product-name" value={r.name} placeholder="Product or service name" onChange={(e) => edit(k, { name: e.target.value })} className="h-8 w-[360px] text-[15px] font-semibold" />
-        {!isNew(r) && <LinkButton onClick={onRemove} className="text-muted-foreground hover:text-bad">Remove</LinkButton>}
-        <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
-          <Button size="sm" variant="outline" type="button" disabled={!prev} onClick={() => prev && onShow(prev._key)}>‹ {prev ? prev.name : "Prev"}</Button>
-          <Button size="sm" variant="outline" type="button" disabled={!next} onClick={() => next && onShow(next._key)}>{next ? next.name : "Next"} ›</Button>
-          <Button size="sm" variant="outline" type="button" onClick={() => onShow(null)}>All products</Button>
-        </span>
-      </div>
-
-      <div onBlur={save}>
-        <Section title="About this line">
-          <FieldGrid>
-            <Field label="What it is" span={3} hint="One or two plain sentences a lender would understand"><FieldTextarea value={r.description ?? ""} placeholder="e.g. Reinforced concrete slabs for new homes, poured and finished by our own crew" onChange={(e) => edit(k, { description: e.target.value })} /></Field>
-            <Field label="Why they buy it, margin, weaknesses" span={2}><FieldTextarea value={r.notes ?? ""} placeholder="e.g. Builders choose us on turnaround; margin is thin — shifting effort to decorative work" onChange={(e) => edit(k, { notes: e.target.value })} /></Field>
-            <Field label="Lifecycle" hint="Where the line sits today"><FieldSelect value={r.lifecycle} options={LIFECYCLE} placeholder="Choose —" onValueChange={(v) => edit(k, { lifecycle: v }, !!r.name.trim())} /></Field>
-          </FieldGrid>
-        </Section>
-      </div>
-
-      <div onBlur={save}>
-        <Section title="What it sells for">
-          <FieldGrid>
-            <Field label="Sells for" hint="Average you actually get"><FieldInput numeric value={r.average_price ? num(r.average_price) : ""} placeholder="0" onChange={(e) => edit(k, { average_price: parseNum(e.target.value) })} /></Field>
-            <Field label={`Units sold ${baseWord}`} hint="Jobs, slabs, hours — whatever you count"><FieldInput numeric value={r.units_sold ? String(r.units_sold) : ""} placeholder="0" onChange={(e) => edit(k, { units_sold: parseNum(e.target.value) })} /></Field>
-            <Field label="Starts selling" hint={startup ? "Year 1 is the first year of the plan" : "Now = you sell it today"}><FieldSelect value={String(r.start_selling_year || 1)} options={startOptions} onValueChange={(v) => edit(k, { start_selling_year: Number(v) }, !!r.name.trim())} /></Field>
-            <Field label=" " span={3}><div className="flex h-8 items-center text-[13px]"><span className="text-muted-foreground">= sales {baseWord}</span><span className="num ml-3 text-[15px] font-semibold">{num(r.average_price * r.units_sold)}</span></div></Field>
-          </FieldGrid>
-        </Section>
-      </div>
-
-      <div onBlur={save}>
-        <Section title="Change each year" tail={<span className="text-[11px] font-normal normal-case tracking-normal text-muted-foreground">Empty = no change · negative shrinks the line</span>}>
-          <Grid>
-            {yearHead()}
-            <tbody>
-              <tr>
-                <Td className="text-[12px] font-semibold">Price change</Td>
-                {YEARS.map((y) => y <= fy ? <Td key={y} right className="text-muted-foreground/60">{y === fy ? "starts" : "—"}</Td> : (
-                  <Td key={y} right><span className="relative block"><Input inputMode="text" value={g(y, "price")} placeholder="" onChange={(e) => setG(y, "price", e.target.value)} className={cellBox} /><span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span></span></Td>
-                ))}
-              </tr>
-              <tr>
-                <Td className="text-[12px] font-semibold">Units change</Td>
-                {YEARS.map((y) => y <= fy ? <Td key={y} right className="text-muted-foreground/60">{y === fy ? "starts" : "—"}</Td> : (
-                  <Td key={y} right><span className="relative block"><Input inputMode="text" value={g(y, "units")} placeholder="" onChange={(e) => setG(y, "units", e.target.value)} className={cellBox} /><span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span></span></Td>
-                ))}
-              </tr>
-            </tbody>
-          </Grid>
-        </Section>
-      </div>
-
-      <Section title="What that gives">
-        <Grid>
-          {yearHead(<span className="normal-case tracking-normal">Sells for × units = sales</span>)}
-          <tbody>
-            <tr><Td className="text-[12px] text-muted-foreground">Sells for</Td>{proj.map((p) => p.year < fy ? <Td key={p.year} right className="text-muted-foreground/60">—</Td> : <Td key={p.year} right className="num">{num(p.price)}</Td>)}</tr>
-            <tr><Td className="text-[12px] text-muted-foreground">× Units</Td>{proj.map((p) => p.year < fy ? <Td key={p.year} right className="text-muted-foreground/60">—</Td> : <Td key={p.year} right className="num">{p.units}</Td>)}</tr>
-            <tr className="[&>td]:border-t-2 [&>td]:border-input [&>td]:bg-secondary [&>td]:font-bold"><Td>= Sales</Td>{proj.map((p) => p.year < fy ? <Td key={p.year} right className="text-muted-foreground/60">—</Td> : <Td key={p.year} right className="num">{num(p.sales)}</Td>)}</tr>
-          </tbody>
-        </Grid>
-        {!startup && fy === 0 && <p className="mt-2 text-xs text-muted-foreground">This year: {num(r.average_price)} × {r.units_sold} = {num(r.average_price * r.units_sold)}. Year 1 is next year.</p>}
-      </Section>
-
-      <div onBlur={save}>
-        <Section title="Seasonality — Year 1 by month">
-          {fy > 1 ? <p className="text-[13px] text-muted-foreground">Starts in Year {fy} — nothing in the first-year cash flow.</p> : (
-            <>
-              <FieldGrid>
-                <Field label="Pattern" span={2}><FieldSelect value={preset} options={PRESETS} onValueChange={(v) => choosePreset(v as Preset)} /></Field>
-                <Field label=" " span={4}><div className="flex h-8 items-center text-[13px] text-muted-foreground">Only the first-year cash flow uses this. Year 1 sales {num(y1)}.</div></Field>
-              </FieldGrid>
-              {preset === "custom" && (
-                <div className="mt-3">
-                  <Grid>
-                    <thead><tr><Th style={{ width: 120 }} />{MONTHS.map((m) => <Th key={m} right>{m}</Th>)}<Th right style={{ width: 80 }}>Total</Th></tr></thead>
-                    <tbody>
-                      <tr>
-                        <Td className="text-[12px] font-semibold">Share %</Td>
-                        {MONTHS.map((_, i) => <Td key={i} right className="px-1"><Input inputMode="decimal" value={r._mtext?.[i + 1] ?? pct(d[String(i + 1)])} onChange={(e) => setD(i + 1, e.target.value)} className="h-8 w-full num text-right px-1.5" /></Td>)}
-                        <Td right className={cn("num font-semibold", Math.abs(total - 100) > 0.01 ? "text-bad" : "text-good")}>{pct(total)}%</Td>
-                      </tr>
-                      <tr className="[&>td]:text-xs [&>td]:text-muted-foreground"><Td>Sales</Td>{months.map((v, i) => <Td key={i} right className="num">{num(v)}</Td>)}<Td right className="num">{num(y1)}</Td></tr>
-                    </tbody>
-                  </Grid>
-                  {Math.abs(total - 100) > 0.01 && <p className="mt-1.5 text-xs text-bad">The twelve months must add up to 100 %.</p>}
-                </div>
-              )}
-              {preset !== "custom" && <div className="mt-2 flex flex-wrap gap-x-4 text-xs text-muted-foreground">{MONTHS.map((m, i) => <span key={m}>{m} <span className="num text-foreground">{num(months[i])}</span></span>)}</div>}
-            </>
-          )}
-        </Section>
-      </div>
-    </div>
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader><DialogTitle>{isNew(r) ? "New product" : "Product"}</DialogTitle><DialogDescription>What you sell, in a lender&apos;s words, and what it earns {startup ? "in Year 1" : "this year"}.</DialogDescription></DialogHeader>
+        <form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); if (ok) onSave(d); }}>
+          <div><label className={label}>Name</label><Input autoFocus value={d.name} placeholder="Product or service" onChange={(e) => set({ name: e.target.value })} className={box} /></div>
+          <div><label className={label}>What it is</label><Textarea value={d.description ?? ""} placeholder="One or two plain sentences — e.g. Reinforced concrete slabs for new homes, poured and finished by our own crew" onChange={(e) => set({ description: e.target.value })} className="min-h-[64px]" /></div>
+          <div><label className={label}>Why they buy it, margin, weaknesses</label><Textarea value={d.notes ?? ""} placeholder="e.g. Builders choose us on turnaround; margin is thin — shifting effort to decorative work" onChange={(e) => set({ notes: e.target.value })} className="min-h-[64px]" /></div>
+          <div className="grid grid-cols-4 gap-3">
+            <div><label className={label}>Lifecycle</label><FieldSelect value={d.lifecycle} options={LIFECYCLE} placeholder="Choose —" onValueChange={(v) => set({ lifecycle: v })} /></div>
+            <div><label className={label}>Average price</label><Input inputMode="decimal" value={d.average_price ? num(d.average_price) : ""} placeholder="0" onChange={(e) => set({ average_price: parseNum(e.target.value) })} className={cn(box, "num text-right")} /></div>
+            <div><label className={label}>Units sold {startup ? "in Year 1" : "this year"}</label><Input inputMode="decimal" value={d.units_sold ? String(d.units_sold) : ""} placeholder="0" onChange={(e) => set({ units_sold: parseNum(e.target.value) })} className={cn(box, "num text-right")} /></div>
+            <div><label className={label}>Annual sales</label><div className={cn(box, "num flex items-center justify-end rounded border border-border bg-secondary px-2.5 font-semibold")}>{num(d.average_price * d.units_sold)}</div></div>
+          </div>
+          <DialogFooter className="mt-1"><Button type="button" variant="outline" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!ok}>Save</Button></DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-function PendingBridge({ pending, dirty, error }: { pending: boolean; dirty: boolean; error?: string }) {
+/* ---------- Growth dialog (APeX "Edit Growth Rates") ---------- */
+function GrowthDialog({ r, startup, startOptions, onSave, onClose }: { r: Row; startup: boolean; startOptions: { value: string; label: string }[]; onSave: (r: Row) => void; onClose: () => void }) {
+  const [d, setD] = useState<Row>(r);
+  const [text, setText] = useState<Record<string, string>>({});
+  const fy = firstYear(d);
+  const proj = yearlyProjection(d.average_price, d.units_sold, d.yearly_growth, d.start_selling_year);
+  const g = (y: number, k: "price" | "units") => text[`${y}${k}`] ?? (d.yearly_growth?.[String(y)]?.[k] ? String(d.yearly_growth![String(y)]![k]) : "");
+  const setG = (y: number, k: "price" | "units", raw: string) => {
+    const yg: Growth = { ...(d.yearly_growth ?? {}) }; yg[String(y)] = { ...(yg[String(y)] ?? {}), [k]: parseSigned(raw) ?? 0 };
+    setD((x) => ({ ...x, yearly_growth: yg })); setText((t) => ({ ...t, [`${y}${k}`]: raw }));
+  };
+  const cell = (y: number, k: "price" | "units") => y <= fy
+    ? <div className={cn(box, "flex items-center justify-end pr-2 text-xs text-muted-foreground/70")}>{y === fy ? "starts" : "—"}</div>
+    : <span className="relative block"><Input inputMode="text" value={g(y, k)} onChange={(e) => setG(y, k, e.target.value)} className={cn(box, "num pr-6 text-right")} /><span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span></span>;
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-3xl">
+        <DialogHeader><DialogTitle>Growth — {d.name}</DialogTitle><DialogDescription>A % change in price and in units for each year. Empty = no change; negative shrinks the line.</DialogDescription></DialogHeader>
+        <form className="grid gap-4" onSubmit={(e) => { e.preventDefault(); onSave(d); }}>
+          <div className="grid grid-cols-[1fr_auto] items-end gap-4">
+            <div className="rounded border border-border bg-secondary px-3 py-2">
+              <div className="text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">{startup ? "Base values" : "Current values"}</div>
+              <div className="mt-1 flex gap-8 text-[13px]"><span>Price <b className="num">{num(d.average_price)}</b></span><span>Units <b className="num">{d.units_sold}</b></span><span>Sales <b className="num">{num(d.average_price * d.units_sold)}</b></span></div>
+            </div>
+            <div className="w-[220px]"><label className={label}>Starts selling</label><FieldSelect value={String(d.start_selling_year || 1)} options={startOptions} onValueChange={(v) => setD((x) => ({ ...x, start_selling_year: Number(v) }))} /></div>
+          </div>
+
+          <div>
+            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Change each year</div>
+            <div className="grid grid-cols-[110px_repeat(5,1fr)] items-center gap-x-3 gap-y-2">
+              <div /> {YEARS.map((y) => <div key={y} className="text-right text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Year {y}</div>)}
+              <div className="text-[12.5px] font-semibold">Price</div>{YEARS.map((y) => <div key={y}>{cell(y, "price")}</div>)}
+              <div className="text-[12.5px] font-semibold">Units</div>{YEARS.map((y) => <div key={y}>{cell(y, "units")}</div>)}
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">What that gives</div>
+            <div className="grid grid-cols-[110px_repeat(5,1fr)] gap-x-3 gap-y-1.5 rounded border border-border px-3 py-2 text-[13px]">
+              <div /> {YEARS.map((y) => <div key={y} className="text-right text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Year {y}</div>)}
+              <div className="text-muted-foreground">Price</div>{proj.map((p) => <div key={p.year} className="num text-right">{p.year < fy ? "—" : num(p.price)}</div>)}
+              <div className="text-muted-foreground">× Units</div>{proj.map((p) => <div key={p.year} className="num text-right">{p.year < fy ? "—" : p.units}</div>)}
+              <div className="font-semibold">= Sales</div>{proj.map((p) => <div key={p.year} className="num text-right font-semibold">{p.year < fy ? "—" : num(p.sales)}</div>)}
+            </div>
+          </div>
+          <DialogFooter><Button type="button" variant="outline" onClick={onClose}>Cancel</Button><Button type="submit">Save</Button></DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ---------- Monthly dialog (APeX "Monthly Sales Distribution") ---------- */
+function MonthlyDialog({ r, onSave, onClose }: { r: Row; onSave: (r: Row) => void; onClose: () => void }) {
+  const [d, setD] = useState<MonthlyDistribution>(normalizeDistribution(r.monthly_distribution));
+  const [text, setText] = useState<Record<string, string>>({});
+  const total = distributionTotal(d);
+  const ok = Math.abs(total - 100) <= 0.01;
+  const y1 = yearlyProjection(r.average_price, r.units_sold, r.yearly_growth, r.start_selling_year)[0].sales;
+  const months = monthlySales(y1, d);
+  const preset = (nd: MonthlyDistribution) => { setD(nd); setText({}); };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader><DialogTitle>Monthly split — {r.name}</DialogTitle><DialogDescription>The share of Year 1 sales ({num(y1)}) in each month. The twelve must add up to 100 %.</DialogDescription></DialogHeader>
+        <form className="grid gap-4" onSubmit={(e) => { e.preventDefault(); if (ok) onSave({ ...r, monthly_distribution: d }); }}>
+          <div className="grid grid-cols-3 gap-x-4 gap-y-3">
+            {MONTHS.map((_, i) => (
+              <div key={i}>
+                <label className={label}>{MONTH_NAMES[i]}</label>
+                <span className="relative block"><Input inputMode="decimal" value={text[i + 1] ?? pct(d[String(i + 1)])} onChange={(e) => { const raw = e.target.value; setText((t) => ({ ...t, [i + 1]: raw })); setD((x) => ({ ...x, [String(i + 1)]: parseSigned(raw) ?? 0 })); }} className={cn(box, "num pr-6 text-right")} /><span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span></span>
+                <div className="mt-0.5 text-right text-[11px] text-muted-foreground num">{num(months[i])}</div>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 border-t border-border pt-3 text-[13px]">
+            <span>Total <b className={cn("num", ok ? "text-good" : "text-bad")}>{pct(total)}%</b></span>
+            <span className="ml-auto flex gap-1.5">
+              <Button type="button" size="sm" variant="outline" onClick={() => preset(evenDistribution())}>Even</Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => preset(moderateDistribution())}>Moderate rise</Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => preset(rampUpDistribution())}>Ramp-up</Button>
+            </span>
+          </div>
+          <DialogFooter><Button type="button" variant="outline" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!ok}>Save</Button></DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PendingBridge({ pending, error }: { pending: boolean; error?: string }) {
   const { setPending, setNote } = useModule();
   useEffect(() => setPending(pending), [pending, setPending]);
-  useEffect(() => setNote(error ? error : pending ? "Saving…" : dirty ? "Unsaved — saves when you leave the field" : undefined), [pending, dirty, error, setNote]);
+  useEffect(() => setNote(error ? error : pending ? "Saving…" : undefined), [pending, error, setNote]);
   return null;
 }
