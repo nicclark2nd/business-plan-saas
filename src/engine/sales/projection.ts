@@ -46,11 +46,17 @@ export const currentSales = (products: ProductLike[]) => products.reduce((t, p) 
 
 // ---------- monthly distribution (Year 1 → the twelve months of cash flow) ----------
 const fix4 = (v: number) => parseFloat(v.toFixed(4));
+/**
+ * A share is a WEIGHT, not a promise about arithmetic. 100 / 12 = 8.333333... recurring, so no number of
+ * decimal places makes twelve equal months sum to exactly 100 — forcing the remainder into December only
+ * produced an odd month (8.3337) that had to be explained. The twelve are stored as they are, and the MONEY
+ * is reconciled instead: `monthlySales` divides by the actual total, so twelve equal shares always give
+ * twelve equal months that add to the year exactly.
+ */
 const fromFactors = (factors: number[]): MonthlyDistribution => {
   const total = factors.reduce((a, b) => a + b, 0);
-  const d: MonthlyDistribution = {}; let running = 0;
-  for (let m = 1; m <= 11; m++) { d[String(m)] = fix4((factors[m - 1] / total) * 100); running += d[String(m)]; }
-  d["12"] = fix4(100 - running);
+  const d: MonthlyDistribution = {};
+  for (let m = 1; m <= 12; m++) d[String(m)] = fix4((factors[m - 1] / total) * 100);
   return d;
 };
 export const evenDistribution = (): MonthlyDistribution => fromFactors(Array(12).fill(1));
@@ -69,13 +75,15 @@ export function normalizeDistribution(raw: unknown): MonthlyDistribution {
 }
 export const distributionTotal = (d: MonthlyDistribution) => fix4(Object.values(d).reduce((a, b) => a + num(b), 0));
 /**
- * Scale a split so the twelve months sum to exactly 100. Someone who types 8.33 into every box means "even",
- * not 99.96 % — and without this the missing 0.04 % quietly walks off with a slice of the year's revenue.
- * Only ever applied to a split that already passes `distributionValid`, so the adjustment is under 0.01 %.
+ * Kept for splits typed by hand: it squares a within-tolerance total to exactly 100 so the stored figures read
+ * as a full year. It is no longer what protects the money — `monthlySales` normalises by the actual total —
+ * so it never has to invent an odd month, and equal shares stay equal.
  */
 export function exactHundred(d: MonthlyDistribution): MonthlyDistribution {
   const total = distributionTotal(d);
   if (!total || Math.abs(total - 100) < 1e-9) return d;
+  const equal = Object.values(d).every((v) => Math.abs(num(v) - num(d["1"])) < 1e-9);
+  if (equal) return d;                                   // twelve equal shares are already the answer
   const out: MonthlyDistribution = {};
   let sum = 0;
   for (let m = 1; m <= 11; m++) { const v = fix4((num(d[String(m)]) * 100) / total); out[String(m)] = v; sum += v; }
@@ -84,8 +92,20 @@ export function exactHundred(d: MonthlyDistribution): MonthlyDistribution {
 }
 export const distributionValid = (d: MonthlyDistribution) => Object.values(d).every((v) => Number.isFinite(v) && v >= 0 && v <= 100) && Math.abs(distributionTotal(d) - 100) <= 0.01;
 
-/** Year-1 sales split by month for one product. */
+/**
+ * Year-1 sales split by month. Shares are treated as weights and divided by their own total, so a split of
+ * twelve 8.3333s gives twelve exactly equal months; the last cent of any rounding is put in December so the
+ * twelve always add to the year to the cent. Nothing can leak here, whatever was typed.
+ */
 export function monthlySales(year1Sales: number, d: MonthlyDistribution | null | undefined) {
   const dist = d ?? evenDistribution();
-  return Array.from({ length: 12 }, (_, i) => Math.round(year1Sales * (num(dist[String(i + 1)]) / 100) * 100) / 100);
+  const total = distributionTotal(dist);
+  if (!total) return Array(12).fill(0);
+  const out: number[] = []; let running = 0;
+  for (let m = 1; m <= 11; m++) {
+    const v = Math.round(year1Sales * (num(dist[String(m)]) / total) * 100) / 100;
+    out.push(v); running += v;
+  }
+  out.push(Math.round((year1Sales - running) * 100) / 100);
+  return out;
 }

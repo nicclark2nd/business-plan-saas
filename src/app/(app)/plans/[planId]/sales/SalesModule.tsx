@@ -427,7 +427,9 @@ function MonthlyDialog({ r, onSave, onClose }: { r: Row; onSave: (r: Row) => voi
             ))}
           </div>
           <div className="flex items-center gap-2 border-t border-border pt-3 text-[13px]">
-            <span>Total <b className={cn("num", ok ? "text-good" : "text-bad")}>{pct(total)}%</b>{ok && total !== 100 && <span className="ml-2 text-muted-foreground">— squared up to exactly 100 % when you save</span>}</span>
+            <span>{ok
+              ? <>Twelve months add to <b className="num text-good">{num(months.reduce((a, b) => a + b, 0))}</b><span className="ml-2 text-muted-foreground">shares total {pct(total)}%</span></>
+              : <>Shares total <b className="num text-bad">{pct(total)}%</b><span className="ml-2 text-muted-foreground">the twelve must add up to 100 %</span></>}</span>
             <span className="ml-auto flex gap-1.5">
               <Button type="button" size="sm" variant="outline" onClick={() => preset(evenDistribution())}>Even</Button>
               <Button type="button" size="sm" variant="outline" onClick={() => preset(moderateDistribution())}>Moderate rise</Button>

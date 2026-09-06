@@ -36,11 +36,12 @@ describe("sales projection (APeX Annual Projections parity, DesignOne)", () => {
 });
 
 describe("monthly distribution", () => {
-  it("presets each sum to exactly 100", () => {
-    for (const d of [evenDistribution(), moderateDistribution(), rampUpDistribution()]) { expect(distributionTotal(d)).toBe(100); expect(distributionValid(d)).toBe(true); }
+  it("presets are all a valid full year", () => {
+    for (const d of [evenDistribution(), moderateDistribution(), rampUpDistribution()]) expect(distributionValid(d)).toBe(true);
   });
-  it("even is 8.3333 × 11 and 8.3337 in December (APeX)", () => {
-    const d = evenDistribution(); expect(d["1"]).toBe(8.3333); expect(d["12"]).toBe(8.3337);
+  it("even is twelve equal shares — no odd December", () => {
+    const d = evenDistribution();
+    expect(Object.values(d)).toEqual(Array(12).fill(8.3333));      // 100/12 has no exact decimal; equal beats tidy
   });
   it("ramp-up puts December well above January", () => {
     const d = rampUpDistribution(); expect(d["12"]).toBeGreaterThan(d["1"] * 10);
@@ -50,18 +51,31 @@ describe("monthly distribution", () => {
   });
 });
 
-describe("a split that is a hair short of 100", () => {
-  it("is scaled to exactly 100 so no revenue leaks", () => {
-    const typed = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [String(i + 1), 8.333]));   // 99.996 %
-    expect(distributionTotal(typed)).toBe(99.996);
-    expect(distributionTotal(exactHundred(typed))).toBe(100);
+describe("the money always reconciles, whatever was typed", () => {
+  // 100/12 is recurring, so a percentage split can never be both equal and sum to exactly 100 at any precision.
+  // The shares are weights; the twelve MONTHS are what must add to the year, and they always do.
+  const cases: [string, Record<string, number>][] = [
+    ["twelve 8.33s (what the old screen taught people to type)", Object.fromEntries(Array.from({ length: 12 }, (_, i) => [String(i + 1), 8.33]))],
+    ["twelve 8.3333s (a twelfth to four places)", Object.fromEntries(Array.from({ length: 12 }, (_, i) => [String(i + 1), 8.3333]))],
+    ["twelve 8.333333s (six places, still short)", Object.fromEntries(Array.from({ length: 12 }, (_, i) => [String(i + 1), 8.333333]))],
+    ["the even preset", evenDistribution()],
+    ["the ramp-up preset", rampUpDistribution()],
+  ];
+  for (const [name, d] of cases) {
+    it(`adds to the year exactly — ${name}`, () => {
+      const m = monthlySales(600000, d);
+      expect(m.reduce((a, b) => a + b, 0)).toBe(600000);
+    });
+  }
+  it("twelve equal shares give twelve equal months", () => {
+    const m = monthlySales(600000, evenDistribution());
+    expect(m).toEqual(Array(12).fill(50000));
   });
-  it("every preset already lands on exactly 100, so nothing leaks before a hand edit", () => {
-    for (const d of [evenDistribution(), moderateDistribution(), rampUpDistribution()]) {
-      expect(distributionTotal(d)).toBe(100);
-      expect(distributionValid(d)).toBe(true);
-    }
-    expect(evenDistribution()["1"]).toBe(8.3333);          // a twelfth, not 8.33
+  it("an uneven hand-typed split is squared to 100 for storage; equal shares are left alone", () => {
+    const uneven = { ...Object.fromEntries(Array.from({ length: 11 }, (_, i) => [String(i + 1), 8.33])), "12": 8.36 };
+    expect(distributionTotal(exactHundred(uneven))).toBe(100);
+    const equal = evenDistribution();
+    expect(exactHundred(equal)).toBe(equal);
   });
   it("leaves an exact split alone", () => {
     const even = Object.fromEntries(Array.from({ length: 11 }, (_, i) => [String(i + 1), 8.3333]));
