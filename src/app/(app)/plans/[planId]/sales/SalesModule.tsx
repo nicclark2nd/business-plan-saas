@@ -10,16 +10,19 @@ import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, R
 import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
-import { YEARS, yearlyProjection, revenueByYear, currentSales, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, distributionTotal, monthlySales, type Growth, type MonthlyDistribution } from "@/engine/sales/projection";
+import { YEARS, yearlyProjection, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, distributionTotal, monthlySales, type Growth, type MonthlyDistribution } from "@/engine/sales/projection";
+import { productYears, productYear1Months, productYear1Clients, planRevenueByYear, planYear1Months, bookNow, monthlyFee, recurring } from "@/engine/sales/product";
 import { upsertProduct, deleteProduct, continueFromSales } from "./actions";
-import { LIFECYCLE, MONTHS, type Product } from "./model";
+import { LIFECYCLE, LIFE_MODE, SOLD_AS, MONTHS, type Product } from "./model";
 
 /**
  * Sales — APeX's shape, rebuilt (§6.16, fifth cut): three read-only lists on the module bar and three dialogs.
- *   Products            → Product dialog (name, what it is, why they buy it, lifecycle, price, units → annual sales)
+ *   Products            → Product dialog (name, what it is, why they buy it, lifecycle, and the sales baseline)
  *   Annual projections  → Growth dialog (current values, start year, % change per year, what that gives)
- *   Monthly projections → Monthly dialog (twelve % boxes, presets, total must be 100)
+ *   Monthly projections → Monthly dialog (a one-off line splits the year by %; an ongoing line wins clients by month)
  * Lists never hold inputs; a dialog is a form with Save and Cancel.
+ * A line is sold either as a one-off job or as an ongoing client who keeps paying (§6.17) — the second earns
+ * from ACTIVE clients, so its year is nothing like price x units and its monthly dialog counts clients, not per cent.
  */
 const fmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
 const num = (v: number | null | undefined) => fmt.format(Number(v) || 0);
@@ -43,7 +46,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
   planId: string; initial: Product[]; mode: "guided" | "advanced"; initialArea: AreaKey; hasHistory: boolean | null; historicRevenue: number | null; historicEnd: string | null; productWord: string;
 }) {
   const startup = hasHistory === false;
-  const blank = (): Row => ({ id: `tmp-${crypto.randomUUID()}`, _key: "", name: "", description: "", notes: "", lifecycle: null, average_price: 0, units_sold: 0, start_selling_year: startup ? 2 : 1, yearly_growth: {}, monthly_distribution: null, sort_order: 0 });
+  const blank = (): Row => ({ id: `tmp-${crypto.randomUUID()}`, _key: "", name: "", description: "", notes: "", lifecycle: null, average_price: 0, units_sold: 0, start_selling_year: startup ? 2 : 1, yearly_growth: {}, monthly_distribution: null, sort_order: 0, sold_as: "one_off", opening_clients: 0, client_life_months: 12, life_mode: "average", monthly_new_clients: null });
   const startOptions = [...(startup ? [] : [{ value: "1", label: "Now — selling today" }]), ...YEARS.map((y) => ({ value: String(y + 1), label: `Year ${y}` }))];
 
   const [area, setArea] = useState<AreaKey>(initialArea);
@@ -76,12 +79,13 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
 
   const named = rows.filter((r) => r.name.trim());
   const err = rows.find((r) => r._error)?._error;
-  const current = currentSales(named);
+  /** "This year" reconciles against Historic — only lines already earning, and for an ongoing line that is its book. */
+  const current = named.reduce((a, r) => recurring(r) ? a + bookNow(r) : (firstYear(r) === 0 ? a + r.average_price * r.units_sold : a), 0);
   const gap = historicRevenue ? ((current - historicRevenue) / historicRevenue) * 100 : null;
-  const totals = revenueByYear(named);
+  const totals = planRevenueByYear(named);
   const open = dlg ? (draftNew && draftNew._key === dlg.key ? draftNew : rows.find((r) => r._key === dlg.key)) ?? null : null;
   const close = () => { setDlg(null); setDraftNew(null); };
-  const monthTotals = MONTHS.map((_, i) => named.reduce((a, r) => a + monthlySales(yearlyProjection(r.average_price, r.units_sold, r.yearly_growth, r.start_selling_year)[0].sales, normalizeDistribution(r.monthly_distribution))[i], 0));
+  const monthTotals = planYear1Months(named);
 
   return (
     <ModuleFrame
@@ -113,21 +117,22 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
             </Meta>
           </Toolbar>
           <Grid>
-            <thead><tr><Th>Product</Th><Th style={{ width: 130 }}>Lifecycle</Th><Th right style={{ width: 140 }}>Average price</Th><Th right style={{ width: 110 }}>Units sold</Th><Th right style={{ width: 150 }}>Annual sales</Th><Th style={{ width: 70 }} /></tr></thead>
+            <thead><tr><Th>Product</Th><Th style={{ width: 120 }}>Sold as</Th><Th style={{ width: 120 }}>Lifecycle</Th><Th right style={{ width: 130 }}>Price</Th><Th right style={{ width: 130 }}>Units / clients</Th><Th right style={{ width: 150 }}>{startup ? "Year 1 sales" : "Sales this year"}</Th><Th style={{ width: 70 }} /></tr></thead>
             <tbody>
               {named.map((r) => (
                 <GridRow key={r._key} className={cn(r._error && "[&>td]:bg-bad-soft")} title={r._error}>
                   <Td><NameLink onClick={() => setDlg({ kind: "product", key: r._key })}>{r.name}</NameLink>{firstYear(r) > 0 && <span className="ml-2 text-xs text-muted-foreground">from Year {firstYear(r)}</span>}</Td>
+                  <Td className="text-muted-foreground">{recurring(r) ? "Ongoing client" : "One-off job"}</Td>
                   <Td className="text-muted-foreground">{LIFECYCLE.find((l) => l.value === r.lifecycle)?.label ?? "—"}</Td>
-                  <Td right className="num">{num(r.average_price)}</Td>
-                  <Td right className="num">{r.units_sold}</Td>
-                  <Td right className="num font-semibold">{num(r.average_price * r.units_sold)}</Td>
+                  <Td right className="num">{recurring(r) ? <>{num(monthlyFee(r))}<span className="text-[11px] text-muted-foreground">/mo</span></> : num(r.average_price)}</Td>
+                  <Td right className="num">{recurring(r) ? <>{r.opening_clients || 0} + {r.units_sold} new</> : r.units_sold}</Td>
+                  <Td right className="num font-semibold">{num(productYears(r)[0].revenue)}</Td>
                   <Td className="whitespace-nowrap text-right"><IconButton title="Edit product" onClick={() => setDlg({ kind: "product", key: r._key })}>✎</IconButton><RemoveButton onClick={() => remove(r)} /></Td>
                 </GridRow>
               ))}
-              {named.length === 0 && <tr><Td colSpan={6} className="h-12 text-muted-foreground">Add your first product — what you sell, what it sells for, how many.</Td></tr>}
+              {named.length === 0 && <tr><Td colSpan={7} className="h-12 text-muted-foreground">Add your first product — what you sell, what it sells for, how many.</Td></tr>}
             </tbody>
-            {named.length > 0 && <FootRow><Td colSpan={3}>Total</Td><Td right className="num">{named.reduce((a, r) => a + r.units_sold, 0)}</Td><Td right className="num">{num(named.reduce((a, r) => a + r.average_price * r.units_sold, 0))}</Td><Td /></FootRow>}
+            {named.length > 0 && <FootRow><Td colSpan={5}>Total</Td><Td right className="num">{num(named.reduce((a, r) => a + productYears(r)[0].revenue, 0))}</Td><Td /></FootRow>}
           </Grid>
           <Note>Click a product to open it. Growth and the monthly split are on the next two tabs.</Note>
         </>
@@ -140,12 +145,12 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
             <thead><tr><Th>Product</Th><Th right style={{ width: 120 }}>{startup ? "Base" : "Current"}</Th>{YEARS.map((y) => <Th key={y} right style={{ width: 120 }}>Year {y}</Th>)}<Th style={{ width: 80 }} /></tr></thead>
             <tbody>
               {named.map((r) => {
-                const fy = firstYear(r); const p = yearlyProjection(r.average_price, r.units_sold, r.yearly_growth, r.start_selling_year);
+                const fy = firstYear(r); const p = productYears(r);
                 return (
                   <GridRow key={r._key}>
-                    <Td><NameLink onClick={() => setDlg({ kind: "growth", key: r._key })}>{r.name}</NameLink></Td>
-                    <Td right className="num text-muted-foreground">{fy === 0 || startup ? num(r.average_price * r.units_sold) : `Year ${fy}`}</Td>
-                    {p.map((y) => <Td key={y.year} right className={cn("num", y.year < fy && "text-muted-foreground/60")} title={y.year < fy ? "" : `${num(y.price)} × ${y.units}`}>{y.year < fy ? "—" : num(y.sales)}</Td>)}
+                    <Td><NameLink onClick={() => setDlg({ kind: "growth", key: r._key })}>{r.name}</NameLink>{recurring(r) && <span className="ml-2 text-xs text-muted-foreground">ongoing</span>}</Td>
+                    <Td right className="num text-muted-foreground">{recurring(r) ? num(bookNow(r)) : fy === 0 || startup ? num(r.average_price * r.units_sold) : `Year ${fy}`}</Td>
+                    {p.map((y) => <Td key={y.year} right className={cn("num", y.year < fy && "text-muted-foreground/60")} title={y.clients !== undefined ? `${y.clients} clients at the end of the year` : ""}>{y.year < fy ? "—" : num(y.revenue)}</Td>)}
                     <Td className="whitespace-nowrap text-right"><IconButton title="Edit growth" onClick={() => setDlg({ kind: "growth", key: r._key })}>✎</IconButton><IconButton title="Edit monthly split" onClick={() => setDlg({ kind: "monthly", key: r._key })}>▦</IconButton></Td>
                   </GridRow>
                 );
@@ -165,8 +170,8 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
             <tbody>
               {named.map((r) => {
                 const fy = firstYear(r);
-                const y1 = yearlyProjection(r.average_price, r.units_sold, r.yearly_growth, r.start_selling_year)[0].sales;
-                const months = monthlySales(y1, normalizeDistribution(r.monthly_distribution));
+                const months = productYear1Months(r);
+                const y1 = months.reduce((a, b) => a + b, 0);
                 return (
                   <GridRow key={r._key}>
                     <Td><NameLink onClick={() => setDlg({ kind: "monthly", key: r._key })}>{r.name}</NameLink></Td>
@@ -183,9 +188,11 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
         </>
       )}
 
-      {open && dlg?.kind === "product" && <ProductDialog key={open._key} r={open} startup={startup} onSave={(r) => { save(r); close(); }} onClose={close} />}
+      {open && dlg?.kind === "product" && <ProductDialog key={open._key} r={open} onSave={(r) => { save(r); close(); }} onClose={close} />}
       {open && dlg?.kind === "growth" && <GrowthDialog key={open._key} r={open} startup={startup} startOptions={startOptions} onSave={(r) => { save(r); close(); }} onClose={close} />}
-      {open && dlg?.kind === "monthly" && <MonthlyDialog key={open._key} r={open} onSave={(r) => { save(r); close(); }} onClose={close} />}
+      {open && dlg?.kind === "monthly" && (recurring(open)
+        ? <ClientsDialog key={open._key} r={open} onSave={(r) => { save(r); close(); }} onClose={close} />
+        : <MonthlyDialog key={open._key} r={open} onSave={(r) => { save(r); close(); }} onClose={close} />)}
     </ModuleFrame>
   );
 }
@@ -195,28 +202,51 @@ function IconButton({ children, title, onClick }: { children: React.ReactNode; t
 }
 
 /* ---------- Product dialog (APeX "Product") ---------- */
-function ProductDialog({ r, startup, onSave, onClose }: { r: Row; startup: boolean; onSave: (r: Row) => void; onClose: () => void }) {
+function ProductDialog({ r, onSave, onClose }: { r: Row; onSave: (r: Row) => void; onClose: () => void }) {
   const [d, setD] = useState<Row>(r);
   const set = (c: Partial<Row>) => setD((x) => ({ ...x, ...c }));
   const ok = d.name.trim().length > 0;
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-2xl">
-        <DialogHeader><DialogTitle>{isNew(r) ? "New product" : "Product"}</DialogTitle><DialogDescription>What you sell, in a lender&apos;s words, and what it earns {startup ? "in Year 1" : "this year"}.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>{isNew(r) ? "New product" : "Product"}</DialogTitle><DialogDescription>What you sell, in a lender&apos;s words, and what it earns. A <b>one-off job</b> is invoiced when you deliver it; an <b>ongoing client</b> keeps paying you every month.</DialogDescription></DialogHeader>
         <form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); if (ok) onSave(d); }}>
           <div className="grid grid-cols-4 gap-3">
-            <div className="col-span-3"><label className={label}>Name</label><Input autoFocus value={d.name} placeholder="Product or service" onChange={(e) => set({ name: e.target.value })} className={box} /></div>
+            <div className="col-span-2"><label className={label}>Name</label><Input autoFocus value={d.name} placeholder="Product or service" onChange={(e) => set({ name: e.target.value })} className={box} /></div>
+            <div><label className={label}>Sold as</label><FieldSelect value={d.sold_as} options={SOLD_AS} onValueChange={(v) => set({ sold_as: v as Row["sold_as"] })} /></div>
             <div><label className={label}>Lifecycle</label><FieldSelect value={d.lifecycle} options={LIFECYCLE} placeholder="Choose —" onValueChange={(v) => set({ lifecycle: v })} /></div>
           </div>
           <div><label className={label}>What it is</label><Textarea value={d.description ?? ""} placeholder="One or two plain sentences — e.g. Reinforced concrete slabs for new homes, poured and finished by our own crew" onChange={(e) => set({ description: e.target.value })} className="min-h-[64px]" /></div>
           <div><label className={label}>Why they buy it, margin, weaknesses</label><Textarea value={d.notes ?? ""} placeholder="e.g. Builders choose us on turnaround; margin is thin — shifting effort to decorative work" onChange={(e) => set({ notes: e.target.value })} className="min-h-[64px]" /></div>
           <div className="border-t border-border pt-3">
             <div className="mb-2 text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Product sales baseline</div>
-            <div className="grid grid-cols-4 gap-3">
-              <div><label className={label}>Average price</label><Input inputMode="decimal" value={d.average_price ? num(d.average_price) : ""} placeholder="0" onChange={(e) => set({ average_price: parseNum(e.target.value) })} className={cn(box, "num text-right")} /></div>
-              <div><label className={label}>Base units sold (per year)</label><Input inputMode="decimal" value={d.units_sold ? String(d.units_sold) : ""} placeholder="0" onChange={(e) => set({ units_sold: parseNum(e.target.value) })} className={cn(box, "num text-right")} /></div>
-              <div><label className={label}>Base annual sales</label><div className={cn(box, "num flex items-center justify-end rounded border border-border bg-secondary px-2.5 font-semibold")}>{num(d.average_price * d.units_sold)}</div></div>
-            </div>
+            {d.sold_as === "recurring" ? (
+              <>
+                <div className="grid grid-cols-5 gap-3">
+                  <div><label className={label}>Fee a client a month</label><Input inputMode="decimal" value={d.average_price ? num(d.average_price / 12) : ""} placeholder="0" onChange={(e) => set({ average_price: parseNum(e.target.value) * 12 })} className={cn(box, "num text-right")} /></div>
+                  <div><label className={cn(label, "whitespace-nowrap")}>Clients you have</label><Input inputMode="decimal" value={d.opening_clients ? String(d.opening_clients) : ""} placeholder="0" onChange={(e) => set({ opening_clients: parseNum(e.target.value) })} className={cn(box, "num text-right")} /></div>
+                  <div><label className={label}>New clients a year</label><Input inputMode="decimal" value={d.units_sold ? String(d.units_sold) : ""} placeholder="0" onChange={(e) => set({ units_sold: parseNum(e.target.value) })} className={cn(box, "num text-right")} /></div>
+                  <div className="col-span-2">
+                    <label className={label}>A client stays (months)</label>
+                    <div className="flex gap-2">
+                      <Input inputMode="decimal" value={d.client_life_months ? String(d.client_life_months) : ""} placeholder="12" onChange={(e) => set({ client_life_months: parseNum(e.target.value) })} className={cn(box, "num w-16 text-right")} />
+                      <FieldSelect value={d.life_mode} options={LIFE_MODE} onValueChange={(v) => set({ life_mode: v as Row["life_mode"] })} className="flex-1" />
+                    </div>
+                  </div>
+                </div>
+                <p className="mt-2 text-[11.5px] text-muted-foreground">
+                  {num(d.average_price / 12)} a month is {num(d.average_price)} a year per client{d.client_life_months ? `, over ${d.client_life_months} month${d.client_life_months === 1 ? "" : "s"}` : ""}.
+                  {d.opening_clients > 0 && <> Your book is worth <b className="text-foreground">{num(bookNow(d))}</b> a year today.</>}
+                  {" "}An ongoing line earns from the clients on your books, so its first year is not price × clients — when you win them decides that, on the Monthly projections tab.
+                </p>
+              </>
+            ) : (
+              <div className="grid grid-cols-4 gap-3">
+                <div><label className={label}>Average price</label><Input inputMode="decimal" value={d.average_price ? num(d.average_price) : ""} placeholder="0" onChange={(e) => set({ average_price: parseNum(e.target.value) })} className={cn(box, "num text-right")} /></div>
+                <div><label className={label}>Base units sold (per year)</label><Input inputMode="decimal" value={d.units_sold ? String(d.units_sold) : ""} placeholder="0" onChange={(e) => set({ units_sold: parseNum(e.target.value) })} className={cn(box, "num text-right")} /></div>
+                <div><label className={label}>Base annual sales</label><div className={cn(box, "num flex items-center justify-end rounded border border-border bg-secondary px-2.5 font-semibold")}>{num(d.average_price * d.units_sold)}</div></div>
+              </div>
+            )}
           </div>
           <DialogFooter className="mt-1"><Button type="button" variant="outline" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!ok}>Save</Button></DialogFooter>
         </form>
@@ -270,6 +300,53 @@ function GrowthDialog({ r, startup, startOptions, onSave, onClose }: { r: Row; s
               <div className="font-semibold">= Sales</div>{proj.map((p) => <div key={p.year} className="num text-right font-semibold">{p.year < fy ? "—" : num(p.sales)}</div>)}
             </div>
           </div>
+          <DialogFooter><Button type="button" variant="outline" onClick={onClose}>Cancel</Button><Button type="submit">Save</Button></DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ---------- Clients-won dialog — the ongoing line's answer to the monthly split (§6.17) ---------- */
+function ClientsDialog({ r, onSave, onClose }: { r: Row; onSave: (r: Row) => void; onClose: () => void }) {
+  const [d, setD] = useState<Record<string, number>>(() => {
+    const src = r.monthly_new_clients ?? {};
+    const any = MONTHS.some((_, i) => Number(src[String(i + 1)]) > 0);
+    return Object.fromEntries(MONTHS.map((_, i) => [String(i + 1), any ? Number(src[String(i + 1)]) || 0 : 0]));
+  });
+  const [text, setText] = useState<Record<string, string>>({});
+  const won = MONTHS.reduce((a, _, i) => a + (d[String(i + 1)] || 0), 0);
+  const draft: Row = { ...r, monthly_new_clients: d, units_sold: won };
+  const months = productYear1Months(draft);
+  const active = productYear1Clients(draft);
+  const year1 = months.reduce((a, b) => a + b, 0);
+  const runRate = (active[11] ?? 0) * monthlyFee(r) * 12;
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Clients won — {r.name}</DialogTitle>
+          <DialogDescription>How many new clients you win in each month of the first year. They keep paying from the month they join, so when you win them decides what the year earns.</DialogDescription>
+        </DialogHeader>
+        <form className="grid gap-4" onSubmit={(e) => { e.preventDefault(); onSave(draft); }}>
+          {r.opening_clients > 0 && <p className="-mb-1 text-[12.5px] text-muted-foreground">Starting with <b className="text-foreground">{r.opening_clients}</b> {r.opening_clients === 1 ? "client" : "clients"} already on the books.</p>}
+          <div className="grid grid-cols-4 gap-x-4 gap-y-3">
+            {MONTHS.map((m, i) => (
+              <div key={i}>
+                <label className={label}>{m}</label>
+                <Input inputMode="decimal" value={text[i + 1] ?? (d[String(i + 1)] ? String(d[String(i + 1)]) : "")} placeholder="0"
+                  onChange={(e) => { const raw = e.target.value; setText((t) => ({ ...t, [i + 1]: raw })); setD((x) => ({ ...x, [String(i + 1)]: Math.max(0, parseNum(raw)) })); }}
+                  className={cn(box, "num text-right")} />
+                <div className="mt-0.5 flex justify-between text-[11px] text-muted-foreground"><span>{(active[i] ?? 0).toFixed(1).replace(/\.0$/, "")} on</span><span className="num">{num(months[i])}</span></div>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-border pt-3 text-[13px]">
+            <span>New clients <b className="num">{won}</b></span>
+            <span>Year 1 sales <b className="num">{num(year1)}</b></span>
+            <span className="text-muted-foreground">Run rate at December <b className="num text-foreground">{num(runRate)}</b></span>
+          </div>
+          <p className="-mt-2 text-[11.5px] text-muted-foreground">A client stays {r.client_life_months} months {r.life_mode === "fixed" ? "as a set programme" : "on average"} — change that on the product. Later years win {won ? `${won} × the growth you set` : "the same number, grown"}.</p>
           <DialogFooter><Button type="button" variant="outline" onClick={onClose}>Cancel</Button><Button type="submit">Save</Button></DialogFooter>
         </form>
       </DialogContent>

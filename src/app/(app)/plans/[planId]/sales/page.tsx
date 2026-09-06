@@ -14,7 +14,15 @@ export default async function SalesPage({ params, searchParams }: { params: Prom
     supabase.from("plan_settings").select("customer_type, product_type, has_history").eq("plan_id", planId).maybeSingle(),
   ]);
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
-  const rows = (products.data ?? []).map((p) => ({ ...p, average_price: Number(p.average_price), units_sold: Number(p.units_sold) })) as Product[];
+  // Defaults keep the module honest if a column has not reached this database yet (§6.17, migration 0013).
+  const rows = (products.data ?? []).map((p) => ({
+    ...p, average_price: Number(p.average_price), units_sold: Number(p.units_sold),
+    sold_as: p.sold_as === "recurring" ? "recurring" : "one_off",
+    opening_clients: Number(p.opening_clients ?? 0),
+    client_life_months: Number(p.client_life_months ?? 12) || 12,
+    life_mode: p.life_mode === "fixed" ? "fixed" : "average",
+    monthly_new_clients: p.monthly_new_clients ?? null,
+  })) as Product[];
   return (
     <SalesModule planId={planId} initial={rows} mode={mode} initialArea={area === "annual" || area === "monthly" ? area : "products"} hasHistory={settings.data?.has_history ?? null}
       historicRevenue={historic.data ? Number(historic.data.revenue) : null} historicEnd={historic.data?.period_end ?? null}
