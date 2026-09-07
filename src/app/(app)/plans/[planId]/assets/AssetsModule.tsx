@@ -9,11 +9,12 @@ import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/Module
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
+import { planMonths } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
 import { YEARS } from "@/engine/sales/projection";
-import { depreciationByYear, bookValueByYear, assetsByYear, type FixedAsset } from "@/engine/assets/depreciation";
+import { depreciationByYear, depreciationMonths, bookValueByYear, assetsByYear, type FixedAsset } from "@/engine/assets/depreciation";
 import { upsertAsset, deleteAsset, saveFinancedShape, continueFromAssets } from "./actions";
-import { MONTHS, METHODS, CATEGORIES, LIVES, lifeLabel, type AssetRow } from "./model";
+import { METHODS, CATEGORIES, LIVES, lifeLabel, type AssetRow } from "./model";
 
 /**
  * Fixed Assets — what the business owns and what it writes off (§6.20). One list, one dialog.
@@ -26,19 +27,23 @@ const fmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
 const num = (v: number | null | undefined) => fmt.format(Number(v) || 0);
 const parseNum = (s: string) => { const n = Number(s.replace(/[,\s$]/g, "")); return Number.isFinite(n) ? n : 0; };
 
+type AreaKey = "assets" | "monthly";
 type Row = AssetRow & { _key: string; _error?: string };
 const STEP = GUIDED_STEPS.find((s) => s.id === "assets")?.step ?? 11;
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
 const box = "h-8";
 const YEAR_OPTIONS = YEARS.map((y) => ({ value: String(y), label: `Year ${y}` }));
-const MONTH_OPTIONS = MONTHS.map((m, i) => ({ value: String(i + 1), label: m }));
+/** The dropdown offers the plan's months in the plan's order; the value is the slot, 1–12. */
+const monthOptions = (fyEndMonth: number) => planMonths(fyEndMonth).map((m, i) => ({ value: String(i + 1), label: m }));
 const LIFE_OPTIONS = LIVES.map((l) => ({ value: String(l.months), label: l.label }));
 
-export function AssetsModule({ planId, initial, mode, lenders }: {
-  planId: string; initial: AssetRow[]; mode: "guided" | "advanced"; lenders: Record<string, string>;
+export function AssetsModule({ planId, initial, mode, lenders, fyEndMonth }: {
+  planId: string; initial: AssetRow[]; mode: "guided" | "advanced"; lenders: Record<string, string>; fyEndMonth: number;
 }) {
+  const MONTHS = planMonths(fyEndMonth);
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(initial.map((a) => ({ ...a, _key: a.id })));
+  const [area, setArea] = useState<AreaKey>("assets");
   const [dlg, setDlg] = useState<{ key: string } | null>(null);
   const [confirmKey, setConfirm] = useState<string | null>(null);
   const [draft, setDraft] = useState<Row | null>(null);
@@ -97,9 +102,9 @@ export function AssetsModule({ planId, initial, mode, lenders }: {
   return (
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group="Financials" title="Fixed assets" subtitle="What the business owns, and what it writes off each year" mode={mode}
-      areas={[{ key: "assets", label: "Assets", count: lines.length }]}
-      area="assets" onArea={() => {}} scope={{ label: "This plan" }}
-      primaryAction={<Button size="sm" type="button" onClick={add}>+ Asset</Button>}
+      areas={[{ key: "assets", label: "Assets", count: lines.length }, { key: "monthly", label: "Monthly projections" }]}
+      area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "This plan" }}
+      primaryAction={area === "assets" ? <Button size="sm" type="button" onClick={add}>+ Asset</Button> : undefined}
       footer={<ModuleFooter planId={planId} prevId="funding" formId="assets-form" />}
       help={<>
         <h3>What good looks like</h3>
@@ -114,6 +119,7 @@ export function AssetsModule({ planId, initial, mode, lenders }: {
       <PendingBridge pending={pending} error={error} />
       <form id="assets-form" onSubmit={onSubmit} className="hidden" />
 
+      {area === "assets" && (<>
       <Toolbar>
         <Meta className="ml-0">
           {lines.length === 0 ? "No assets yet" : <>{num(totals[0].depreciation)} written off in Year 1 · {num(totals[0].bookValue)} still on the books</>}
@@ -194,12 +200,48 @@ export function AssetsModule({ planId, initial, mode, lenders }: {
             Depreciation never moves cash; it only lowers the profit and what the assets are worth.
           </Note>
         )}
-      </div>
+        </div>
+      </>)}
+
+      {area === "monthly" && (() => {
+        /* Depreciation lands every month whether or not anyone notices it — this is where the owner sees it
+           against the twelve months the rest of the plan is managed by. */
+        const rowsM = lines.map((r) => ({ r, months: depreciationMonths(r as FixedAsset).slice(0, 12) }));
+        const monthTotals = MONTHS.map((_, i) => rowsM.reduce((a, l) => a + (l.months[i] ?? 0), 0));
+        const grand = monthTotals.reduce((a, b) => a + b, 0);
+        return (
+          <div className="min-h-0 overflow-auto px-3 pb-3">
+            <Toolbar><Meta className="ml-0">Year 1 depreciation by month. It lowers the profit and what the assets are worth — it never moves cash.</Meta></Toolbar>
+            <Grid>
+              <thead><tr><Th style={{ width: "16%" }}>Asset</Th>{MONTHS.map((m) => <Th key={m} right>{m}</Th>)}<Th right style={{ width: 100 }}>Total</Th><Th style={{ width: 44 }} /></tr></thead>
+              <tbody>
+                {rowsM.map(({ r, months }) => (
+                  <GridRow key={r._key}>
+                    <Td>
+                      <NameLink onClick={() => setDlg({ key: r._key })}>{r.name || "Untitled asset"}</NameLink>
+                      {r.source === "finance" && <LinkMark title={`Bought with ${lenders[r.funding_debt_id ?? ""] ?? "finance"}`} onClick={() => router.push(`/plans/${planId}/funding`)} />}
+                    </Td>
+                    {months.map((v, i) => <Td key={i} right className="num">{v ? num(v) : <span className="text-muted-foreground">—</span>}</Td>)}
+                    <Td right className="num font-semibold">{num(months.reduce((a, b) => a + b, 0))}</Td>
+                    <Td className="text-right"><IconButton title="How it is written off" onClick={() => setDlg({ key: r._key })}>✎</IconButton></Td>
+                  </GridRow>
+                ))}
+                {rowsM.length === 0 && <tr><Td colSpan={15} className="h-12 text-muted-foreground">No assets yet.</Td></tr>}
+              </tbody>
+              {rowsM.length > 0 && (
+                <FootRow><Td>Depreciation</Td>{monthTotals.map((v, i) => <Td key={i} right className="num">{num(v)}</Td>)}<Td right className="num">{num(grand)}</Td><Td /></FootRow>
+              )}
+            </Grid>
+            <Note>An asset bought part-way through the year only depreciates from the month it arrives, so its twelve do not fill.</Note>
+          </div>
+        );
+      })()}
 
       {current && (
         <AssetDialog
           row={current}
           lender={lenders[current.funding_debt_id ?? ""] ?? "finance"}
+          fyEndMonth={fyEndMonth}
           onCancel={() => { setDlg(null); if (draft && draft._key === current._key) setDraft(null); }}
           onSave={save}
         />
@@ -237,7 +279,8 @@ function PendingBridge({ pending, error }: { pending: boolean; error?: string })
 }
 
 /** One asset. A financed line shows what it cost as read-only and lets the write-off be chosen. */
-function AssetDialog({ row, lender, onCancel, onSave }: { row: Row & { _key: string }; lender: string; onCancel: () => void; onSave: (r: Row) => void }) {
+function AssetDialog({ row, lender, fyEndMonth, onCancel, onSave }: { row: Row & { _key: string }; lender: string; fyEndMonth: number; onCancel: () => void; onSave: (r: Row) => void }) {
+  const MONTH_OPTIONS = monthOptions(fyEndMonth);
   const [d, setD] = useState<Row>(row);
   const locked = d.source === "finance";
   const set = (patch: Partial<Row>) => setD((x) => ({ ...x, ...patch }));

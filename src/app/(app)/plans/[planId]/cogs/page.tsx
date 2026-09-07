@@ -7,11 +7,12 @@ export default async function CogsPage({ params, searchParams }: { params: Promi
   const { planId } = await params;
   const { area } = await searchParams;
   const supabase = await createClient();
-  const [session, products, fixed, historic] = await Promise.all([
+  const [session, products, fixed, historic, settings] = await Promise.all([
     getSession(),
     supabase.from("plan_products").select("*").eq("plan_id", planId).order("sort_order").order("created_at"),
     supabase.from("plan_fixed_cogs").select("*").eq("plan_id", planId).order("sort_order").order("created_at"),
     supabase.from("plan_historic_periods").select("revenue, cogs, period_end").eq("plan_id", planId).eq("period_number", 1).maybeSingle(),
+    supabase.from("plan_settings").select("financial_year_end_month").eq("plan_id", planId).maybeSingle(),
   ]);
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
   const rows = (products.data ?? []).map((p) => ({
@@ -28,7 +29,8 @@ export default async function CogsPage({ params, searchParams }: { params: Promi
   const h = historic.data;
   return (
     <CogsModule planId={planId} products={rows} fixed={fixedRows} mode={mode}
-      initialArea={area === "fixed" ? "fixed" : "products"}
+      initialArea={area === "fixed" || area === "monthly" ? area : "products"}
+      fyEndMonth={settings.data?.financial_year_end_month ?? 6}
       historicRevenue={h ? Number(h.revenue) : null} historicCogs={h ? Number(h.cogs) : null} historicEnd={h?.period_end ?? null} />
   );
 }

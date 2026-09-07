@@ -1,7 +1,6 @@
 import type { FundingKind, Loan, RevenueLinked, RepaymentType, PaymentFrequency } from "@/engine/funding/sources";
 
 /** Funding — one list, every kind of source in it (SaaS §6.20). */
-export const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export type OwnerType = "owner_capital" | "owner_loan";
 export type LoanType = "term_loan" | "line_of_credit" | "equipment_finance" | "vehicle_finance" | "director_loan";

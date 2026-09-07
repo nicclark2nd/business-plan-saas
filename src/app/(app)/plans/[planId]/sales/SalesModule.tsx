@@ -9,11 +9,12 @@ import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/Module
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
+import { planMonths } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
 import { YEARS, yearlyProjection, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, distributionTotal, monthlySales, type Growth, type MonthlyDistribution } from "@/engine/sales/projection";
 import { productYears, productYear1Months, productYear1Clients, newClientsYear1, planRevenueByYear, planYear1Months, sourceOf, isLinked, bookNow, monthlyFee, recurring } from "@/engine/sales/product";
 import { upsertProduct, deleteProduct, continueFromSales } from "./actions";
-import { LIFECYCLE, LIFE_MODE, SOLD_AS, MONTHS, type Product } from "./model";
+import { LIFECYCLE, LIFE_MODE, SOLD_AS, type Product } from "./model";
 
 /**
  * Sales — APeX's shape, rebuilt (§6.16, fifth cut): three read-only lists on the module bar and three dialogs.
@@ -46,9 +47,10 @@ const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "Ju
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
 const box = "h-8";
 
-export function SalesModule({ planId, initial, mode, initialArea, hasHistory, historicRevenue, historicEnd, productWord }: {
-  planId: string; initial: Product[]; mode: "guided" | "advanced"; initialArea: AreaKey; hasHistory: boolean | null; historicRevenue: number | null; historicEnd: string | null; productWord: string;
+export function SalesModule({ planId, initial, mode, initialArea, hasHistory, historicRevenue, historicEnd, productWord, fyEndMonth }: {
+  planId: string; initial: Product[]; mode: "guided" | "advanced"; initialArea: AreaKey; hasHistory: boolean | null; historicRevenue: number | null; historicEnd: string | null; productWord: string; fyEndMonth: number;
 }) {
+  const MONTHS = planMonths(fyEndMonth);          // the plan's own twelve, not January to December
   const startup = hasHistory === false;
   const blank = (): Row => ({ id: `tmp-${crypto.randomUUID()}`, _key: "", name: "", description: "", notes: "", lifecycle: null, average_price: 0, units_sold: 0, start_selling_year: startup ? 2 : 1, yearly_growth: {}, monthly_distribution: null, sort_order: 0, sold_as: "one_off", opening_clients: 0, client_life_months: 12, life_mode: "fixed", monthly_new_clients: null, clients_from_product_id: null });
   const startOptions = [...(startup ? [] : [{ value: "1", label: "Now — selling today" }]), ...YEARS.map((y) => ({ value: String(y + 1), label: `Year ${y}` }))];
@@ -234,8 +236,8 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
       )}
 
       {open && dlg?.kind === "monthly" && (recurring(open)
-        ? <ClientsDialog key={open._key} r={open} source={src(open)} onSave={(r) => { save(r); close(); }} onClose={close} />
-        : <MonthlyDialog key={open._key} r={open} onSave={(r) => { save(r); close(); }} onClose={close} />)}
+        ? <ClientsDialog key={open._key} r={open} fyEndMonth={fyEndMonth} source={src(open)} onSave={(r) => { save(r); close(); }} onClose={close} />
+        : <MonthlyDialog key={open._key} r={open} fyEndMonth={fyEndMonth} onSave={(r) => { save(r); close(); }} onClose={close} />)}
     </ModuleFrame>
   );
 }
@@ -385,7 +387,8 @@ function GrowthDialog({ r, source, startup, startOptions, onSave, onClose }: { r
 }
 
 /* ---------- Clients-won dialog — the ongoing line's answer to the monthly split (§6.17) ---------- */
-function ClientsDialog({ r, source, onSave, onClose }: { r: Row; source: Row | null; onSave: (r: Row) => void; onClose: () => void }) {
+function ClientsDialog({ r, source, fyEndMonth, onSave, onClose }: { r: Row; source: Row | null; fyEndMonth: number; onSave: (r: Row) => void; onClose: () => void }) {
+  const MONTHS = planMonths(fyEndMonth);
   const [d, setD] = useState<Record<string, number>>(() => {
     const src = r.monthly_new_clients ?? {};
     const any = MONTHS.some((_, i) => Number(src[String(i + 1)]) > 0);
@@ -439,7 +442,8 @@ function ClientsDialog({ r, source, onSave, onClose }: { r: Row; source: Row | n
 }
 
 /* ---------- Monthly dialog (APeX "Monthly Sales Distribution") ---------- */
-function MonthlyDialog({ r, onSave, onClose }: { r: Row; onSave: (r: Row) => void; onClose: () => void }) {
+function MonthlyDialog({ r, fyEndMonth, onSave, onClose }: { r: Row; fyEndMonth: number; onSave: (r: Row) => void; onClose: () => void }) {
+  const MONTHS = planMonths(fyEndMonth);
   const [d, setD] = useState<MonthlyDistribution>(normalizeDistribution(r.monthly_distribution));
   const [text, setText] = useState<Record<string, string>>({});
   const total = distributionTotal(d);

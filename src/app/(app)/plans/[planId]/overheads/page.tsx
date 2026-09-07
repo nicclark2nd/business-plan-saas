@@ -40,6 +40,7 @@ export default async function OverheadsPage({ params }: { params: Promise<{ plan
   return (
     <OverheadsModule planId={planId} initial={rows} mode={mode}
       salaries={salaries} marketing={marketing} peopleCount={(people.data ?? []).filter((p) => p.role !== "contractor").length}
-      marketingLines={(spend.data ?? []).length} onCostPct={Number(settings.data?.on_cost_pct ?? 0)} />
+      marketingLines={(spend.data ?? []).length} onCostPct={Number(settings.data?.on_cost_pct ?? 0)}
+      fyEndMonth={settings.data?.financial_year_end_month ?? 6} />
   );
 }

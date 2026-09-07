@@ -1,18 +1,21 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
+import { planMonths, planMonthNames } from "@/engine/plan/calendar";
+import { productCostMonths } from "@/engine/cogs/direct";
 import { cn } from "@/lib/utils";
 import { YEARS, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, distributionTotal, type MonthlyDistribution } from "@/engine/sales/projection";
 import { sourceOf, recurring, monthlyFee, type AnyProduct } from "@/engine/sales/product";
 import { productCostYears, unitCostByYear, fixedCostByYear, fixedCostMonths, planCogsByYear, currentCost } from "@/engine/cogs/direct";
 import { saveProductCost, upsertFixedCogs, deleteFixedCogs, continueFromCogs } from "./actions";
-import { MONTHS, MONTH_NAMES, type CostedProduct, type FixedCogs } from "./model";
+import { type CostedProduct, type FixedCogs } from "./model";
 
 /**
  * COGS — the direct cost of what you sell (§6.18). Two lists, three dialogs, nothing typed into a list.
@@ -32,7 +35,7 @@ const parseSigned = (s: string) => { const t = s.replace(/[,\s%]/g, ""); if (t =
 const pct = (v: number | undefined) => v === undefined || v === null ? "" : String(Math.round(v * 10000) / 10000);
 const pctText = (v: number | null | undefined) => v === null || v === undefined ? "—" : `${Math.round(v * 10) / 10}%`;
 
-type AreaKey = "products" | "fixed";
+type AreaKey = "products" | "fixed" | "monthly";
 type Dlg = { kind: "cost"; key: string } | { kind: "item" | "split"; key: string } | null;
 type FixRow = FixedCogs & { _key: string; _error?: string };
 const STEP = GUIDED_STEPS.find((s) => s.id === "cogs")?.step ?? 8;
@@ -40,10 +43,12 @@ const isNew = (r: FixRow) => r.id.startsWith("tmp-");
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
 const box = "h-8";
 
-export function CogsModule({ planId, products, fixed, mode, initialArea, historicRevenue, historicCogs, historicEnd }: {
+export function CogsModule({ planId, products, fixed, mode, initialArea, historicRevenue, historicCogs, historicEnd, fyEndMonth }: {
   planId: string; products: CostedProduct[]; fixed: FixedCogs[]; mode: "guided" | "advanced"; initialArea: AreaKey;
-  historicRevenue: number | null; historicCogs: number | null; historicEnd: string | null;
+  historicRevenue: number | null; historicCogs: number | null; historicEnd: string | null; fyEndMonth: number;
 }) {
+  const MONTHS = planMonths(fyEndMonth);
+  const router = useRouter();
   const [area, setArea] = useState<AreaKey>(initialArea);
   const [rows, setRows] = useState<CostedProduct[]>(products);
   const [items, setItems] = useState<FixRow[]>(fixed.map((f) => ({ ...f, _key: f.id })));
@@ -109,7 +114,8 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group="Financials" title="COGS" subtitle="What each sale costs you to deliver — the gap between this and your prices is your gross profit" mode={mode}
       areas={[{ key: "products", label: "By product", count: priced.length, tag: priced.length - costed > 0 ? `${priced.length - costed} without a cost` : undefined },
-              { key: "fixed", label: "Fixed costs", count: items.filter((i) => i.item_name.trim()).length }]}
+              { key: "fixed", label: "Fixed costs", count: items.filter((i) => i.item_name.trim()).length },
+              { key: "monthly", label: "Monthly projections" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "All products" }}
       primaryAction={area === "fixed" ? <Button size="sm" type="button" onClick={addItem}>+ Fixed cost</Button> : undefined}
       footer={<ModuleFooter planId={planId} prevId="sales" formId="cogs-form" />}
@@ -203,13 +209,52 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
         </>
       )}
 
+
+      {area === "monthly" && (() => {
+        /* Year 1, line by line. The reason this tab exists: a plan whose costs are only ever annual cannot
+           be managed — the first twelve months are what the owner runs the business against. */
+        const lines = [
+          ...priced.filter((p) => p.cost_per_unit > 0).map((p) => ({ key: `p-${p.id}`, name: p.name, kind: "Product", months: productCostMonths(p, src(p)) })),
+          ...items.filter((f) => f.item_name.trim()).map((f) => ({ key: `f-${f._key}`, name: f.item_name, kind: "Fixed", months: fixedCostMonths(f) })),
+        ];
+        const monthTotals = MONTHS.map((_, i) => lines.reduce((a, l) => a + (l.months[i] ?? 0), 0));
+        const grand = monthTotals.reduce((a, b) => a + b, 0);
+        return (
+          <>
+            <Toolbar><Meta className="ml-0">Year 1 cost of sales by month — what each line takes out, and when. A product costs when it sells; a fixed cost follows its own split.</Meta></Toolbar>
+            <Grid>
+              <thead><tr><Th style={{ width: "16%" }}>Cost</Th>{MONTHS.map((m) => <Th key={m} right>{m}</Th>)}<Th right style={{ width: 100 }}>Total</Th><Th style={{ width: 44 }} /></tr></thead>
+              <tbody>
+                {lines.map((l) => (
+                  <GridRow key={l.key}>
+                    <Td>{l.name}<span className="ml-2 text-[11px] text-muted-foreground">{l.kind}</span></Td>
+                    {l.months.map((v, i) => <Td key={i} right className="num">{num(v)}</Td>)}
+                    <Td right className="num font-semibold">{num(l.months.reduce((a, b) => a + b, 0))}</Td>
+                    <Td className="text-right">
+                      {l.kind === "Fixed"
+                        ? <IconButton title="Edit monthly split" onClick={() => setDlg({ kind: "split", key: l.key.slice(2) })}>✎</IconButton>
+                        : <IconButton title="A product's months follow its sales — edit them on Sales" onClick={() => router.push(`/plans/${planId}/sales?area=monthly`)}>✎</IconButton>}
+                    </Td>
+                  </GridRow>
+                ))}
+                {lines.length === 0 && <tr><Td colSpan={15} className="h-12 text-muted-foreground">No costs yet — set a cost against a product, or add a fixed cost.</Td></tr>}
+              </tbody>
+              {lines.length > 0 && (
+                <FootRow><Td>Total</Td>{monthTotals.map((v, i) => <Td key={i} right className="num">{num(v)}</Td>)}<Td right className="num">{num(grand)}</Td><Td /></FootRow>
+              )}
+            </Grid>
+            <Note>These twelve add to the Year 1 column on the other tabs. A product&apos;s split belongs to the product and is set on Sales; a fixed cost carries its own.</Note>
+          </>
+        );
+      })()}
+
       <div className="border-t border-border px-5 py-2.5 text-xs text-muted-foreground">
         Total COGS {num(currentTotal)} this year → {totals.map((t) => `${num(t.total)}`).join(" · ")} · gross margin {totals.map((t) => pctText(t.margin)).join(" · ")}
       </div>
 
       {openProduct && <CostDialog key={openProduct.id} p={openProduct} source={src(openProduct)} onSave={(p) => { saveCost(p); close(); }} onClose={close} />}
       {openItem && dlg?.kind === "item" && <ItemDialog key={openItem._key} f={openItem} onSave={(f) => { saveItem(f); close(); }} onClose={close} />}
-      {openItem && dlg?.kind === "split" && <SplitDialog key={openItem._key} f={openItem} onSave={(f) => { saveItem(f); close(); }} onClose={close} />}
+      {openItem && dlg?.kind === "split" && <SplitDialog key={openItem._key} f={openItem} fyEndMonth={fyEndMonth} onSave={(f) => { saveItem(f); close(); }} onClose={close} />}
     </ModuleFrame>
   );
 }
@@ -340,7 +385,9 @@ function ItemDialog({ f, onSave, onClose }: { f: FixRow; onSave: (f: FixRow) => 
 }
 
 /* ---------- Fixed cost monthly split ---------- */
-function SplitDialog({ f, onSave, onClose }: { f: FixRow; onSave: (f: FixRow) => void; onClose: () => void }) {
+function SplitDialog({ f, fyEndMonth, onSave, onClose }: { f: FixRow; fyEndMonth: number; onSave: (f: FixRow) => void; onClose: () => void }) {
+  const MONTHS = planMonths(fyEndMonth);
+  const MONTH_NAMES = planMonthNames(fyEndMonth);
   const [d, setD] = useState<MonthlyDistribution>(normalizeDistribution(f.monthly_distribution));
   const [text, setText] = useState<Record<string, string>>({});
   const total = distributionTotal(d);

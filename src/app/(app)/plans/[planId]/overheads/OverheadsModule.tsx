@@ -9,11 +9,12 @@ import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/Module
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
+import { planMonths, planMonthNames } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
 import { YEARS, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, distributionTotal, type MonthlyDistribution } from "@/engine/sales/projection";
 import { enteredByYear, overheadByYear, overheadMonths, overheadsByYear, type Overhead } from "@/engine/overheads/expenses";
 import { upsertOverhead, deleteOverhead, saveSyncedShape, saveOnCostPct, continueFromOverheads } from "./actions";
-import { MONTHS, MONTH_NAMES, SOURCE_LABEL, SOURCE_STEP, type OverheadRow } from "./model";
+import { SOURCE_LABEL, SOURCE_STEP, type OverheadRow } from "./model";
 
 /**
  * Overheads — what the business costs to run whether or not it sells (§6.19). One list, three dialogs.
@@ -27,6 +28,7 @@ const parseNum = (s: string) => { const n = Number(s.replace(/[,\s]/g, "")); ret
 const parseSigned = (s: string) => { const t = s.replace(/[,\s%]/g, ""); if (t === "-" || t === "") return null; const n = Number(t); return Number.isFinite(n) ? n : null; };
 const pct = (v: number | undefined) => v === undefined || v === null ? "" : String(Math.round(v * 10000) / 10000);
 
+type AreaKey = "expenses" | "monthly";
 type Dlg = { kind: "expense" | "split"; key: string } | null;
 type Row = OverheadRow & { _key: string; _error?: string };
 const STEP = GUIDED_STEPS.find((s) => s.id === "overheads")?.step ?? 9;
@@ -35,14 +37,16 @@ const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground"
 const box = "h-8";
 const START_OPTIONS = YEARS.map((y) => ({ value: String(y), label: y === 1 ? "Year 1" : `Year ${y}` }));
 
-export function OverheadsModule({ planId, initial, mode, salaries, marketing, peopleCount, marketingLines, onCostPct }: {
+export function OverheadsModule({ planId, initial, mode, salaries, marketing, peopleCount, marketingLines, onCostPct, fyEndMonth }: {
   planId: string; initial: OverheadRow[]; mode: "guided" | "advanced";
-  salaries: number[]; marketing: number[]; peopleCount: number; marketingLines: number; onCostPct: number;
+  salaries: number[]; marketing: number[]; peopleCount: number; marketingLines: number; onCostPct: number; fyEndMonth: number;
 }) {
+  const MONTHS = planMonths(fyEndMonth);
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(initial.map((o) => ({ ...o, _key: o.id })));
   const [onCost, setOnCost] = useState(onCostPct);
   const [onCostText, setOnCostText] = useState<string | null>(null);
+  const [area, setArea] = useState<AreaKey>("expenses");
   const [dlg, setDlg] = useState<Dlg>(null);
   const [draftNew, setDraftNew] = useState<Row | null>(null);
   const [error, setErr] = useState<string | undefined>();
@@ -112,9 +116,9 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
   return (
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group="Financials" title="Overheads" subtitle="What the business costs to run whether or not it sells anything" mode={mode}
-      areas={[{ key: "expenses", label: "Expenses", count: lines.length }]}
-      area="expenses" onArea={() => {}} scope={{ label: "This plan" }}
-      primaryAction={<Button size="sm" type="button" onClick={add}>+ Expense</Button>}
+      areas={[{ key: "expenses", label: "Expenses", count: lines.length }, { key: "monthly", label: "Monthly projections" }]}
+      area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "This plan" }}
+      primaryAction={area === "expenses" ? <Button size="sm" type="button" onClick={add}>+ Expense</Button> : undefined}
       footer={<ModuleFooter planId={planId} prevId="cogs" formId="overheads-form" />}
       help={<>
         <h3>What good looks like</h3>
@@ -129,6 +133,7 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
       <PendingBridge pending={pending} error={error ?? rows.find((r) => r._error)?._error} />
       <form id="overheads-form" onSubmit={onSubmit} className="hidden" />
 
+      {area === "expenses" && (<>
       <Toolbar>
         <Meta className="ml-0">Total {num(totals[0].total)} in Year 1 · {num(totals[0].wages)} wages{onCost > 0 && <> + {num(totals[0].onCosts)} on-costs</>} · {num(totals[0].other)} everything else</Meta>
         <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
@@ -183,9 +188,50 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
         </div>
       )}
       <Note>Anything that only happens because you made a sale belongs in COGS, not here — put it in one place or it counts twice.</Note>
+      </>)}
+
+      {area === "monthly" && (() => {
+        /* Year 1, line by line. Overheads are the costs that arrive whether or not anything sells, so when
+           they land is exactly what the twelve-month cash flow turns on — and what the owner manages. */
+        const rowsM = lines.map((r) => ({ r, months: overheadMonths(r as Overhead, r.source === "entered" ? null : syncedValues(r.source as "people" | "marketing")) }));
+        const withOnCost = rowsM.map(({ r, months }) => {
+          const factor = r.on_cost || r.source === "people" ? 1 + onCost / 100 : 1;
+          return { r, months: months.map((v) => Math.round(v * factor * 100) / 100) };
+        });
+        const monthTotals = MONTHS.map((_, i) => withOnCost.reduce((a, l) => a + (l.months[i] ?? 0), 0));
+        const grand = monthTotals.reduce((a, b) => a + b, 0);
+        return (
+          <>
+            <Toolbar><Meta className="ml-0">Year 1 overheads by month{onCost > 0 && <>, on-costs included</>} — what leaves the bank, and when. The ▦ icon sets a line&apos;s split.</Meta></Toolbar>
+            <Grid>
+              <thead><tr><Th style={{ width: "16%" }}>Expense</Th>{MONTHS.map((m) => <Th key={m} right>{m}</Th>)}<Th right style={{ width: 100 }}>Total</Th><Th style={{ width: 44 }} /></tr></thead>
+              <tbody>
+                {withOnCost.map(({ r, months }) => (
+                  <GridRow key={r._key}>
+                    <Td>
+                      {r.source !== "entered"
+                        ? <><span className="font-semibold">{r.name}</span><LinkMark title={`Set on ${SOURCE_LABEL[r.source]}`} onClick={() => router.push(`/plans/${planId}/${SOURCE_STEP[r.source]}`)} /></>
+                        : <NameLink onClick={() => setDlg({ kind: "split", key: r._key })}>{r.name}</NameLink>}
+                      {(r.on_cost || r.source === "people") && onCost > 0 && <span className="ml-2 text-[11px] text-muted-foreground">+ on-costs</span>}
+                    </Td>
+                    {months.map((v, i) => <Td key={i} right className="num">{num(v)}</Td>)}
+                    <Td right className="num font-semibold">{num(months.reduce((a, b) => a + b, 0))}</Td>
+                    <Td className="text-right"><IconButton title="Edit monthly split" onClick={() => setDlg({ kind: "split", key: r._key })}>▦</IconButton></Td>
+                  </GridRow>
+                ))}
+                {withOnCost.length === 0 && <tr><Td colSpan={15} className="h-12 text-muted-foreground">Add an expense first.</Td></tr>}
+              </tbody>
+              {withOnCost.length > 0 && (
+                <FootRow><Td>Total</Td>{monthTotals.map((v, i) => <Td key={i} right className="num">{num(v)}</Td>)}<Td right className="num">{num(grand)}</Td><Td /></FootRow>
+              )}
+            </Grid>
+            <Note>These twelve add to the Year 1 column on the Expenses tab. A line with no split of its own is spread evenly.</Note>
+          </>
+        );
+      })()}
 
       {open && dlg?.kind === "expense" && <ExpenseDialog key={open._key} r={open} onSave={saveRow} onClose={close} />}
-      {open && dlg?.kind === "split" && <SplitDialog key={open._key} r={open} year1={valuesFor(open)[0]} onSave={saveRow} onClose={close} />}
+      {open && dlg?.kind === "split" && <SplitDialog key={open._key} r={open} fyEndMonth={fyEndMonth} year1={valuesFor(open)[0]} onSave={saveRow} onClose={close} />}
     </ModuleFrame>
   );
 }
@@ -248,7 +294,9 @@ function ExpenseDialog({ r, onSave, onClose }: { r: Row; onSave: (r: Row) => voi
 }
 
 /* ---------- monthly split, for any line including the synced two ---------- */
-function SplitDialog({ r, year1, onSave, onClose }: { r: Row; year1: number; onSave: (r: Row) => void; onClose: () => void }) {
+function SplitDialog({ r, year1, fyEndMonth, onSave, onClose }: { r: Row; year1: number; fyEndMonth: number; onSave: (r: Row) => void; onClose: () => void }) {
+  const MONTHS = planMonths(fyEndMonth);
+  const MONTH_NAMES = planMonthNames(fyEndMonth);
   const [d, setD] = useState<MonthlyDistribution>(normalizeDistribution(r.monthly_distribution));
   const [text, setText] = useState<Record<string, string>>({});
   const total = distributionTotal(d);

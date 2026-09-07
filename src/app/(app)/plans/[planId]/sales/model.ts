@@ -5,7 +5,6 @@ export const LIFECYCLE = [
   { value: "development", label: "Development" }, { value: "introduction", label: "Introduction" }, { value: "growth", label: "Growth" },
   { value: "maturity", label: "Maturity" }, { value: "saturation", label: "Saturation" }, { value: "decline", label: "Decline" },
 ];
-export const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** How a line is sold. A one-off job is invoiced when delivered; an ongoing client keeps paying. */
 export const SOLD_AS = [

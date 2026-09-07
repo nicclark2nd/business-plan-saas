@@ -6,10 +6,11 @@ import type { AssetRow } from "./model";
 export default async function AssetsPage({ params }: { params: Promise<{ planId: string }> }) {
   const { planId } = await params;
   const supabase = await createClient();
-  const [session, assets, debts] = await Promise.all([
+  const [session, assets, debts, settings] = await Promise.all([
     getSession(),
     supabase.from("plan_fixed_assets").select("*").eq("plan_id", planId).order("sort_order").order("created_at"),
     supabase.from("plan_funding_debt").select("id, lender_name, loan_type").eq("plan_id", planId),
+    supabase.from("plan_settings").select("financial_year_end_month").eq("plan_id", planId).maybeSingle(),
   ]);
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
 
@@ -25,5 +26,5 @@ export default async function AssetsPage({ params }: { params: Promise<{ planId:
   // A financed asset carries the name of the loan that bought it, so the chain can say where to look.
   const lenders = Object.fromEntries((debts.data ?? []).map((d) => [d.id, d.lender_name as string]));
 
-  return <AssetsModule planId={planId} initial={rows} mode={mode} lenders={lenders} />;
+  return <AssetsModule planId={planId} initial={rows} mode={mode} lenders={lenders} fyEndMonth={settings.data?.financial_year_end_month ?? 6} />;
 }

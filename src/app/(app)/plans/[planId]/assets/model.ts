@@ -1,7 +1,6 @@
 import type { AssetSource, DepreciationMethod } from "@/engine/assets/depreciation";
 
 /** Fixed Assets — one list, one dialog (SaaS §6.20). */
-export const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export type AssetRow = {
   id: string; name: string; source: AssetSource;

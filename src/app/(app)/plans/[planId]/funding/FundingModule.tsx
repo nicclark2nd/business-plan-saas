@@ -9,15 +9,16 @@ import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/Module
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
+import { planMonths } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
 import { YEARS } from "@/engine/sales/projection";
 import {
-  loanSummary, loanByYear, rbfCap, rbfCost, fundingTotals, adequacy, interestByYear, debtByYear,
+  loanSummary, loanByYear, loanMonths, rbfMonths, fundingInMonths, rbfCap, rbfCost, fundingTotals, adequacy, interestByYear, debtByYear,
   type FundingKind, type FundingSource,
 } from "@/engine/funding/sources";
 import { upsertFunding, deleteFunding, saveOpeningCash, continueFromFunding } from "./actions";
 import {
-  MONTHS, KIND_LABEL, KIND_CARDS, LOAN_TYPES, REPAYMENT_TYPES, FREQUENCIES, isAssetBacked, loanOf, rbfOf,
+  KIND_LABEL, KIND_CARDS, LOAN_TYPES, REPAYMENT_TYPES, FREQUENCIES, isAssetBacked, loanOf, rbfOf,
   type FundingRow, type LoanType,
 } from "./model";
 
@@ -34,24 +35,29 @@ const signed = (v: number) => (v < 0 ? `(${fmt.format(Math.abs(v))})` : fmt.form
 const parseNum = (s: string) => { const n = Number(s.replace(/[,\s$%]/g, "")); return Number.isFinite(n) ? n : 0; };
 
 type Row = FundingRow & { _key: string };
+type AreaKey = "sources" | "monthly";
 type Dlg = { kind: "picker" } | { kind: "edit"; key: string } | null;
 const STEP = GUIDED_STEPS.find((s) => s.id === "funding")?.step ?? 10;
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
 const box = "h-8";
 const YEAR_OPTIONS = YEARS.map((y) => ({ value: String(y), label: `Year ${y}` }));
-const MONTH_OPTIONS = MONTHS.map((m, i) => ({ value: String(i + 1), label: m }));
+/** The dropdown offers the plan's months in the plan's order; the value is the slot, 1–12. */
+const monthOptions = (fyEndMonth: number) => planMonths(fyEndMonth).map((m, i) => ({ value: String(i + 1), label: m }));
 
 export type CashInput = { revenueMonths: number[]; cogsMonths: number[]; overheadsMonths: number[]; capexMonths: number[] };
 
-export function FundingModule({ planId, initial, mode, openingCash, cash, year1 }: {
+export function FundingModule({ planId, initial, mode, openingCash, cash, year1, fyEndMonth }: {
   planId: string; initial: FundingRow[]; mode: "guided" | "advanced";
   openingCash: number; cash: CashInput;
   year1: { revenue: number; cogs: number; overheads: number; depreciation: number };
+  fyEndMonth: number;
 }) {
+  const MONTHS = planMonths(fyEndMonth);
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(initial.map((r) => ({ ...r, _key: r.id })));
   const [opening, setOpening] = useState(openingCash);
   const [openingText, setOpeningText] = useState<string | null>(null);
+  const [area, setArea] = useState<AreaKey>("sources");
   const [dlg, setDlg] = useState<Dlg>(null);
   const [draft, setDraft] = useState<Row | null>(null);
   const [confirmKey, setConfirm] = useState<string | null>(null);
@@ -124,9 +130,9 @@ export function FundingModule({ planId, initial, mode, openingCash, cash, year1 
   return (
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group="Financials" title="Funding" subtitle="Where the money comes from, and whether it is enough" mode={mode}
-      areas={[{ key: "sources", label: "Sources", count: lines.length }]}
-      area="sources" onArea={() => {}} scope={{ label: "This plan" }}
-      primaryAction={<Button size="sm" type="button" onClick={() => setDlg({ kind: "picker" })}>+ Funding</Button>}
+      areas={[{ key: "sources", label: "Sources", count: lines.length }, { key: "monthly", label: "Monthly projections" }]}
+      area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "This plan" }}
+      primaryAction={area === "sources" ? <Button size="sm" type="button" onClick={() => setDlg({ kind: "picker" })}>+ Funding</Button> : undefined}
       footer={<ModuleFooter planId={planId} prevId="overheads" formId="funding-form" />}
       help={<>
         <h3>What good looks like</h3>
@@ -141,6 +147,7 @@ export function FundingModule({ planId, initial, mode, openingCash, cash, year1 
       <PendingBridge pending={pending} error={error} />
       <form id="funding-form" onSubmit={onSubmit} className="hidden" />
 
+      {area === "sources" && (<>
       <Toolbar>
         <Meta className="ml-0">
           {lines.length === 0 ? "No funding yet" : <>
@@ -179,7 +186,7 @@ export function FundingModule({ planId, initial, mode, openingCash, cash, year1 
                 </Td>
               </GridRow>
             )}
-            {lines.map((r) => <SourceRow key={r._key} r={r} onEdit={() => setDlg({ kind: "edit", key: r._key })} onRemove={() => setConfirm(r._key)} planId={planId} />)}
+            {lines.map((r) => <SourceRow key={r._key} r={r} onEdit={() => setDlg({ kind: "edit", key: r._key })} onRemove={() => setConfirm(r._key)} planId={planId} fyEndMonth={fyEndMonth} />)}
           </tbody>
           {lines.length > 0 && (
             <FootRow>
@@ -203,14 +210,69 @@ export function FundingModule({ planId, initial, mode, openingCash, cash, year1 
           </Note>
         )}
 
-        <CashRow check={check} opening={opening} year1={year1} onAdd={() => setDlg({ kind: "picker" })} />
+        <CashRow check={check} opening={opening} year1={year1} onAdd={() => setDlg({ kind: "picker" })} fyEndMonth={fyEndMonth} />
       </div>
+      </>)}
+
+      {area === "monthly" && (() => {
+        /* Money in, and money back out, month by month — the twelve the business is actually run against.
+           A loan is the only source that keeps costing after it lands, so it is the only one with a row. */
+        const arriving = fundingInMonths(sources).slice(0, 12);
+        const paying = lines.map((r) => {
+          const loan = loanOf(r);
+          if (loan) { const m = loanMonths(loan).slice(0, 12); return { r, months: m.map((x) => x.payment), note: "repayments" }; }
+          if (r.kind === "revenue_linked") return { r, months: rbfMonths(rbfOf(r)!, cash.revenueMonths).slice(0, 12), note: "share of sales" };
+          return null;
+        }).filter(Boolean) as { r: Row; months: number[]; note: string }[];
+        const outTotals = MONTHS.map((_, i) => paying.reduce((a, l) => a + (l.months[i] ?? 0), 0));
+        return (
+          <div className="min-h-0 overflow-auto px-3 pb-3">
+            <Toolbar><Meta className="ml-0">Year 1 funding by month — when the money lands, and what goes back out to service it.</Meta></Toolbar>
+            <Grid>
+              <thead><tr><Th style={{ width: "16%" }}>Source</Th>{MONTHS.map((m) => <Th key={m} right>{m}</Th>)}<Th right style={{ width: 100 }}>Total</Th><Th style={{ width: 44 }} /></tr></thead>
+              <tbody>
+                {lines.map((r) => {
+                  const inM = MONTHS.map((_, i) => (r.start_year === 1 && r.start_month === i + 1 ? r.amount : 0));
+                  return (
+                    <GridRow key={`in-${r._key}`}>
+                      <Td><NameLink onClick={() => setDlg({ kind: "edit", key: r._key })}>{r.name || "Untitled"}</NameLink><span className="ml-2 text-[11px] text-muted-foreground">in</span></Td>
+                      {inM.map((v, i) => <Td key={i} right className="num">{v ? num(v) : <span className="text-muted-foreground">—</span>}</Td>)}
+                      <Td right className="num font-semibold">{num(inM.reduce((a, b) => a + b, 0))}</Td>
+                      <Td className="text-right"><IconButton title="Edit" onClick={() => setDlg({ kind: "edit", key: r._key })}>✎</IconButton></Td>
+                    </GridRow>
+                  );
+                })}
+                {paying.map(({ r, months, note }) => (
+                  <GridRow key={`out-${r._key}`}>
+                    <Td className="text-muted-foreground">{r.name}<span className="ml-2 text-[11px]">{note}</span></Td>
+                    {months.map((v, i) => <Td key={i} right className="num text-muted-foreground">{v ? `(${num(v)})` : "—"}</Td>)}
+                    <Td right className="num font-semibold text-muted-foreground">({num(months.reduce((a, b) => a + b, 0))})</Td>
+                    <Td />
+                  </GridRow>
+                ))}
+                {lines.length === 0 && <tr><Td colSpan={15} className="h-12 text-muted-foreground">No funding in the plan yet.</Td></tr>}
+              </tbody>
+              {lines.length > 0 && (
+                <FootRow>
+                  <Td>Net funding</Td>
+                  {MONTHS.map((_, i) => <Td key={i} right className="num">{num((arriving[i] ?? 0) - (outTotals[i] ?? 0))}</Td>)}
+                  <Td right className="num">{num(arriving.reduce((a, b) => a + b, 0) - outTotals.reduce((a, b) => a + b, 0))}</Td>
+                  <Td />
+                </FootRow>
+              )}
+            </Grid>
+            <CashRow check={check} opening={opening} year1={year1} onAdd={() => setArea("sources")} fyEndMonth={fyEndMonth} />
+            <Note>Repayments are shown in brackets because they leave the bank. Interest inside them is a cost in the profit and loss; the principal is not.</Note>
+          </div>
+        );
+      })()}
 
       {dlg?.kind === "picker" && <PickerDialog onPick={(k) => beginAdd(k)} onCancel={() => setDlg(null)} />}
 
       {current && (
         <SourceDialog
           row={current}
+          fyEndMonth={fyEndMonth}
           onCancel={() => { setDlg(null); if (draft && draft._key === current._key) setDraft(null); }}
           onSave={save}
         />
@@ -241,8 +303,9 @@ export function FundingModule({ planId, initial, mode, openingCash, cash, year1 
 
 /* ------------------------------------------------------------------ */
 
-function SourceRow({ r, onEdit, onRemove, planId }: { r: Row; onEdit: () => void; onRemove: () => void; planId: string }) {
+function SourceRow({ r, onEdit, onRemove, planId, fyEndMonth }: { r: Row; onEdit: () => void; onRemove: () => void; planId: string; fyEndMonth: number }) {
   const router = useRouter();
+  const MONTHS = planMonths(fyEndMonth);
   const loan = loanOf(r);
   const summary = loan ? loanSummary(loan) : null;
   const y1 = loan ? loanByYear(loan)[0] : null;
@@ -286,10 +349,11 @@ function SourceRow({ r, onEdit, onRemove, planId }: { r: Row; onEdit: () => void
 }
 
 /** The whole point of the module: twelve months of cash, and a straight answer under it. */
-function CashRow({ check, opening, year1, onAdd }: {
+function CashRow({ check, opening, year1, onAdd, fyEndMonth }: {
   check: ReturnType<typeof adequacy>; opening: number;
-  year1: { revenue: number; cogs: number; overheads: number; depreciation: number }; onAdd: () => void;
+  year1: { revenue: number; cogs: number; overheads: number; depreciation: number }; onAdd: () => void; fyEndMonth: number;
 }) {
+  const MONTHS = planMonths(fyEndMonth);
   const trading = year1.revenue > 0 || year1.overheads > 0;
   return (
     <div className="mt-4 rounded border border-input">
@@ -336,6 +400,10 @@ function CashRow({ check, opening, year1, onAdd }: {
   );
 }
 
+function IconButton({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) {
+  return <button type="button" title={title} aria-label={title} onClick={onClick} className="px-1.5 text-[14px] leading-none text-muted-foreground hover:text-primary">{children}</button>;
+}
+
 function PendingBridge({ pending, error }: { pending: boolean; error?: string }) {
   const { setPending, setNote } = useModule();
   useEffect(() => setPending(pending), [pending, setPending]);
@@ -371,7 +439,8 @@ function PickerDialog({ onPick, onCancel }: { onPick: (k: FundingKind) => void; 
  * One dialog per kind of funding, each showing its own numbers back.  *
  * ------------------------------------------------------------------ */
 
-function SourceDialog({ row, onCancel, onSave }: { row: Row; onCancel: () => void; onSave: (r: Row) => void }) {
+function SourceDialog({ row, fyEndMonth, onCancel, onSave }: { row: Row; fyEndMonth: number; onCancel: () => void; onSave: (r: Row) => void }) {
+  const MONTH_OPTIONS = monthOptions(fyEndMonth);
   const [d, setD] = useState<Row>(row);
   const set = (patch: Partial<Row>) => setD((x) => ({ ...x, ...patch }));
   const loan = loanOf(d);

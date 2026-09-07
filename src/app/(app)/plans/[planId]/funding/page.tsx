@@ -114,6 +114,7 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
     <FundingModule
       planId={planId} initial={rows} mode={mode}
       openingCash={Number(settings.data?.opening_cash ?? 0)}
+      fyEndMonth={settings.data?.financial_year_end_month ?? 6}
       cash={{ revenueMonths, cogsMonths, overheadsMonths: ohMonths, capexMonths }}
       year1={{ revenue: revenueYear1, cogs: cogsYear1, overheads: ohYear1, depreciation: assetsMonths(assetRows).reduce((a, b) => a + b, 0) }}
     />

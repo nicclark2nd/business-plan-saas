@@ -471,3 +471,17 @@ Funding is the first screen that shows Sales, COGS and Overheads together, and i
 3. **The Funding header and the row under it were computed from different sources** — `planCogsByYear` in the header, `planCogsMonths` in the row. Every figure on the screen is now the sum of the months the row actually spends. Same rule as the Overheads footer (§6.19): a header that adds up differently from the row beneath it is a screen that lies.
 
 Also fixed: both new modules wrapped `FootRow` in a `<tfoot>` of their own, and `FootRow` renders one already — the nested element is reparented by the browser and every footer cell lands a column to the left. And a financed asset was being named after the bank; the loan owns its figures, but what the thing is called belongs to the client, so the name is set once as `Equipment — <lender>` and anything typed over it is left alone.
+
+## 6.21 Monthly Projections, and the plan's own calendar (7 Sep 2026)
+
+**Every financial module carries two tabs: Annual and Monthly.** APeX has always done this — Sales, COGS and Overheads each have Annual Projections and Monthly Projections — and it was removed here twice: from COGS in §6.18 ("Monthly holds no inputs at all… belongs to Review forecast") and from Overheads without being written down at all. Both were wrong, and the reasoning was wrong in the same way both times: *the first twelve months is the part of a plan that gets managed.* It is the cash flow, it is what a lender asks about, it is what the owner reads on a Monday. A plan that shows revenue by month and costs only by year cannot be run. Sales monthly without cost monthly is not a trade-off; it is a hole.
+
+Monthly Projections is the same shape everywhere, following the Sales tab already built: every line down the side, the twelve months across, a Total column that ties to the Year 1 column on the annual tab, and an edit icon per row opening that line's split. Now on **COGS** (products costing as they sell, fixed costs on their own split), **Overheads** (on-costs included), **Fixed Assets** (depreciation by month — the expense that never moves cash), and **Funding** (money in, repayments out in brackets, net, with the cash check beneath it).
+
+### The plan's own calendar
+
+A plan's Year 1 starts the month after the financial year ends: `plan_settings.financial_year_end_month` = June means **July → June**. Six modules each carried a private `["Jan" … "Dec"]` and none of them offset by it, so every monthly grid in the app labelled slot 1 "Jan" whatever the client's year was — on a June year-end plan the column headed JAN was really July, and every column was six months out. APeX gets this right; its DesignOne columns read February → January.
+
+`engine/plan/calendar.ts` is the one definition — `planMonths(fyEndMonth)`, `planMonthNames`, `monthAt`, `planYearLabel` — and Sales, COGS, Overheads, Assets and Funding all take `fyEndMonth` and label from it, dialogs included. **No module may hardcode a month list.** Six tests.
+
+*The lesson worth keeping: three of these faults (this one, the Year 1 units gap, the lost salaries) were invisible while each module was read on its own, and obvious the moment two views of the same figure sat on one screen. Every new view should be checked against the view it duplicates before it is called done.*
