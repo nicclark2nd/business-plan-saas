@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { enteredByYear, overheadByYear, overheadMonths, overheadsByYear, overheadsMonths, type Overhead } from "./expenses";
+import { enteredByYear, overheadByYear, overheadMonths, overheadsByYear, overheadsMonths, planOverheadLines, type Overhead } from "./expenses";
 
 const rent: Overhead = { name: "Rent", source: "entered", current_value: 125000, yearly_change: { "1": 0, "2": 2, "3": 2, "4": 2, "5": 2 }, monthly_distribution: null, start_year: 1 };
 
@@ -48,5 +48,29 @@ describe("overheads", () => {
     const lines = [{ o: rent }, { o: wages }];
     const y = overheadsByYear(lines, 10)[0];
     expect(overheadsMonths(lines, 10).reduce((a, b) => a + b, 0)).toBeCloseTo(y.total, 2);
+  });
+});
+
+describe("the lines a plan's overheads consist of", () => {
+  const rent: Overhead = { name: "Rent", source: "entered", current_value: 125000, yearly_change: null, monthly_distribution: null, start_year: 1 };
+  const salaries = [126000, 129780, 136269, 143082, 150237];
+  const marketing = [14000, 14000, 14000, 14000, 14000];
+
+  it("counts the Leadership Team and Marketing even when no row exists to hold them", () => {
+    const lines = planOverheadLines([rent], salaries, marketing);
+    expect(lines).toHaveLength(3);
+    expect(overheadsByYear(lines, 11.5)[0].total).toBe(279490);       // 125,000 rent + 126,000 salaries + 14,490 on-costs + 14,000 marketing
+  });
+
+  it("does not count a synced line twice when its row does exist", () => {
+    const stored: Overhead = { name: "Leadership Team salaries", source: "people", current_value: 0, yearly_change: null, monthly_distribution: null, on_cost: true };
+    const lines = planOverheadLines([stored, rent], salaries, marketing);
+    expect(lines).toHaveLength(3);
+    expect(overheadsByYear(lines, 11.5)[0].total).toBe(279490);
+  });
+
+  it("splits the same total across the months, whether the rows exist or not", () => {
+    const withoutRows = overheadsMonths(planOverheadLines([rent], salaries, marketing), 11.5);
+    expect(withoutRows.reduce((a, b) => a + b, 0)).toBeCloseTo(279490, 1);
   });
 });

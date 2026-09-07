@@ -51,11 +51,13 @@ export async function deleteAsset(planId: string, id: string): Promise<Result> {
   touch(planId); return { ok: true };
 }
 
-/** How a financed asset is written off is a real choice, even though what it cost is not. */
-export async function saveFinancedShape(planId: string, id: string, m: { method: DepreciationMethod; useful_life_months: number }): Promise<Result> {
+/** What a financed asset is called, and how it is written off, are real choices — what it cost is not. */
+export async function saveFinancedShape(planId: string, id: string, m: { name?: string; method: DepreciationMethod; useful_life_months: number }): Promise<Result> {
   const supabase = await createClient();
+  const name = (m.name ?? "").trim();
+  if (!name) return { ok: false, error: "Give the asset a name." };
   const { error } = await supabase.from("plan_fixed_assets")
-    .update({ method: m.method, useful_life_months: Math.max(1, Math.trunc(Number(m.useful_life_months) || 60)) })
+    .update({ name, method: m.method, useful_life_months: Math.max(1, Math.trunc(Number(m.useful_life_months) || 60)) })
     .eq("id", id).eq("plan_id", planId).eq("source", "finance");
   if (error) { console.error("financed asset", error); return { ok: false, error: error.message }; }
   touch(planId); return { ok: true };

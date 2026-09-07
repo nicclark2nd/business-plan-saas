@@ -37,13 +37,22 @@ const priceFactors = (g: Growth | null | undefined) => {
   let f = 1;
   return YEARS.map((y) => { f = f * (1 + num(g?.[String(y)]?.price) / 100); return f; });
 };
-/** New clients won in each plan year: the base count grown by the units change. */
+/**
+ * Units — jobs, or clients won — in each plan year: the base count grown by the units change.
+ *
+ * This mirrors `yearlyProjection` exactly and must keep doing so. An earlier version read the base year as
+ * `first || 1`, which for a line selling from Year 1 (first = 0, and 0 is falsy) skipped the Year 1 growth
+ * that `yearlyProjection` applies. The annual columns then said 33 units while the twelve months said 30 —
+ * so COGS costed a different number of jobs than Sales billed, and a linked line inherited the wrong count.
+ */
 const newByYear = (p: AnyProduct) => {
-  const first = Math.min(5, Math.max(0, (num(p.start_selling_year) || 1) - 1));
+  const start = Math.min(6, Math.max(1, Math.trunc(num(p.start_selling_year)) || 1));
+  const firstYear = start - 1;                       // the plan year whose column holds the base
   let n = num(p.units_sold);
-  return YEARS.map((y) => {
-    if (y > (first || 1)) n = n * (1 + num(p.yearly_growth?.[String(y)]?.units) / 100);
-    return y < (first || 1) ? 0 : r2(n);
+  return YEARS.map((year) => {
+    if (year < firstYear) return 0;
+    if (year > firstYear) n = n * (1 + num(p.yearly_growth?.[String(year)]?.units) / 100);
+    return r2(n);
   });
 };
 

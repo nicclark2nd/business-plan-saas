@@ -50,6 +50,33 @@ export function overheadMonths(o: Overhead, synced?: number[] | null): number[] 
   return monthlySales(overheadByYear(o, synced)[0], normalizeDistribution(o.monthly_distribution));
 }
 
+/**
+ * The lines a plan's overheads actually consist of — the typed rows, plus the two synced lines whether or
+ * not a row exists to hold them yet.
+ *
+ * A synced row is only written when someone opens its monthly-split dialog, so a plan can carry a full
+ * Leadership Team and no `people` row in `plan_overheads`. The Overheads screen draws those lines anyway;
+ * anything else reading overheads has to do the same or it silently loses them. Funding did exactly that
+ * and told a plan its cash held while ignoring 140,490 of salaries. One definition, used by both.
+ */
+export function planOverheadLines(
+  rows: Overhead[], salaries: number[], marketing: number[],
+): { o: Overhead; synced?: number[] | null }[] {
+  const virtual = (source: "people" | "marketing", values: number[]) =>
+    rows.some((r) => r.source === source)
+      ? []
+      : [{ o: { name: source === "people" ? "Leadership Team salaries" : "Marketing spend", source, current_value: 0, on_cost: source === "people" } as Overhead, synced: values }];
+
+  return [
+    ...virtual("people", salaries),
+    ...virtual("marketing", marketing),
+    ...rows.map((o) => ({
+      o,
+      synced: o.source === "people" ? salaries : o.source === "marketing" ? marketing : null,
+    })),
+  ];
+}
+
 export type OverheadYear = { year: number; wages: number; onCosts: number; other: number; total: number };
 
 /**

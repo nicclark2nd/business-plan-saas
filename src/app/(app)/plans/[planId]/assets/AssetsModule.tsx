@@ -63,7 +63,7 @@ export function AssetsModule({ planId, initial, mode, lenders }: {
     setErr(undefined);
     start(async () => {
       if (next.source === "finance") {
-        const res = await saveFinancedShape(planId, next.id, { method: next.method, useful_life_months: next.useful_life_months });
+        const res = await saveFinancedShape(planId, next.id, { name: next.name, method: next.method, useful_life_months: next.useful_life_months });
         if (!res.ok) { setErr(res.error); return; }
         setRows((rs) => rs.map((r) => (r._key === next._key ? next : r)));
       } else {
@@ -125,13 +125,13 @@ export function AssetsModule({ planId, initial, mode, lenders }: {
         <Grid>
           <thead>
             <tr>
-              <Th className="w-[26%]">Asset</Th>
+              <Th className="w-[24%]">Asset</Th>
               <Th className="w-[12%]">Bought</Th>
               <Th right>Cost</Th>
               <Th right>Life</Th>
               {YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}
-              <Th right>Left at Year 5</Th>
-              <Th className="w-[70px]" />
+              <Th right>Still worth</Th>
+              <Th className="w-[76px]" />
             </tr>
           </thead>
           <tbody>
@@ -175,15 +175,15 @@ export function AssetsModule({ planId, initial, mode, lenders }: {
             })}
           </tbody>
           {lines.length > 0 && (
-            <tfoot>
-              <FootRow>
-                <Td>Depreciation</Td>
-                <Td /><Td right className="num">{num(totals.reduce((a, t) => a + t.capex, 0))}</Td><Td />
-                {totals.map((t) => <Td key={t.year} right className="num">{num(t.depreciation)}</Td>)}
-                <Td right className="num">{num(totals[4].bookValue)}</Td>
-                <Td />
-              </FootRow>
-            </tfoot>
+            <FootRow>
+              <Td>Depreciation</Td>
+              <Td />
+              <Td right className="num">{num(totals.reduce((a, t) => a + t.capex, 0))}</Td>
+              <Td />
+              {totals.map((t) => <Td key={t.year} right className="num">{num(t.depreciation)}</Td>)}
+              <Td right className="num">{num(totals[4].bookValue)}</Td>
+              <Td />
+            </FootRow>
           )}
         </Grid>
 
@@ -249,28 +249,27 @@ function AssetDialog({ row, lender, onCancel, onSave }: { row: Row & { _key: str
     <Dialog open onOpenChange={onCancel}>
       <DialogContent className="max-w-[620px]">
         <DialogHeader>
-          <DialogTitle>{locked ? d.name : d.name.trim() ? d.name : "New asset"}</DialogTitle>
+          <DialogTitle>{d.name.trim() || "New asset"}</DialogTitle>
           <DialogDescription>
             {locked
-              ? `Bought with ${lender}. What it cost and when it arrived come from that loan — how you write it off is your call.`
+              ? `Bought with ${lender}. What it cost and when it arrived come from that loan — what you call it, and how you write it off, are yours.`
               : "Something the business buys and keeps. Its cost is spread across the years it earns its keep."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-3">
-          {!locked && (
-            <div className="grid grid-cols-[1fr_180px] gap-3">
-              <div>
-                <span className={label}>Name</span>
-                <Input autoFocus value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="Delivery van" className={box} />
-              </div>
-              <div>
-                <span className={label}>Category</span>
-                <FieldSelect value={d.category ?? ""} onValueChange={(v) => set({ category: v || null })}
-                  options={CATEGORIES.map((c) => ({ value: c, label: c }))} placeholder="Choose" />
-              </div>
+          <div className="grid grid-cols-[1fr_180px] gap-3">
+            <div>
+              <span className={label}>Name</span>
+              <Input autoFocus value={d.name} onChange={(e) => set({ name: e.target.value })}
+                placeholder={locked ? "Concrete pump" : "Delivery van"} className={box} />
             </div>
-          )}
+            <div>
+              <span className={label}>Category</span>
+              <FieldSelect value={d.category ?? ""} onValueChange={(v) => set({ category: v || null })}
+                options={CATEGORIES.map((c) => ({ value: c, label: c }))} placeholder="Choose" />
+            </div>
+          </div>
 
           <div className="grid grid-cols-4 gap-3">
             <div>
@@ -324,7 +323,7 @@ function AssetDialog({ row, lender, onCancel, onSave }: { row: Row & { _key: str
 
         <DialogFooter>
           <Button variant="outline" size="sm" type="button" onClick={onCancel}>Cancel</Button>
-          <Button size="sm" type="button" onClick={() => onSave(d)} disabled={!locked && !d.name.trim()}>Save</Button>
+          <Button size="sm" type="button" onClick={() => onSave(d)} disabled={!d.name.trim()}>Save</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -3,8 +3,8 @@ import { getSession } from "@/lib/plan";
 import { startYearFromDate, planYearStart, totalSalariesByYear } from "@/engine/people/salary";
 import { YEARS } from "@/engine/sales/projection";
 import { planYear1Months, type AnyProduct } from "@/engine/sales/product";
-import { planCogsByYear, planCogsMonths, type CostProduct } from "@/engine/cogs/direct";
-import { overheadsByYear, overheadsMonths, type Overhead } from "@/engine/overheads/expenses";
+import { planCogsMonths, type CostProduct } from "@/engine/cogs/direct";
+import { overheadsMonths, planOverheadLines, type Overhead } from "@/engine/overheads/expenses";
 import { assetsMonths, capexByYear, type FixedAsset } from "@/engine/assets/depreciation";
 import { FundingModule } from "./FundingModule";
 import type { FundingRow } from "./model";
@@ -76,9 +76,12 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
 
   const cost = prods as CostProduct[];
   const fixed = (fixedCogs.data ?? []) as never[];
-  const cogsYear1 = planCogsByYear(cost, fixed, sourceFor)[0]?.total ?? 0;
   const cogsMonths = planCogsMonths(cost, fixed, sourceFor);      // the cost of what was actually sold, by month
-  const revenueYear1 = revenueMonths.reduce((a, b) => a + b, 0);
+  // Every figure on this screen is the sum of the months the row below actually spends. A header that adds
+  // up differently from the row under it is the Overheads footer mistake again (§6.19).
+  const sum = (a: number[]) => Math.round(a.reduce((x, y) => x + y, 0) * 100) / 100;
+  const cogsYear1 = sum(cogsMonths);
+  const revenueYear1 = sum(revenueMonths);
 
   const fyStart = planYearStart(plan.data?.plan_year ?? new Date().getFullYear(), settings.data?.financial_year_end_month ?? 6);
   const salaries = totalSalariesByYear((people.data ?? []).map((p) => ({
@@ -87,13 +90,13 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
     startYear: startYearFromDate(p.started_on, fyStart), role: p.role,
   }))).map((y) => y.value);
   const marketingTotal = (spend.data ?? []).reduce((a, s) => a + Number(s.annual_budget ?? 0), 0);
-  const ohLines = (overheads.data ?? []).map((o) => ({
-    o: { ...o, current_value: Number(o.current_value ?? 0) } as Overhead,
-    synced: o.source === "people" ? salaries : o.source === "marketing" ? YEARS.map(() => marketingTotal) : null,
-  }));
+  const ohLines = planOverheadLines(
+    (overheads.data ?? []).map((o) => ({ ...o, current_value: Number(o.current_value ?? 0) }) as Overhead),
+    salaries, YEARS.map(() => marketingTotal),
+  );
   const onCostPct = Number(settings.data?.on_cost_pct ?? 0);
   const ohMonths = overheadsMonths(ohLines, onCostPct);
-  const ohYear1 = overheadsByYear(ohLines, onCostPct)[0]?.total ?? 0;
+  const ohYear1 = sum(ohMonths);
 
   const assetRows = (assets.data ?? []).map((a) => ({
     ...a, purchase_price: Number(a.purchase_price ?? 0), residual_value: Number(a.residual_value ?? 0),

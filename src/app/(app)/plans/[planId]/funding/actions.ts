@@ -87,17 +87,22 @@ async function syncFinancedAsset(planId: string, debtId: string, name: string, r
     if (existing) await supabase.from("plan_fixed_assets").delete().eq("id", existing.id).eq("plan_id", planId);
     return;
   }
-  // The asset costs what the loan bought — the drawn amount plus anything paid up front.
-  const asset = {
-    plan_id: planId, source: "finance" as const, funding_debt_id: debtId, name,
-    category: r.loan_type === "vehicle_finance" ? "Vehicle" : "Equipment",
+  const category = r.loan_type === "vehicle_finance" ? "Vehicle" : "Equipment";
+  // The figures come from the loan. The NAME does not: an asset called "Citibank" reads as nonsense in a
+  // plan a lender opens, and what the thing actually is only the client knows. It is set once, as a
+  // starting point, and anything typed over it in Fixed Assets is left alone from then on.
+  const figures = {
     purchase_price: money(r.amount),               // what the lender advanced is what the asset cost
     residual_value: money(r.residual_value),       // the balloon is what it is expected to be worth
-    useful_life_months: Math.max(12, Math.trunc(Number(r.term_months) || 60)),
     start_year: yr(r.start_year), start_month: mo(r.start_month),
   };
-  if (existing) await supabase.from("plan_fixed_assets").update(asset).eq("id", existing.id).eq("plan_id", planId);
-  else await supabase.from("plan_fixed_assets").insert(asset);
+  if (existing) await supabase.from("plan_fixed_assets").update(figures).eq("id", existing.id).eq("plan_id", planId);
+  else await supabase.from("plan_fixed_assets").insert({
+    plan_id: planId, source: "finance" as const, funding_debt_id: debtId, category,
+    name: `${category} — ${name}`,
+    useful_life_months: Math.max(12, Math.trunc(Number(r.term_months) || 60)),
+    ...figures,
+  });
 }
 
 export async function deleteFunding(planId: string, kind: FundingKind, id: string): Promise<Result> {

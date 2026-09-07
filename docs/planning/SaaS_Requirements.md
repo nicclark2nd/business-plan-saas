@@ -459,3 +459,15 @@ There was no assets table at all, so equipment and vehicle finance bought someth
 **Parked:** `draw_schedule`, `auto_draw_enabled` and `min_cash_buffer` are in the 0003 schema and in no UI — a revolver that draws automatically to cover a gap belongs with Review forecast. **Extraordinary items** (`plan_extraordinary_items`, and its own APeX nav item) is not funding but a forecast adjustment, and is still homeless.
 
 Migration 0016: `plan_fixed_assets` with `asset_source` / `depreciation_method`, one asset per finance row, a check that a financed asset names its loan and a cash one does not; `start_year` / `start_month` on all five funding tables (a plan is five forecast years, not a calendar, and APeX's absolute `start_date` is the odd one out); `opening_cash` on `plan_settings`. Engines `engine/funding/sources.ts` and `engine/assets/depreciation.ts`, 24 tests.
+
+### 6.20.1 What putting three modules on one screen found (7 Sep 2026)
+
+Funding is the first screen that shows Sales, COGS and Overheads together, and it immediately caught three faults that each screen had hidden on its own. All three are the same disease: **two ways of computing the same number.**
+
+1. **Year 1 units were 10 % light in every monthly view.** `newByYear` read the base year as `first || 1`; for a line selling from Year 1 `first` is 0, which is falsy, so the Year 1 units growth that `yearlyProjection` applies was skipped. The annual columns said 33 units while the twelve months said 30 — COGS costed a different number of jobs than Sales billed, and a linked royalty line inherited the wrong client count. `newByYear` now mirrors `yearlyProjection` exactly, and three tests hold Year 1 to its own months for a one-off line, an ongoing line and the whole plan.
+
+2. **Funding was ignoring the Leadership Team's salaries entirely.** A synced overhead row is only written to `plan_overheads` when someone opens its monthly-split dialog, so a plan can carry a full Leadership Team and no `people` row at all; the Overheads screen draws the line anyway from its own module. Funding read the table and lost 140,490 of salaries — and told the plan its cash held. `planOverheadLines` now builds that list in one place, synced lines included whether or not a row exists, and both screens use it. **Any module that reads overheads must go through it.**
+
+3. **The Funding header and the row under it were computed from different sources** — `planCogsByYear` in the header, `planCogsMonths` in the row. Every figure on the screen is now the sum of the months the row actually spends. Same rule as the Overheads footer (§6.19): a header that adds up differently from the row beneath it is a screen that lies.
+
+Also fixed: both new modules wrapped `FootRow` in a `<tfoot>` of their own, and `FootRow` renders one already — the nested element is reparented by the browser and every footer cell lands a column to the left. And a financed asset was being named after the bank; the loan owns its figures, but what the thing is called belongs to the client, so the name is set once as `Equipment — <lender>` and anything typed over it is left alone.

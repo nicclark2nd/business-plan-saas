@@ -182,17 +182,17 @@ export function FundingModule({ planId, initial, mode, openingCash, cash, year1 
             {lines.map((r) => <SourceRow key={r._key} r={r} onEdit={() => setDlg({ kind: "edit", key: r._key })} onRemove={() => setConfirm(r._key)} planId={planId} />)}
           </tbody>
           {lines.length > 0 && (
-            <tfoot>
-              <FootRow>
-                <Td>Total funding</Td><Td />
-                <Td right className="num">{num(totals.total)}</Td>
-                <Td /><Td />
-                <Td className="font-normal text-muted-foreground">
-                  {num(interest[0])} interest · {num(owing[0])} still owed at Year 1
-                </Td>
-                <Td />
-              </FootRow>
-            </tfoot>
+            <FootRow>
+              <Td>Total funding</Td>
+              <Td />
+              <Td right className="num">{num(totals.total)}</Td>
+              <Td />
+              <Td />
+              <Td className="font-normal text-muted-foreground">
+                {num(interest[0])} interest · {num(owing[0])} still owed at Year 1
+              </Td>
+              <Td />
+            </FootRow>
           )}
         </Grid>
 
