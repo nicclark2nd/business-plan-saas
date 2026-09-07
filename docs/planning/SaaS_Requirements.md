@@ -431,3 +431,31 @@ APeX: an Overheads list with a per-item growth dialog and a monthly dialog, plus
 **Boundary:** production costs that scale with volume are COGS (§6.18); overheads are what would still be there in a month with no sales. Said in the help rail on both sides, because the two locked lines are exactly where a double-count would hide.
 
 Migration 0015: `overhead_source` enum with `source`, `start_year`, `on_cost` on `plan_overheads`, a unique partial index enforcing one synced row per source per plan, and `on_cost_pct` on `plan_settings`. Engine `engine/overheads/expenses.ts`.
+
+## 6.20 Funding, and Fixed Assets — one list and a straight answer (6 Sep 2026)
+
+APeX: five tabs — Owner Funding, Debt, Equity Investment, Grants, Revenue-Linked — each a flat list with an Add/Edit dialog, plus a Cap Table panel on Equity and an RBF Summary on Revenue-Linked, under a header reading *Total Funding Raised: $820,108*.
+
+**The number has nothing to be measured against.** APeX adds the funding up and stops, so the screen never answers the only question a lender, an SBA reviewer or the owner actually has: does this business run out of money, and when? Funding is built as **step 10, after Sales, COGS and Overheads**, precisely so it can answer it.
+
+**One area, `Sources`.** Every source in one list regardless of kind — Source · Type · Amount · Arrives · What it costs · Year 1 effect — because that is how a bank reads a plan, and because five tabs where four are empty is four screens of nothing for a sole trader with his own money and a bank loan. `+ Funding` opens the five plain-language cards from §7.2 (*My own money · A loan · An investor · A grant · Revenue-based finance*) and then the dialog for that kind. Cap Table and RBF Summary survive as footer lines, not panels.
+
+**Every dialog shows its numbers back** — the "worked out for you" line validated in mockup v7. A rate and a term mean nothing to most people until they see the payment: *"3,774 a month. Year 1 costs 9,180 in interest and leaves 163,657 owing. Over the whole loan the interest comes to 26,455."* Equity states what is given up and the post-money valuation; a grant states whether it is counted at once or spread; revenue-based finance states the cap and, separately, the **cost** — 80,000 repaid at 1.5× is 40,000, and that is the number the client has to see.
+
+**Under the list, twelve months of closing cash with the low point marked**, and a verdict in words: *"Short 4,200 in November. Another 4,200 of funding closes it."* One row, not a cash flow — the full twelve-month statement belongs to Review forecast — but a shortfall named without the month is unactionable, and this is the screen where adding a loan fixes it. Trading receipts are taken in the month they are earned; debtor-day timing lives with Review forecast, because two screens answering the same question differently is worse than one answering it late.
+
+**Debt maths.** Payments run at their own frequency — a fortnightly loan really does pay 26 times a year, and monthlyising it understates the cost. Payment *k* falls at the end of period *k*, so the first monthly payment belongs to the month the money is drawn; an earlier cut put it a month later, dropped a payment out of Year 1 and understated Year 1 interest by 8 %. Amortised, interest-only and %-of-balance are all supported, with a balloon, and an annual fee charged on the anniversary and kept **separate from interest** — it is a financing cost, not interest, and the P&L wants them apart. Interest goes to the P&L; principal only moves cash; the closing balance goes to the balance sheet.
+
+### Fixed Assets — step 11
+
+There was no assets table at all, so equipment and vehicle finance bought something the plan could not depreciate. **One area, one dialog**: Asset · Bought · Cost · Life · depreciation Years 1-5 · what is left at Year 5.
+
+**Two kinds of line, and only one is typed here.** A cash-bought asset is entered directly. An asset bought with **equipment or vehicle finance is created by its Funding row** and carries the chain (`LinkMark`) back to it in both directions: what it cost, when it arrived and its residual belong to that loan and cannot be typed over — the same rule as a synced Overheads line (§6.19) — but **how it is written off, the life and the method, stays editable**, because that is a real accounting choice and not a consequence of the loan. Deleting the loan deletes the asset, by cascade.
+
+**Depreciation never moves cash**, and the engine returns the two separately rather than netting them: the cash left when the asset was bought, or leaves monthly as repayments. Capex for a financed asset is nil here — its cash is the loan repayment on the Funding step. Straight line is the default (what a lender expects); diminishing value is 200 % / life and stops at the residual. The monthly rate is never rounded then multiplied — 6,000 over 36 months became 6,000.12 the first time — so each month charges the difference between two running totals and the write-off lands on the cent, the §6.17 rule applied again.
+
+**The guided path grows from 13 steps to 14**: Funding 10, Fixed Assets 11, Review forecast 12, Goals 13, Business plan 14. The old unnumbered *Capital Equipment* item under Assets is replaced by this.
+
+**Parked:** `draw_schedule`, `auto_draw_enabled` and `min_cash_buffer` are in the 0003 schema and in no UI — a revolver that draws automatically to cover a gap belongs with Review forecast. **Extraordinary items** (`plan_extraordinary_items`, and its own APeX nav item) is not funding but a forecast adjustment, and is still homeless.
+
+Migration 0016: `plan_fixed_assets` with `asset_source` / `depreciation_method`, one asset per finance row, a check that a financed asset names its loan and a cash one does not; `start_year` / `start_month` on all five funding tables (a plan is five forecast years, not a calendar, and APeX's absolute `start_date` is the odd one out); `opening_cash` on `plan_settings`. Engines `engine/funding/sources.ts` and `engine/assets/depreciation.ts`, 24 tests.
