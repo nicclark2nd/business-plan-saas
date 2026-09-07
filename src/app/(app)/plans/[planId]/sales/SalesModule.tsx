@@ -9,7 +9,7 @@ import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/Module
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
-import { planMonths } from "@/engine/plan/calendar";
+import { planMonths, planMonthNames } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
 import { YEARS, yearlyProjection, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, distributionTotal, monthlySales, type Growth, type MonthlyDistribution } from "@/engine/sales/projection";
 import { productYears, productYear1Months, productYear1Clients, newClientsYear1, planRevenueByYear, planYear1Months, sourceOf, isLinked, bookNow, monthlyFee, recurring } from "@/engine/sales/product";
@@ -42,7 +42,6 @@ const STEP = GUIDED_STEPS.find((s) => s.id === "sales")?.step ?? 7;
 const isNew = (r: Row) => r.id.startsWith("tmp-");
 /** start_selling_year: 1 = now (this year's actuals), 2–6 = plan Year 1–5. */
 const firstYear = (r: Pick<Row, "start_selling_year">) => Math.min(5, Math.max(0, (r.start_selling_year || 1) - 1));
-const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
 const box = "h-8";
@@ -444,6 +443,7 @@ function ClientsDialog({ r, source, fyEndMonth, onSave, onClose }: { r: Row; sou
 /* ---------- Monthly dialog (APeX "Monthly Sales Distribution") ---------- */
 function MonthlyDialog({ r, fyEndMonth, onSave, onClose }: { r: Row; fyEndMonth: number; onSave: (r: Row) => void; onClose: () => void }) {
   const MONTHS = planMonths(fyEndMonth);
+  const MONTH_NAMES = planMonthNames(fyEndMonth);
   const [d, setD] = useState<MonthlyDistribution>(normalizeDistribution(r.monthly_distribution));
   const [text, setText] = useState<Record<string, string>>({});
   const total = distributionTotal(d);

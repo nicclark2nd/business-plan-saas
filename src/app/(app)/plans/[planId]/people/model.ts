@@ -21,7 +21,8 @@ export type Person = {
 export type Capability = { id: string; person_id: string; kind: CapabilityKind; description: string; internal: boolean; sort_order: number };
 export type PeopleData = { people: Person[]; capabilities: Capability[] };
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** Calendar order here on purpose: these parse and print a real start date, not a plan slot. */
+import { MONTH_SHORT as MONTHS } from "@/engine/plan/calendar";
 
 /** "Mar 2020" / "2020-03" / "03/2020" / "2020" → "2020-03-01"; empty → null; unparseable → undefined. */
 export function parseMonth(input: string | null | undefined): string | null | undefined {

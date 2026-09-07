@@ -485,3 +485,11 @@ A plan's Year 1 starts the month after the financial year ends: `plan_settings.f
 `engine/plan/calendar.ts` is the one definition — `planMonths(fyEndMonth)`, `planMonthNames`, `monthAt`, `planYearLabel` — and Sales, COGS, Overheads, Assets and Funding all take `fyEndMonth` and label from it, dialogs included. **No module may hardcode a month list.** Six tests.
 
 *The lesson worth keeping: three of these faults (this one, the Year 1 units gap, the lost salaries) were invisible while each module was read on its own, and obvious the moment two views of the same figure sat on one screen. Every new view should be checked against the view it duplicates before it is called done.*
+
+### 6.21.1 The reconciliation invariant (7 Sep 2026)
+
+`engine/reconciliation.test.ts` holds one rule across every module: **Year 1 equals its own twelve months** — sales (one-off, ongoing and linked lines together), cost of sales including a fixed cost with its own split, overheads with on-costs and with synced lines that have no row of their own, depreciation straight-line and diminishing with a mid-year start, and loan repayments at all four frequencies with interest and principal checked separately.
+
+Four faults this session were the same shape — one fact with two computations that quietly disagreed — and every one was invisible while a module was read alone. This file is where that disagreement now fails a test instead of reaching a client's plan. **A new monthly or annual view is not done until it is asserted against the view it duplicates here.**
+
+Also swept: the last four hardcoded month lists. Sales' monthly-split dialog was still labelling its twelve boxes January–December (missed in the §6.21 pass); Plan settings and the Historic and People date helpers legitimately want *calendar* order and now take it from `calendar.ts` rather than keeping private copies. No module owns a month list.

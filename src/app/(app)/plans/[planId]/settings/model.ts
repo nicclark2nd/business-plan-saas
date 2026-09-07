@@ -51,7 +51,8 @@ export const CUSTOMER_TYPES = ["Agent", "Client", "Customer", "Distributor", "Fr
 export const PRODUCT_TYPES = ["Access", "Applications", "Goods", "Intellectual Property", "Livestock", "Memberships", "Produce", "Products", "Products and services", "Services"].map((x) => ({ value: x, label: x }));
 export const COUNTRIES = ["Australia", "New Zealand", "United States", "United Kingdom", "Canada", "Singapore", "Ireland", "South Africa", "India", "Philippines", "Thailand", "Malaysia", "Indonesia", "Other"];
 export const CURRENCIES = ["AUD", "NZD", "USD", "GBP", "CAD", "SGD", "EUR", "ZAR", "INR", "PHP", "THB", "MYR", "IDR"];
-export const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+/** Calendar order here on purpose: this picks *which* month the financial year ends in. */
+export { MONTH_LONG as MONTHS } from "@/engine/plan/calendar";
 
 export type Profile = {
   business_name: string;

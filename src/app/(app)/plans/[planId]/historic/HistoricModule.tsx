@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { Toolbar, Meta, Note, CellInput, RemoveButton } from "@/components/module/DataGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
+import { MONTH_SHORT } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
 import { deriveFromComponents, periodRatios, periodsFromTemplate, COMPONENT_INPUTS, TEMPLATE_ROWS, type PeriodField, type PeriodInput, type TemplateSheet } from "@/engine/historic/derive";
 import { savePeriod, importPeriods, deletePeriod, setHasHistory, continueFromHistoric } from "./actions";
@@ -21,7 +22,7 @@ const STEP = GUIDED_STEPS.find((s) => s.id === "historic")?.step ?? 6;
 const endText = (iso: string | null, fyEnd: number) => {
   if (!iso) return "";
   const [y, m] = iso.split("-").map(Number);
-  return m === fyEnd ? String(y) : `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m - 1]} ${y}`;
+  return m === fyEnd ? String(y) : `${MONTH_SHORT[m - 1]} ${y}`;   // a real calendar month, from a real date
 };
 
 export function HistoricModule({ planId, initial, hasHistory, mode, initialArea, fyEndMonth, loadError }: {
