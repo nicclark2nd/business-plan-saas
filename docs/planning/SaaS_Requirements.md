@@ -514,3 +514,21 @@ Warm route render after the change: **344–393 ms** (the 2 s seen on a cold rou
 *Still open, worth doing but not urgent:* `getCompleteness` is 17 separate `count` queries to draw the sidebar's green ticks, and it runs on every page in the plan even though its own docstring says it is for the dashboard. One Postgres function returning all eleven counts would make it a single round trip and speed up every navigation in the app.
 
 **The rule this establishes:** a preference that changes only what is displayed must never invalidate server data. If nothing on the screen can change value, nothing should be refetched.
+
+## 6.23 One-off income & costs — step 12 (13 Sep 2026)
+
+APeX: an Extraordinary Items list with two summary cards and one Add/Edit dialog (description, category, amount, year, month). Unnumbered, so a guided client never sees it. Now **step 12**, because an insurance settlement, an office fit-out or a redundancy payout changes profit, tax and cash, and a plan that leaves them out is wrong.
+
+**APeX's forecast ignores what the client typed.** The card reads *Total Extraordinary Income A$16,500*; only **1,500** of it reaches the P&L or the cash flow. Reconciling backwards: APeX's "Year 1" extraordinary figure of −26,500 is the plan's *2027* items and "Year 2" −25,000 is the 2028 one, so the year dropdown offers a year that sits outside the five-year projection and anything dated there is dropped without a word. Same fault as the lost Leadership Team salaries (§6.21.1). Here the year is a plan year 1–5, enforced by a check constraint in the database, so **there is no date a client can choose that the forecast then ignores**.
+
+**Two areas.** *One-offs* — What it is · Type · When · Amount · Effect on the year, with a block beneath showing money in, money out and the net line per year. *Monthly projections* (§6.21) — all five years by month, because these are lumpy by nature and the month is the whole point of them. The dialog offers example chips (insurance settlement, sold a vehicle, fit-out, feasibility study, redundancy payout) since "extraordinary item" is the one phrase on the screen an owner will not recognise, and it says back what the entry does: *"Year 2 profit comes down by 15,000, and the cash leaves in March. It is taxed with the rest of the year's profit."*
+
+**Where it goes:** one net line in the P&L below operating profit and above interest and tax — verified against APeX, 247,796 − 26,500 − 9,651 = 211,645, their own Net Profit Before Tax — so these are taxed. In the cash flow, separate receipts and payments.
+
+**Disposals name their asset.** APeX runs proceeds from selling a machine through *operating* receipts while its own Asset Disposal Proceeds line under Investing reads zero. An income item can name a `plan_fixed_assets` row (`source_asset_id`, income only, enforced by check constraint) and the engine returns those proceeds separately so the cash flow can put them in investing. *Parked for Review forecast:* actually retiring the asset, stopping its depreciation and booking the gain or loss against written-down value.
+
+**One name in both modes.** The first cut gave the nav item an `advancedLabel` of "Extraordinary items" while Guided read "One-off income & costs" — so toggling the mode looked like one item vanishing and a different one appearing, and it was reported as the step missing from Guided. **A nav item must not change its name with the view mode.** "Extraordinary items" belongs on the printed P&L line for the lender, not in the sidebar.
+
+*Also noted for the forecast build:* APeX's own cash flow currently prints *"Cross-statement checks failed for years 3, 4, 5 — profit, cash and the balance sheet do not agree, so these figures should not be relied on."* We should build that check, and pass it.
+
+Migration 0017: `source_asset_id` / `notes` / `sort_order` on `plan_extraordinary_items`, `year` bounded 1–5, disposals restricted to income. No `apply_plan_rls` — 0003 already applied it, and calling it twice fails on the existing policy (caught by replaying all seventeen against a scratch Postgres). Engine `engine/extraordinary/items.ts`, 9 tests. Guided path now 15 steps.

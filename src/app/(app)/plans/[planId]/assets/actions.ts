@@ -64,5 +64,5 @@ export async function saveFinancedShape(planId: string, id: string, m: { name?: 
 }
 
 export async function continueFromAssets(planId: string, intent: "next" | "later") {
-  redirect(intent === "next" ? `/plans/${planId}/forecast` : `/plans/${planId}/dashboard`);
+  redirect(intent === "next" ? `/plans/${planId}/extraordinary` : `/plans/${planId}/dashboard`);
 }
