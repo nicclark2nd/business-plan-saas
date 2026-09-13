@@ -58,8 +58,23 @@ export async function upsertProduct(planId: string, p: {
   return { ok: true, data: { id: data.id } };
 }
 
+/**
+ * A line another line takes its clients from cannot be deleted (§6.24.1).
+ *
+ * The foreign key is `on delete set null`, so the database would quietly detach the dependent line and let
+ * it carry on winning clients by itself — its income would change and nothing would say so. The screen
+ * refuses first, and this refuses again, because the screen is not the gate.
+ */
 export async function deleteProduct(planId: string, id: string): Promise<Result> {
   const supabase = await createClient();
+
+  const { data: fed } = await supabase
+    .from("plan_products").select("name").eq("plan_id", planId).eq("clients_from_product_id", id);
+  if (fed && fed.length) {
+    const names = fed.map((f) => f.name).filter(Boolean).join(", ");
+    return { ok: false, error: `${names} ${fed.length === 1 ? "takes its clients" : "take their clients"} from this line. Change ${fed.length === 1 ? "it" : "them"} first, or ${fed.length === 1 ? "its" : "their"} income would change without anyone saying so.` };
+  }
+
   const { error } = await supabase.from("plan_products").delete().eq("id", id).eq("plan_id", planId);
   if (error) return { ok: false, error: error.message };
   touch(planId); return { ok: true };

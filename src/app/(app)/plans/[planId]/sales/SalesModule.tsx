@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -55,11 +56,13 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
   const blank = (): Row => ({ id: `tmp-${crypto.randomUUID()}`, _key: "", name: "", description: "", notes: "", lifecycle: null, average_price: 0, units_sold: 0, start_selling_year: startup ? 2 : 1, yearly_growth: {}, monthly_distribution: null, sort_order: 0, sold_as: "one_off", opening_clients: 0, client_life_months: 12, life_mode: "fixed", monthly_new_clients: null, clients_from_product_id: null });
   const startOptions = [...(startup ? [] : [{ value: "1", label: "Now — selling today" }]), ...YEARS.map((y) => ({ value: String(y + 1), label: `Year ${y}` }))];
 
+  const router = useRouter();
   const [area, setArea] = useState<AreaKey>(initialArea);
   const [rows, setRows] = useState<Row[]>(initial.map((p) => ({ ...p, _key: p.id })));
   const [dlg, setDlg] = useState<Dlg>(null);
   const [draftNew, setDraftNew] = useState<Row | null>(null);
   const [confirm, setConfirm] = useState<{ row: Row; fed: Row[] } | null>(null);
+  const [serverErr, setServerErr] = useState<string | undefined>();
   const [pending, start] = useTransition();
   const ref = useRef(rows); useEffect(() => { ref.current = rows; }, [rows]);
 
@@ -80,12 +83,18 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
   const askRemove = (r: Row) => {
     const fed = ref.current.filter((x) => x.name.trim() && x.clients_from_product_id === r.id && x._key !== r._key);
     if (!r.name.trim() && isNew(r)) { remove(r); return; }   // an untouched blank row has nothing to lose
-    setConfirm({ row: r, fed });
+    setConfirm({ row: r, fed });                             // fed.length > 0 renders as a refusal, not a warning
   };
   const remove = (r: Row) => {
     setConfirm(null);
-    setRows((xs) => xs.filter((x) => x._key !== r._key).map((x) => (x.clients_from_product_id === r.id ? { ...x, clients_from_product_id: null } : x)));
-    if (!isNew(r)) start(async () => { await deleteProduct(planId, r.id); });
+    setServerErr(undefined);
+    setRows((xs) => xs.filter((x) => x._key !== r._key));
+    if (!isNew(r)) start(async () => {
+      const res = await deleteProduct(planId, r.id);
+      // The server is the gate, not the screen. If it refuses, say why and take the list back from the
+      // database rather than trusting whatever the client happened to be holding.
+      if (!res.ok) { setServerErr(res.error); router.refresh(); }
+    });
   };
   const add = () => { const b = blank(); setDraftNew({ ...b, _key: b.id }); setDlg({ kind: "product", key: b.id }); };
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -108,7 +117,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
     if (fed.length) return <LinkMark feeds title={`Feeds ${fed.map((f) => f.name).join(", ")} — every one sold becomes a client there. Click to open it.`} onClick={() => setDlg({ kind: "product", key: fed[0]._key })} />;
     return null;
   };
-  const err = rows.find((r) => r._error)?._error;
+  const err = serverErr ?? rows.find((r) => r._error)?._error;
   /** "This year" reconciles against Historic — only lines already earning, and for an ongoing line that is its book. */
   const current = named.reduce((a, r) => recurring(r) ? a + bookNow(r) : (firstYear(r) === 0 ? a + r.average_price * r.units_sold : a), 0);
   const gap = historicRevenue ? ((current - historicRevenue) / historicRevenue) * 100 : null;
@@ -229,10 +238,14 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
             what={<>
               {y1 > 0 && <>It contributes <b>{num(y1)}</b> to Year 1 sales. </>}
               Its price, units, yearly growth, monthly split and cost go with it.
-              {fed.length > 0 && (
-                <> {fed.length === 1 ? <><b>{fed[0].name}</b> takes its clients from this line and goes</> : <><b>{fed.map((f) => f.name).join(", ")}</b> take their clients from this line and go</>} back to winning clients on {fed.length === 1 ? "its" : "their"} own.</>
-              )}
             </>}
+            blocked={fed.length > 0 ? (
+              <>
+                {fed.length === 1 ? <><b>{fed[0].name}</b> takes its clients from this line.</> : <><b>{fed.map((f) => f.name).join(", ")}</b> take their clients from this line.</>}
+                {" "}Deleting it would leave {fed.length === 1 ? "that line" : "those lines"} winning clients alone, so {fed.length === 1 ? "its" : "their"} income would change and nothing would say so.
+                {" "}Open {fed.length === 1 ? fed[0].name : "each of them"} and either point {fed.length === 1 ? "it" : "them"} somewhere else or delete {fed.length === 1 ? "it" : "them"} first.
+              </>
+            ) : undefined}
             onCancel={() => setConfirm(null)}
             onConfirm={() => remove(confirm.row)}
           />

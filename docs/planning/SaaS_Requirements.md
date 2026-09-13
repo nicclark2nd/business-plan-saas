@@ -542,3 +542,18 @@ The same `✕` meant different things on different screens. Fixed Assets, Fundin
 **It names the consequence, never "are you sure".** `components/module/ConfirmDelete.tsx` is the single component, and each caller supplies what actually goes: *"Delete Carports? It contributes 141,372 to Year 1 sales. Its price, units, yearly growth, monthly split and cost go with it."* A person's dialog says the Leadership Team total in Overheads will drop; a marketing channel's says the same about the Marketing spend line; a product that feeds another line still says which line detaches. "Are you sure" tells the client nothing they did not already know.
 
 *Found while testing:* the Royalties line — the franchise royalty that took its clients from Licence Sales, and the whole reason linked products were built in §6.17 — is no longer in the plan. Seven products became six. Nobody asked before it went.
+
+### 6.24.1 A line another line is built on cannot be deleted (13 Sep 2026)
+
+Warning was not enough. A product that feeds a linked line was deletable with a warning, and the dependent line was then quietly detached — it carried on winning clients by itself, **its income changed, and nothing said so**. The foreign key is `on delete set null`, so the database did the detaching without a word; there was no guard at any layer.
+
+Now the delete is **refused**. `ConfirmDelete` takes a `blocked` prop: the destructive button is *absent* rather than disabled — a button you cannot press invites hunting for the way round it, a sentence explaining what to do first does not — and the title becomes a statement, not a question:
+
+> **Can't delete Licence Sales**
+> 1:2:1 Business Coaching takes its clients from this line. Deleting it would leave that line winning clients alone, so its income would change and nothing would say so. Open 1:2:1 Business Coaching and either point it somewhere else or delete it first.
+
+**The server action refuses too.** `deleteProduct` queries for dependents before deleting and returns the same refusal in words; the screen is not the gate. If the server says no, the list is taken back from the database rather than from whatever the client was holding.
+
+The foreign key stays `on delete set null` rather than `restrict`, because `restrict` risks breaking the cascade when a whole plan is deleted. The application is the right place for this rule; the FK is the fallback, not the guard.
+
+*Verified on the plan:* with a line pointed at Licence Sales the delete is refused and offers only "Got it"; with the link removed the same button gives the ordinary "Delete Licence Sales? It contributes 600,000 to Year 1 sales" and deletes.
