@@ -228,7 +228,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
       )}
 
       {open && dlg?.kind === "product" && <ProductDialog key={open._key} r={open} others={named.filter((x) => x._key !== open._key && !x.clients_from_product_id && !isNew(x))} onSave={(r) => { save(r); close(); }} onClose={close} />}
-      {open && dlg?.kind === "growth" && <GrowthDialog key={open._key} r={open} source={src(open)} startup={startup} startOptions={startOptions} onSave={(r) => { save(r); close(); }} onClose={close} />}
+      {open && dlg?.kind === "growth" && <GrowthDialog key={open._key} r={open} source={src(open)} startOptions={startOptions} onSave={(r) => { save(r); close(); }} onClose={close} />}
       {confirm && (() => {
         const y1 = productYear1Months(confirm.row, src(confirm.row)).reduce((a, b) => a + b, 0);
         const fed = confirm.fed;
@@ -336,7 +336,7 @@ function ProductDialog({ r, others, onSave, onClose }: { r: Row; others: Row[]; 
 }
 
 /* ---------- Growth dialog (APeX "Edit Growth Rates") ---------- */
-function GrowthDialog({ r, source, startup, startOptions, onSave, onClose }: { r: Row; source: Row | null; startup: boolean; startOptions: { value: string; label: string }[]; onSave: (r: Row) => void; onClose: () => void }) {
+function GrowthDialog({ r, source, startOptions, onSave, onClose }: { r: Row; source: Row | null; startOptions: { value: string; label: string }[]; onSave: (r: Row) => void; onClose: () => void }) {
   const [d, setD] = useState<Row>(r);
   const [text, setText] = useState<Record<string, string>>({});
   const fy = firstYear(d);
@@ -348,7 +348,7 @@ function GrowthDialog({ r, source, startup, startOptions, onSave, onClose }: { r
     setD((x) => ({ ...x, yearly_growth: yg })); setText((t) => ({ ...t, [`${y}${k}`]: raw }));
   };
   const cell = (y: number, k: "price" | "units") => y <= fy
-    ? <div className={cn(box, "flex items-center justify-end pr-2 text-xs text-muted-foreground/70")}>{y === fy ? "starts" : "—"}</div>
+    ? <div className={cn(box, "flex items-center justify-end pr-2 text-xs text-muted-foreground/70")}>{y === fy ? "base year" : "—"}</div>
     : <span className="relative block"><Input inputMode="text" value={g(y, k)} onChange={(e) => setG(y, k, e.target.value)} className={cn(box, "num pr-6 text-right")} /><span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span></span>;
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -357,7 +357,9 @@ function GrowthDialog({ r, source, startup, startOptions, onSave, onClose }: { r
         <form className="grid gap-4" onSubmit={(e) => { e.preventDefault(); onSave(d); }}>
           <div className="grid grid-cols-[1fr_auto] items-end gap-4">
             <div className="rounded border border-border bg-secondary px-3 py-2">
-              <div className="text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">{startup ? "Base values" : "Current values"}</div>
+              <div className="text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">
+                {fy === 0 ? "Current values" : `Year ${fy} values`}
+              </div>
               {recurring(d)
                 ? <div className="mt-1 flex gap-8 text-[13px]"><span>Fee <b className="num">{num(monthlyFee(d))}</b>/mo</span><span>On the books <b className="num">{d.opening_clients || 0}</b></span><span>Worth <b className="num">{num(bookNow(d))}</b> a year</span></div>
                 : <div className="mt-1 flex gap-8 text-[13px]"><span>Price <b className="num">{num(d.average_price)}</b></span><span>Units <b className="num">{d.units_sold}</b></span><span>Sales <b className="num">{num(d.average_price * d.units_sold)}</b></span></div>}
@@ -375,6 +377,12 @@ function GrowthDialog({ r, source, startup, startOptions, onSave, onClose }: { r
                 ? <div className="col-span-5 self-center text-[12px] text-muted-foreground">Follows {source.name} — change the growth on that line.</div>
                 : YEARS.map((y) => <div key={y}>{cell(y, "units")}</div>)}
             </div>
+            {fy > 0 && (
+              <p className="mt-2 text-[12px] text-muted-foreground">
+                This line starts in <b>Year {fy}</b>, so the price and units above <i>are</i> its Year {fy} figures — there is nothing before them to grow from, which is why Year {fy} has no box. The first change you can make is <b>Year {fy + 1}</b>.
+                {" "}If it is already selling, set <b>Starts selling</b> to <b>Now — selling today</b> and Year 1 becomes a change on today&apos;s figures.
+              </p>
+            )}
           </div>
 
           <div>

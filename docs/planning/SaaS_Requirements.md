@@ -557,3 +557,19 @@ Now the delete is **refused**. `ConfirmDelete` takes a `blocked` prop: the destr
 The foreign key stays `on delete set null` rather than `restrict`, because `restrict` risks breaking the cascade when a whole plan is deleted. The application is the right place for this rule; the FK is the fallback, not the guard.
 
 *Verified on the plan:* with a line pointed at Licence Sales the delete is refused and offers only "Got it"; with the link removed the same button gives the ordinary "Delete Licence Sales? It contributes 600,000 to Year 1 sales" and deletes.
+
+## 6.25 A line's base year has to explain itself (13 Sep 2026)
+
+Reported as *"the Price % and Units % entry for Year 1 is not allowing entry as there is no field"*. The maths was right; the screen was not.
+
+**Starts selling** offers *Now — selling today* plus Year 1–5. Picking **Now** means the price and units are this year's trading and Year 1 is a forecast year, so Year 1 gets a % box. Picking **Year N** means the line does not exist yet and starts then — those figures *are* Year N, there is nothing before them to grow from, and Year N correctly has no box. Both readings agree with `yearlyProjection` and, since §6.21.1, with `newByYear` too.
+
+Three things made it unreadable:
+
+- The base panel said **"CURRENT VALUES"** regardless, switching to "Base values" only when the whole *plan* was a startup — never per product. So a line starting in Year 3 announced its figures as current and then refused to let them grow.
+- The empty cell said **`starts`** — one grey word, indistinguishable from a field that failed to render, which is exactly how it was read.
+- Nothing said that choosing a start year costs you that year's box, so the field simply vanished with no cause on screen.
+
+Now the panel is headed by **that product's own first year** — "Current values" only when it sells today, otherwise "Year 3 values". The cell reads **base year**. And a line beneath the grid says why and what to do: *"This line starts in Year 3, so the price and units above are its Year 3 figures — there is nothing before them to grow from, which is why Year 3 has no box. The first change you can make is Year 4. If it is already selling, set Starts selling to Now — selling today and Year 1 becomes a change on today's figures."*
+
+**The rule: a disabled or absent input must say why it is absent and what to do instead.** A greyed cell with a one-word label is a bug report waiting to happen.
