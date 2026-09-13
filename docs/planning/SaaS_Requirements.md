@@ -623,3 +623,23 @@ Even / Moderate rise / Ramp-up stay, and now write into whatever unit is selecte
 **The rule this generalises: when a stored value is a weight, let the client type in the unit they think in and convert on the way out.** Any screen that makes someone reverse-solve for a percentage — here, and §6.26 before it — is asking the wrong question.
 
 *Verified on the plan:* Carports opened in Units reading **1.5 every month** — exactly the figure the old screen hid. July and August switched off left ten months at 12,240 and the footer at "· 2 months off"; the Dollars and % views agreed with each other and with the annual 122,400; **Same as… House Slab** copied that line's shape across, June included, in one click.
+
+### 6.28.1 An affordance nobody can see is not a feature (13 Sep 2026)
+
+Two corrections after using §6.28 in anger.
+
+**Switching a month off was undiscoverable.** *"The click on the month to blank it out may not be discovered by the user."* Correct — the only thing marking the month name as clickable was a `title` tooltip, which nobody hovers a label to find. A feature behind a hover is a feature that does not exist.
+
+Three changes, because one would not have been enough:
+
+- **The month name carries a visible `×`**, muted at 40 % and full strength on hover, sitting after the label. Twelve faint glyphs cost almost nothing in density and say *these are dismissible* at a glance, which is the whole job.
+- **Switched off, the glyph becomes a coloured `+`** and the name strikes through. Reversal has to look as available as the action; a struck-out label on its own reads as damage rather than a setting.
+- **A line above the grid says it in words**: *"Type 0 in a month — or click its name — to switch it off for a wet season, a shutdown, a month you don't trade. The rest take the year between them."* Typing `0` always worked and is entirely discoverable; the click is the accelerator, so the hint leads with the obvious path and offers the shortcut second.
+
+**The rule: a click target that is not a button shape needs a mark, a changed state and a sentence — the tooltip is the fourth of those, never the first.**
+
+**Per cent is the default for every line, and the order is % · Units · currency.** The default used to follow the line — units where there were units, per cent where there were none — which meant the dialog opened differently product by product. A screen worked through ten times in a row has to open the same way each time; a default that moves costs more in re-orientation than a smart guess returns. The unit reading sits under every box regardless, so opening in per cent hides nothing, and % first matches what the field actually stores.
+
+**"Dollars" is now the plan's own currency code** — AUD, PHP, GBP, whatever `plan_settings.currency` says. The app is not dollar-only and the header chip has been showing the real code all along; the button now agrees with it. `currency` threads from the Sales page through `SalesModule` to the dialog.
+
+*Verified on the plan:* Carports opens in **%** with the switch reading **% · Units · AUD**; clicking July struck the label, turned its mark into a coloured `+` and moved the other eleven to 11,127; AUD mode read 10,200 a month against the same 122,400.

@@ -48,8 +48,8 @@ const firstYear = (r: Pick<Row, "start_selling_year">) => Math.min(5, Math.max(0
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
 const box = "h-8";
 
-export function SalesModule({ planId, initial, mode, initialArea, hasHistory, historicRevenue, historicEnd, productWord, fyEndMonth }: {
-  planId: string; initial: Product[]; mode: "guided" | "advanced"; initialArea: AreaKey; hasHistory: boolean | null; historicRevenue: number | null; historicEnd: string | null; productWord: string; fyEndMonth: number;
+export function SalesModule({ planId, initial, mode, initialArea, hasHistory, historicRevenue, historicEnd, productWord, fyEndMonth, currency }: {
+  planId: string; initial: Product[]; mode: "guided" | "advanced"; initialArea: AreaKey; hasHistory: boolean | null; historicRevenue: number | null; historicEnd: string | null; productWord: string; fyEndMonth: number; currency: string;
 }) {
   const MONTHS = planMonths(fyEndMonth);          // the plan's own twelve, not January to December
   const startup = hasHistory === false;
@@ -291,7 +291,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
 
       {open && dlg?.kind === "monthly" && (recurring(open)
         ? <ClientsDialog key={open._key} r={open} fyEndMonth={fyEndMonth} source={src(open)} onSave={(r) => { save(r); close(); }} onClose={close} />
-        : <MonthlyDialog key={open._key} r={open} fyEndMonth={fyEndMonth} others={named.filter((x) => x._key !== open._key && !recurring(x) && x.monthly_distribution)} onSave={(r) => { save(r); close(); }} onClose={close} />)}
+        : <MonthlyDialog key={open._key} r={open} fyEndMonth={fyEndMonth} currency={currency} others={named.filter((x) => x._key !== open._key && !recurring(x) && x.monthly_distribution)} onSave={(r) => { save(r); close(); }} onClose={close} />)}
     </ModuleFrame>
   );
 }
@@ -565,15 +565,15 @@ function ClientsDialog({ r, source, fyEndMonth, onSave, onClose }: { r: Row; sou
  * "8.33 % of my carports in July", they think "two a month, three in spring, none in July because it
  * rains". Twenty minutes a product, times a range of ten.
  *
- * Three things changed. You can type **units, dollars or percentages** — whichever the line is easiest to
+ * Three things changed. You can type **percentages, units or the plan's own currency** — whichever the line is easiest to
  * think about — because the split has been stored as *weights* since §6.17, so a typed number is only ever
  * a proportion. Nothing breaks if the annual figure changes afterwards: the same shape distributes the new
  * total exactly. You can **switch a month off** for a wet season or a shutdown, and the rest take the year
  * between them. And you can **copy the shape from another line**, which is where the real time goes on a
  * large range — wet season is wet season whether it is a driveway or a patio.
  */
-function MonthlyDialog({ r, fyEndMonth, others, onSave, onClose }: {
-  r: Row; fyEndMonth: number; others: Row[]; onSave: (r: Row) => void; onClose: () => void;
+function MonthlyDialog({ r, fyEndMonth, currency, others, onSave, onClose }: {
+  r: Row; fyEndMonth: number; currency: string; others: Row[]; onSave: (r: Row) => void; onClose: () => void;
 }) {
   const MONTHS = planMonths(fyEndMonth);
   const MONTH_NAMES = planMonthNames(fyEndMonth);
@@ -581,7 +581,13 @@ function MonthlyDialog({ r, fyEndMonth, others, onSave, onClose }: {
 
   const y1 = yearlyProjection(r.average_price, r.units_sold, r.yearly_growth, r.start_selling_year)[0];
   const yearSales = y1.sales, yearUnits = y1.units;
-  const [mode, setMode] = useState<EntryMode>(yearUnits > 0 ? "units" : "pct");
+  /**
+   * Per cent is the default for every line, not units (§6.28.1). A default that changes with the line —
+   * units when there are units, per cent when there are not — means the dialog opens differently product by
+   * product, and a screen used ten times in a row has to open the same way each time. The unit reading is
+   * under every box regardless, so nothing is hidden by opening in per cent.
+   */
+  const [mode, setMode] = useState<EntryMode>("pct");
 
   /** What the client typed, in whatever unit they chose. Only the proportions matter. */
   const asMode = (pctValue: number, m: EntryMode) =>
@@ -594,7 +600,7 @@ function MonthlyDialog({ r, fyEndMonth, others, onSave, onClose }: {
     for (let i = 1; i <= 12; i++) out[String(i)] = String(asMode(num2(stored[String(i)]), m));
     return out;
   };
-  const [w, setW] = useState<Record<string, string>>(() => fromStored(yearUnits > 0 ? "units" : "pct"));
+  const [w, setW] = useState<Record<string, string>>(() => fromStored("pct"));
 
   const weight = (i: number) => Math.max(0, parseSigned(w[String(i)] ?? "") ?? 0);
   const weightTotal = Array.from({ length: 12 }, (_, i) => weight(i + 1)).reduce((a, b) => a + b, 0);
@@ -651,7 +657,7 @@ function MonthlyDialog({ r, fyEndMonth, others, onSave, onClose }: {
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[11.5px] font-semibold text-muted-foreground">Type in</span>
             <span className="flex rounded border border-input p-0.5">
-              {([["units", "Units"], ["money", "Dollars"], ["pct", "%"]] as [EntryMode, string][]).map(([m, lbl]) => (
+              {([["pct", "%"], ["units", "Units"], ["money", currency]] as [EntryMode, string][]).map(([m, lbl]) => (
                 <button key={m} type="button" onClick={() => switchMode(m)} disabled={m === "units" && yearUnits <= 0}
                   className={cn("rounded px-2.5 py-0.5 text-xs font-semibold disabled:opacity-40",
                     mode === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{lbl}</button>
@@ -669,15 +675,21 @@ function MonthlyDialog({ r, fyEndMonth, others, onSave, onClose }: {
             )}
           </div>
 
+          <p className="-mt-1 text-[11.5px] text-muted-foreground">
+            Type <b className="num">0</b> in a month — or click its name — to switch it off for a wet season, a shutdown, a month you don&rsquo;t trade. The rest take the year between them.
+          </p>
+
           <div className="grid grid-cols-3 gap-x-4 gap-y-2.5">
             {MONTHS.map((_, i) => {
               const off = weight(i + 1) === 0;
               return (
                 <div key={i}>
-                  <button type="button" onClick={() => toggleMonth(i + 1)}
-                    title={off ? "Nothing sold this month — click to bring it back" : "Click to switch this month off"}
-                    className={cn("mb-[3px] block text-[11.5px] font-semibold hover:text-primary", off ? "text-muted-foreground/60 line-through" : "text-muted-foreground")}>
-                    {MONTH_NAMES[i]}
+                  <button type="button" onClick={() => toggleMonth(i + 1)} aria-pressed={!off}
+                    aria-label={off ? `${MONTH_NAMES[i]} is switched off — bring it back` : `Switch ${MONTH_NAMES[i]} off`}
+                    title={off ? `Nothing sold in ${MONTH_NAMES[i]} — click to bring it back` : `Click to switch ${MONTH_NAMES[i]} off`}
+                    className="group mb-[3px] flex items-baseline gap-1 text-[11.5px] font-semibold">
+                    <span className={cn(off ? "text-muted-foreground/60 line-through" : "text-muted-foreground group-hover:text-foreground")}>{MONTH_NAMES[i]}</span>
+                    <span aria-hidden className={cn("text-[13px] leading-none", off ? "text-primary" : "text-muted-foreground/40 group-hover:text-foreground")}>{off ? "+" : "\u00d7"}</span>
                   </button>
                   <span className="relative block">
                     <Input inputMode="decimal" value={w[String(i + 1)] ?? ""} onChange={(e) => setMonth(i + 1, e.target.value)}
