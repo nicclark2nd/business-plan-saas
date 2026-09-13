@@ -13,7 +13,7 @@ import { GUIDED_STEPS } from "@/lib/nav";
 import { planMonths, planMonthNames } from "@/engine/plan/calendar";
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { cn } from "@/lib/utils";
-import { YEARS, yearlyProjection, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, distributionTotal, monthlySales, hasValue, impliedPct, type Growth, type MonthlyDistribution } from "@/engine/sales/projection";
+import { YEARS, yearlyProjection, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, monthlySales, hasValue, impliedPct, type Growth, type MonthlyDistribution } from "@/engine/sales/projection";
 import { productYears, productYear1Months, productYear1Clients, newClientsYear1, planRevenueByYear, planYear1Months, sourceOf, isLinked, bookNow, monthlyFee, recurring } from "@/engine/sales/product";
 import { upsertProduct, deleteProduct, continueFromSales } from "./actions";
 import { LIFECYCLE, LIFE_MODE, SOLD_AS, type Product } from "./model";
@@ -35,7 +35,6 @@ const parseSigned = (s: string) => { const t = s.replace(/[,\s%]/g, ""); if (t =
  * Month shares are STORED to four decimals, so they are shown to four. A twelfth is 8.3333, not 8.33 — showing
  * the rounded figure taught people to type it back, and twelve of those add to 99.96 %, not 100.
  */
-const pct = (v: number | undefined) => v === undefined || v === null ? "" : String(Math.round(v * 10000) / 10000);
 
 type Row = Product & { _key: string; _error?: string };
 type AreaKey = "products" | "annual" | "monthly";
@@ -43,6 +42,7 @@ type Dlg = { kind: "product" | "growth" | "monthly"; key: string } | null;
 const STEP = GUIDED_STEPS.find((s) => s.id === "sales")?.step ?? 7;
 const isNew = (r: Row) => r.id.startsWith("tmp-");
 /** start_selling_year: 1 = now (this year's actuals), 2–6 = plan Year 1–5. */
+const num2 = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 const firstYear = (r: Pick<Row, "start_selling_year">) => Math.min(5, Math.max(0, (r.start_selling_year || 1) - 1));
 
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
@@ -291,7 +291,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
 
       {open && dlg?.kind === "monthly" && (recurring(open)
         ? <ClientsDialog key={open._key} r={open} fyEndMonth={fyEndMonth} source={src(open)} onSave={(r) => { save(r); close(); }} onClose={close} />
-        : <MonthlyDialog key={open._key} r={open} fyEndMonth={fyEndMonth} onSave={(r) => { save(r); close(); }} onClose={close} />)}
+        : <MonthlyDialog key={open._key} r={open} fyEndMonth={fyEndMonth} others={named.filter((x) => x._key !== open._key && !recurring(x) && x.monthly_distribution)} onSave={(r) => { save(r); close(); }} onClose={close} />)}
     </ModuleFrame>
   );
 }
@@ -558,40 +558,161 @@ function ClientsDialog({ r, source, fyEndMonth, onSave, onClose }: { r: Row; sou
 }
 
 /* ---------- Monthly dialog (APeX "Monthly Sales Distribution") ---------- */
-function MonthlyDialog({ r, fyEndMonth, onSave, onClose }: { r: Row; fyEndMonth: number; onSave: (r: Row) => void; onClose: () => void }) {
+/**
+ * Monthly split (§6.28) — how a one-off line falls across the twelve months.
+ *
+ * This used to be twelve percentage boxes, and it was the hardest screen in the app: nobody thinks
+ * "8.33 % of my carports in July", they think "two a month, three in spring, none in July because it
+ * rains". Twenty minutes a product, times a range of ten.
+ *
+ * Three things changed. You can type **units, dollars or percentages** — whichever the line is easiest to
+ * think about — because the split has been stored as *weights* since §6.17, so a typed number is only ever
+ * a proportion. Nothing breaks if the annual figure changes afterwards: the same shape distributes the new
+ * total exactly. You can **switch a month off** for a wet season or a shutdown, and the rest take the year
+ * between them. And you can **copy the shape from another line**, which is where the real time goes on a
+ * large range — wet season is wet season whether it is a driveway or a patio.
+ */
+function MonthlyDialog({ r, fyEndMonth, others, onSave, onClose }: {
+  r: Row; fyEndMonth: number; others: Row[]; onSave: (r: Row) => void; onClose: () => void;
+}) {
   const MONTHS = planMonths(fyEndMonth);
   const MONTH_NAMES = planMonthNames(fyEndMonth);
-  const [d, setD] = useState<MonthlyDistribution>(normalizeDistribution(r.monthly_distribution));
-  const [text, setText] = useState<Record<string, string>>({});
-  const total = distributionTotal(d);
-  const ok = Math.abs(total - 100) <= 0.01;
-  const y1 = yearlyProjection(r.average_price, r.units_sold, r.yearly_growth, r.start_selling_year)[0].sales;
-  const months = monthlySales(y1, d);
-  const preset = (nd: MonthlyDistribution) => { setD(nd); setText({}); };
+  type EntryMode = "units" | "money" | "pct";
+
+  const y1 = yearlyProjection(r.average_price, r.units_sold, r.yearly_growth, r.start_selling_year)[0];
+  const yearSales = y1.sales, yearUnits = y1.units;
+  const [mode, setMode] = useState<EntryMode>(yearUnits > 0 ? "units" : "pct");
+
+  /** What the client typed, in whatever unit they chose. Only the proportions matter. */
+  const asMode = (pctValue: number, m: EntryMode) =>
+    m === "pct" ? Math.round(pctValue * 10000) / 10000
+      : m === "units" ? Math.round(yearUnits * (pctValue / 100) * 100) / 100
+        : Math.round(yearSales * (pctValue / 100));
+  const fromStored = (m: EntryMode) => {
+    const stored = normalizeDistribution(r.monthly_distribution);
+    const out: Record<string, string> = {};
+    for (let i = 1; i <= 12; i++) out[String(i)] = String(asMode(num2(stored[String(i)]), m));
+    return out;
+  };
+  const [w, setW] = useState<Record<string, string>>(() => fromStored(yearUnits > 0 ? "units" : "pct"));
+
+  const weight = (i: number) => Math.max(0, parseSigned(w[String(i)] ?? "") ?? 0);
+  const weightTotal = Array.from({ length: 12 }, (_, i) => weight(i + 1)).reduce((a, b) => a + b, 0);
+  const ok = weightTotal > 0;
+
+  /** Weights become the stored percentages only on the way out — what is typed is never rewritten. */
+  const asDistribution = (): MonthlyDistribution => {
+    const out: MonthlyDistribution = {};
+    for (let i = 1; i <= 12; i++) out[String(i)] = Math.round((weight(i) / weightTotal) * 100 * 10000) / 10000;
+    return out;
+  };
+
+  const monthsMoney = ok ? monthlySales(yearSales, asDistribution()) : Array(12).fill(0);
+  const monthsUnits = Array.from({ length: 12 }, (_, i) => (ok ? Math.round(yearUnits * (weight(i + 1) / weightTotal) * 100) / 100 : 0));
+
+  const setMonth = (i: number, raw: string) => setW((x) => ({ ...x, [String(i)]: raw }));
+  const switchMode = (m: EntryMode) => {
+    if (m === mode) return;
+    const dist = ok ? asDistribution() : normalizeDistribution(r.monthly_distribution);
+    const out: Record<string, string> = {};
+    for (let i = 1; i <= 12; i++) out[String(i)] = String(asMode(num2(dist[String(i)]), m));
+    setMode(m); setW(out);
+  };
+  const applyPct = (dist: MonthlyDistribution) => {
+    const out: Record<string, string> = {};
+    for (let i = 1; i <= 12; i++) out[String(i)] = String(asMode(num2(dist[String(i)]), mode));
+    setW(out);
+  };
+  /** Off is a real answer — a shutdown, or a trade that cannot pour in the wet. The rest take the year. */
+  const toggleMonth = (i: number) => {
+    const on = weight(i) > 0;
+    if (on) { setMonth(i, "0"); return; }
+    const live = Array.from({ length: 12 }, (_, j) => weight(j + 1)).filter((v) => v > 0);
+    const avg = live.length ? live.reduce((a, b) => a + b, 0) / live.length : (mode === "pct" ? 8.3333 : mode === "units" ? Math.max(1, Math.round(yearUnits / 12)) : Math.round(yearSales / 12));
+    setMonth(i, String(Math.round(avg * 100) / 100));
+  };
+
+  const unitText = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
+  const suffix = mode === "pct" ? "%" : mode === "units" ? "" : "";
+  const offCount = Array.from({ length: 12 }, (_, i) => weight(i + 1)).filter((v) => v === 0).length;
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-2xl">
-        <DialogHeader><DialogTitle>Monthly split — {r.name}</DialogTitle><DialogDescription>The share of Year 1 sales ({num(y1)}) in each month. The twelve must add up to 100 %.</DialogDescription></DialogHeader>
-        <form className="grid gap-4" onSubmit={(e) => { e.preventDefault(); if (ok) onSave({ ...r, monthly_distribution: d }); }}>
-          <div className="grid grid-cols-3 gap-x-4 gap-y-3">
-            {MONTHS.map((_, i) => (
-              <div key={i}>
-                <label className={label}>{MONTH_NAMES[i]}</label>
-                <span className="relative block"><Input inputMode="decimal" value={text[i + 1] ?? pct(d[String(i + 1)])} onChange={(e) => { const raw = e.target.value; setText((t) => ({ ...t, [i + 1]: raw })); setD((x) => ({ ...x, [String(i + 1)]: parseSigned(raw) ?? 0 })); }} className={cn(box, "num pr-6 text-right")} /><span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span></span>
-                <div className="mt-0.5 text-right text-[11px] text-muted-foreground num">{num(months[i])}</div>
-              </div>
-            ))}
+        <DialogHeader>
+          <DialogTitle>Monthly split — {r.name}</DialogTitle>
+          <DialogDescription>
+            How Year 1 falls across the twelve months — {num(yearSales)}{yearUnits > 0 && <> from {unitText(yearUnits)} {yearUnits === 1 ? "unit" : "units"}</>}.
+            Only the proportions matter, so type whatever is easiest to think about.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); if (ok) onSave({ ...r, monthly_distribution: asDistribution() }); }}>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11.5px] font-semibold text-muted-foreground">Type in</span>
+            <span className="flex rounded border border-input p-0.5">
+              {([["units", "Units"], ["money", "Dollars"], ["pct", "%"]] as [EntryMode, string][]).map(([m, lbl]) => (
+                <button key={m} type="button" onClick={() => switchMode(m)} disabled={m === "units" && yearUnits <= 0}
+                  className={cn("rounded px-2.5 py-0.5 text-xs font-semibold disabled:opacity-40",
+                    mode === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{lbl}</button>
+              ))}
+            </span>
+            {others.length > 0 && (
+              <span className="ml-auto flex items-center gap-2">
+                <span className="text-[11.5px] font-semibold text-muted-foreground">Same as</span>
+                <span className="w-[190px]">
+                  <FieldSelect value="" placeholder="another product…"
+                    options={others.map((o) => ({ value: o._key, label: o.name }))}
+                    onValueChange={(v) => { const o = others.find((x) => x._key === v); if (o) applyPct(normalizeDistribution(o.monthly_distribution)); }} />
+                </span>
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-2 border-t border-border pt-3 text-[13px]">
-            <span>{ok
-              ? <>Twelve months add to <b className="num text-good">{num(months.reduce((a, b) => a + b, 0))}</b><span className="ml-2 text-muted-foreground">shares total {pct(total)}%</span></>
-              : <>Shares total <b className="num text-bad">{pct(total)}%</b><span className="ml-2 text-muted-foreground">the twelve must add up to 100 %</span></>}</span>
+
+          <div className="grid grid-cols-3 gap-x-4 gap-y-2.5">
+            {MONTHS.map((_, i) => {
+              const off = weight(i + 1) === 0;
+              return (
+                <div key={i}>
+                  <button type="button" onClick={() => toggleMonth(i + 1)}
+                    title={off ? "Nothing sold this month — click to bring it back" : "Click to switch this month off"}
+                    className={cn("mb-[3px] block text-[11.5px] font-semibold hover:text-primary", off ? "text-muted-foreground/60 line-through" : "text-muted-foreground")}>
+                    {MONTH_NAMES[i]}
+                  </button>
+                  <span className="relative block">
+                    <Input inputMode="decimal" value={w[String(i + 1)] ?? ""} onChange={(e) => setMonth(i + 1, e.target.value)}
+                      className={cn(box, "num text-right", suffix && "pr-6", off && "text-muted-foreground/60")} />
+                    {suffix && <span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{suffix}</span>}
+                  </span>
+                  <div className="mt-0.5 text-right text-[11px] text-muted-foreground num">
+                    {mode === "money"
+                      ? <>{yearUnits > 0 ? `${unitText(monthsUnits[i])} units` : ""}</>
+                      : <>{num(monthsMoney[i])}{mode === "pct" && yearUnits > 0 ? ` · ${unitText(monthsUnits[i])} units` : ""}</>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3 text-[13px]">
+            <span>
+              {!ok ? <b className="text-bad">Put a figure in at least one month.</b> : <>
+                Twelve months add to <b className="num text-good">{num(monthsMoney.reduce((a, b) => a + b, 0))}</b>
+                {yearUnits > 0 && <span className="ml-2 text-muted-foreground">{unitText(yearUnits)} units</span>}
+                {offCount > 0 && <span className="ml-2 text-muted-foreground">· {offCount} {offCount === 1 ? "month" : "months"} off</span>}
+              </>}
+            </span>
             <span className="ml-auto flex gap-1.5">
-              <Button type="button" size="sm" variant="outline" onClick={() => preset(evenDistribution())}>Even</Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => preset(moderateDistribution())}>Moderate rise</Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => preset(rampUpDistribution())}>Ramp-up</Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => applyPct(evenDistribution())}>Even</Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => applyPct(moderateDistribution())}>Moderate rise</Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => applyPct(rampUpDistribution())}>Ramp-up</Button>
             </span>
           </div>
+
+          <p className="text-[11.5px] text-muted-foreground">
+            Whatever you type is read as a proportion, so the twelve always add to the year exactly — change the annual figure later and this shape still holds.
+          </p>
+
           <DialogFooter><Button type="button" variant="outline" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!ok}>Save</Button></DialogFooter>
         </form>
       </DialogContent>

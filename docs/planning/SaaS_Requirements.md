@@ -603,3 +603,23 @@ Asked for on Sales → Annual projections: sort by product name, and by the curr
 - **The arrow shows only on the sorted column**, with a faint one on hover elsewhere, and always *after* the label — left-aligned or right — so the eye looks in one place for it. Eight permanent arrows would cost more in density than they return.
 
 Ties keep the plan's order, so a column of equal values never looks shuffled. Applied to all three Sales tabs at once, because Products, Annual and Monthly are the same list and should behave the same way.
+
+## 6.28 The monthly split has to be typed in whatever unit the client thinks in (13 Sep 2026)
+
+Reported plainly: *"I can fuck around in this screen for a good 20 minutes, and given a large product range, it becomes a mental strain."* Ten products, twenty minutes each.
+
+Twelve percentage boxes is the wrong question. Nobody thinks *"8.33 % of my carports in July"*; they think *"two a month, three through spring, none in July because you can't pour in the wet."* The screen was also hiding the one figure that makes the answer obvious — it showed the dollars under each box but never the **units**, so Carports read 10,200 a month with no hint that this is **1.5 carports a month**, which is the absurdity that tells a builder the shape is wrong.
+
+**Units, dollars or percent — the client picks.** This is only safe because the split has been stored as *weights* since §6.17: `monthlySales` divides by the shares' actual total, so a typed number is never anything but a proportion. Type `2` in each month and `0` in July and you have said the shape; the annual figure still lands exactly, and **changing the annual figure later leaves the shape intact**. Units is the default when the line has any, because that is the unit the trade thinks in. What is typed is never rewritten underneath the client — weights stay as raw text and convert to stored percentages only on save.
+
+**The other readings sit under every box.** In Units you see the dollars, in % you see both, in Dollars you see the units. One screen, no arithmetic.
+
+**Months switch off.** The month name is a button: click it and it goes to zero with the label struck through, and the remaining months take the year between them. A wet season, a shutdown, a trade that stops over Christmas — off is a real answer, not a zero the client has to remember to type. Click again and the month comes back at the average of the live ones rather than at zero, so bringing it back is one click too. The footer counts them: *"Twelve months add to 122,400 · 18 units · 2 months off"*.
+
+**Copy the shape from another line.** This is where the time actually goes on a range: wet season is wet season whether it is a driveway or a patio. **Same as…** lists the other lines that carry a shape of their own — a line with no saved split is implicitly even, and *Even* is already a button, so listing it would be noise. Recurring lines are excluded; their monthly pattern is client-months, not a seasonal shape.
+
+Even / Moderate rise / Ramp-up stay, and now write into whatever unit is selected rather than into percentages only.
+
+**The rule this generalises: when a stored value is a weight, let the client type in the unit they think in and convert on the way out.** Any screen that makes someone reverse-solve for a percentage — here, and §6.26 before it — is asking the wrong question.
+
+*Verified on the plan:* Carports opened in Units reading **1.5 every month** — exactly the figure the old screen hid. July and August switched off left ten months at 12,240 and the footer at "· 2 months off"; the Dollars and % views agreed with each other and with the annual 122,400; **Same as… House Slab** copied that line's shape across, June included, in one click.
