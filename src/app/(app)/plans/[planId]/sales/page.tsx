@@ -18,6 +18,10 @@ export default async function SalesPage({ params, searchParams }: { params: Prom
   const rows = (products.data ?? []).map((p) => ({
     ...p, average_price: Number(p.average_price), units_sold: Number(p.units_sold),
     sold_as: p.sold_as === "recurring" ? "recurring" : "one_off",
+    // 0018 dropped 'saturation'. A database whose migration has not run yet still holds it, so read it as
+    // maturity: the grid, the picker and a save then agree whichever side of the migration this deploy is on,
+    // and a product saved before the migration lands on a value the new enum accepts instead of being nulled.
+    lifecycle: p.lifecycle === "saturation" ? "maturity" : p.lifecycle,
     opening_clients: Number(p.opening_clients ?? 0),
     client_life_months: Number(p.client_life_months ?? 12) || 12,
     life_mode: p.life_mode === "fixed" ? "fixed" : "average",

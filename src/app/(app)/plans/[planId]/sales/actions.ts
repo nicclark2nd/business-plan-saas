@@ -7,7 +7,7 @@ import { distributionValid, exactHundred, type Growth, type MonthlyDistribution 
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
-const LIFECYCLES = ["development", "introduction", "growth", "maturity", "saturation", "decline"];
+const LIFECYCLES = ["development", "introduction", "growth", "maturity", "decline"];
 
 export async function upsertProduct(planId: string, p: {
   id?: string; name: string; description?: string | null; notes?: string | null; lifecycle?: string | null;

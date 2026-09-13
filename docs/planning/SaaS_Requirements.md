@@ -690,3 +690,20 @@ Found during an external review of Sales. Only the defects were acted on; no par
 **Observed, not changed:** after a mode round trip the displayed percentages rescale when a month is off — 7.6453 becomes 8.2636 — because the live months renormalise to 100. The money does not move (that is the §6.17 weight model working), but the numbers on screen change while nothing about the plan has. Raised for Nic rather than fixed, since a fix means choosing between normalising on every render and storing shares that do not add to 100.
 
 **On the review itself, for the record:** its strongest claim — that the *Moderate rise* and *Ramp-up* curves match APeX's *Moderate Growth* and *Exponential Growth* — is correct and understated. The expressions are the same (`0.5 * Math.exp(0.3 * month)`, `0.8 + 0.2 * (month / 12)`), differing only in how month 12 reconciles. This is not a discovery: `APeX_Code_Audit.md` places `salesProductUtils.ts` on the **PORT** list as a deliberate decision. Its claim about shared sample data is wrong — no plan data ships in this repo; the shared figures are Nic's own plan entered into both systems, and the sample plan for release will be a different business entirely.
+
+### 6.29 Saturation is not a life cycle stage (13 Sep 2026)
+
+Reported while editing a product: *"remove saturation as this is not a standard lifecycle for business planning."* Correct — the standard is **Development → Introduction → Growth → Maturity → Decline**. Where "saturation" appears at all it is the late plateau of maturity, so carrying both asked the client to split a hair that no lender, grant assessor or accountant recognises.
+
+**It was not a one-line list edit, because a product was using it.** Mining Works was marked Saturation. Dropping the option alone would have shown it as `—` in the grid, opened the dialog with a blank Lifecycle, and — the real damage — **silently nulled it the next time that product was saved for any other reason**, because the server sanitiser rejects an unknown value. A picker change would have quietly deleted the client's judgement.
+
+Four parts:
+
+- **Migration 0018 rebuilds the enum.** Postgres cannot drop a value from an enum in place, so the type is renamed, recreated with five values, the column recast, and the old type dropped. **The data moves first**, while the column still has the old type, so the cast can never meet a value the new type lacks. Existing rows go to **maturity, not null** — a line marked saturation was marked deliberately.
+- **It is guarded and re-runnable.** The whole block only fires if `saturation` is still in the enum. A migration that cannot be run twice is a migration that strands a half-finished push.
+- **The reader maps the legacy value.** `lifecycle === "saturation"` reads as `maturity` at the page boundary, so the grid, the picker and a save all agree **whichever side of the migration a deploy is on** — and a product saved before the migration lands on a value the new enum accepts instead of being nulled. Without this, deploy order becomes a data-loss hazard that depends on nobody touching one product at the wrong moment.
+- **The server whitelist drops it too**, so nothing can write it back.
+
+*Verified against a scratch Postgres 16 before it went near Supabase:* all eighteen migrations apply in order; a seeded `saturation` row becomes `maturity` while a `growth` row and a `null` row are untouched; the enum ends with five values; the old type is gone; `saturation` is then rejected on insert; and 0018 runs three times in a row without error. On screen, Mining Works reads **Maturity** with the migration not yet run.
+
+**The rule: removing an option is a data migration, not a list edit — and the reader has to bridge the deploy, because the code and the database are never updated in the same instant.**

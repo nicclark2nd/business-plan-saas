@@ -1,9 +1,14 @@
 import type { Growth, MonthlyDistribution } from "@/engine/sales/projection";
 
 /** Sales — three areas (SaaS §6.16): Products · Annual projections · Monthly projections. */
+/**
+ * The standard product life cycle, and only the standard one (0018). Saturation was offered and is not a
+ * stage a lender, grant assessor or accountant recognises - where the term appears at all it is the late
+ * plateau of maturity, so carrying both asked the client to split a hair for no gain.
+ */
 export const LIFECYCLE = [
   { value: "development", label: "Development" }, { value: "introduction", label: "Introduction" }, { value: "growth", label: "Growth" },
-  { value: "maturity", label: "Maturity" }, { value: "saturation", label: "Saturation" }, { value: "decline", label: "Decline" },
+  { value: "maturity", label: "Maturity" }, { value: "decline", label: "Decline" },
 ];
 
 /** How a line is sold. A one-off job is invoiced when delivered; an ongoing client keeps paying. */
