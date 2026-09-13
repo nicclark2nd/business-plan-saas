@@ -30,11 +30,21 @@ export async function upsertProduct(planId: string, p: {
   }
   const clients: Record<string, number> = {};
   for (let m = 1; m <= 12; m++) { const v = Number(p.monthly_new_clients?.[String(m)]); clients[String(m)] = Number.isFinite(v) ? Math.max(0, v) : 0; }
+  /**
+   * A year holds either a % change or the figure itself (§6.26). A typed figure wins and clears its
+   * percentage, so the two can never disagree about what the year is — and a figure of 0 is a real answer
+   * (a year the line sells nothing), which is why this checks for null rather than falsiness.
+   */
+  const pct = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? Math.max(-100, Math.min(1000, n)) : 0; };
+  const figure = (v: unknown) => { if (v === null || v === undefined || v === "") return null; const n = Number(v); return Number.isFinite(n) ? Math.max(0, n) : null; };
   const growth: Growth = {};
   for (const y of ["1", "2", "3", "4", "5"]) {
     const g = p.yearly_growth?.[y]; if (!g) continue;
-    const price = Number(g.price), units = Number(g.units);
-    growth[y] = { price: Number.isFinite(price) ? Math.max(-100, Math.min(1000, price)) : 0, units: Number.isFinite(units) ? Math.max(-100, Math.min(1000, units)) : 0 };
+    const priceValue = figure(g.priceValue), unitsValue = figure(g.unitsValue);
+    growth[y] = {
+      price: priceValue === null ? pct(g.price) : null, priceValue,
+      units: unitsValue === null ? pct(g.units) : null, unitsValue,
+    };
   }
   const row = {
     plan_id: planId, name, description: p.description?.trim() || null, notes: p.notes?.trim() || null,

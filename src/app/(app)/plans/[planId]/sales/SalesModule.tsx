@@ -13,7 +13,7 @@ import { GUIDED_STEPS } from "@/lib/nav";
 import { planMonths, planMonthNames } from "@/engine/plan/calendar";
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { cn } from "@/lib/utils";
-import { YEARS, yearlyProjection, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, distributionTotal, monthlySales, type Growth, type MonthlyDistribution } from "@/engine/sales/projection";
+import { YEARS, yearlyProjection, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, distributionTotal, monthlySales, hasValue, impliedPct, type Growth, type MonthlyDistribution } from "@/engine/sales/projection";
 import { productYears, productYear1Months, productYear1Clients, newClientsYear1, planRevenueByYear, planYear1Months, sourceOf, isLinked, bookNow, monthlyFee, recurring } from "@/engine/sales/product";
 import { upsertProduct, deleteProduct, continueFromSales } from "./actions";
 import { LIFECYCLE, LIFE_MODE, SOLD_AS, type Product } from "./model";
@@ -343,13 +343,53 @@ function GrowthDialog({ r, source, startOptions, onSave, onClose }: { r: Row; so
   const proj = productYears(d, source);
   const price = yearlyProjection(d.average_price, d.units_sold, d.yearly_growth, d.start_selling_year);
   const g = (y: number, k: "price" | "units") => text[`${y}${k}`] ?? (d.yearly_growth?.[String(y)]?.[k] ? String(d.yearly_growth![String(y)]![k]) : "");
+  const valueKey = (k: "price" | "units"): "priceValue" | "unitsValue" => (k === "price" ? "priceValue" : "unitsValue");
+  /** Typing a % means "grow it by this much", so it clears any figure typed outright for that year. */
   const setG = (y: number, k: "price" | "units", raw: string) => {
-    const yg: Growth = { ...(d.yearly_growth ?? {}) }; yg[String(y)] = { ...(yg[String(y)] ?? {}), [k]: parseSigned(raw) ?? 0 };
-    setD((x) => ({ ...x, yearly_growth: yg })); setText((t) => ({ ...t, [`${y}${k}`]: raw }));
+    const yg: Growth = { ...(d.yearly_growth ?? {}) };
+    yg[String(y)] = { ...(yg[String(y)] ?? {}), [k]: parseSigned(raw) ?? 0, [valueKey(k)]: null };
+    setD((x) => ({ ...x, yearly_growth: yg }));
+    // Drop any text held for the figure box so it falls back to showing what the % works out to,
+    // rather than sitting empty as if the year had no price at all.
+    setText((t) => { const next = { ...t, [`${y}${k}`]: raw }; delete next[`v${y}${k}`]; return next; });
   };
-  const cell = (y: number, k: "price" | "units") => y <= fy
-    ? <div className={cn(box, "flex items-center justify-end pr-2 text-xs text-muted-foreground/70")}>{y === fy ? "base year" : "—"}</div>
-    : <span className="relative block"><Input inputMode="text" value={g(y, k)} onChange={(e) => setG(y, k, e.target.value)} className={cn(box, "num pr-6 text-right")} /><span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span></span>;
+  /** Typing a figure means "it is exactly this", so the % for that year becomes derived, not stored. */
+  const setV = (y: number, k: "price" | "units", raw: string) => {
+    const yg: Growth = { ...(d.yearly_growth ?? {}) };
+    const parsed = raw.trim() === "" ? null : parseSigned(raw);
+    yg[String(y)] = { ...(yg[String(y)] ?? {}), [valueKey(k)]: parsed, ...(parsed === null ? {} : { [k]: null }) };
+    setD((x) => ({ ...x, yearly_growth: yg }));
+    setText((t) => ({ ...t, [`v${y}${k}`]: raw, [`${y}${k}`]: "" }));
+  };
+  const vText = (y: number, k: "price" | "units", shown: number) => {
+    const t = text[`v${y}${k}`];
+    if (t !== undefined) return t;
+    const set = d.yearly_growth?.[String(y)]?.[valueKey(k)];
+    return set != null ? String(set) : String(Math.round(shown * 100) / 100);
+  };
+  const cell = (y: number, k: "price" | "units") => {
+    if (y <= fy) return <div className={cn(box, "flex items-center justify-end pr-2 text-xs text-muted-foreground/70")}>{y === fy ? "base year" : "—"}</div>;
+    const typed = hasValue(d.yearly_growth?.[String(y)], k);
+    const shown = k === "price" ? price[y - 1].price : price[y - 1].units;
+    const prev = y - 2 >= 0 ? (k === "price" ? price[y - 2].price : price[y - 2].units) : NaN;
+    const derived = typed ? impliedPct(prev, shown) : null;
+    return (
+      <span className="relative block">
+        <Input inputMode="text" value={typed ? (derived === null ? "" : String(derived)) : g(y, k)}
+          onChange={(e) => setG(y, k, e.target.value)}
+          title={typed ? "Worked out from the figure below — type here to grow by a % instead" : undefined}
+          className={cn(box, "num pr-6 text-right", typed && "text-muted-foreground/70")} />
+        <span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+      </span>
+    );
+  };
+  /** The figure itself, typed straight in. What you put here is what the plan uses — no reverse arithmetic. */
+  const valueCell = (y: number, k: "price" | "units", shown: number) => y < fy
+    ? <div className="num text-right text-muted-foreground/60">—</div>
+    : y === fy
+      ? <div className="num text-right text-muted-foreground" title="Set on the product — this is the line's base year">{k === "price" ? num(shown) : shown}</div>
+      : <Input inputMode="text" value={vText(y, k, shown)} onChange={(e) => setV(y, k, e.target.value)}
+          className={cn("h-7 num px-1.5 text-right", hasValue(d.yearly_growth?.[String(y)], k) && "font-semibold")} />;
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-3xl">
@@ -386,7 +426,10 @@ function GrowthDialog({ r, source, startOptions, onSave, onClose }: { r: Row; so
           </div>
 
           <div>
-            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">What that gives</div>
+            <div className="mb-1.5 flex items-baseline gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">What that gives</span>
+              {!recurring(d) && <span className="text-[11.5px] text-muted-foreground">— or type the price and the number of units straight in, and the % works itself out</span>}
+            </div>
             <div className="grid grid-cols-[110px_repeat(5,1fr)] gap-x-3 gap-y-1.5 rounded border border-border px-3 py-2 text-[13px]">
               <div /> {YEARS.map((y) => <div key={y} className="text-right text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Year {y}</div>)}
               {recurring(d) ? (
@@ -397,9 +440,9 @@ function GrowthDialog({ r, source, startOptions, onSave, onClose }: { r: Row; so
                 </>
               ) : (
                 <>
-                  <div className="text-muted-foreground">Price</div>{price.map((p) => <div key={p.year} className="num text-right">{p.year < fy ? "—" : num(p.price)}</div>)}
-                  <div className="text-muted-foreground">× Units</div>{price.map((p) => <div key={p.year} className="num text-right">{p.year < fy ? "—" : p.units}</div>)}
-                  <div className="font-semibold">= Sales</div>{price.map((p) => <div key={p.year} className="num text-right font-semibold">{p.year < fy ? "—" : num(p.sales)}</div>)}
+                  <div className="self-center text-muted-foreground">Price</div>{price.map((p) => <div key={p.year} className="self-center">{valueCell(p.year, "price", p.price)}</div>)}
+                  <div className="self-center text-muted-foreground">× Units</div>{price.map((p) => <div key={p.year} className="self-center">{valueCell(p.year, "units", p.units)}</div>)}
+                  <div className="self-center font-semibold">= Sales</div>{price.map((p) => <div key={p.year} className="num self-center text-right font-semibold">{p.year < fy ? "—" : num(p.sales)}</div>)}
                 </>
               )}
             </div>

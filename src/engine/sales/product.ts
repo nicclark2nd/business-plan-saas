@@ -37,6 +37,9 @@ const priceFactors = (g: Growth | null | undefined) => {
   let f = 1;
   return YEARS.map((y) => { f = f * (1 + num(g?.[String(y)]?.price) / 100); return f; });
 };
+// NOTE: a typed price figure (priceValue) is not yet honoured for ongoing lines, whose revenue is a monthly
+// fee times client-months rather than price x units. Sales §6.26 covers one-off lines; ongoing lines keep
+// percentages until the fee model is revisited.
 /**
  * Units — jobs, or clients won — in each plan year: the base count grown by the units change.
  *
@@ -51,7 +54,10 @@ const newByYear = (p: AnyProduct) => {
   let n = num(p.units_sold);
   return YEARS.map((year) => {
     if (year < firstYear) return 0;
-    if (year > firstYear) n = n * (1 + num(p.yearly_growth?.[String(year)]?.units) / 100);
+    if (year > firstYear) {
+      const g = p.yearly_growth?.[String(year)];
+      n = g?.unitsValue != null ? num(g.unitsValue) : n * (1 + num(g?.units) / 100);
+    }
     return r2(n);
   });
 };

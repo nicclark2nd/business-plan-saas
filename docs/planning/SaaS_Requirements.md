@@ -573,3 +573,19 @@ Three things made it unreadable:
 Now the panel is headed by **that product's own first year** — "Current values" only when it sells today, otherwise "Year 3 values". The cell reads **base year**. And a line beneath the grid says why and what to do: *"This line starts in Year 3, so the price and units above are its Year 3 figures — there is nothing before them to grow from, which is why Year 3 has no box. The first change you can make is Year 4. If it is already selling, set Starts selling to Now — selling today and Year 1 becomes a change on today's figures."*
 
 **The rule: a disabled or absent input must say why it is absent and what to do instead.** A greyed cell with a one-word label is a bug report waiting to happen.
+
+## 6.26 Type the figure, not the percentage that lands on it (13 Sep 2026)
+
+Reported after having to solve backwards for 16.7 %, 14.25 %, 12.5 % and 11.1 % to get twelve, fourteen, sixteen, eighteen and twenty retaining walls. **Nobody plans "16.7 % more retaining walls."** Percentages suit prices and are unnatural for quantities.
+
+It was not only awkward, it was lossy. Units carry unrounded, so 16.7 % of 12 is **14.004** — displayed as 14, and 14.004 is what compounds into the next year. The plan held a quantity the client never typed and would not recognise.
+
+**A year now holds either a % change or the figure itself, per row and per year.** `GrowthYear` gains `priceValue` / `unitsValue`; when present they win and carry forward exactly. `yearly_growth` is already `jsonb`, so **no migration**. `yearlyProjection` and `newByYear` both honour them — they must stay identical (§6.21.1).
+
+**One grid, type either.** The *What that gives* table is editable: type 2 % into the Price row and 12 / 14 / 16 / 18 / 20 straight into Units, and the Units percentages fill themselves in as 16.67 / 14.29 / 12.5 / 11.11, greyed to show they are worked out rather than set. Typing a % clears that year's figure; typing a figure clears that year's %. The two can never disagree about what the year is, and **the figure is stored as given — the percentage is derived for display, never the other way round.** A figure of `0` is a real answer (a year the line sells nothing), so the sanitiser checks for null rather than falsiness.
+
+*Also fixed in the same pass:* typing a % first left the figure box empty, as if the year had no price at all, instead of showing what the % works out to.
+
+**Not yet:** ongoing (recurring) lines still take percentages only — their revenue is a monthly fee times client-months rather than price × units, so a typed figure needs the fee model revisited. Noted in `product.ts`. And Overheads, COGS unit costs and fixed costs keep percentages until this has been used in anger on Sales.
+
+Engine `typed-figures.test.ts`, 7 tests, including the invariant that units by year and by month still agree.

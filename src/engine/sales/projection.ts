@@ -6,7 +6,30 @@
  */
 export const YEARS = [1, 2, 3, 4, 5] as const;
 export type Year = (typeof YEARS)[number];
-export type Growth = Partial<Record<string, { price?: number | null; units?: number | null }>>;
+/**
+ * A year's change, per line (§6.26).
+ *
+ * `price` / `units` are a % change on the year before. `priceValue` / `unitsValue` are the figure itself —
+ * what the client actually typed — and when present they win.
+ *
+ * Percentages suit prices and are unnatural for quantities: nobody plans "16.7 % more retaining walls", they
+ * plan twelve, then fourteen. Made to work it backwards, a client lands on 16.7 % of 12 = 14.004, which is
+ * then what compounds into the next year — a quantity they never typed and would not recognise. So the
+ * figure is stored as given and the percentage is derived for display, never the other way round.
+ */
+export type GrowthYear = {
+  price?: number | null; units?: number | null;
+  priceValue?: number | null; unitsValue?: number | null;
+};
+export type Growth = Partial<Record<string, GrowthYear>>;
+
+/** Is this year's figure typed outright rather than grown? */
+export const hasValue = (g: GrowthYear | undefined, k: "price" | "units") =>
+  g?.[k === "price" ? "priceValue" : "unitsValue"] != null;
+
+/** The % change a typed figure implies, for showing back beside it. Null when there is nothing to compare. */
+export const impliedPct = (prev: number, next: number) =>
+  !Number.isFinite(prev) || prev === 0 ? null : Math.round(((next - prev) / prev) * 10000) / 100;
 export type MonthlyDistribution = Record<string, number>;   // {"1": 8.3333, … "12": 8.3337} — percentages summing to 100
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
@@ -25,8 +48,9 @@ export function yearlyProjection(basePrice: number, baseUnits: number, growth: G
     if (year < firstYear) return { year, price: 0, units: 0, sales: 0 };
     if (year > firstYear) {
       const g = growth?.[String(year)] ?? {};
-      price = price * (1 + num(g.price) / 100);
-      units = units * (1 + num(g.units) / 100);      // carried unrounded (APeX), shown and multiplied at 2 dp
+      // A typed figure is exact and carries forward exactly; a percentage compounds unrounded (APeX).
+      price = g.priceValue != null ? num(g.priceValue) : price * (1 + num(g.price) / 100);
+      units = g.unitsValue != null ? num(g.unitsValue) : units * (1 + num(g.units) / 100);
     }
     const shownUnits = r2(units);
     return { year, price, units: shownUnits, sales: price * shownUnits };
