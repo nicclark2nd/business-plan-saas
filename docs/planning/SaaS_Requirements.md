@@ -643,3 +643,28 @@ Three changes, because one would not have been enough:
 **"Dollars" is now the plan's own currency code** — AUD, PHP, GBP, whatever `plan_settings.currency` says. The app is not dollar-only and the header chip has been showing the real code all along; the button now agrees with it. `currency` threads from the Sales page through `SalesModule` to the dialog.
 
 *Verified on the plan:* Carports opens in **%** with the switch reading **% · Units · AUD**; clicking July struck the label, turned its mark into a coloured `+` and moved the other eleven to 11,127; AUD mode read 10,200 a month against the same 122,400.
+
+### 6.28.2 A reading that cannot fail is not a check (13 Sep 2026)
+
+Reported as three questions about one line, which is how you know the line was wrong: *"Twelve months add to 56,100 · 11 units · 1 month off — is it to tell the user we are 56,100 short? Is 11 units the total? What does 1 month off mean?"*
+
+**It was confirming that the twelve months sum to the year — and they always do.** The split is stored as weights (§6.17), so whatever is typed gets divided by its own total; the twelve can never add to anything but the year's own figure. It looked like a reconciliation and could never fail, and a number that can only ever say one thing carries no information, so the eye goes hunting for a meaning that is not there — in this case *"am I short?"*.
+
+Worse, it was duplication. The header already says *"56,100 from 11 units"* and the closing line already promises *"the twelve always add to the year exactly"*. Both facts the footer restated were on screen already, and the third — "1 month off" — was shorthand with no subject and no denominator.
+
+**The slot now reads the shape back.** Twelve typed boxes do not show a pattern; one sentence does.
+
+- `Selling in all twelve months · busiest December, quietest August`
+- `Selling in 11 of the twelve months · busiest June, quietest August` — the off months are counted into the denominator rather than tacked on as an aside
+- `Selling in December only`
+- Flat: `Selling in all twelve months · even at 4,675 a month, 0.9 units`
+
+**The flat case carries the reality check.** Eleven slabs spread evenly is **0.9 slabs a month**, which is the figure that tells a builder an even year is fiction — the same absurdity as the 1.5 carports of §6.28, and until now nothing said it out loud. It is stated as a reading, not a warning: the screen reports what the shape means and leaves the judgement to the client.
+
+"Flat" is a tolerance, not an equality — a legacy share of 8.3337 against 8.3333 is rounding, not a season. Half a per cent of the largest month; a real seasonal shape varies far more.
+
+The only failure state left is the real one: every month blank, which still says *"Put a figure in at least one month."*
+
+**The rule: a reading that cannot fail does not belong on the screen. If it can only ever say one thing, say that thing once in prose and give the slot to something that changes.**
+
+*Verified on the plan:* Shed and Tank Concrete Slabs opened flat at *"Selling in all twelve months · even at 4,675 a month, 0.9 units"*; Moderate rise with July switched off read *"Selling in 11 of the twelve months · busiest June, quietest August"*.

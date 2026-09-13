@@ -640,7 +640,33 @@ function MonthlyDialog({ r, fyEndMonth, currency, others, onSave, onClose }: {
 
   const unitText = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
   const suffix = mode === "pct" ? "%" : mode === "units" ? "" : "";
-  const offCount = Array.from({ length: 12 }, (_, i) => weight(i + 1)).filter((v) => v === 0).length;
+
+  /**
+   * What shape did you just make? (§6.28.2)
+   *
+   * This slot used to read "Twelve months add to 56,100", which could never say anything else — the split is
+   * weights, so the twelve add to the year by construction. A reading that cannot fail is not a check; it is
+   * furniture, and it invites the one question it was never answering: *am I short?* The header already
+   * carries the year's total and the closing line already promises it holds.
+   *
+   * So it reads the SHAPE back instead — how much of the year trades, and where the peak and trough sit.
+   * Twelve typed boxes do not show a pattern; one sentence does. When the spread is still flat it gives the
+   * per-month figure, because "0.9 slabs a month" is the number that tells a builder an even year is fiction.
+   */
+  const shapeNote = () => {
+    const live = Array.from({ length: 12 }, (_, i) => ({ v: weight(i + 1), i })).filter((x) => x.v > 0);
+    if (!live.length) return null;
+    if (live.length === 1) return `Selling in ${MONTH_NAMES[live[0].i]} only`;
+    const trading = live.length === 12 ? "Selling in all twelve months" : `Selling in ${live.length} of the twelve months`;
+    const top = live.reduce((a, b) => (b.v > a.v ? b : a));
+    const low = live.reduce((a, b) => (b.v < a.v ? b : a));
+    // A tolerance, not an equality: a legacy share of 8.3337 against 8.3333 is rounding, not a season.
+    if (top.v - low.v <= top.v * 0.005) {
+      const each = num(Math.round(yearSales / live.length));
+      return `${trading} \u00b7 even at ${each} a month${yearUnits > 0 ? `, ${unitText(yearUnits / live.length)} units` : ""}`;
+    }
+    return `${trading} \u00b7 busiest ${MONTH_NAMES[top.i]}, quietest ${MONTH_NAMES[low.i]}`;
+  };
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -707,12 +733,8 @@ function MonthlyDialog({ r, fyEndMonth, currency, others, onSave, onClose }: {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3 text-[13px]">
-            <span>
-              {!ok ? <b className="text-bad">Put a figure in at least one month.</b> : <>
-                Twelve months add to <b className="num text-good">{num(monthsMoney.reduce((a, b) => a + b, 0))}</b>
-                {yearUnits > 0 && <span className="ml-2 text-muted-foreground">{unitText(yearUnits)} units</span>}
-                {offCount > 0 && <span className="ml-2 text-muted-foreground">· {offCount} {offCount === 1 ? "month" : "months"} off</span>}
-              </>}
+            <span className={cn(ok && "text-muted-foreground")}>
+              {ok ? shapeNote() : <b className="text-bad">Put a figure in at least one month.</b>}
             </span>
             <span className="ml-auto flex gap-1.5">
               <Button type="button" size="sm" variant="outline" onClick={() => applyPct(evenDistribution())}>Even</Button>
