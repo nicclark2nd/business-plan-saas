@@ -10,6 +10,7 @@ import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, L
 import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { planMonths, planMonthNames } from "@/engine/plan/calendar";
+import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { cn } from "@/lib/utils";
 import { YEARS, yearlyProjection, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, distributionTotal, monthlySales, type Growth, type MonthlyDistribution } from "@/engine/sales/projection";
 import { productYears, productYear1Months, productYear1Clients, newClientsYear1, planRevenueByYear, planYear1Months, sourceOf, isLinked, bookNow, monthlyFee, recurring } from "@/engine/sales/product";
@@ -72,11 +73,14 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
       setRows((xs) => xs.map((x) => (x._key === key ? (res.ok ? { ...x, id: res.data!.id } : { ...x, _error: res.error }) : x)));
     });
   };
-  /** Nothing that feeds another line is deleted silently — the line it feeds would quietly detach. */
+  /**
+   * A product is never deleted silently (§6.24). It carries a price, units, five years of growth, a monthly
+   * split and its COGS cost — and possibly a line that takes its clients from it.
+   */
   const askRemove = (r: Row) => {
     const fed = ref.current.filter((x) => x.name.trim() && x.clients_from_product_id === r.id && x._key !== r._key);
-    if (fed.length) { setConfirm({ row: r, fed }); return; }
-    remove(r);
+    if (!r.name.trim() && isNew(r)) { remove(r); return; }   // an untouched blank row has nothing to lose
+    setConfirm({ row: r, fed });
   };
   const remove = (r: Row) => {
     setConfirm(null);
@@ -216,23 +220,24 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
 
       {open && dlg?.kind === "product" && <ProductDialog key={open._key} r={open} others={named.filter((x) => x._key !== open._key && !x.clients_from_product_id && !isNew(x))} onSave={(r) => { save(r); close(); }} onClose={close} />}
       {open && dlg?.kind === "growth" && <GrowthDialog key={open._key} r={open} source={src(open)} startup={startup} startOptions={startOptions} onSave={(r) => { save(r); close(); }} onClose={close} />}
-      {confirm && (
-        <Dialog open onOpenChange={(o) => !o && setConfirm(null)}>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Delete {confirm.row.name}?</DialogTitle>
-              <DialogDescription>
-                {confirm.fed.length === 1 ? <><b>{confirm.fed[0].name}</b> takes its clients from this line.</> : <><b>{confirm.fed.map((f) => f.name).join(", ")}</b> take their clients from this line.</>}
-                {" "}Delete it and {confirm.fed.length === 1 ? "that line goes" : "those lines go"} back to winning clients on {confirm.fed.length === 1 ? "its" : "their"} own — the numbers will change.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setConfirm(null)}>Keep it</Button>
-              <Button type="button" onClick={() => remove(confirm.row)}>Delete {confirm.row.name}</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+      {confirm && (() => {
+        const y1 = productYear1Months(confirm.row, src(confirm.row)).reduce((a, b) => a + b, 0);
+        const fed = confirm.fed;
+        return (
+          <ConfirmDelete
+            title={`Delete ${confirm.row.name || "this product"}?`}
+            what={<>
+              {y1 > 0 && <>It contributes <b>{num(y1)}</b> to Year 1 sales. </>}
+              Its price, units, yearly growth, monthly split and cost go with it.
+              {fed.length > 0 && (
+                <> {fed.length === 1 ? <><b>{fed[0].name}</b> takes its clients from this line and goes</> : <><b>{fed.map((f) => f.name).join(", ")}</b> take their clients from this line and go</>} back to winning clients on {fed.length === 1 ? "its" : "their"} own.</>
+              )}
+            </>}
+            onCancel={() => setConfirm(null)}
+            onConfirm={() => remove(confirm.row)}
+          />
+        );
+      })()}
 
       {open && dlg?.kind === "monthly" && (recurring(open)
         ? <ClientsDialog key={open._key} r={open} fyEndMonth={fyEndMonth} source={src(open)} onSave={(r) => { save(r); close(); }} onClose={close} />

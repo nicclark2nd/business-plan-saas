@@ -532,3 +532,13 @@ APeX: an Extraordinary Items list with two summary cards and one Add/Edit dialog
 *Also noted for the forecast build:* APeX's own cash flow currently prints *"Cross-statement checks failed for years 3, 4, 5 — profit, cash and the balance sheet do not agree, so these figures should not be relied on."* We should build that check, and pass it.
 
 Migration 0017: `source_asset_id` / `notes` / `sort_order` on `plan_extraordinary_items`, `year` bounded 1–5, disposals restricted to income. No `apply_plan_rls` — 0003 already applied it, and calling it twice fails on the existing policy (caught by replaying all seventeen against a scratch Postgres). Engine `engine/extraordinary/items.ts`, 9 tests. Guided path now 15 steps.
+
+## 6.24 Deleting a row that carries figures (13 Sep 2026)
+
+The same `✕` meant different things on different screens. Fixed Assets, Funding and One-offs asked first; Sales asked **only** if the product fed a linked line and otherwise deleted on the spot; COGS fixed costs, Leadership Team, Marketing and Competitors never asked at all. A client learns the button is safe on one screen and loses a product on another.
+
+**The rule: a row carrying figures the forecast uses is never deleted silently.** Sales products, COGS fixed costs, people, competitors and marketing spend now confirm, alongside the three that already did. **A single line of free text does not** — SWOT items and marketing evidence still go on one click, because a dialog there is friction that teaches people to click through dialogs without reading, which is precisely what makes the dangerous ones dangerous. A blank row the client has not typed into yet is removed without asking.
+
+**It names the consequence, never "are you sure".** `components/module/ConfirmDelete.tsx` is the single component, and each caller supplies what actually goes: *"Delete Carports? It contributes 141,372 to Year 1 sales. Its price, units, yearly growth, monthly split and cost go with it."* A person's dialog says the Leadership Team total in Overheads will drop; a marketing channel's says the same about the Marketing spend line; a product that feeds another line still says which line detaches. "Are you sure" tells the client nothing they did not already know.
+
+*Found while testing:* the Royalties line — the franchise royalty that took its clients from Licence Sales, and the whole reason linked products were built in §6.17 — is no longer in the plan. Seven products became six. Nobody asked before it went.

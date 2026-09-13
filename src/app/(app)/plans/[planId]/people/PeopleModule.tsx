@@ -6,6 +6,7 @@ import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/Module
 import { Grid, Th, Td, Row, FootRow, GroupRow, Toolbar, Meta, Note, NameLink, LinkButton, RemoveButton, CellInput, CellSelect, CellTextarea, focusRow } from "@/components/module/DataGrid";
 import { cn } from "@/lib/utils";
 import { GUIDED_STEPS } from "@/lib/nav";
+import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { SALARY_YEARS, planYearStart, startYearFromDate, tenureLabel, salarySchedule, scheduleChangeFromBase, totalSalariesByYear } from "@/engine/people/salary";
 import { upsertPerson, deletePerson, upsertCapability, deleteCapability, continueFromPeople } from "./actions";
 import { PERSON_ROLES, ROLE_LABEL, CAPABILITY_KINDS, KIND_LABEL, formatMonth, type Person, type Capability, type CapabilityKind, type PeopleData } from "./model";
@@ -22,6 +23,7 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
   void currency;
   const fyStart = useMemo(() => planYearStart(planYear, fyEndMonth), [planYear, fyEndMonth]);
   // Empty grids start with a blank row ready to type in (closed decision 8). Starter ids are fixed so server and client match.
+  const [killPerson, setKillPerson] = useState<Row | null>(null);
   const blankPerson = (key = "tmp-new-person"): Row => ({ _key: key, id: "", plan_id: planId, first_name: "", last_name: "", name: "", position: "", role: "employee", pct_shareholding: 0, annual_salary: 0, started_on: null, started_text: "", salary_adjustments: {}, sort_order: 0 });
   const blankCap = (personId: string, id = `tmp-new-cap-${personId}`): Cap => ({ id, _key: id, person_id: personId, kind: "responsibility", description: "", internal: false, sort_order: 0 });
   const [people, setPeople] = useState<Row[]>(() => initial.people.length
@@ -70,7 +72,13 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
     setPeople((ps) => [r, ...ps]); setScope(null); setArea("people");
     focusRow(`[data-row="${r._key}"]`);
   };
+  /** A person carries a salary, its yearly adjustments and a start date (§6.24). */
+  const askRemovePerson = (r: Row) => {
+    if (!(r.name ?? "").trim() && !(r.first_name ?? "").trim() && !r.id) { removePerson(r); return; }
+    setKillPerson(r);
+  };
   const removePerson = (r: Row) => {
+    setKillPerson(null);
     setPeople((ps) => { const rest = ps.filter((x) => x._key !== r._key); return rest.length ? rest : [blankPerson(crypto.randomUUID())]; });
     if (scope === r._key) setScope(null);
     if (r.id) start(async () => { await deletePerson(planId, r.id); });
@@ -158,7 +166,7 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
                   <Td right><CellInput numeric value={String(r.pct_shareholding ?? 0)} onChange={(e) => edit(r._key, { pct_shareholding: Number(e.target.value.replace(/[^\d.-]/g, "")) || 0 })} /></Td>
                   <Td><CellInput value={r.started_text} placeholder="month year" onChange={(e) => edit(r._key, { started_text: e.target.value, started_on: r.started_on })} /></Td>
                   <Td right className={cn("num text-muted-foreground", r.started_on && new Date(r.started_on) > new Date() && "text-warn")}>{tenureLabel(r.started_on, fyStart)}</Td>
-                  <Td><RemoveButton onClick={() => removePerson(r)} /></Td>
+                  <Td><RemoveButton onClick={() => askRemovePerson(r)} /></Td>
                 </Row>
               ))}
             </tbody>
@@ -226,6 +234,14 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
             <tbody>{visible.map((r) => <Row key={r._key}><Td><NameLink onClick={() => setScope(r._key)}>{r.name || r.first_name}</NameLink></Td><Td colSpan={4} className="text-muted-foreground">Phase 2 — after the forecast is live.</Td></Row>)}</tbody>
           </Grid>
         </>
+      )}
+      {killPerson && (
+        <ConfirmDelete
+          title={`Remove ${(killPerson.name || [killPerson.first_name, killPerson.last_name].filter(Boolean).join(" ") || "this person")}?`}
+          what={<>Their salary{killPerson.annual_salary ? <> of {new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 }).format(killPerson.annual_salary)}</> : null}, its yearly adjustments and their start date go with them — and the Leadership Team total in Overheads drops to match.</>}
+          onCancel={() => setKillPerson(null)}
+          onConfirm={() => removePerson(killPerson)}
+        />
       )}
     </ModuleFrame>
   );

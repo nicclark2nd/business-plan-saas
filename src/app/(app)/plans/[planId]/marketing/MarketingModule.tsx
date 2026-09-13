@@ -6,6 +6,7 @@ import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/Module
 import { Grid, Th, Td, Row, FootRow, Toolbar, Meta, Note, RemoveButton, CellInput, CellSelect, CellTextarea, focusRow } from "@/components/module/DataGrid";
 import { Section, FieldGrid, Field, FieldTextarea } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
+import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { cn } from "@/lib/utils";
 import { formatMonth } from "../people/model";
 import { saveMarket, upsertRow, deleteRow, continueFromMarketing, type RowKind } from "./actions";
@@ -19,6 +20,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
   planId: string; initial: MarketingData; mode: "guided" | "advanced"; initialArea: AreaKey; customerWord: string;
 }) {
   const [area, setArea] = useState<AreaKey>(initialArea);
+  const [kill, setKill] = useState<{ id: string; channel: string; budget: number } | null>(null);
   const [market, setMarket] = useState<Market>(initial.market);
   const [marketDirty, setMarketDirty] = useState(false);
   // An empty grid starts with one blank row ready to type in (it only saves once its first column is filled).
@@ -68,7 +70,18 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
     setList(k, (xs) => [{ id: tmp, sort_order: 0, ...blank }, ...xs]);
     focusRow(`[data-row="${tmp}"]`);
   };
+  /**
+   * A spend line feeds the Marketing total that Overheads locks in, so it asks first (§6.24). A piece of
+   * evidence is a line of text and still goes on one click — a dialog there only teaches people to
+   * click through dialogs.
+   */
+  const askRemoveSpend = (id: string) => {
+    const r = (list("spend") as AnyRow[]).find((x) => x.id === id) as { channel?: string; annual_budget?: number } | undefined;
+    if (!r || (!r.channel?.trim() && id.startsWith("tmp-"))) { remove("spend", id); return; }
+    setKill({ id, channel: r.channel ?? "", budget: Number(r.annual_budget ?? 0) });
+  };
   const remove = (k: GridKind, id: string) => {
+    setKill(null);
     setList(k, (xs) => { const rest = xs.filter((x) => x.id !== id); return rest.length ? rest : [k === "spend" ? blankSpend(`tmp-${crypto.randomUUID()}`) as unknown as AnyRow : blankEvidence(`tmp-${crypto.randomUUID()}`) as unknown as AnyRow]; });
     if (!id.startsWith("tmp-")) start(async () => { await deleteRow(planId, k, id); });
   };
@@ -140,7 +153,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
                   <Td><CellSelect value={s.kind} options={SPEND_KINDS.map((k) => ({ value: k, label: SPEND_LABEL[k] }))} onValueChange={(v) => edit("spend", s.id, { kind: v as SpendKind }, !!s.approach.trim())} /></Td>
                   <Td wrap><CellTextarea value={s.approach} placeholder="e.g. Google Ads on 'concreter Wollongong'; referral fee to builders" onChange={(e) => edit("spend", s.id, { approach: e.target.value })} /></Td>
                   <Td right><CellInput numeric value={s.annual_budget ? fmt.format(s.annual_budget) : ""} placeholder="0" onChange={(e) => edit("spend", s.id, { annual_budget: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} /></Td>
-                  <Td><RemoveButton onClick={() => remove("spend", s.id)} /></Td>
+                  <Td><RemoveButton onClick={() => askRemoveSpend(s.id)} /></Td>
                 </Row>
               ))}
             </tbody>
@@ -167,6 +180,14 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
             </tbody>
           </Grid>
         </>
+      )}
+      {kill && (
+        <ConfirmDelete
+          title={`Delete ${kill.channel.trim() || "this channel"}?`}
+          what={<>{kill.budget > 0 && <>{new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 }).format(kill.budget)} a year comes out of the marketing budget, </>}and the Marketing spend line in Overheads drops to match.</>}
+          onCancel={() => setKill(null)}
+          onConfirm={() => remove("spend", kill.id)}
+        />
       )}
     </ModuleFrame>
   );

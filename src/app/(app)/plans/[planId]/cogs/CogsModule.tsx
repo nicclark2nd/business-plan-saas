@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
+import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { planMonths, planMonthNames } from "@/engine/plan/calendar";
 import { productCostMonths } from "@/engine/cogs/direct";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,7 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
   const MONTHS = planMonths(fyEndMonth);
   const router = useRouter();
   const [area, setArea] = useState<AreaKey>(initialArea);
+  const [kill, setKill] = useState<FixRow | null>(null);
   const [rows, setRows] = useState<CostedProduct[]>(products);
   const [items, setItems] = useState<FixRow[]>(fixed.map((f) => ({ ...f, _key: f.id })));
   const [dlg, setDlg] = useState<Dlg>(null);
@@ -85,8 +87,14 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
     });
   };
   const removeItem = (f: FixRow) => {
+    setKill(null);
     setItems((xs) => xs.filter((x) => x._key !== f._key));
     if (!isNew(f)) start(async () => { await deleteFixedCogs(planId, f.id); });
+  };
+  /** A fixed cost carries its yearly rises and its own monthly split — never dropped silently (§6.24). */
+  const askRemoveItem = (f: FixRow) => {
+    if (!f.item_name.trim() && isNew(f)) { removeItem(f); return; }
+    setKill(f);
   };
   const addItem = () => {
     const id = `tmp-${crypto.randomUUID()}`;
@@ -194,7 +202,7 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
                     <Td className="whitespace-nowrap text-right">
                       <IconButton title="Edit cost" onClick={() => setDlg({ kind: "item", key: f._key })}>✎</IconButton>
                       <IconButton title="Edit monthly split" onClick={() => setDlg({ kind: "split", key: f._key })}>▦</IconButton>
-                      <RemoveButton onClick={() => removeItem(f)} />
+                      <RemoveButton onClick={() => askRemoveItem(f)} />
                     </Td>
                   </GridRow>
                 );
@@ -253,6 +261,14 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
       </div>
 
       {openProduct && <CostDialog key={openProduct.id} p={openProduct} source={src(openProduct)} onSave={(p) => { saveCost(p); close(); }} onClose={close} />}
+      {kill && (
+        <ConfirmDelete
+          title={`Delete ${kill.item_name || "this fixed cost"}?`}
+          what={<>{num(fixedCostByYear(kill)[0])} a year comes out of cost of sales, along with its yearly rises and its monthly split. Gross margin will move.</>}
+          onCancel={() => setKill(null)}
+          onConfirm={() => removeItem(kill)}
+        />
+      )}
       {openItem && dlg?.kind === "item" && <ItemDialog key={openItem._key} f={openItem} onSave={(f) => { saveItem(f); close(); }} onClose={close} />}
       {openItem && dlg?.kind === "split" && <SplitDialog key={openItem._key} f={openItem} fyEndMonth={fyEndMonth} onSave={(f) => { saveItem(f); close(); }} onClose={close} />}
     </ModuleFrame>

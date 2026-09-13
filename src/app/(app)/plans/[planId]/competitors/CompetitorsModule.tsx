@@ -6,6 +6,7 @@ import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/Module
 import { Grid, Th, Td, Toolbar, Meta, RemoveButton, CellInput, CellSelect, CellTextarea, focusRow } from "@/components/module/DataGrid";
 import { Section, FieldGrid, Field, FieldTextarea } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
+import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { cn } from "@/lib/utils";
 import { saveMarket, upsertRow, deleteRow } from "../marketing/actions";
 import { POSITION_FIELDS, COMPETITOR_KIND, COMPETITOR_REACH, COMPETITOR_PRICING, COMPETITOR_THREAT, type Position, type Competitor } from "../marketing/model";
@@ -19,6 +20,7 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
   planId: string; initialPosition: Position; initialCompetitors: Competitor[]; mode: "guided" | "advanced"; initialArea: AreaKey; customerWord: string;
 }) {
   const [area, setArea] = useState<AreaKey>(initialArea);
+  const [kill, setKill] = useState<{ id: string; name: string } | null>(null);
   const [position, setPosition] = useState<Position>(initialPosition);
   const [positionDirty, setPositionDirty] = useState(false);
   const blank = (id = "tmp-new-competitor"): Row_ => ({ id, name: "", kind: "direct", reach: null, pricing: null, threat: "medium", strengths: "", weaknesses: "", how_we_win: "", sort_order: 0 });
@@ -53,7 +55,14 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
     setRows((xs) => [blank(tmp), ...xs]);
     setArea("competitors"); focusRow(`[data-row="${tmp}"]`);
   };
+  /** A competitor carries the whole SBA comparison — never dropped silently (§6.24). */
+  const askRemove = (id: string) => {
+    const r = rowsRef.current.find((x) => x.id === id);
+    if (!r || (!r.name?.trim() && id.startsWith("tmp-"))) { remove(id); return; }
+    setKill({ id, name: r.name ?? "" });
+  };
   const remove = (id: string) => {
+    setKill(null);
     setRows((xs) => { const rest = xs.filter((x) => x.id !== id); return rest.length ? rest : [blank(`tmp-${crypto.randomUUID()}`)]; });
     if (!id.startsWith("tmp-")) start(async () => { await deleteRow(planId, "competitors", id); });
   };
@@ -104,7 +113,7 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
                   <Td><CellSelect value={c.reach} options={COMPETITOR_REACH} placeholder="Reach —" onValueChange={(v) => edit(c.id, { reach: v }, !!c.name.trim())} /></Td>
                   <Td><CellSelect value={c.pricing} options={COMPETITOR_PRICING} placeholder="Pricing —" onValueChange={(v) => edit(c.id, { pricing: v }, !!c.name.trim())} /></Td>
                   <Td><CellSelect value={c.threat} options={COMPETITOR_THREAT} className={cn("font-semibold", c.threat === "critical" || c.threat === "high" ? "text-bad" : c.threat === "medium" ? "text-warn" : "text-good")} onValueChange={(v) => edit(c.id, { threat: v as Competitor["threat"] }, !!c.name.trim())} /></Td>
-                  <Td><RemoveButton onClick={() => remove(c.id)} /></Td>
+                  <Td><RemoveButton onClick={() => askRemove(c.id)} /></Td>
                 </tr>,
                 <tr key={c.id + "b"} data-row={c.id} onBlur={(e) => left(e) && commit(c.id)} className={cn("[&>td]:align-top [&>td]:pb-3", c._error && "[&>td]:bg-bad-soft")}>
                   <Td colSpan={2} wrap><div className="mb-0.5 pl-1.5 text-[10.5px] font-semibold uppercase tracking-[.05em] text-muted-foreground">What they do well</div><CellTextarea value={c.strengths ?? ""} placeholder="Reputation, market position, what clients say they like" onChange={(e) => edit(c.id, { strengths: e.target.value })} /></Td>
@@ -131,6 +140,14 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
             </FieldGrid>
           </Section>
         </div>
+      )}
+      {kill && (
+        <ConfirmDelete
+          title={`Delete ${kill.name.trim() || "this competitor"}?`}
+          what={<>Everything recorded against them goes too — how they compare on price, quality and service, and the notes behind it. They will drop out of the plan&apos;s competitor section.</>}
+          onCancel={() => setKill(null)}
+          onConfirm={() => remove(kill.id)}
+        />
       )}
     </ModuleFrame>
   );
