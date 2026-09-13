@@ -668,3 +668,25 @@ The only failure state left is the real one: every month blank, which still says
 **The rule: a reading that cannot fail does not belong on the screen. If it can only ever say one thing, say that thing once in prose and give the slot to something that changes.**
 
 *Verified on the plan:* Shed and Tank Concrete Slabs opened flat at *"Selling in all twelve months · even at 4,675 a month, 0.9 units"*; Moderate rise with July switched off read *"Selling in 11 of the twelve months · busiest June, quietest August"*.
+
+### 6.28.3 Three defects in the monthly split (13 Sep 2026)
+
+Found during an external review of Sales. Only the defects were acted on; no part of the review's redesign proposals was built, and the app is otherwise unchanged pending Nic's own read.
+
+**A preset was undoing a month the client had switched off.** `applyPct` wrote all twelve boxes, so turning July off and then reaching for *Moderate rise* quietly brought July back — the preset overwrote a deliberate decision with a default one, and nothing said so. Presets now go through `applyShape`, which reshapes the **months that trade** and leaves the off ones at zero. With nothing live at all there is nothing to preserve, so a preset fills all twelve; that is what makes **Even** the way back from an empty screen. **Same as…** keeps the wholesale behaviour, because copying another line's shape means copying its off months too — that is what the label promises.
+
+**Switching entry mode moved the allocation.** Units were seeded to two decimals, so a shape typed in per cent and viewed in units came back slightly different: on a ramp, the worst month moved by up to **40 of revenue** with nothing typed and nothing said. Units now seed to three decimals, which drops the worst case to **under 4** and leaves the box readable (`0.917`, not `0.9167`). Currency was already immaterial at whole units — half a unit of currency worst case — and stays there rather than putting cents in twelve boxes.
+
+| Line | 2dp (before) | 3dp (now) |
+|---|---|---|
+| Shed & Tank, 11 units | 23.00 | 3.03 |
+| Carports, 18 units | 33.17 | 3.06 |
+| A 1-unit line | 37.56 | 3.92 |
+
+*Verified on screen:* Moderate rise with July off left July at zero and ramped the other eleven; a per cent → units → per cent round trip moved no month by more than **3**.
+
+**"1 units".** The flat reading in §6.28.2 did not pluralise, so a line selling twelve a year read *"even at 5,100 a month, 1 units"*.
+
+**Observed, not changed:** after a mode round trip the displayed percentages rescale when a month is off — 7.6453 becomes 8.2636 — because the live months renormalise to 100. The money does not move (that is the §6.17 weight model working), but the numbers on screen change while nothing about the plan has. Raised for Nic rather than fixed, since a fix means choosing between normalising on every render and storing shares that do not add to 100.
+
+**On the review itself, for the record:** its strongest claim — that the *Moderate rise* and *Ramp-up* curves match APeX's *Moderate Growth* and *Exponential Growth* — is correct and understated. The expressions are the same (`0.5 * Math.exp(0.3 * month)`, `0.8 + 0.2 * (month / 12)`), differing only in how month 12 reconciles. This is not a discovery: `APeX_Code_Audit.md` places `salesProductUtils.ts` on the **PORT** list as a deliberate decision. Its claim about shared sample data is wrong — no plan data ships in this repo; the shared figures are Nic's own plan entered into both systems, and the sample plan for release will be a different business entirely.

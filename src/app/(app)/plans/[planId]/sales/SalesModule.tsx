@@ -592,7 +592,7 @@ function MonthlyDialog({ r, fyEndMonth, currency, others, onSave, onClose }: {
   /** What the client typed, in whatever unit they chose. Only the proportions matter. */
   const asMode = (pctValue: number, m: EntryMode) =>
     m === "pct" ? Math.round(pctValue * 10000) / 10000
-      : m === "units" ? Math.round(yearUnits * (pctValue / 100) * 100) / 100
+      : m === "units" ? Math.round(yearUnits * (pctValue / 100) * 1000) / 1000
         : Math.round(yearSales * (pctValue / 100));
   const fromStored = (m: EntryMode) => {
     const stored = normalizeDistribution(r.monthly_distribution);
@@ -624,9 +624,23 @@ function MonthlyDialog({ r, fyEndMonth, currency, others, onSave, onClose }: {
     for (let i = 1; i <= 12; i++) out[String(i)] = String(asMode(num2(dist[String(i)]), m));
     setMode(m); setW(out);
   };
+  /** Copy another line's shape wholesale — its off months included, because that is what "same as" means. */
   const applyPct = (dist: MonthlyDistribution) => {
     const out: Record<string, string> = {};
     for (let i = 1; i <= 12; i++) out[String(i)] = String(asMode(num2(dist[String(i)]), mode));
+    setW(out);
+  };
+  /**
+   * A preset reshapes the months that trade; it does not bring back the ones switched off (§6.28.3).
+   * Turning July off and then reaching for Moderate rise is not a request to start selling in July again —
+   * the old behaviour overwrote all twelve and silently undid the decision. With nothing live at all there
+   * is nothing to preserve, so a preset fills all twelve, which is what makes Even the way back from empty.
+   */
+  const applyShape = (dist: MonthlyDistribution) => {
+    const off = Array.from({ length: 12 }, (_, i) => weight(i + 1) === 0);
+    const anyLive = off.some((x) => !x);
+    const out: Record<string, string> = {};
+    for (let i = 1; i <= 12; i++) out[String(i)] = anyLive && off[i - 1] ? "0" : String(asMode(num2(dist[String(i)]), mode));
     setW(out);
   };
   /** Off is a real answer — a shutdown, or a trade that cannot pour in the wet. The rest take the year. */
@@ -635,7 +649,7 @@ function MonthlyDialog({ r, fyEndMonth, currency, others, onSave, onClose }: {
     if (on) { setMonth(i, "0"); return; }
     const live = Array.from({ length: 12 }, (_, j) => weight(j + 1)).filter((v) => v > 0);
     const avg = live.length ? live.reduce((a, b) => a + b, 0) / live.length : (mode === "pct" ? 8.3333 : mode === "units" ? Math.max(1, Math.round(yearUnits / 12)) : Math.round(yearSales / 12));
-    setMonth(i, String(Math.round(avg * 100) / 100));
+    setMonth(i, String(Math.round(avg * 1000) / 1000));
   };
 
   const unitText = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
@@ -663,7 +677,8 @@ function MonthlyDialog({ r, fyEndMonth, currency, others, onSave, onClose }: {
     // A tolerance, not an equality: a legacy share of 8.3337 against 8.3333 is rounding, not a season.
     if (top.v - low.v <= top.v * 0.005) {
       const each = num(Math.round(yearSales / live.length));
-      return `${trading} \u00b7 even at ${each} a month${yearUnits > 0 ? `, ${unitText(yearUnits / live.length)} units` : ""}`;
+      const per = yearUnits / live.length;
+      return `${trading} \u00b7 even at ${each} a month${yearUnits > 0 ? `, ${unitText(per)} ${per === 1 ? "unit" : "units"}` : ""}`;
     }
     return `${trading} \u00b7 busiest ${MONTH_NAMES[top.i]}, quietest ${MONTH_NAMES[low.i]}`;
   };
@@ -737,9 +752,9 @@ function MonthlyDialog({ r, fyEndMonth, currency, others, onSave, onClose }: {
               {ok ? shapeNote() : <b className="text-bad">Put a figure in at least one month.</b>}
             </span>
             <span className="ml-auto flex gap-1.5">
-              <Button type="button" size="sm" variant="outline" onClick={() => applyPct(evenDistribution())}>Even</Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => applyPct(moderateDistribution())}>Moderate rise</Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => applyPct(rampUpDistribution())}>Ramp-up</Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => applyShape(evenDistribution())}>Even</Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => applyShape(moderateDistribution())}>Moderate rise</Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => applyShape(rampUpDistribution())}>Ramp-up</Button>
             </span>
           </div>
 
