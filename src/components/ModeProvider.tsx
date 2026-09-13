@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useOptimistic, useTransition } from "react";
+import { createContext, useContext, useState, useTransition } from "react";
 import { setMode as persistMode } from "@/app/(app)/actions";
 
 /**
@@ -23,15 +23,19 @@ const Ctx = createContext<{ mode: Mode; setMode: (m: Mode) => void; saving: bool
 
 export function ModeProvider({ initial, children }: { initial: Mode; children: React.ReactNode }) {
   const [pending, start] = useTransition();
-  // useOptimistic keeps the switch instant while the write is still in flight, and falls back to the
-  // server's value if the write fails — so the button never lies about what was actually saved.
-  const [mode, show] = useOptimistic<Mode, Mode>(initial, (_, next) => next);
+  // Plain state, not useOptimistic. An optimistic value is only held for the life of the transition and
+  // then falls back to whatever the server last rendered — and since this deliberately does not revalidate,
+  // the server's value never catches up, so the switch snapped straight back to Guided every time. The
+  // client owns the mode for the session; the write only has to say if it failed.
+  const [mode, show] = useState<Mode>(initial);
 
   const setMode = (next: Mode) => {
     if (next === mode) return;
+    const previous = mode;
+    show(next);                                  // instant, and it stays
     start(async () => {
-      show(next);
-      await persistMode(next);
+      const saved = await persistMode(next);
+      if (!saved) show(previous);                // revert only if the preference genuinely did not save
     });
   };
 

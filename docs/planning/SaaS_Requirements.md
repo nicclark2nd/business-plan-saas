@@ -500,7 +500,9 @@ Pressing Guided or Advanced took **just over two seconds** — measured at 2,025
 
 `setMode` wrote the preference and then called `revalidatePath(path)`, which throws away the whole route and re-runs the layout *and* the page. One click cost roughly **39 round trips to Supabase** (measured at ~200 ms each): `setMode` 2, `getSession` 3, **`getCompleteness` 17**, plan settings 1, then the page's own `getSession` 3 again and its queries 13. All of it to redraw figures that had not changed — because the mode changes **which items the sidebar lists and whether the help rail starts open, and nothing else**.
 
-**The mode now lives on the client.** `ModeProvider` holds it with `useOptimistic`, seeded by the server on first render; `Sidebar` and `ModeToggle` read it from context; `setMode` still writes to `profiles` but no longer revalidates, so the write happens where nobody is waiting on it. If the write fails the optimistic value falls back, so the button never claims something was saved that wasn't. **Result: 2,025 ms → 7 ms**, and the preference still survives a reload and a new tab.
+**The mode now lives on the client.** `ModeProvider` holds it in plain state, seeded by the server on first render; `Sidebar` and `ModeToggle` read it from context; `setMode` still writes to `profiles` but no longer revalidates, so the write happens where nobody is waiting on it. It returns whether it saved, and the provider reverts only on a genuine failure. **Result: 2,025 ms → 7 ms**, and the preference survives a reload, a new tab and in-app navigation.
+
+*It shipped broken once, and the reason is worth keeping.* The first cut used `useOptimistic`, which holds its value only for the life of the transition and then falls back to whatever the server last rendered. Removing the revalidation meant the server's value never caught up — so the write succeeded and the switch snapped straight back to Guided. The two halves of the same change contradicted each other. **An optimistic value needs a server render to land on; without one, the client has to own the state outright.**
 
 Two things found alongside it and fixed:
 

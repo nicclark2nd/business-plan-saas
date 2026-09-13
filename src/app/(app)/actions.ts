@@ -8,10 +8,12 @@ import { createClient } from "@/lib/supabase/server";
  * the sidebar lists and nothing else, so throwing away the route to redraw identical figures cost about two
  * seconds a click. The switch itself is client state (ModeProvider); this only makes it stick (§6.22).
  */
-export async function setMode(mode: "guided" | "advanced") {
+export async function setMode(mode: "guided" | "advanced"): Promise<boolean> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (user) await supabase.from("profiles").update({ mode }).eq("id", user.id);
+  if (!user) return false;
+  const { error } = await supabase.from("profiles").update({ mode }).eq("id", user.id);
+  return !error;
 }
 
 export type SetupState = { error?: string } | undefined;
