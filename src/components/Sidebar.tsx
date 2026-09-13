@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV, GUIDED_STEPS } from "@/lib/nav";
+import { useMode } from "@/components/ModeProvider";
 import { cn } from "@/lib/utils";
 
-export function Sidebar({ planId, mode, doneSteps }: { planId: string; mode: "guided" | "advanced"; doneSteps: number[] }) {
+export function Sidebar({ planId, doneSteps }: { planId: string; doneSteps: number[] }) {
+  const { mode } = useMode();
   const path = usePathname();
   const base = `/plans/${planId}`;
   const groups = NAV.map((g) => ({ ...g, items: g.items.filter((i) => mode === "advanced" || i.step || i.tool) })).filter((g) => g.items.length);

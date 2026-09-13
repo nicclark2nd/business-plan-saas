@@ -1,9 +1,16 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 
 export type Mode = "guided" | "advanced";
 
-/** The signed-in user's profile plus the plans they can see. */
-export async function getSession() {
+/**
+ * The signed-in user's profile plus the plans they can see.
+ *
+ * Wrapped in React's `cache` so the layout and the page share one call per request. Without it every render
+ * did the whole thing twice, including two `auth.getUser()` calls — each a network round trip to the Auth
+ * API, not a local check.
+ */
+export const getSession = cache(async () => {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
@@ -12,10 +19,10 @@ export async function getSession() {
     supabase.from("plans").select("id, business_name, status, plan_year, organisation_id, organisations(name, kind)").order("created_at"),
   ]);
   return { user, profile, plans: plans ?? [] };
-}
+});
 
 /** Section completeness for the dashboard — counts rows in each module for one plan. */
-export async function getCompleteness(planId: string) {
+export const getCompleteness = cache(async (planId: string) => {
   const supabase = await createClient();
   const count = async (table: string, opts?: { annualOnly?: boolean }) => {
     const base = supabase.from(table).select("*", { count: "exact", head: true }).eq("plan_id", planId);
@@ -52,4 +59,4 @@ export async function getCompleteness(planId: string) {
   ];
   const done = sections.reduce((a, s) => a + s.done / s.total, 0);
   return { sections, percent: Math.round((done / sections.length) * 100) };
-}
+});

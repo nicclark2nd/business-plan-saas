@@ -493,3 +493,22 @@ A plan's Year 1 starts the month after the financial year ends: `plan_settings.f
 Four faults this session were the same shape — one fact with two computations that quietly disagreed — and every one was invisible while a module was read alone. This file is where that disagreement now fails a test instead of reaching a client's plan. **A new monthly or annual view is not done until it is asserted against the view it duplicates here.**
 
 Also swept: the last four hardcoded month lists. Sales' monthly-split dialog was still labelling its twelve boxes January–December (missed in the §6.21 pass); Plan settings and the Historic and People date helpers legitimately want *calendar* order and now take it from `calendar.ts` rather than keeping private copies. No module owns a month list.
+
+## 6.22 Guided vs Advanced is a view preference, not a refetch (13 Sep 2026)
+
+Pressing Guided or Advanced took **just over two seconds** — measured at 2,025 ms, of which 819 ms was waiting on the server and the rest streaming.
+
+`setMode` wrote the preference and then called `revalidatePath(path)`, which throws away the whole route and re-runs the layout *and* the page. One click cost roughly **39 round trips to Supabase** (measured at ~200 ms each): `setMode` 2, `getSession` 3, **`getCompleteness` 17**, plan settings 1, then the page's own `getSession` 3 again and its queries 13. All of it to redraw figures that had not changed — because the mode changes **which items the sidebar lists and whether the help rail starts open, and nothing else**.
+
+**The mode now lives on the client.** `ModeProvider` holds it with `useOptimistic`, seeded by the server on first render; `Sidebar` and `ModeToggle` read it from context; `setMode` still writes to `profiles` but no longer revalidates, so the write happens where nobody is waiting on it. If the write fails the optimistic value falls back, so the button never claims something was saved that wasn't. **Result: 2,025 ms → 7 ms**, and the preference still survives a reload and a new tab.
+
+Two things found alongside it and fixed:
+
+- **`getSession()` ran twice per render** — once in the layout, once in the page — each doing an `auth.getUser()`, which is a network call to the Auth API rather than a local check. Both it and `getCompleteness` are now wrapped in React's `cache()`, so they resolve once per request.
+- The layout did `await import("@/lib/supabase/server")` **inside the render body** on every request. Now a normal top-level import.
+
+Warm route render after the change: **344–393 ms** (the 2 s seen on a cold route is Turbopack compiling on first hit, not queries).
+
+*Still open, worth doing but not urgent:* `getCompleteness` is 17 separate `count` queries to draw the sidebar's green ticks, and it runs on every page in the plan even though its own docstring says it is for the dashboard. One Postgres function returning all eleven counts would make it a single round trip and speed up every navigation in the app.
+
+**The rule this establishes:** a preference that changes only what is displayed must never invalidate server data. If nothing on the screen can change value, nothing should be refetched.

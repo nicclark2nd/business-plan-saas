@@ -1,14 +1,17 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
-export async function setMode(mode: "guided" | "advanced", path: string) {
+/**
+ * Remember the view preference. Deliberately does NOT revalidate: Guided vs Advanced changes which items
+ * the sidebar lists and nothing else, so throwing away the route to redraw identical figures cost about two
+ * seconds a click. The switch itself is client state (ModeProvider); this only makes it stick (§6.22).
+ */
+export async function setMode(mode: "guided" | "advanced") {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (user) await supabase.from("profiles").update({ mode }).eq("id", user.id);
-  revalidatePath(path);
 }
 
 export type SetupState = { error?: string } | undefined;
