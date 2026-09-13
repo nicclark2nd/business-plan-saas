@@ -589,3 +589,17 @@ It was not only awkward, it was lossy. Units carry unrounded, so 16.7 % of 12 is
 **Not yet:** ongoing (recurring) lines still take percentages only — their revenue is a monthly fee times client-months rather than price × units, so a typed figure needs the fee model revisited. Noted in `product.ts`. And Overheads, COGS unit costs and fixed costs keep percentages until this has been used in anger on Sales.
 
 Engine `typed-figures.test.ts`, 7 tests, including the invariant that units by year and by month still agree.
+
+## 6.27 Sorting a list is a view, never a reorder (13 Sep 2026)
+
+Asked for on Sales → Annual projections: sort by product name, and by the current value.
+
+**Every numeric column sorts, not just those two.** Once a list ranks by "this year" the next question is which line is biggest in *Year 5* — and that is the more useful one, because it says what the business becomes rather than what it is. Same mechanism, no extra cost. On Nic's plan, Year 5 descending puts House Slab at 921,484 and Mining Works — flat all five years — down at fourth.
+
+`SortTh` and `sortRows` live in `DataGrid`, so COGS, Overheads, Funding and the rest can take them as they need them. Three rules they enforce:
+
+- **Click, click again, click off.** Ascending, descending, then back to the plan's own order. That third state is the point: `sort_order` decides what the report prints, so there has to be a way back to it.
+- **Sorting never writes.** While a sort is on, the toolbar says *"Sorted by Year 5, largest first — the plan's own order is unchanged"* with a **Plan order** button beside it. A table that rearranges itself invites the worry that the plan has just been rearranged with it, and the answer to that worry belongs on the screen rather than in a help page.
+- **The arrow shows only on the sorted column**, with a faint one on hover elsewhere, and always *after* the label — left-aligned or right — so the eye looks in one place for it. Eight permanent arrows would cost more in density than they return.
+
+Ties keep the plan's order, so a column of equal values never looks shuffled. Applied to all three Sales tabs at once, because Products, Annual and Monthly are the same list and should behave the same way.

@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
-import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
+import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton, SortTh, sortRows, type Sort } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { planMonths, planMonthNames } from "@/engine/plan/calendar";
@@ -63,6 +63,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
   const [draftNew, setDraftNew] = useState<Row | null>(null);
   const [confirm, setConfirm] = useState<{ row: Row; fed: Row[] } | null>(null);
   const [serverErr, setServerErr] = useState<string | undefined>();
+  const [sort, setSort] = useState<Sort>(null);
   const [pending, start] = useTransition();
   const ref = useRef(rows); useEffect(() => { ref.current = rows; }, [rows]);
 
@@ -125,6 +126,19 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
   const open = dlg ? (draftNew && draftNew._key === dlg.key ? draftNew : rows.find((r) => r._key === dlg.key)) ?? null : null;
   const close = () => { setDlg(null); setDraftNew(null); };
   const monthTotals = planYear1Months(named);
+  /**
+   * The list as displayed. Sorting is a view only — `sort_order` still decides what the report prints,
+   * and a third click on a heading puts the plan's own order back (§6.27).
+   */
+  const view = useMemo(() => sortRows(named, sort, (r, key) => {
+    if (key === "name") return r.name.toLowerCase();
+    if (key === "current") return recurring(r) ? bookNow(r) : firstYear(r) === 0 ? r.average_price * r.units_sold : -1;
+    return years(r)[Number(key) - 1]?.revenue ?? 0;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [named, sort]);
+  const sortLabel = !sort ? null
+    : `${sort.key === "name" ? "product" : sort.key === "current" ? (startup ? "base" : "this year") : `Year ${sort.key}`}, ${sort.key === "name" ? (sort.dir === "asc" ? "A to Z" : "Z to A") : sort.dir === "asc" ? "smallest first" : "largest first"}`;
+
 
   return (
     <ModuleFrame
@@ -154,11 +168,18 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
                 ? <span className="text-warn"> · {gap > 0 ? "+" : ""}{gap.toFixed(0)}% against Historic {historicEnd?.slice(0, 4) ?? ""} revenue {num(historicRevenue)} — a line is missing or a price × units is off</span>
                 : <> · within {Math.abs(gap).toFixed(0)}% of Historic {historicEnd?.slice(0, 4) ?? ""} revenue</>)}
             </Meta>
+            <SortNote sortLabel={sortLabel} onClear={() => setSort(null)} />
           </Toolbar>
           <Grid>
-            <thead><tr><Th>Product</Th><Th style={{ width: 120 }}>Sold as</Th><Th style={{ width: 120 }}>Lifecycle</Th><Th right style={{ width: 130 }}>Price</Th><Th right style={{ width: 130 }}>Units / clients</Th><Th right style={{ width: 150 }}>{startup ? "Year 1 sales" : "Sales this year"}</Th><Th style={{ width: 70 }} /></tr></thead>
+            <thead><tr>
+              <SortTh label="Product" sortKey="name" sort={sort} onSort={setSort} />
+              <Th style={{ width: 120 }}>Sold as</Th><Th style={{ width: 120 }}>Lifecycle</Th>
+              <Th right style={{ width: 130 }}>Price</Th><Th right style={{ width: 130 }}>Units / clients</Th>
+              <SortTh right style={{ width: 150 }} label={startup ? "Year 1 sales" : "Sales this year"} sortKey={startup ? "1" : "current"} sort={sort} onSort={setSort} />
+              <Th style={{ width: 70 }} />
+            </tr></thead>
             <tbody>
-              {named.map((r) => (
+              {view.map((r) => (
                 <GridRow key={r._key} className={cn(r._error && "[&>td]:bg-bad-soft")} title={r._error}>
                   <Td><NameLink onClick={() => setDlg({ kind: "product", key: r._key })}>{r.name}</NameLink>{mark(r)}{firstYear(r) > 0 && <span className="ml-2 text-xs text-muted-foreground">from Year {firstYear(r)}</span>}</Td>
                   <Td className="text-muted-foreground">{recurring(r) ? "Ongoing client" : "One-off job"}</Td>
@@ -179,11 +200,19 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
 
       {area === "annual" && (
         <>
-          <Toolbar><Meta className="ml-0">Sales by year. Pencil = growth; calendar = monthly split. Each year starts at 0 % change until you say otherwise.</Meta></Toolbar>
+          <Toolbar>
+            <Meta className="ml-0">Sales by year. Pencil = growth; calendar = monthly split. Each year starts at 0 % change until you say otherwise.</Meta>
+            <SortNote sortLabel={sortLabel} onClear={() => setSort(null)} />
+          </Toolbar>
           <Grid>
-            <thead><tr><Th>Product</Th><Th right style={{ width: 120 }}>{startup ? "Base" : "Current"}</Th>{YEARS.map((y) => <Th key={y} right style={{ width: 120 }}>Year {y}</Th>)}<Th style={{ width: 80 }} /></tr></thead>
+            <thead><tr>
+              <SortTh label="Product" sortKey="name" sort={sort} onSort={setSort} />
+              <SortTh right style={{ width: 120 }} label={startup ? "Base" : "Current"} sortKey="current" sort={sort} onSort={setSort} />
+              {YEARS.map((y) => <SortTh key={y} right style={{ width: 120 }} label={`Year ${y}`} sortKey={String(y)} sort={sort} onSort={setSort} />)}
+              <Th style={{ width: 80 }} />
+            </tr></thead>
             <tbody>
-              {named.map((r) => {
+              {view.map((r) => {
                 const fy = firstYear(r); const p = years(r);
                 return (
                   <GridRow key={r._key}>
@@ -203,11 +232,19 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
 
       {area === "monthly" && (
         <>
-          <Toolbar><Meta className="ml-0">Year 1 sales by month — the twelve months the cash flow uses. Pencil to change a product&apos;s split.</Meta></Toolbar>
+          <Toolbar>
+            <Meta className="ml-0">Year 1 sales by month — the twelve months the cash flow uses. Pencil to change a product&apos;s split.</Meta>
+            <SortNote sortLabel={sortLabel} onClear={() => setSort(null)} />
+          </Toolbar>
           <Grid>
-            <thead><tr><Th style={{ width: "16%" }}>Product</Th>{MONTHS.map((m) => <Th key={m} right>{m}</Th>)}<Th right style={{ width: 100 }}>Total</Th><Th style={{ width: 44 }} /></tr></thead>
+            <thead><tr>
+              <SortTh style={{ width: "16%" }} label="Product" sortKey="name" sort={sort} onSort={setSort} />
+              {MONTHS.map((m) => <Th key={m} right>{m}</Th>)}
+              <SortTh right style={{ width: 100 }} label="Total" sortKey="1" sort={sort} onSort={setSort} />
+              <Th style={{ width: 44 }} />
+            </tr></thead>
             <tbody>
-              {named.map((r) => {
+              {view.map((r) => {
                 const fy = firstYear(r);
                 const months = productYear1Months(r, src(r));
                 const y1 = months.reduce((a, b) => a + b, 0);
@@ -256,6 +293,17 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
         ? <ClientsDialog key={open._key} r={open} fyEndMonth={fyEndMonth} source={src(open)} onSave={(r) => { save(r); close(); }} onClose={close} />
         : <MonthlyDialog key={open._key} r={open} fyEndMonth={fyEndMonth} onSave={(r) => { save(r); close(); }} onClose={close} />)}
     </ModuleFrame>
+  );
+}
+
+/** Says a sort is only a view, and offers the way back. Nothing about the plan has been reordered. */
+function SortNote({ sortLabel, onClear }: { sortLabel: string | null; onClear: () => void }) {
+  if (!sortLabel) return null;
+  return (
+    <span className="ml-auto flex items-center gap-2 text-[11.5px] text-muted-foreground">
+      Sorted by {sortLabel} — the plan&apos;s own order is unchanged
+      <button type="button" onClick={onClear} className="rounded border border-input px-1.5 py-0.5 hover:border-primary hover:text-primary">Plan order</button>
+    </span>
   );
 }
 

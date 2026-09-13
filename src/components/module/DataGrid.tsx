@@ -42,6 +42,58 @@ export function Th({ children, className, right, style }: { children?: React.Rea
     </th>
   );
 }
+/* ---------- sorting (§6.27) ---------- */
+
+export type Sort = { key: string; dir: "asc" | "desc" } | null;
+
+/**
+ * Click a heading to sort, click again to reverse, click a third time to go back to the plan's own order.
+ *
+ * That third state is the point: `sort_order` is the order the report prints in, so there has to be a way
+ * back to it. Sorting is a **view** — it never writes, and the screen says so while a sort is on, because a
+ * table that rearranges itself invites the worry that the plan has just been rearranged with it.
+ *
+ * The arrow shows only on the sorted column, with a faint one on hover elsewhere. Eight permanent arrows
+ * would cost more in density than they return in discoverability. It sits after the label in every column,
+ * left-aligned or right, so the eye always looks in the same place for it.
+ */
+export function SortTh({ label, sortKey, sort, onSort, right, style, className }: {
+  label: React.ReactNode; sortKey: string; sort: Sort; onSort: (s: Sort) => void;
+  right?: boolean; style?: React.CSSProperties; className?: string;
+}) {
+  const active = sort?.key === sortKey;
+  const next = (): Sort => (!active ? { key: sortKey, dir: "asc" } : sort!.dir === "asc" ? { key: sortKey, dir: "desc" } : null);
+  const hint = !active ? "Sort" : sort!.dir === "asc" ? "Sort the other way" : "Back to the plan's order";
+  return (
+    <th style={style}
+      className={cn("group sticky top-0 z-[1] cursor-pointer select-none whitespace-nowrap border-b border-input bg-secondary px-3 py-[7px] text-left text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground first:pl-5 last:pr-5 hover:text-foreground",
+        right && "text-right", className)}
+      onClick={() => onSort(next())} title={hint} aria-sort={active ? (sort!.dir === "asc" ? "ascending" : "descending") : "none"}>
+      <span className="inline-flex items-center gap-1">
+        <span>{label}</span>
+        <span aria-hidden className={cn("text-[9px] leading-none", active ? "text-foreground" : "opacity-0 group-hover:opacity-40")}>
+          {active ? (sort!.dir === "asc" ? "▲" : "▼") : "▲"}
+        </span>
+      </span>
+    </th>
+  );
+}
+
+/** Order rows for display only. Ties keep the plan's order, so sorting never looks random. */
+export function sortRows<T>(rows: T[], sort: Sort, value: (r: T, key: string) => string | number): T[] {
+  if (!sort) return rows;
+  const dir = sort.dir === "asc" ? 1 : -1;
+  return rows
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => {
+      const x = value(a.r, sort.key), y = value(b.r, sort.key);
+      if (x === y) return a.i - b.i;
+      if (typeof x === "string" || typeof y === "string") return String(x).localeCompare(String(y)) * dir;
+      return (x - y) * dir;
+    })
+    .map(({ r }) => r);
+}
+
 export function Td({ children, className, right, wrap, colSpan, rowSpan, style, title }: { children?: React.ReactNode; className?: string; right?: boolean; wrap?: boolean; colSpan?: number; rowSpan?: number; style?: React.CSSProperties; title?: string }) {
   return (
     <td colSpan={colSpan} rowSpan={rowSpan} style={style} title={title} className={cn("h-9 border-b border-border px-3 first:pl-5 last:pr-5", wrap ? "whitespace-normal py-1" : "whitespace-nowrap", right && "text-right", className)}>
