@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { YEARS, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, distributionTotal, type MonthlyDistribution } from "@/engine/sales/projection";
 import { sourceOf, recurring, monthlyFee, type AnyProduct } from "@/engine/sales/product";
 import { productCostYears, unitCostByYear, fixedCostByYear, fixedCostMonths, planCogsByYear, currentCost } from "@/engine/cogs/direct";
+import { useMoney } from "@/components/MoneyProvider";
 import { saveProductCost, upsertFixedCogs, deleteFixedCogs, continueFromCogs } from "./actions";
 import { type CostedProduct, type FixedCogs } from "./model";
 
@@ -25,8 +26,6 @@ import { type CostedProduct, type FixedCogs } from "./model";
  * A cost follows how the line is SOLD: per job for a one-off, per client per month for an ongoing client.
  * APeX's Combined and Monthly tabs are dropped — they hold no inputs; those views belong to Review forecast.
  */
-const fmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
-const num = (v: number | null | undefined) => fmt.format(Number(v) || 0);
 const parseNum = (s: string) => { const n = Number(s.replace(/[,\s]/g, "")); return Number.isFinite(n) ? n : 0; };
 const parseSigned = (s: string) => { const t = s.replace(/[,\s%]/g, ""); if (t === "-" || t === "") return null; const n = Number(t); return Number.isFinite(n) ? n : null; };
 /**
@@ -48,6 +47,7 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
   planId: string; products: CostedProduct[]; fixed: FixedCogs[]; mode: "guided" | "advanced"; initialArea: AreaKey;
   historicRevenue: number | null; historicCogs: number | null; historicEnd: string | null; fyEndMonth: number;
 }) {
+  const num = useMoney();
   const MONTHS = planMonths(fyEndMonth);
   const router = useRouter();
   const [area, setArea] = useState<AreaKey>(initialArea);
@@ -281,6 +281,7 @@ function IconButton({ children, title, onClick }: { children: React.ReactNode; t
 
 /* ---------- Cost dialog (APeX "Cost Details", per product) ---------- */
 function CostDialog({ p, source, onSave, onClose }: { p: CostedProduct; source: CostedProduct | null; onSave: (p: CostedProduct) => void; onClose: () => void }) {
+  const num = useMoney();
   const [d, setD] = useState<CostedProduct>(p);
   const [text, setText] = useState<Record<string, string>>({});
   const ongoing = recurring(d);
@@ -356,6 +357,7 @@ function CostDialog({ p, source, onSave, onClose }: { p: CostedProduct; source: 
 
 /* ---------- Fixed cost item ---------- */
 function ItemDialog({ f, onSave, onClose }: { f: FixRow; onSave: (f: FixRow) => void; onClose: () => void }) {
+  const num = useMoney();
   const [d, setD] = useState<FixRow>(f);
   const [text, setText] = useState<Record<string, string>>({});
   const years = fixedCostByYear(d);
@@ -402,6 +404,7 @@ function ItemDialog({ f, onSave, onClose }: { f: FixRow; onSave: (f: FixRow) => 
 
 /* ---------- Fixed cost monthly split ---------- */
 function SplitDialog({ f, fyEndMonth, onSave, onClose }: { f: FixRow; fyEndMonth: number; onSave: (f: FixRow) => void; onClose: () => void }) {
+  const num = useMoney();
   const MONTHS = planMonths(fyEndMonth);
   const MONTH_NAMES = planMonthNames(fyEndMonth);
   const [d, setD] = useState<MonthlyDistribution>(normalizeDistribution(f.monthly_distribution));

@@ -8,11 +8,12 @@ import { GUIDED_STEPS } from "@/lib/nav";
 import { MONTH_SHORT } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
 import { deriveFromComponents, periodRatios, periodsFromTemplate, COMPONENT_INPUTS, TEMPLATE_ROWS, type PeriodField, type PeriodInput, type TemplateSheet } from "@/engine/historic/derive";
+import { useMoney } from "@/components/MoneyProvider";
 import { savePeriod, importPeriods, deletePeriod, setHasHistory, continueFromHistoric } from "./actions";
 import { PNL_LINES, BS_LINES, type Period, type LineDef } from "./model";
 
-const fmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
-const money = (v: number) => (v < 0 ? `(${fmt.format(-v)})` : fmt.format(v));
+type Num = (v: number | null | undefined) => string;
+const moneyWith = (num: Num) => (v: number) => (v < 0 ? `(${num(-v)})` : num(v));
 const parseNum = (s: string) => { const t = s.replace(/[,\s]/g, "").replace(/^\((.*)\)$/, "-$1"); const n = Number(t); return Number.isFinite(n) ? n : 0; };
 const PERIODS = [1, 2, 3, 4] as const;
 type AreaKey = "pnl" | "bs" | "import";
@@ -144,6 +145,8 @@ function LineRow({ line, cols, derived, onEdit, onCommit, leftCol }: {
   line: LineDef; cols: Col[]; derived: ReturnType<typeof deriveFromComponents>[];
   onEdit: (n: number, f: PeriodField, raw: string) => void; onCommit: (n: number) => void; leftCol: (e: React.FocusEvent<HTMLElement>, n: number) => boolean;
 }) {
+  const num = useMoney();
+  const money = moneyWith(num);
   return (
     <tr className={cn("border-b border-border", line.calc && "bg-secondary/60")} title={line.help}>
       <td className={cn("py-0 pl-5 pr-3 h-8", line.indent && "pl-8", line.strong && "font-semibold", line.calc && "text-foreground")}>{line.label}</td>
@@ -160,6 +163,8 @@ function LineRow({ line, cols, derived, onEdit, onCommit, leftCol }: {
 
 /** Upload the standard template (totals in, components derived). Parsed in the browser; four columns, newest first. */
 function ImportArea({ planId, onLoaded }: { planId: string; onLoaded: () => void }) {
+  const num = useMoney();
+  const money = moneyWith(num);
   const [sheet, setSheet] = useState<TemplateSheet | null>(null);
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState<string | undefined>();

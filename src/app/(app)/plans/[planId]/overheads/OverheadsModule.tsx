@@ -13,6 +13,7 @@ import { planMonths, planMonthNames } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
 import { YEARS, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, distributionTotal, type MonthlyDistribution } from "@/engine/sales/projection";
 import { enteredByYear, overheadByYear, overheadMonths, overheadsByYear, type Overhead } from "@/engine/overheads/expenses";
+import { useMoney } from "@/components/MoneyProvider";
 import { upsertOverhead, deleteOverhead, saveSyncedShape, saveOnCostPct, continueFromOverheads } from "./actions";
 import { SOURCE_LABEL, SOURCE_STEP, type OverheadRow } from "./model";
 
@@ -22,8 +23,6 @@ import { SOURCE_LABEL, SOURCE_STEP, type OverheadRow } from "./model";
  * that owns them, across all five years, and are never grown a second time. They carry the chain back to their
  * source, cannot be deleted, and own only their monthly shape here.
  */
-const fmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
-const num = (v: number | null | undefined) => fmt.format(Number(v) || 0);
 const parseNum = (s: string) => { const n = Number(s.replace(/[,\s]/g, "")); return Number.isFinite(n) ? n : 0; };
 const parseSigned = (s: string) => { const t = s.replace(/[,\s%]/g, ""); if (t === "-" || t === "") return null; const n = Number(t); return Number.isFinite(n) ? n : null; };
 const pct = (v: number | undefined) => v === undefined || v === null ? "" : String(Math.round(v * 10000) / 10000);
@@ -41,6 +40,7 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
   planId: string; initial: OverheadRow[]; mode: "guided" | "advanced";
   salaries: number[]; marketing: number[]; peopleCount: number; marketingLines: number; onCostPct: number; fyEndMonth: number;
 }) {
+  const num = useMoney();
   const MONTHS = planMonths(fyEndMonth);
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(initial.map((o) => ({ ...o, _key: o.id })));
@@ -242,6 +242,7 @@ function IconButton({ children, title, onClick }: { children: React.ReactNode; t
 
 /* ---------- one typed expense ---------- */
 function ExpenseDialog({ r, onSave, onClose }: { r: Row; onSave: (r: Row) => void; onClose: () => void }) {
+  const num = useMoney();
   const [d, setD] = useState<Row>(r);
   const [text, setText] = useState<Record<string, string>>({});
   const years = enteredByYear(d as Overhead);
@@ -295,6 +296,7 @@ function ExpenseDialog({ r, onSave, onClose }: { r: Row; onSave: (r: Row) => voi
 
 /* ---------- monthly split, for any line including the synced two ---------- */
 function SplitDialog({ r, year1, fyEndMonth, onSave, onClose }: { r: Row; year1: number; fyEndMonth: number; onSave: (r: Row) => void; onClose: () => void }) {
+  const num = useMoney();
   const MONTHS = planMonths(fyEndMonth);
   const MONTH_NAMES = planMonthNames(fyEndMonth);
   const [d, setD] = useState<MonthlyDistribution>(normalizeDistribution(r.monthly_distribution));

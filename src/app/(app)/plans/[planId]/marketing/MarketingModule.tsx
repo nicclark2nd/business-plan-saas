@@ -8,17 +8,18 @@ import { Section, FieldGrid, Field, FieldTextarea } from "@/components/module/Fi
 import { GUIDED_STEPS } from "@/lib/nav";
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { cn } from "@/lib/utils";
+import { useMoney } from "@/components/MoneyProvider";
 import { formatMonth } from "../people/model";
 import { saveMarket, upsertRow, deleteRow, continueFromMarketing, type RowKind } from "./actions";
 import { MARKET_FIELDS, SPEND_KINDS, SPEND_LABEL, type Market, type MarketingData, type Spend, type Evidence, type SpendKind } from "./model";
 
-const fmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
 type AreaKey = "market" | "spend" | "evidence";
 type WithMeta<T> = T & { _dirty?: boolean; _error?: string };
 
 export function MarketingModule({ planId, initial, mode, initialArea, customerWord }: {
   planId: string; initial: MarketingData; mode: "guided" | "advanced"; initialArea: AreaKey; customerWord: string;
 }) {
+  const num = useMoney();
   const [area, setArea] = useState<AreaKey>(initialArea);
   const [kill, setKill] = useState<{ id: string; channel: string; budget: number } | null>(null);
   const [market, setMarket] = useState<Market>(initial.market);
@@ -152,12 +153,12 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
                 <Row key={s.id} data-row={s.id} onBlur={(e) => left(e) && commit("spend", s.id)} className={cn(s._error && "[&>td]:bg-bad-soft")} title={s._error}>
                   <Td><CellSelect value={s.kind} options={SPEND_KINDS.map((k) => ({ value: k, label: SPEND_LABEL[k] }))} onValueChange={(v) => edit("spend", s.id, { kind: v as SpendKind }, !!s.approach.trim())} /></Td>
                   <Td wrap><CellTextarea value={s.approach} placeholder="e.g. Google Ads on 'concreter Wollongong'; referral fee to builders" onChange={(e) => edit("spend", s.id, { approach: e.target.value })} /></Td>
-                  <Td right><CellInput numeric value={s.annual_budget ? fmt.format(s.annual_budget) : ""} placeholder="0" onChange={(e) => edit("spend", s.id, { annual_budget: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} /></Td>
+                  <Td right><CellInput numeric value={s.annual_budget ? num(s.annual_budget) : ""} placeholder="0" onChange={(e) => edit("spend", s.id, { annual_budget: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} /></Td>
                   <Td><RemoveButton onClick={() => askRemoveSpend(s.id)} /></Td>
                 </Row>
               ))}
             </tbody>
-            <FootRow><Td colSpan={2}>Total → Overheads (Marketing)</Td><Td right className="num">{fmt.format(spendTotal)}</Td><Td /></FootRow>
+            <FootRow><Td colSpan={2}>Total → Overheads (Marketing)</Td><Td right className="num">{num(spendTotal)}</Td><Td /></FootRow>
           </Grid>
           <Note>Annual figures for Year 1. Later years follow the Overheads growth assumption unless you change them there.</Note>
         </>
@@ -184,7 +185,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
       {kill && (
         <ConfirmDelete
           title={`Delete ${kill.channel.trim() || "this channel"}?`}
-          what={<>{kill.budget > 0 && <>{new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 }).format(kill.budget)} a year comes out of the marketing budget, </>}and the Marketing spend line in Overheads drops to match.</>}
+          what={<>{kill.budget > 0 && <>{num(kill.budget)} a year comes out of the marketing budget, </>}and the Marketing spend line in Overheads drops to match.</>}
           onCancel={() => setKill(null)}
           onConfirm={() => remove("spend", kill.id)}
         />

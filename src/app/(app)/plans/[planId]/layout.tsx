@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getSession, getCompleteness } from "@/lib/plan";
 import { createClient } from "@/lib/supabase/server";
 import { ModeToggle } from "@/components/ModeToggle";
+import { MoneyProvider } from "@/components/MoneyProvider";
 import { ModeProvider } from "@/components/ModeProvider";
 import { Sidebar } from "@/components/Sidebar";
 import { GUIDED_STEPS } from "@/lib/nav";
@@ -26,6 +27,7 @@ export default async function PlanLayout({ children, params }: { children: React
 
   return (
     <ModeProvider initial={mode}>
+    <MoneyProvider currency={settings?.currency ?? "AUD"}>
     <div className="grid h-screen min-h-[640px] grid-cols-[240px_1fr] grid-rows-[48px_1fr]">
       <header className="col-span-2 flex items-center gap-4 border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground">
         <Link href="/setup" className="flex w-[224px] items-center gap-2.5 font-bold text-white">
@@ -42,6 +44,7 @@ export default async function PlanLayout({ children, params }: { children: React
       <Sidebar planId={planId} doneSteps={doneSteps} />
       <main className="min-h-0 overflow-y-auto">{children}</main>
     </div>
+    </MoneyProvider>
     </ModeProvider>
   );
 }

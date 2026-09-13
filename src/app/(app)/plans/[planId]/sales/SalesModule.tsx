@@ -15,6 +15,7 @@ import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { cn } from "@/lib/utils";
 import { YEARS, yearlyProjection, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, monthlySales, hasValue, impliedPct, type Growth, type MonthlyDistribution } from "@/engine/sales/projection";
 import { productYears, productYear1Months, productYear1Clients, newClientsYear1, planRevenueByYear, planYear1Months, sourceOf, isLinked, bookNow, monthlyFee, recurring } from "@/engine/sales/product";
+import { useMoney } from "@/components/MoneyProvider";
 import { upsertProduct, deleteProduct, continueFromSales } from "./actions";
 import { LIFECYCLE, LIFE_MODE, SOLD_AS, type Product } from "./model";
 
@@ -27,8 +28,6 @@ import { LIFECYCLE, LIFE_MODE, SOLD_AS, type Product } from "./model";
  * A line is sold either as a one-off job or as an ongoing client who keeps paying (§6.17) — the second earns
  * from ACTIVE clients, so its year is nothing like price x units and its monthly dialog counts clients, not per cent.
  */
-const fmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
-const num = (v: number | null | undefined) => fmt.format(Number(v) || 0);
 const parseNum = (s: string) => { const n = Number(s.replace(/[,\s]/g, "")); return Number.isFinite(n) ? n : 0; };
 const parseSigned = (s: string) => { const t = s.replace(/[,\s%]/g, ""); if (t === "-" || t === "") return null; const n = Number(t); return Number.isFinite(n) ? n : null; };
 /**
@@ -51,6 +50,7 @@ const box = "h-8";
 export function SalesModule({ planId, initial, mode, initialArea, hasHistory, historicRevenue, historicEnd, productWord, fyEndMonth, currency }: {
   planId: string; initial: Product[]; mode: "guided" | "advanced"; initialArea: AreaKey; hasHistory: boolean | null; historicRevenue: number | null; historicEnd: string | null; productWord: string; fyEndMonth: number; currency: string;
 }) {
+  const num = useMoney();
   const MONTHS = planMonths(fyEndMonth);          // the plan's own twelve, not January to December
   const startup = hasHistory === false;
   const blank = (): Row => ({ id: `tmp-${crypto.randomUUID()}`, _key: "", name: "", description: "", notes: "", lifecycle: null, average_price: 0, units_sold: 0, start_selling_year: startup ? 2 : 1, yearly_growth: {}, monthly_distribution: null, sort_order: 0, sold_as: "one_off", opening_clients: 0, client_life_months: 12, life_mode: "fixed", monthly_new_clients: null, clients_from_product_id: null });
@@ -313,6 +313,7 @@ function IconButton({ children, title, onClick }: { children: React.ReactNode; t
 
 /* ---------- Product dialog (APeX "Product") ---------- */
 function ProductDialog({ r, others, onSave, onClose }: { r: Row; others: Row[]; onSave: (r: Row) => void; onClose: () => void }) {
+  const num = useMoney();
   const [d, setD] = useState<Row>(r);
   const set = (c: Partial<Row>) => setD((x) => ({ ...x, ...c }));
   const ok = d.name.trim().length > 0;
@@ -385,6 +386,7 @@ function ProductDialog({ r, others, onSave, onClose }: { r: Row; others: Row[]; 
 
 /* ---------- Growth dialog (APeX "Edit Growth Rates") ---------- */
 function GrowthDialog({ r, source, startOptions, onSave, onClose }: { r: Row; source: Row | null; startOptions: { value: string; label: string }[]; onSave: (r: Row) => void; onClose: () => void }) {
+  const num = useMoney();
   const [d, setD] = useState<Row>(r);
   const [text, setText] = useState<Record<string, string>>({});
   const fy = firstYear(d);
@@ -504,6 +506,7 @@ function GrowthDialog({ r, source, startOptions, onSave, onClose }: { r: Row; so
 
 /* ---------- Clients-won dialog — the ongoing line's answer to the monthly split (§6.17) ---------- */
 function ClientsDialog({ r, source, fyEndMonth, onSave, onClose }: { r: Row; source: Row | null; fyEndMonth: number; onSave: (r: Row) => void; onClose: () => void }) {
+  const num = useMoney();
   const MONTHS = planMonths(fyEndMonth);
   const [d, setD] = useState<Record<string, number>>(() => {
     const src = r.monthly_new_clients ?? {};
@@ -575,6 +578,7 @@ function ClientsDialog({ r, source, fyEndMonth, onSave, onClose }: { r: Row; sou
 function MonthlyDialog({ r, fyEndMonth, currency, others, onSave, onClose }: {
   r: Row; fyEndMonth: number; currency: string; others: Row[]; onSave: (r: Row) => void; onClose: () => void;
 }) {
+  const num = useMoney();
   const MONTHS = planMonths(fyEndMonth);
   const MONTH_NAMES = planMonthNames(fyEndMonth);
   type EntryMode = "units" | "money" | "pct";

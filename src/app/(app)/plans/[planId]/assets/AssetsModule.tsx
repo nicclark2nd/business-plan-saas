@@ -13,6 +13,7 @@ import { planMonths } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
 import { YEARS } from "@/engine/sales/projection";
 import { depreciationByYear, depreciationMonths, bookValueByYear, assetsByYear, type FixedAsset } from "@/engine/assets/depreciation";
+import { useMoney } from "@/components/MoneyProvider";
 import { upsertAsset, deleteAsset, saveFinancedShape, continueFromAssets } from "./actions";
 import { METHODS, CATEGORIES, LIVES, lifeLabel, type AssetRow } from "./model";
 
@@ -23,8 +24,6 @@ import { METHODS, CATEGORIES, LIVES, lifeLabel, type AssetRow } from "./model";
  * bought it: its cost, its start and its residual come from that loan and cannot be typed over, but how it
  * is written off — the life and the method — is a real accounting choice and stays editable.
  */
-const fmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
-const num = (v: number | null | undefined) => fmt.format(Number(v) || 0);
 const parseNum = (s: string) => { const n = Number(s.replace(/[,\s$]/g, "")); return Number.isFinite(n) ? n : 0; };
 
 type AreaKey = "assets" | "monthly";
@@ -40,6 +39,7 @@ const LIFE_OPTIONS = LIVES.map((l) => ({ value: String(l.months), label: l.label
 export function AssetsModule({ planId, initial, mode, lenders, fyEndMonth }: {
   planId: string; initial: AssetRow[]; mode: "guided" | "advanced"; lenders: Record<string, string>; fyEndMonth: number;
 }) {
+  const num = useMoney();
   const MONTHS = planMonths(fyEndMonth);
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(initial.map((a) => ({ ...a, _key: a.id })));
@@ -280,6 +280,7 @@ function PendingBridge({ pending, error }: { pending: boolean; error?: string })
 
 /** One asset. A financed line shows what it cost as read-only and lets the write-off be chosen. */
 function AssetDialog({ row, lender, fyEndMonth, onCancel, onSave }: { row: Row & { _key: string }; lender: string; fyEndMonth: number; onCancel: () => void; onSave: (r: Row) => void }) {
+  const num = useMoney();
   const MONTH_OPTIONS = monthOptions(fyEndMonth);
   const [d, setD] = useState<Row>(row);
   const locked = d.source === "finance";

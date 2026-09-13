@@ -8,11 +8,10 @@ import { cn } from "@/lib/utils";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { SALARY_YEARS, planYearStart, startYearFromDate, tenureLabel, salarySchedule, scheduleChangeFromBase, totalSalariesByYear } from "@/engine/people/salary";
+import { useMoney } from "@/components/MoneyProvider";
 import { upsertPerson, deletePerson, upsertCapability, deleteCapability, continueFromPeople } from "./actions";
 import { PERSON_ROLES, ROLE_LABEL, CAPABILITY_KINDS, KIND_LABEL, formatMonth, type Person, type Capability, type CapabilityKind, type PeopleData } from "./model";
 
-const fmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
-const num = (n: number | null | undefined) => fmt.format(Number(n) || 0);
 type Row = Person & { _key: string; started_text: string; _dirty?: boolean; _state?: "saving" | "saved" | "error"; _error?: string };
 type Cap = Capability & { _key: string; _dirty?: boolean };
 type AreaKey = "people" | "salary" | "cap" | "risk";
@@ -20,6 +19,7 @@ type AreaKey = "people" | "salary" | "cap" | "risk";
 export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndMonth }: {
   planId: string; initial: PeopleData; mode: "guided" | "advanced"; currency: string; planYear: number; fyEndMonth: number;
 }) {
+  const num = useMoney();
   void currency;
   const fyStart = useMemo(() => planYearStart(planYear, fyEndMonth), [planYear, fyEndMonth]);
   // Empty grids start with a blank row ready to type in (closed decision 8). Starter ids are fixed so server and client match.
@@ -238,7 +238,7 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
       {killPerson && (
         <ConfirmDelete
           title={`Remove ${(killPerson.name || [killPerson.first_name, killPerson.last_name].filter(Boolean).join(" ") || "this person")}?`}
-          what={<>Their salary{killPerson.annual_salary ? <> of {new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 }).format(killPerson.annual_salary)}</> : null}, its yearly adjustments and their start date go with them — and the Leadership Team total in Overheads drops to match.</>}
+          what={<>Their salary{killPerson.annual_salary ? <> of {num(killPerson.annual_salary)}</> : null}, its yearly adjustments and their start date go with them — and the Leadership Team total in Overheads drops to match.</>}
           onCancel={() => setKillPerson(null)}
           onConfirm={() => removePerson(killPerson)}
         />

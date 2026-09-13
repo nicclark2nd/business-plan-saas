@@ -12,6 +12,7 @@ import { GUIDED_STEPS } from "@/lib/nav";
 import { planMonths } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
 import { YEARS } from "@/engine/sales/projection";
+import { useMoney } from "@/components/MoneyProvider";
 import {
   loanSummary, loanByYear, loanMonths, rbfMonths, fundingInMonths, rbfCap, rbfCost, fundingTotals, adequacy, interestByYear, debtByYear,
   type FundingKind, type FundingSource,
@@ -29,9 +30,8 @@ import {
  * with nothing to measure it against. Every source lives in one list here, the way a bank reads a plan, and
  * underneath it the twelve months of cash say whether the money actually holds.
  */
-const fmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
-const num = (v: number | null | undefined) => fmt.format(Number(v) || 0);
-const signed = (v: number) => (v < 0 ? `(${fmt.format(Math.abs(v))})` : fmt.format(v));
+type Num = (v: number | null | undefined) => string;
+const signedWith = (num: Num) => (v: number) => (v < 0 ? `(${num(Math.abs(v))})` : num(v));
 const parseNum = (s: string) => { const n = Number(s.replace(/[,\s$%]/g, "")); return Number.isFinite(n) ? n : 0; };
 
 type Row = FundingRow & { _key: string };
@@ -52,6 +52,7 @@ export function FundingModule({ planId, initial, mode, openingCash, cash, year1,
   year1: { revenue: number; cogs: number; overheads: number; depreciation: number };
   fyEndMonth: number;
 }) {
+  const num = useMoney();
   const MONTHS = planMonths(fyEndMonth);
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(initial.map((r) => ({ ...r, _key: r.id })));
@@ -304,6 +305,7 @@ export function FundingModule({ planId, initial, mode, openingCash, cash, year1,
 /* ------------------------------------------------------------------ */
 
 function SourceRow({ r, onEdit, onRemove, planId, fyEndMonth }: { r: Row; onEdit: () => void; onRemove: () => void; planId: string; fyEndMonth: number }) {
+  const num = useMoney();
   const router = useRouter();
   const MONTHS = planMonths(fyEndMonth);
   const loan = loanOf(r);
@@ -353,6 +355,8 @@ function CashRow({ check, opening, year1, onAdd, fyEndMonth }: {
   check: ReturnType<typeof adequacy>; opening: number;
   year1: { revenue: number; cogs: number; overheads: number; depreciation: number }; onAdd: () => void; fyEndMonth: number;
 }) {
+  const num = useMoney();
+  const signed = signedWith(num);
   const MONTHS = planMonths(fyEndMonth);
   const trading = year1.revenue > 0 || year1.overheads > 0;
   return (
@@ -440,6 +444,7 @@ function PickerDialog({ onPick, onCancel }: { onPick: (k: FundingKind) => void; 
  * ------------------------------------------------------------------ */
 
 function SourceDialog({ row, fyEndMonth, onCancel, onSave }: { row: Row; fyEndMonth: number; onCancel: () => void; onSave: (r: Row) => void }) {
+  const num = useMoney();
   const MONTH_OPTIONS = monthOptions(fyEndMonth);
   const [d, setD] = useState<Row>(row);
   const set = (patch: Partial<Row>) => setD((x) => ({ ...x, ...patch }));
@@ -649,6 +654,7 @@ function SourceDialog({ row, fyEndMonth, onCancel, onSave }: { row: Row; fyEndMo
  * rate and a term mean nothing to most people until they see the payment.
  */
 function WorkedOut({ d, summary, per }: { d: Row; summary: ReturnType<typeof loanSummary> | null; per: string }) {
+  const num = useMoney();
   if (d.amount <= 0) return (
     <div className="rounded border border-input bg-muted/40 px-3 py-2 text-[12px] text-muted-foreground">
       Put in an amount and this will show what it costs and what it leaves behind.

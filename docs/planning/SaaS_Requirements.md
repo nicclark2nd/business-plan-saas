@@ -707,3 +707,33 @@ Four parts:
 *Verified against a scratch Postgres 16 before it went near Supabase:* all eighteen migrations apply in order; a seeded `saturation` row becomes `maturity` while a `growth` row and a `null` row are untouched; the enum ends with five values; the old type is gone; `saturation` is then rejected on insert; and 0018 runs three times in a row without error. On screen, Mining Works reads **Maturity** with the migration not yet run.
 
 **The rule: removing an option is a data migration, not a list edit — and the reader has to bridge the deploy, because the code and the database are never updated in the same instant.**
+
+## 6.30 The plan's currency decides how money reads (13 Sep 2026)
+
+Asked for as a small sweep — "Overheads, COGS, Funding and Fixed Assets still say `$` while Sales reads AUD". **That was wrong, and what was actually there is worse.** There is almost no literal `$` in those modules. What there is, is nine copies of this:
+
+```ts
+const fmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
+```
+
+**Every plan was formatted as Australian, whatever currency the client chose in Settings.** The currency setting reached exactly one place — the header chip that displayed it. This is the money twin of §6.21, where six modules hardcoded January to December while the plan ran July to June: one fact, nine copies, and the copies were wrong.
+
+It matters for **four of the thirteen currencies the app offers**:
+
+| | correct | PlanWell showed |
+|---|---|---|
+| EUR, IDR | 2.119.240 | 2,119,240 |
+| ZAR | 2 119 240 | 2,119,240 |
+| **INR** | **21,19,240** | 2,119,240 |
+
+The rupee case is not cosmetic. Indian grouping is in lakh, so a client reading `2,119,240` as twenty-one lakh is **out by a factor of ten before they reach the second column** — in a document going to a bank.
+
+**One provider, not nine props.** `engine/plan/money.ts` maps a currency to the market that spells its numbers and returns a formatter; `MoneyProvider` hangs off the plan layout's existing `plan_settings.currency` fetch — the same query that already fed the chip — and `useMoney()` hands each component the formatter. No page selects currency again and no module takes it as a prop, because nine modules each wiring it themselves is precisely how it came to be ignored.
+
+**No symbol is attached.** The currency is stated once on the header chip; a code in every cell of a dense grid costs more in noise than it returns.
+
+**The type checker did the sweep.** Deleting the module-scope `num` turned every one of the **171 call sites across 44 components** into a compile error, so the work was mechanical and nothing could be missed silently — 25 components needed the hook, and three module-scope helpers (`signedText`, `signed`, `money`) became factories that take the formatter, since a plain function cannot call a hook.
+
+*Verified:* six engine tests, the first of which pins AUD output character-for-character so an Australian plan cannot move. On screen, Sales read identically before and after; the plan was switched to INR and every module regrouped to lakh from that one setting — `21,19,240` — then switched back to AUD and confirmed identical again.
+
+**The rule, twice learned now: if a value comes from the plan, exactly one module may decide what it means. The second copy is already a bug — it is just waiting for a client who is not Australian.**

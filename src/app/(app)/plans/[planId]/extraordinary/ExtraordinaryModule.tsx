@@ -11,6 +11,7 @@ import { GUIDED_STEPS } from "@/lib/nav";
 import { planMonths } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
 import { YEARS } from "@/engine/sales/projection";
+import { useMoney } from "@/components/MoneyProvider";
 import {
   extraordinaryByYear, extraordinaryMonths, extraordinaryTotals, isDisposal,
   type ExtraordinaryItem,
@@ -24,9 +25,9 @@ import { CATEGORIES, EXAMPLES, type ExtraordinaryRow } from "./model";
  * Money in or out that has nothing to do with trading. Every item lands in a plan year 1–5, so unlike APeX
  * there is no date a client can pick that the forecast then silently drops.
  */
-const fmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
-const num = (v: number | null | undefined) => fmt.format(Number(v) || 0);
-const signedText = (v: number) => (v < 0 ? `(${fmt.format(Math.abs(v))})` : v > 0 ? fmt.format(v) : "—");
+type Num = (v: number | null | undefined) => string;
+/** Money out reads in brackets, the accounting convention every lender expects. */
+const signedWith = (num: Num) => (v: number) => (v < 0 ? `(${num(Math.abs(v))})` : v > 0 ? num(v) : "—");
 const parseNum = (s: string) => { const n = Number(s.replace(/[,\s$]/g, "")); return Number.isFinite(n) ? n : 0; };
 
 type AreaKey = "items" | "monthly";
@@ -40,6 +41,8 @@ export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth 
   planId: string; initial: ExtraordinaryRow[]; mode: "guided" | "advanced";
   assets: { id: string; name: string }[]; fyEndMonth: number;
 }) {
+  const num = useMoney();
+  const signedText = signedWith(num);
   const MONTHS = planMonths(fyEndMonth);
   const MONTH_OPTIONS = MONTHS.map((m, i) => ({ value: String(i + 1), label: m }));
   const [area, setArea] = useState<AreaKey>("items");
@@ -261,6 +264,7 @@ function ItemDialog({ row, assets, monthOptions, onCancel, onSave }: {
   monthOptions: { value: string; label: string }[];
   onCancel: () => void; onSave: (r: Row) => void;
 }) {
+  const num = useMoney();
   const [d, setD] = useState<Row>(row);
   const set = (patch: Partial<Row>) => setD((x) => ({ ...x, ...patch }));
   const income = d.category === "income";
