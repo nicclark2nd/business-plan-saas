@@ -56,6 +56,9 @@ export type OpeningBalance = {
   fixedAssets: number;
   otherNonCurrentAssets: number;
   accountsPayable: number;
+  /** Debt the business already owes when the plan starts. Funding covers new money; this is what is there. */
+  bankLoansCurrent: number;
+  bankLoansNonCurrent: number;
   otherCurrentLiabilities: number;
   otherNonCurrentLiabilities: number;
   equity: number;
@@ -235,8 +238,12 @@ export function buildForecast(input: ForecastInput): Forecast {
     const currentAssets = closingCash + ar + inventory + prepaid + n(o.otherCurrentAssets);
     const nonCurrentAssets = fixedAssets + n(o.otherNonCurrentAssets);
     const totalAssets = currentAssets + nonCurrentAssets;
-    const currentLiabilities = ap + accrued + taxPayable + n(b.debtCurrent) + n(o.otherCurrentLiabilities);
-    const nonCurrentLiabilities = n(b.debtNonCurrent) + n(o.otherNonCurrentLiabilities);
+    // Debt the business already had plus debt the plan raises. Dropping the opening balance is how a
+    // balance sheet comes out short by exactly what the business owes its bank (§6.32.4).
+    const debtCurrent = n(b.debtCurrent) + n(o.bankLoansCurrent);
+    const debtNonCurrent = n(b.debtNonCurrent) + n(o.bankLoansNonCurrent);
+    const currentLiabilities = ap + accrued + taxPayable + debtCurrent + n(o.otherCurrentLiabilities);
+    const nonCurrentLiabilities = debtNonCurrent + n(o.otherNonCurrentLiabilities);
     const totalLiabilities = currentLiabilities + nonCurrentLiabilities;
 
     bs[year] = {
@@ -245,8 +252,8 @@ export function buildForecast(input: ForecastInput): Forecast {
       fixedAssets: r2(fixedAssets), otherNonCurrentAssets: r2(n(o.otherNonCurrentAssets)),
       nonCurrentAssets: r2(nonCurrentAssets), totalAssets: r2(totalAssets),
       accountsPayable: r2(ap), accrued: r2(accrued), taxPayable: r2(taxPayable),
-      debtCurrent: r2(n(b.debtCurrent)), otherCurrentLiabilities: r2(n(o.otherCurrentLiabilities)),
-      currentLiabilities: r2(currentLiabilities), debtNonCurrent: r2(n(b.debtNonCurrent)),
+      debtCurrent: r2(debtCurrent), otherCurrentLiabilities: r2(n(o.otherCurrentLiabilities)),
+      currentLiabilities: r2(currentLiabilities), debtNonCurrent: r2(debtNonCurrent),
       otherNonCurrentLiabilities: r2(n(o.otherNonCurrentLiabilities)),
       nonCurrentLiabilities: r2(nonCurrentLiabilities), totalLiabilities: r2(totalLiabilities),
       equity: r2(equity), totalLiabilitiesAndEquity: r2(totalLiabilities + equity),

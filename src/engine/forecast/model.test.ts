@@ -11,7 +11,8 @@ const input = (over: Partial<ForecastInput> = {}): ForecastInput => ({
   base: Object.fromEntries(FORECAST_YEARS.map((y) => [y, base({ revenue: 1_000_000, variableCogs: 400_000, overheads: 300_000 })])),
   opening: {
     cash: 50_000, accountsReceivable: 0, inventory: 0, otherCurrentAssets: 0, fixedAssets: 0,
-    otherNonCurrentAssets: 0, accountsPayable: 0, otherCurrentLiabilities: 0, otherNonCurrentLiabilities: 0,
+    otherNonCurrentAssets: 0, accountsPayable: 0, bankLoansCurrent: 0, bankLoansNonCurrent: 0,
+    otherCurrentLiabilities: 0, otherNonCurrentLiabilities: 0,
     equity: 50_000, taxPayable: 0,
   },
   workingCapital: Object.fromEntries(FORECAST_YEARS.map((y) => [y, { debtorDays: 45, inventoryDays: 20, creditorDays: 30 }])),
@@ -68,7 +69,8 @@ describe("forecast", () => {
     expectReconciled(buildForecast(input({
       base: Object.fromEntries(FORECAST_YEARS.map((y) => [y, base()])),
       opening: { cash: 0, accountsReceivable: 0, inventory: 0, otherCurrentAssets: 0, fixedAssets: 0,
-        otherNonCurrentAssets: 0, accountsPayable: 0, otherCurrentLiabilities: 0, otherNonCurrentLiabilities: 0,
+        otherNonCurrentAssets: 0, accountsPayable: 0, bankLoansCurrent: 0, bankLoansNonCurrent: 0,
+    otherCurrentLiabilities: 0, otherNonCurrentLiabilities: 0,
         equity: 0, taxPayable: 0 },
     })));
   });
@@ -137,5 +139,28 @@ describe("forecast", () => {
     expect(f.invariants).toHaveLength(20);
     expect(new Set(f.invariants.map((i) => i.key)).size).toBe(4);
     for (const i of f.invariants) expect(i.label.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * §6.32.4: the balance sheet came out short by exactly the business's existing bank debt, in every year,
+   * because assembleOpening never read it. An opening position that balances has to stay balanced.
+   */
+  it("carries the opening bank debt, so an opening sheet that balances stays balanced", () => {
+    const opening = {
+      cash: 80_000, accountsReceivable: 275_000, inventory: 7_000, otherCurrentAssets: 7_148,
+      fixedAssets: 129_294, otherNonCurrentAssets: 900,
+      accountsPayable: 21_727, bankLoansCurrent: 60_000, bankLoansNonCurrent: 128_823,
+      otherCurrentLiabilities: 135_399, otherNonCurrentLiabilities: 635,
+      equity: 0, taxPayable: 0,
+    };
+    // Assets less liabilities is what equity must be for the opening sheet to balance.
+    const assets = opening.cash + opening.accountsReceivable + opening.inventory + opening.otherCurrentAssets
+      + opening.fixedAssets + opening.otherNonCurrentAssets;
+    const liabilities = opening.accountsPayable + opening.bankLoansCurrent + opening.bankLoansNonCurrent
+      + opening.otherCurrentLiabilities + opening.otherNonCurrentLiabilities;
+    const f = buildForecast(input({ opening: { ...opening, equity: assets - liabilities } }));
+    expectReconciled(f);
+    expect(f.balanceSheet[1].debtCurrent).toBe(60_000);
+    expect(f.balanceSheet[1].debtNonCurrent).toBe(128_823);
   });
 });

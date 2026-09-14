@@ -849,3 +849,15 @@ The summary line now reads what it means: **"Year 1 runs July 2026 → June 2027
 **The naming convention, stated once:** a financial year is named by the calendar year it **ends** in. FY2027 runs July 2026 → June 2027 for a June year end. `planYearEnding(first, n)` gives Year N's name.
 
 **Still to do:** `plan_year` should become an editable field on Business profile — it defaults to the year the plan was created, which is right, but a plan revised and reissued next March should be able to carry the right date on its cover.
+
+### 6.32.4 A balance sheet is short by exactly what you forget to put on it (14 Sep 2026)
+
+The reconciliation strip failed on the first real plan: **the balance sheet was out by 188,823, identically in all five years.** A constant gap is never the forecast — it is the opening position.
+
+`plan_historic_periods` carries **`bank_loans_current`** and **`bank_loans_non_current`**, and `assembleOpening` read neither. The business's existing bank debt was dropped on the way in, so assets exceeded liabilities and equity by precisely what it owes: 98,849 due within the year and 89,974 due later. Both now carry onto the balance sheet alongside anything Funding raises, and all four invariants pass in all five years.
+
+A new test pins it: an opening position that balances has to stay balanced, with the opening debt intact in Year 1.
+
+**What was not a fault:** depreciation and interest both read zero, and both are correct — this plan has **no fixed assets** and its only funding source is 100,000 of owner capital. A zero that is right looks exactly like a zero that is wrong, which is why the invariants matter more than eyeballing the statements.
+
+**Noted, not chased:** Funding's twelve-month cash check closes Year 1 at 26,739 while the forecast closes it at 28,249. They are different models — Funding's adequacy check spends and collects in the month of trade, the forecast applies debtor and creditor days — so they are not obliged to agree. But they are close enough to be mistaken for each other, and two screens quoting a Year 1 closing cash 1,510 apart is the §6.21.1 shape. Worth settling before the reports print either.

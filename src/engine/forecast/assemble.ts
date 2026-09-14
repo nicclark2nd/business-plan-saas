@@ -163,6 +163,10 @@ export function assembleOpening(
     fixedAssets: h("fixed_assets"),
     otherNonCurrentAssets: h("other_non_current_assets"),
     accountsPayable: h("accounts_payable"),
+    // The business's existing bank debt. It was missing here, and a balance sheet is short by exactly what
+    // you forget to put on it (§6.32.4).
+    bankLoansCurrent: h("bank_loans_current"),
+    bankLoansNonCurrent: h("bank_loans_non_current"),
     otherCurrentLiabilities: h("other_current_liabilities"),
     otherNonCurrentLiabilities: h("other_non_current_liabilities"),
     equity: historic ? h("equity") : n(openingCash),
