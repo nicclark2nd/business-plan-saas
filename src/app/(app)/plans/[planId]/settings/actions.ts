@@ -14,8 +14,14 @@ export async function saveProfile(planId: string, p: Partial<Profile> & { establ
   if (established === undefined) return { ok: false, error: "Date established should be a month and year, e.g. Jun 1975." };
   const name = (p.business_name ?? "").trim();
   if (!name) return { ok: false, error: "The business needs a name." };
+  // The cover year. A plan revised and reissued next March should be able to say so (§6.33.2).
+  const year = Math.trunc(Number(p.plan_year));
+  if (p.plan_year !== undefined && (!Number.isFinite(year) || year < 1900 || year > 2200)) {
+    return { ok: false, error: "The plan year should be a four-digit year, e.g. 2026." };
+  }
+  const planYear = p.plan_year === undefined ? null : year;
   const [plans, settings] = await Promise.all([
-    supabase.from("plans").update({ business_name: name }).eq("id", planId),
+    supabase.from("plans").update({ business_name: name, ...(planYear ? { plan_year: planYear } : {}) }).eq("id", planId),
     supabase.from("plan_settings").upsert({
       plan_id: planId,
       date_established: established ?? null,

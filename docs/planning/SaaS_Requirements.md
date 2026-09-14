@@ -861,3 +861,13 @@ A new test pins it: an opening position that balances has to stay balanced, with
 **What was not a fault:** depreciation and interest both read zero, and both are correct — this plan has **no fixed assets** and its only funding source is 100,000 of owner capital. A zero that is right looks exactly like a zero that is wrong, which is why the invariants matter more than eyeballing the statements.
 
 **Noted, not chased:** Funding's twelve-month cash check closes Year 1 at 26,739 while the forecast closes it at 28,249. They are different models — Funding's adequacy check spends and collects in the month of trade, the forecast applies debtor and creditor days — so they are not obliged to agree. But they are close enough to be mistaken for each other, and two screens quoting a Year 1 closing cash 1,510 apart is the §6.21.1 shape. Worth settling before the reports print either.
+
+### 6.33.2 The financial year is asked once, at the start (14 Sep 2026)
+
+Two changes, both about asking for a fact at the moment the answer is known.
+
+**The financial year is now set when the plan is created.** Setup asks *"Financial year ends in"* and states the consequence before the client clicks the button: **"Year 1 of the plan will run July 2026 → June 2027 — the year the business is in."** `first_projected_year` is stored at the same moment, from the financial year today falls in. A plan therefore knows its own calendar from the first screen, and Settings never has to be found to make Year 1 mean what the client thinks it means.
+
+**`plan_year` is now editable, on Business profile, where it belongs.** It is the year on the front cover of the report — *"not the financial year"*, says the hint, because that confusion cost a whole diagnosis. It still defaults to the year the plan was created, which is right for a plan written once; a plan revised and reissued next March can now say so. Validated as a four-digit year, and `Settings` stopped carrying it as a read-only extra: it is part of the profile, saved with it.
+
+**The rule: a field that defines how everything else is read must be asked for at creation, not left blank with a hint explaining what happens if you skip it.** The old hint — *"Leave blank to use the plan year"* — was the entire confusion in one sentence, and it survived because nothing forced the question.

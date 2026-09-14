@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { currentFinancialYear } from "@/engine/plan/calendar";
 
 /**
  * Remember the view preference. Deliberately does NOT revalidate: Guided vs Advanced changes which items
@@ -29,6 +30,12 @@ export async function completeSetup(_: SetupState, formData: FormData): Promise<
   const businessName = String(formData.get("business_name") ?? "").trim();
   const country = String(formData.get("country") ?? "").trim() || null;
   const currency = String(formData.get("currency") ?? "AUD").trim();
+  // The plan's financial calendar, stated at creation rather than left for Settings to be asked for later
+  // (§6.33.2). plan_year is the cover year and defaults to the year of creation; it is not the calendar.
+  const fyEndMonth = Math.min(12, Math.max(1, Math.trunc(Number(formData.get("financial_year_end_month"))) || 6));
+  const firstProjected = Math.trunc(Number(formData.get("first_projected_year")));
+  const firstProjectedYear = Number.isFinite(firstProjected) && firstProjected >= 1900 && firstProjected <= 2200
+    ? firstProjected : currentFinancialYear(fyEndMonth);
   if (!businessName) return { error: "Give the business a name." };
 
   const { data: org, error: orgErr } = await supabase
@@ -43,7 +50,7 @@ export async function completeSetup(_: SetupState, formData: FormData): Promise<
     .select("id").single();
   if (planErr) return { error: planErr.message };
 
-  await supabase.from("plan_settings").update({ country, currency }).eq("plan_id", plan.id);
+  await supabase.from("plan_settings").update({ country, currency, financial_year_end_month: fyEndMonth, first_projected_year: firstProjectedYear }).eq("plan_id", plan.id);
   await supabase.from("profiles").update({ default_organisation_id: org.id }).eq("id", user.id);
   redirect(`/plans/${plan.id}/dashboard`);
 }

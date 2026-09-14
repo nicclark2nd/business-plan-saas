@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MONTH_LONG, currentFinancialYear, planYearLabel } from "@/engine/plan/calendar";
 import { FormError } from "@/components/FormMessage";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +24,10 @@ export function SetupForm() {
   const [kind, setKind] = useState("owner");
   const [country, setCountry] = useState("Australia");
   const [currency, setCurrency] = useState("AUD");
+  // The plan's financial year, asked once, here (§6.33.2). Everything downstream reads these two and the
+  // client never has to find them in Settings to make Year 1 mean what they think it means.
+  const [fyEnd, setFyEnd] = useState("6");
+  const firstYear = currentFinancialYear(Number(fyEnd));
   const advisor = kind !== "owner";
 
   return (
@@ -30,6 +35,8 @@ export function SetupForm() {
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="country" value={country} />
       <input type="hidden" name="currency" value={currency} />
+      <input type="hidden" name="financial_year_end_month" value={fyEnd} />
+      <input type="hidden" name="first_projected_year" value={String(firstYear)} />
 
       <fieldset>
         <legend className="mb-2 text-[13px] font-semibold">Which best describes you?</legend>
@@ -66,6 +73,16 @@ export function SetupForm() {
             <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
             <SelectContent>{CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
           </Select></div>
+      </div>
+      <div className="space-y-1.5">
+        <Label>Financial year ends in</Label>
+        <Select value={fyEnd} onValueChange={(v) => v && setFyEnd(v)}>
+          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+          <SelectContent>{MONTH_LONG.map((m, i) => <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          Year 1 of the plan will run <b>{planYearLabel(firstYear, Number(fyEnd))}</b> — the year the business is in. You can change it in Plan settings.
+        </p>
       </div>
       <FormError>{state?.error}</FormError>
       <Button type="submit" disabled={pending}>{pending ? "Setting up…" : "Create my plan →"}</Button>

@@ -65,6 +65,8 @@ export type Profile = {
   industry: string | null;
   country: string | null;
   legal_structure: string | null;
+  /** The year on the front cover of the report. Defaults to the year the plan was created; not the calendar. */
+  plan_year: number;
   customer_type: string | null;
   product_type: string | null;
   products_services_statement: string | null;
@@ -76,7 +78,7 @@ export type Financial = {
   dividend_rate: number;
   currency: string;
 };
-export type Settings = Profile & Financial & { logo_path: string | null; plan_year: number };
+export type Settings = Profile & Financial & { logo_path: string | null };
 
 /** The fields a report's business overview cannot do without. */
 export const PROFILE_REQUIRED: (keyof Profile)[] = ["business_name", "industry", "country", "legal_structure", "products_services_statement"];
