@@ -46,9 +46,9 @@ const monthOptions = (fyEndMonth: number) => planMonths(fyEndMonth).map((m, i) =
 
 export type CashInput = { revenueMonths: number[]; cogsMonths: number[]; overheadsMonths: number[]; capexMonths: number[] };
 
-export function FundingModule({ planId, initial, mode, openingCash, cash, year1, fyEndMonth }: {
+export function FundingModule({ planId, initial, mode, openingCash, openingFromHistory, cash, year1, fyEndMonth }: {
   planId: string; initial: FundingRow[]; mode: "guided" | "advanced";
-  openingCash: number; cash: CashInput;
+  openingCash: number; openingFromHistory: boolean; cash: CashInput;
   year1: { revenue: number; cogs: number; overheads: number; depreciation: number };
   fyEndMonth: number;
 }) {
@@ -77,8 +77,8 @@ export function FundingModule({ planId, initial, mode, openingCash, cash, year1,
     openingCash: opening, revenueMonths: cash.revenueMonths, cogsMonths: cash.cogsMonths,
     overheadsMonths: cash.overheadsMonths, capexMonths: cash.capexMonths,
   }, 12);
-  const interest = interestByYear(sources);
-  const owing = debtByYear(sources);
+  const interest = interestByYear(sources, cash.revenueMonths);
+  const owing = debtByYear(sources, cash.revenueMonths);
   const equityGiven = lines.filter((r) => r.kind === "equity").reduce((a, r) => a + (r.equity_percent ?? 0), 0);
 
   const beginAdd = (kind: FundingKind) => {
@@ -157,11 +157,20 @@ export function FundingModule({ planId, initial, mode, openingCash, cash, year1,
             {totals.revenueLinked > 0 && <> · {num(totals.revenueLinked)} revenue-based</>}
           </>}
         </Meta>
+        {/* A trading business already stated this on its historic balance sheet; asking twice is how the
+            two screens came to disagree about what is in the bank (§6.37). */}
         <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
           Cash at bank on day one
-          <Input inputMode="decimal" value={openingText ?? (opening ? String(opening) : "")} placeholder="0"
-            onChange={(e) => { setOpeningText(e.target.value); setOpening(parseNum(e.target.value)); }}
-            onBlur={commitOpening} className={cn(box, "num w-28 text-right")} />
+          {openingFromHistory ? (
+            <span className="num font-semibold text-foreground" title="From your historic balance sheet">
+              {num(openingCash)}
+              <span className="ml-1.5 font-normal text-muted-foreground">from Historic</span>
+            </span>
+          ) : (
+            <Input inputMode="decimal" value={openingText ?? (opening ? String(opening) : "")} placeholder="0"
+              onChange={(e) => { setOpeningText(e.target.value); setOpening(parseNum(e.target.value)); }}
+              onBlur={commitOpening} className={cn(box, "num w-28 text-right")} />
+          )}
         </span>
       </Toolbar>
 
@@ -362,7 +371,7 @@ function CashRow({ check, opening, year1, onAdd, fyEndMonth }: {
   return (
     <div className="mt-4 rounded border border-input">
       <div className="flex items-center gap-2 border-b border-input bg-[#E9EDF2] px-3 py-1.5">
-        <span className="text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground">Cash at the end of each month — Year 1</span>
+        <span className="text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground">Cash at the end of each month — Year 1, as billed</span>
         <span className="ml-auto text-[11.5px] text-muted-foreground">
           Opening {num(opening)} · sales {num(year1.revenue)} · costs {num(year1.cogs + year1.overheads)}
         </span>
@@ -389,7 +398,14 @@ function CashRow({ check, opening, year1, onAdd, fyEndMonth }: {
         {!trading ? (
           <span className="text-muted-foreground">Fill in Sales, COGS and Overheads and this will tell you whether the funding covers the year.</span>
         ) : check.covered ? (
-          <span>The funding holds all year. The tightest month is {MONTHS[check.low.month - 1]} at {num(check.low.closing)}.</span>
+          <span>
+            The funding holds all year. The tightest month is {MONTHS[check.low.month - 1]} at {num(check.low.closing)}.
+            <span className="ml-1 text-muted-foreground">
+              This counts the money on the day the work is billed and the bill is raised. Review forecast runs
+              the same year again with your payment terms applied, which moves every figure and is the one a
+              lender reads.
+            </span>
+          </span>
         ) : (
           <>
             <span className="font-semibold text-destructive">

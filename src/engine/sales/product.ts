@@ -147,6 +147,45 @@ export function planRevenueByYear(products: AnyProduct[]) {
   for (const p of products) productYears(p, sourceOf(p, products)).forEach((y, i) => { totals[i] += y.revenue; });
   return YEARS.map((year, i) => ({ year, value: r2(totals[i]) }));
 }
+/**
+ * All sixty months, for the things that follow revenue past Year 1 — revenue-linked finance is the first, and
+ * it repays out of sales for as long as the cap takes (§6.37).
+ *
+ * Each year's twelve are settled against that year's own total from `productYears`, December taking the
+ * remainder, so the sixty months and the five years can never say different things.
+ */
+export function productMonths(p: AnyProduct, source?: AnyProduct | null): number[] {
+  const years = productYears(p, source);
+  const out: number[] = [];
+  if (recurring(p)) {
+    const { months } = recurringBase(p, source);
+    const factors = priceFactors(p.yearly_growth);
+    for (let y = 0; y < 5; y++) {
+      const raw = months.slice(y * 12, y * 12 + 12).map((m) => num(m.active) * monthlyFee(p) * factors[y]);
+      out.push(...settleTo(raw, years[y].revenue));
+    }
+    return out;
+  }
+  const d = normalizeDistribution(p.monthly_distribution);
+  for (let y = 0; y < 5; y++) out.push(...monthlySales(years[y].revenue, d));
+  return out;
+}
+
+/** Twelve raw figures rounded to a stated total, the last month taking the remainder (§6.17). */
+function settleTo(raw: number[], total: number): number[] {
+  const out = raw.map(r2);
+  const first11 = out.slice(0, 11).reduce((a, b) => a + b, 0);
+  out[11] = r2(num(total) - first11);
+  return out;
+}
+
+/** Sixty months of revenue across the plan. */
+export function planRevenueMonths(products: AnyProduct[]): number[] {
+  const totals = Array(60).fill(0);
+  for (const p of products) productMonths(p, sourceOf(p, products)).forEach((v, i) => { totals[i] += v; });
+  return totals.map(r2);
+}
+
 /** Year 1 by month across every product. */
 export function planYear1Months(products: AnyProduct[]) {
   const totals = Array(12).fill(0);

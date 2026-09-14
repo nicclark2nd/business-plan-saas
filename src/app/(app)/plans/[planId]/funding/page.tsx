@@ -2,13 +2,14 @@ import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { startYearFromDate, planYearStart, totalSalariesByYear } from "@/engine/people/salary";
 import { YEARS } from "@/engine/sales/projection";
-import { planYear1Months, type AnyProduct } from "@/engine/sales/product";
+import { planRevenueMonths, type AnyProduct } from "@/engine/sales/product";
 import { planCogsMonths, type CostProduct } from "@/engine/cogs/direct";
 import { overheadsMonths, planOverheadLines, type Overhead } from "@/engine/overheads/expenses";
 import { assetsMonths, capexMonths, type FixedAsset } from "@/engine/assets/depreciation";
 import { FundingModule } from "./FundingModule";
 import type { FundingRow } from "./model";
 import { firstProjectedYear } from "@/engine/plan/calendar";
+import { openingCashFor } from "@/engine/forecast/assemble";
 
 /**
  * Funding comes after Sales, COGS and Overheads precisely so it can answer the question APeX never asks:
@@ -17,7 +18,7 @@ import { firstProjectedYear } from "@/engine/plan/calendar";
 export default async function FundingPage({ params }: { params: Promise<{ planId: string }> }) {
   const { planId } = await params;
   const supabase = await createClient();
-  const [session, owner, debt, equity, grants, rbf, products, fixedCogs, overheads, people, spend, assets, settings] = await Promise.all([
+  const [session, owner, debt, equity, grants, rbf, products, fixedCogs, overheads, people, spend, assets, settings, historic] = await Promise.all([
     getSession(),
     supabase.from("plan_funding_owner").select("*").eq("plan_id", planId).order("created_at"),
     supabase.from("plan_funding_debt").select("*").eq("plan_id", planId).order("created_at"),
@@ -31,6 +32,7 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
     supabase.from("plan_marketing_spend").select("annual_budget").eq("plan_id", planId),
     supabase.from("plan_fixed_assets").select("*").eq("plan_id", planId),
     supabase.from("plan_settings").select("opening_cash, on_cost_pct, financial_year_end_month, first_projected_year").eq("plan_id", planId).maybeSingle(),
+    supabase.from("plan_historic_periods").select("cash").eq("plan_id", planId).order("period_number").limit(1).maybeSingle(),
   ]);
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
   const n = (v: unknown) => Number(v ?? 0) || 0;
@@ -72,7 +74,9 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
   /* ---- what the business does with the money, month by month ---- */
   const prods = (products.data ?? []) as AnyProduct[];
   const sourceFor = (p: AnyProduct) => prods.find((x) => x.id === p.clients_from_product_id) ?? null;
-  const revenueMonths = planYear1Months(prods);
+  // Sixty, not twelve: revenue-linked finance repays out of sales for as long as the cap takes, so the
+  // funding functions need the whole plan. The cash check still only runs the first twelve (§6.37).
+  const revenueMonths = planRevenueMonths(prods);
 
   const cost = prods as CostProduct[];
   const fixed = (fixedCogs.data ?? []) as never[];
@@ -81,7 +85,7 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
   // up differently from the row under it is the Overheads footer mistake again (§6.19).
   const sum = (a: number[]) => Math.round(a.reduce((x, y) => x + y, 0) * 100) / 100;
   const cogsYear1 = sum(cogsMonths);
-  const revenueYear1 = sum(revenueMonths);
+  const revenueYear1 = sum(revenueMonths.slice(0, 12));
 
   const fyStart = planYearStart(firstProjectedYear(settings.data?.first_projected_year, settings.data?.financial_year_end_month), settings.data?.financial_year_end_month ?? 6);
   const salaries = totalSalariesByYear((people.data ?? []).map((p) => ({
@@ -110,7 +114,8 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
   return (
     <FundingModule
       planId={planId} initial={rows} mode={mode}
-      openingCash={Number(settings.data?.opening_cash ?? 0)}
+      openingCash={openingCashFor(historic.data, Number(settings.data?.opening_cash ?? 0))}
+      openingFromHistory={!!historic.data}
       fyEndMonth={settings.data?.financial_year_end_month ?? 6}
       cash={{ revenueMonths, cogsMonths, overheadsMonths: ohMonths, capexMonths: capex }}
       year1={{ revenue: revenueYear1, cogs: cogsYear1, overheads: ohYear1, depreciation: assetsMonths(assetRows).reduce((a, b) => a + b, 0) }}

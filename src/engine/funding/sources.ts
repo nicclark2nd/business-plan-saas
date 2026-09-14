@@ -193,6 +193,71 @@ export function rbfMonths(r: RevenueLinked, revenueMonths: number[]): number[] {
   return out;
 }
 
+export type RbfMonth = { payment: number; principal: number; cost: number; balance: number };
+
+/**
+ * Revenue-linked finance, split the way a balance sheet needs it (§6.37).
+ *
+ * The money is real debt: it arrives in the bank, it is repaid, and until it is repaid the business owes it.
+ * None of that reached the forecast, because every function that feeds it asked for `s.loan` and a
+ * revenue-linked source has `s.rbf` — so the cash came in, was never repaid, never appeared as a liability,
+ * and the balance sheet came out over by the full amount in every year.
+ *
+ * **Each payment is split by the cap ratio**: a 1.4x cap means 1/1.4 of every dollar repaid retires the
+ * principal and the rest is the cost of the money. That is not the easy answer, it is the only honest one —
+ * the repayment stream follows future sales, so unlike a loan there is no term and no rate to amortise
+ * against, and nothing about the deal is knowable on day one except the cap. Splitting on it retires the
+ * balance to exactly zero at exactly the moment the cap is reached.
+ *
+ * The last payment absorbs any rounding into its cost rather than its principal, so the liability lands on
+ * nil rather than on a few cents that would sit on the balance sheet forever.
+ */
+export function rbfSplitMonths(r: RevenueLinked, revenueMonths: number[]): RbfMonth[] {
+  const out: RbfMonth[] = Array.from({ length: 60 }, () => ({ payment: 0, principal: 0, cost: 0, balance: 0 }));
+  const drawn = num(r.amount_received);
+  const cap = rbfCap(r);
+  if (drawn <= 0 || cap <= 0) return out;
+
+  const from = (Math.max(1, num(r.start_year) || 1) - 1) * 12 + (Math.max(1, num(r.start_month) || 1) - 1);
+  const pay = rbfMonths(r, revenueMonths);
+  const principalShare = drawn / cap;
+
+  // Which payment settles it. Splitting every month at the cap ratio and rounding leaves a few cents of
+  // principal behind — a liability of 0.10 sitting on the balance sheet forever, long after the deal is
+  // done. The payment that exhausts the cap retires whatever is left and takes the difference on its cost.
+  // If sales never reach the cap inside the plan, there is no such payment and the balance genuinely stays.
+  const capExhausted = Math.abs(r2(pay.reduce((a, b) => a + num(b), 0)) - cap) < 0.005;
+  const lastPayment = pay.reduce((last, v, i) => (num(v) > 0 ? i : last), -1);
+
+  let balance = 0;
+  for (let i = 0; i < 60; i++) {
+    if (i === from) balance = drawn;                       // the month the money lands
+    const payment = i >= from ? r2(num(pay[i])) : 0;
+    const principal = capExhausted && i === lastPayment
+      ? balance
+      : Math.min(r2(payment * principalShare), balance);
+    balance = r2(balance - principal);
+    out[i] = { payment, principal, cost: r2(payment - principal), balance };
+  }
+  return out;
+}
+
+export type RbfYear = { year: number; principal: number; cost: number; closing: number };
+
+/** The five years of a revenue-linked source, to sit beside `loanByYear` in everything that reads funding. */
+export function rbfByYear(r: RevenueLinked, revenueMonths: number[]): RbfYear[] {
+  const m = rbfSplitMonths(r, revenueMonths);
+  return YEARS.map((year, i) => {
+    const slice = m.slice(i * 12, i * 12 + 12);
+    return {
+      year,
+      principal: r2(slice.reduce((a, x) => a + x.principal, 0)),
+      cost: r2(slice.reduce((a, x) => a + x.cost, 0)),
+      closing: slice[11]?.balance ?? 0,
+    };
+  });
+}
+
 /* ------------------------------------------------------------------ *
  * The whole funding picture                                           *
  * ------------------------------------------------------------------ */
@@ -234,24 +299,37 @@ export function fundingOutMonths(sources: FundingSource[], revenueMonths: number
   return out;
 }
 
-/** Interest by year — a P&L cost, unlike the principal, which only moves cash. */
-export function interestByYear(sources: FundingSource[]): number[] {
+/**
+ * The cost of borrowed money by year — a P&L charge, unlike principal, which only moves cash.
+ *
+ * `revenueMonths` is required rather than optional on purpose: a revenue-linked source repays out of sales,
+ * so without them it would quietly report nothing, which is exactly the fault this is fixing (§6.37).
+ */
+export function interestByYear(sources: FundingSource[], revenueMonths: number[]): number[] {
   const out = YEARS.map(() => 0);
   for (const s of sources) {
-    if (!s.loan) continue;
-    const y = loanByYear(s.loan);
-    for (let i = 0; i < 5; i++) out[i] = r2(out[i] + y[i].interest);
+    if (s.loan) {
+      const y = loanByYear(s.loan);
+      for (let i = 0; i < 5; i++) out[i] = r2(out[i] + y[i].interest);
+    } else if (s.rbf) {
+      const y = rbfByYear(s.rbf, revenueMonths);
+      for (let i = 0; i < 5; i++) out[i] = r2(out[i] + y[i].cost);
+    }
   }
   return out;
 }
 
 /** Debt still owed at the end of each year — the balance sheet's liability. */
-export function debtByYear(sources: FundingSource[]): number[] {
+export function debtByYear(sources: FundingSource[], revenueMonths: number[]): number[] {
   const out = YEARS.map(() => 0);
   for (const s of sources) {
-    if (!s.loan) continue;
-    const y = loanByYear(s.loan);
-    for (let i = 0; i < 5; i++) out[i] = r2(out[i] + y[i].closing);
+    if (s.loan) {
+      const y = loanByYear(s.loan);
+      for (let i = 0; i < 5; i++) out[i] = r2(out[i] + y[i].closing);
+    } else if (s.rbf) {
+      const y = rbfByYear(s.rbf, revenueMonths);
+      for (let i = 0; i < 5; i++) out[i] = r2(out[i] + y[i].closing);
+    }
   }
   return out;
 }

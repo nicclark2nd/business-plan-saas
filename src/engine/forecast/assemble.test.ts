@@ -57,7 +57,7 @@ describe("assemble", () => {
   });
 
   it("splits debt into what falls due next year and what does not", () => {
-    const { current, nonCurrent } = debtSplitByYear(funding);
+    const { current, nonCurrent } = debtSplitByYear(funding, []);
     const closing = current.map((c, i) => c + nonCurrent[i]);
     for (const y of FORECAST_YEARS) {
       expect(current[y - 1], `current Y${y}`).toBeGreaterThanOrEqual(0);
@@ -77,7 +77,7 @@ describe("assemble", () => {
   });
 
   it("never lets principal be mistaken for a cost", () => {
-    const principal = principalByYear(funding);
+    const principal = principalByYear(funding, []);
     const base = assembleBase(sources);
     for (const y of FORECAST_YEARS) {
       expect(base[y].debtRepaid).toBe(principal[y - 1]);

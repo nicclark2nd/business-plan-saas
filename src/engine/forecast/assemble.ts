@@ -24,10 +24,10 @@
  */
 import { FORECAST_YEARS, type OpeningBalance, type YearBase } from "./model";
 import type { MonthlyShapes } from "./monthly";
-import { planRevenueByYear, planYear1Months, sourceOf, type AnyProduct } from "../sales/product";
+import { planRevenueByYear, planRevenueMonths, planYear1Months, sourceOf, type AnyProduct } from "../sales/product";
 import { planCogsByYear, planCogsMonths, type CostProduct, type FixedCost } from "../cogs/direct";
 import { overheadsByYear, overheadsMonths, planOverheadLines, type Overhead } from "../overheads/expenses";
-import { debtByYear, interestByYear, loanByYear, loanMonths, type FundingSource } from "../funding/sources";
+import { debtByYear, interestByYear, loanByYear, loanMonths, rbfByYear, rbfSplitMonths, type FundingSource } from "../funding/sources";
 import { assetsByYear, assetsMonths, bookValueByYear, capexMonths, type FixedAsset } from "../assets/depreciation";
 import { extraordinaryByYear, extraordinaryCashMonths, isDisposal, type ExtraordinaryItem } from "../extraordinary/items";
 
@@ -53,12 +53,12 @@ export type PlanSources = {
  * following twelve months; whatever is left is non-current. Year 5 has no year 6 to look at, so its closing
  * balance is treated as current — a balance still outstanding at the end of the plan is due, not deferred.
  */
-export function debtSplitByYear(funding: FundingSource[]): { current: number[]; nonCurrent: number[] } {
-  const closing = debtByYear(funding);
+export function debtSplitByYear(funding: FundingSource[], revenueMonths: number[]): { current: number[]; nonCurrent: number[] } {
+  const closing = debtByYear(funding, revenueMonths);
   const principalNextYear = FORECAST_YEARS.map(() => 0);
   for (const s of funding) {
-    if (!s.loan) continue;
-    const y = loanByYear(s.loan);
+    const y = s.loan ? loanByYear(s.loan) : s.rbf ? rbfByYear(s.rbf, revenueMonths) : null;
+    if (!y) continue;
     for (let i = 0; i < 5; i++) principalNextYear[i] += i < 4 ? n(y[i + 1]?.principal) : 0;
   }
   const current = closing.map((c, i) => r2(Math.min(c, i === 4 ? c : principalNextYear[i])));
@@ -66,11 +66,11 @@ export function debtSplitByYear(funding: FundingSource[]): { current: number[]; 
 }
 
 /** Principal repaid in each year — cash out, and never a P&L cost. */
-export function principalByYear(funding: FundingSource[]): number[] {
+export function principalByYear(funding: FundingSource[], revenueMonths: number[]): number[] {
   const out = FORECAST_YEARS.map(() => 0);
   for (const s of funding) {
-    if (!s.loan) continue;
-    const y = loanByYear(s.loan);
+    const y = s.loan ? loanByYear(s.loan) : s.rbf ? rbfByYear(s.rbf, revenueMonths) : null;
+    if (!y) continue;
     for (let i = 0; i < 5; i++) out[i] = r2(out[i] + n(y[i].principal));
   }
   return out;
@@ -91,6 +91,9 @@ export function raisedByYear(funding: FundingSource[]): { debt: number[]; equity
 
 export function assembleBase(p: PlanSources): Record<number, YearBase> {
   const revenue = planRevenueByYear(p.products);
+  // Revenue-linked finance repays out of sales, so the funding functions need the sales, all sixty months
+  // of them — not a second reading of the plan, the same series the Sales screen draws from (§6.37).
+  const revenueMonths = planRevenueMonths(p.products);
   // An ongoing line whose clients come from another line costs what THAT line wins (§6.36). Passing
   // `() => null` here silently unlinked them, so the forecast costed a book of clients it never counted:
   // 28,800 against the COGS screen's 42,247 on the same plan, with all three statements still agreeing
@@ -98,11 +101,11 @@ export function assembleBase(p: PlanSources): Record<number, YearBase> {
   // plan — which is why this reads the link exactly as Sales and COGS already do.
   const cogs = planCogsByYear(p.costProducts, p.fixedCogs, (c) => sourceOf(c, p.products));
   const overheads = overheadsByYear(planOverheadLines(p.overheads, p.salaries, p.marketing), p.onCostPct);
-  const interest = interestByYear(p.funding);
+  const interest = interestByYear(p.funding, revenueMonths);
   const assets = assetsByYear(p.assets);
   const extra = extraordinaryByYear(p.extraordinary);
-  const { current, nonCurrent } = debtSplitByYear(p.funding);
-  const principal = principalByYear(p.funding);
+  const { current, nonCurrent } = debtSplitByYear(p.funding, revenueMonths);
+  const principal = principalByYear(p.funding, revenueMonths);
   const raised = raisedByYear(p.funding);
 
   /**
@@ -159,6 +162,7 @@ export function assembleBase(p: PlanSources): Record<number, YearBase> {
  * using the identical test, so a source cannot be equity by the year and debt by the month.
  */
 export function assembleMonths(p: PlanSources): MonthlyShapes {
+  const revenueMonths = planRevenueMonths(p.products);
   const debtProceeds = Array(12).fill(0) as number[];
   const equityRaised = Array(12).fill(0) as number[];
   const debtRepaid = Array(12).fill(0) as number[];
@@ -171,11 +175,18 @@ export function assembleMonths(p: PlanSources): MonthlyShapes {
       const bucket = borrowed ? debtProceeds : equityRaised;
       bucket[m - 1] = r2(bucket[m - 1] + n(s.amount));
     }
-    if (!s.loan) continue;
-    const months = loanMonths(s.loan);
-    for (let i = 0; i < 12; i++) {
-      debtRepaid[i] = r2(debtRepaid[i] + n(months[i]?.principal));
-      interest[i] = r2(interest[i] + n(months[i]?.interest) + n(months[i]?.fees));
+    if (s.loan) {
+      const months = loanMonths(s.loan);
+      for (let i = 0; i < 12; i++) {
+        debtRepaid[i] = r2(debtRepaid[i] + n(months[i]?.principal));
+        interest[i] = r2(interest[i] + n(months[i]?.interest) + n(months[i]?.fees));
+      }
+    } else if (s.rbf) {
+      const months = rbfSplitMonths(s.rbf, revenueMonths);
+      for (let i = 0; i < 12; i++) {
+        debtRepaid[i] = r2(debtRepaid[i] + n(months[i]?.principal));
+        interest[i] = r2(interest[i] + n(months[i]?.cost));
+      }
     }
   }
 
@@ -194,6 +205,18 @@ export function assembleMonths(p: PlanSources): MonthlyShapes {
 }
 
 /**
+ * The cash the plan opens with (§6.37).
+ *
+ * A trading business already told the app this on its historic balance sheet; only a business with no
+ * history has to state it. Funding asked for it a second time and read only the stated figure, so a plan
+ * with 21,315 in the bank ran its whole funding check from nil — one fact, two homes, and the two screens
+ * disagreeing about the most basic number in the plan. This is the rule, and both screens use it.
+ */
+export const openingCashFor = (
+  historic: { cash?: number | null } | null | undefined, stated: number | null | undefined,
+) => (historic ? n(historic.cash) : n(stated));
+
+/**
  * The opening position, from the last historic period. A plan with no history opens flat except for whatever
  * cash the client says they are starting with — a startup's balance sheet is its funding, and that arrives
  * through the forecast's own Year 1 rather than being assumed here.
@@ -205,7 +228,7 @@ export function assembleOpening(
 ): OpeningBalance {
   const h = (k: string) => n(historic?.[k]);
   return {
-    cash: historic ? h("cash") : n(openingCash),
+    cash: openingCashFor(historic as { cash?: number | null } | null, openingCash),
     accountsReceivable: h("accounts_receivable"),
     inventory: h("inventory_wip"),
     otherCurrentAssets: h("other_current_assets"),

@@ -124,8 +124,8 @@ describe("the funding picture", () => {
   });
 
   it("sends only the interest to the P&L and only the balance to the balance sheet", () => {
-    expect(interestByYear(sources)[0]).toBeCloseTo(9179.9, 1);
-    expect(debtByYear(sources)[4]).toBe(0);
+    expect(interestByYear(sources, [])[0]).toBeCloseTo(9179.9, 1);
+    expect(debtByYear(sources, [])[4]).toBe(0);
   });
 });
 
