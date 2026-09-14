@@ -4,22 +4,22 @@ import { startYearFromDate, planYearStart, totalSalariesByYear } from "@/engine/
 import { YEARS } from "@/engine/sales/projection";
 import { OverheadsModule } from "./OverheadsModule";
 import type { OverheadRow } from "./model";
+import { firstProjectedYear } from "@/engine/plan/calendar";
 
 export default async function OverheadsPage({ params }: { params: Promise<{ planId: string }> }) {
   const { planId } = await params;
   const supabase = await createClient();
-  const [session, overheads, people, spend, settings, plan] = await Promise.all([
+  const [session, overheads, people, spend, settings] = await Promise.all([
     getSession(),
     supabase.from("plan_overheads").select("*").eq("plan_id", planId).order("sort_order").order("created_at"),
     supabase.from("plan_people").select("annual_salary, salary_adjustments, started_on, role").eq("plan_id", planId),
     supabase.from("plan_marketing_spend").select("annual_budget").eq("plan_id", planId),
-    supabase.from("plan_settings").select("on_cost_pct, financial_year_end_month").eq("plan_id", planId).maybeSingle(),
-    supabase.from("plans").select("plan_year").eq("id", planId).single(),
+    supabase.from("plan_settings").select("on_cost_pct, financial_year_end_month, first_projected_year").eq("plan_id", planId).maybeSingle(),
   ]);
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
 
   // The Leadership Team already models each person's start year and yearly rises — all five years come from it.
-  const fyStart = planYearStart(plan.data?.plan_year ?? new Date().getFullYear(), settings.data?.financial_year_end_month ?? 6);
+  const fyStart = planYearStart(firstProjectedYear(settings.data?.first_projected_year, settings.data?.financial_year_end_month), settings.data?.financial_year_end_month ?? 6);
   const salaries = totalSalariesByYear((people.data ?? []).map((p) => ({
     annual_salary: p.annual_salary === null ? null : Number(p.annual_salary),
     salary_adjustments: p.salary_adjustments ?? null,

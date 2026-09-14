@@ -8,6 +8,7 @@ import { overheadsMonths, planOverheadLines, type Overhead } from "@/engine/over
 import { assetsMonths, capexByYear, type FixedAsset } from "@/engine/assets/depreciation";
 import { FundingModule } from "./FundingModule";
 import type { FundingRow } from "./model";
+import { firstProjectedYear } from "@/engine/plan/calendar";
 
 /**
  * Funding comes after Sales, COGS and Overheads precisely so it can answer the question APeX never asks:
@@ -16,7 +17,7 @@ import type { FundingRow } from "./model";
 export default async function FundingPage({ params }: { params: Promise<{ planId: string }> }) {
   const { planId } = await params;
   const supabase = await createClient();
-  const [session, owner, debt, equity, grants, rbf, products, fixedCogs, overheads, people, spend, assets, settings, plan] = await Promise.all([
+  const [session, owner, debt, equity, grants, rbf, products, fixedCogs, overheads, people, spend, assets, settings] = await Promise.all([
     getSession(),
     supabase.from("plan_funding_owner").select("*").eq("plan_id", planId).order("created_at"),
     supabase.from("plan_funding_debt").select("*").eq("plan_id", planId).order("created_at"),
@@ -29,8 +30,7 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
     supabase.from("plan_people").select("annual_salary, salary_adjustments, started_on, role").eq("plan_id", planId),
     supabase.from("plan_marketing_spend").select("annual_budget").eq("plan_id", planId),
     supabase.from("plan_fixed_assets").select("*").eq("plan_id", planId),
-    supabase.from("plan_settings").select("opening_cash, on_cost_pct, financial_year_end_month").eq("plan_id", planId).maybeSingle(),
-    supabase.from("plans").select("plan_year").eq("id", planId).single(),
+    supabase.from("plan_settings").select("opening_cash, on_cost_pct, financial_year_end_month, first_projected_year").eq("plan_id", planId).maybeSingle(),
   ]);
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
   const n = (v: unknown) => Number(v ?? 0) || 0;
@@ -83,7 +83,7 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
   const cogsYear1 = sum(cogsMonths);
   const revenueYear1 = sum(revenueMonths);
 
-  const fyStart = planYearStart(plan.data?.plan_year ?? new Date().getFullYear(), settings.data?.financial_year_end_month ?? 6);
+  const fyStart = planYearStart(firstProjectedYear(settings.data?.first_projected_year, settings.data?.financial_year_end_month), settings.data?.financial_year_end_month ?? 6);
   const salaries = totalSalariesByYear((people.data ?? []).map((p) => ({
     annual_salary: p.annual_salary === null ? null : Number(p.annual_salary),
     salary_adjustments: p.salary_adjustments ?? null,

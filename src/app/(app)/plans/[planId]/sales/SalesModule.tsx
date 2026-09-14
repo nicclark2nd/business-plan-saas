@@ -10,7 +10,7 @@ import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/Module
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton, SortTh, sortRows, type Sort } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
-import { planMonths, planMonthNames, planYearLabel } from "@/engine/plan/calendar";
+import { planMonths, planMonthNames, planYearLabel, firstProjectedYear } from "@/engine/plan/calendar";
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { cn } from "@/lib/utils";
 import { YEARS, yearlyProjection, firstPlanYear, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, monthlySales, hasValue, impliedPct, type Growth, type MonthlyDistribution } from "@/engine/sales/projection";
@@ -48,11 +48,11 @@ const firstYear = (r: Pick<Row, "start_selling_year">) => firstPlanYear(r.start_
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
 const box = "h-8";
 
-export function SalesModule({ planId, initial, mode, initialArea, hasHistory, historicRevenue, historicEnd, fyEndMonth, planYear, currency }: {
-  planId: string; initial: Product[]; mode: "guided" | "advanced"; initialArea: AreaKey; hasHistory: boolean | null; historicRevenue: number | null; historicEnd: string | null; fyEndMonth: number; planYear: number; currency: string;
+export function SalesModule({ planId, initial, mode, initialArea, hasHistory, historicRevenue, historicEnd, fyEndMonth, firstProjectedYear: firstYearEnding, currency }: {
+  planId: string; initial: Product[]; mode: "guided" | "advanced"; initialArea: AreaKey; hasHistory: boolean | null; historicRevenue: number | null; historicEnd: string | null; fyEndMonth: number; firstProjectedYear: number | null; currency: string;
 }) {
-  // What Year 1 actually is, from the plan's own calendar (§6.21) — so the client never has to work it out.
-  const yearOne = planYearLabel(planYear, fyEndMonth);
+  // What Year 1 actually is, from the two Settings fields that define the financial year (§6.33.1).
+  const yearOne = planYearLabel(firstProjectedYear(firstYearEnding, fyEndMonth), fyEndMonth);
   // What this plan calls a line — Products, Services, Treatments (§6.31.1).
   const noun = useProductNoun();
   const many = noun.many.toLowerCase();

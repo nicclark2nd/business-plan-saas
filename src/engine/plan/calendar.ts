@@ -41,3 +41,31 @@ export function planYearLabel(planYear: number, fyEndMonth: number | null | unde
   const startYear = end === 12 ? planYear : planYear - 1;
   return `${MONTH_LONG[start - 1]} ${startYear} → ${MONTH_LONG[end - 1]} ${planYear}`;
 }
+
+/**
+ * The year Year 1 ends in (§6.33.1).
+ *
+ * Two fields in Settings define the plan's financial calendar and nothing else does: **Financial year ends
+ * in** and **First projected year**. `plans.plan_year` is not one of them — it is the year the plan was
+ * produced, for the front cover of the report — and it had quietly become the calendar in four places,
+ * which is how Year 1 came to read as the twelve months the Historic step already covers.
+ *
+ * Nothing is inferred from history or from today's date at read time: a plan's calendar is something the
+ * client states, and a stated answer can be checked. The fallback exists only so a plan saved before this
+ * field was required does not crash, and Settings asks for it.
+ */
+export const firstProjectedYear = (stored: number | null | undefined, fyEndMonth: number | null | undefined) => {
+  const n = Math.trunc(Number(stored));
+  if (Number.isFinite(n) && n >= 1900 && n <= 2200) return n;
+  return currentFinancialYear(fyEndMonth);
+};
+
+/** The financial year today falls in, named by the calendar year it ENDS in — the same convention as above. */
+export function currentFinancialYear(fyEndMonth: number | null | undefined, today = new Date()) {
+  const end = Math.min(12, Math.max(1, Math.trunc(Number(fyEndMonth)) || 6));
+  const year = today.getUTCFullYear(), month = today.getUTCMonth() + 1;
+  return month > end ? year + 1 : year;
+}
+
+/** Year 1 of the plan runs to `firstProjectedYear`; Year N runs to that plus N-1. */
+export const planYearEnding = (first: number, planYear: number) => first + Math.max(1, Math.trunc(planYear)) - 1;

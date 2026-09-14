@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { ModuleFrame, ModuleStatusFooter, useModule } from "@/components/module/ModuleFrame";
 import { Section, FieldGrid, Field, FieldInput, FieldTextarea, FieldSelect } from "@/components/module/FieldGrid";
 import { Toolbar, Meta } from "@/components/module/DataGrid";
+import { currentFinancialYear, firstProjectedYear, planYearEnding, planYearLabel } from "@/engine/plan/calendar";
 import { formatMonth } from "../people/model";
 import { saveProfile, saveFinancial } from "./actions";
 import { legalStructuresFor, CUSTOMER_TYPES, PRODUCT_TYPES, COUNTRIES, CURRENCIES, MONTHS, profileMissing, type Settings, type Profile, type Financial } from "./model";
@@ -82,11 +83,14 @@ export function SettingsModule({ planId, initial, mode, initialArea }: { planId:
 
       {area === "financial" && (
         <div onBlur={(e) => left(e) && dirty === "financial" && commit("financial")}>
-          <Toolbar><Meta className="ml-0">Plan year FY{s.plan_year}: Year 1 runs {MONTHS[s.financial_year_end_month % 12]} {s.financial_year_end_month === 12 ? s.plan_year : s.plan_year - 1} → {MONTHS[s.financial_year_end_month - 1]} {s.plan_year}.</Meta></Toolbar>
+          <Toolbar><Meta className="ml-0">
+            <b>Year 1 runs {planYearLabel(firstProjectedYear(s.first_projected_year, s.financial_year_end_month), s.financial_year_end_month)}</b> — the year the business is in. Year 5 ends {planYearEnding(firstProjectedYear(s.first_projected_year, s.financial_year_end_month), 5)}.
+            {s.first_projected_year === null && <span className="text-warn"> · First projected year is not set, so this is the financial year today falls in.</span>}
+          </Meta></Toolbar>
           <Section title="Financial year">
             <FieldGrid>
               <Field label="Financial year ends in" span={2}><FieldSelect value={String(s.financial_year_end_month)} options={MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))} onValueChange={(v) => edit({ financial_year_end_month: Number(v) }, "financial", true)} /></Field>
-              <Field label="First projected year" hint="Leave blank to use the plan year."><FieldInput numeric inputMode="numeric" value={s.first_projected_year ?? ""} placeholder="plan year" onChange={(e) => edit({ first_projected_year: Number(e.target.value.replace(/\D/g, "")) || null }, "financial")} /></Field>
+              <Field label="First projected year" hint="The year Year 1 ends in. With these two fields the plan knows its own calendar."><FieldInput numeric inputMode="numeric" value={s.first_projected_year ?? ""} placeholder={String(currentFinancialYear(s.financial_year_end_month))} onChange={(e) => edit({ first_projected_year: Number(e.target.value.replace(/\D/g, "")) || null }, "financial")} /></Field>
               <Field label="Currency"><FieldSelect value={s.currency} options={opts(CURRENCIES)} onValueChange={(v) => edit({ currency: v }, "financial", true)} /></Field>
             </FieldGrid>
           </Section>

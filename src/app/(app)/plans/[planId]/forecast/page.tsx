@@ -6,6 +6,7 @@ import { ForecastModule } from "./ForecastModule";
 import { assembleBase, assembleOpening, type PlanSources } from "@/engine/forecast/assemble";
 import { buildForecast } from "@/engine/forecast/model";
 import { cashTimingSchedule, daysFromHistory, workingCapitalSchedule } from "@/engine/forecast/assumptions";
+import { firstProjectedYear } from "@/engine/plan/calendar";
 import type { FundingSource } from "@/engine/funding/sources";
 
 /**
@@ -20,9 +21,8 @@ export default async function ForecastPage({ params, searchParams }: {
   const { area } = await searchParams;
   const supabase = await createClient();
 
-  const [session, plan, settings] = await Promise.all([
+  const [session, settings] = await Promise.all([
     getSession(),
-    supabase.from("plans").select("plan_year").eq("id", planId).single(),
     supabase.from("plan_settings").select("*").eq("plan_id", planId).maybeSingle(),
   ]);
   const s = settings.data;
@@ -37,7 +37,7 @@ export default async function ForecastPage({ params, searchParams }: {
       supabase.from("plan_extraordinary_items").select("*").eq("plan_id", planId),
       supabase.from("plan_historic_periods").select("*").eq("plan_id", planId).order("period_number").limit(1).maybeSingle(),
       loadFundingRows(planId),
-      loadSalariesByYear(planId, plan.data?.plan_year ?? new Date().getFullYear(), fyEndMonth),
+      loadSalariesByYear(planId, firstProjectedYear(s?.first_projected_year, fyEndMonth), fyEndMonth),
       loadMarketingByYear(planId),
     ]);
 

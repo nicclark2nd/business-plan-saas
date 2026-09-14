@@ -833,3 +833,19 @@ The code did not agree. `start_selling_year` meant *"1 = now, 2–6 = plan Year 
 **On labelling the years.** Considered and rejected: *Now, Year 2, Year 3, Year 4, Year 5*. It reads plainly on screen, but "Now" is not now — a plan written in May is forecasting a year that has not started, and one read six months later cannot be dated at all. These labels go into a document a bank reads, and **"Year 1" survives being put in a drawer**. Year 1–5 also keeps Sales speaking the same language as Overheads, COGS, Funding, Fixed Assets and One-off costs. The comprehension problem is solved where the confusion actually lives — in the picker, and in a line above the columns stating what Year 1 is.
 
 **Open, and not guessed at:** Settings states *"Plan year FY2026: Year 1 runs July 2025 → June 2026"*, while this plan's Historic period also ends in 2026 — so Year 1 and the last historic year are the same twelve months. One of the two is wrong. Rather than shift every date label on a guess, the Year 1 date line currently follows Settings' existing convention, and the contradiction is raised.
+
+### 6.33.1 Two fields define the financial year, and the cover year is not one of them (14 Sep 2026)
+
+*"Under the Financial year & tax tab there is the FINANCIAL YEAR with two fields — 'Financial year ends in' and 'First projected year'. **This is the financial year.** The plan year is the year the plan was produced and will end up on the front cover."*
+
+**`first_projected_year` was stored, editable, and used nowhere.** A dead field. Meanwhile `plans.plan_year` — the cover year — had quietly become the plan's calendar in four places: the Settings summary line, Sales' Year 1 label, and `planYearStart` in Overheads and Funding, which decides which plan year a person's start date falls into. That is why Year 1 read **July 2025 → June 2026**: the twelve months the Historic step already covers.
+
+`firstProjectedYear(stored, fyEndMonth)` in `calendar.ts` is now the single answer, and every one of those four reads it. `plan_year` no longer appears in any financial calculation — three page queries for it were deleted outright.
+
+**Nothing is inferred at read time.** A plan's calendar is something the client states, and a stated answer can be checked; a derived one is a guess wearing a fact's clothes. The fallback — the financial year today falls in — exists only so a plan saved before this mattered does not crash, and Settings says out loud when it is being used: *"First projected year is not set, so this is the financial year today falls in."*
+
+The summary line now reads what it means: **"Year 1 runs July 2026 → June 2027 — the year the business is in. Year 5 ends 2031."** And the hint on the field stops lying: it said *"Leave blank to use the plan year"*, which was the whole confusion in one sentence.
+
+**The naming convention, stated once:** a financial year is named by the calendar year it **ends** in. FY2027 runs July 2026 → June 2027 for a June year end. `planYearEnding(first, n)` gives Year N's name.
+
+**Still to do:** `plan_year` should become an editable field on Business profile — it defaults to the year the plan was created, which is right, but a plan revised and reissued next March should be able to carry the right date on its cover.
