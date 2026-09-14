@@ -104,8 +104,15 @@ export function Td({ children, className, right, wrap, colSpan, rowSpan, style, 
 export function Row({ children, className, ...props }: React.ComponentProps<"tr">) {
   return <tr className={cn("hover:[&>td]:bg-secondary/60", className)} {...props}>{children}</tr>;
 }
+/**
+ * The totals row. It is a plain `<tr>` on purpose: a `<tfoot>` written inside a `<tbody>` — which is what a
+ * mapped list of rows produces — is not part of that table at all. The browser lays it out as its own
+ * anonymous table, so it takes its own column widths and the totals stop lining up with the figures they
+ * total: 84 px out on the forecast's statements, in a product whose whole claim is that the numbers agree
+ * (§6.36). As a `<tr>` it belongs to the table wherever it is written.
+ */
 export function FootRow({ children }: { children: React.ReactNode }) {
-  return <tfoot><tr className="[&>td]:border-t-2 [&>td]:border-input [&>td]:bg-secondary [&>td]:font-bold">{children}</tr></tfoot>;
+  return <tr className="[&>td]:border-t-2 [&>td]:border-input [&>td]:bg-secondary [&>td]:font-bold">{children}</tr>;
 }
 /** Group header row (one per person in an all-people scope). */
 export function GroupRow({ colSpan, children }: { colSpan: number; children: React.ReactNode }) {

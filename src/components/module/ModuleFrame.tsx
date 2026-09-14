@@ -53,7 +53,10 @@ export function ModuleFrame({
 
   return (
     <ModuleCtx.Provider value={{ pending, setPending, note, setNote }}>
-      <div className="grid h-full grid-rows-[auto_auto_minmax(0,1fr)_auto] bg-card">
+      {/* The single column is minmax(0,1fr) on purpose: without it the implicit column is max-content, so a
+          grid wider than the screen — the twelve-month cash flow, Funding's cash row — stretches the whole
+          module bar and header sideways instead of scrolling inside its own frame (§6.36). */}
+      <div className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)_auto] bg-card">
         {/* module bar */}
         <div className="flex h-10 items-stretch border-b border-input bg-[#E9EDF2] pl-3 pr-2" role="tablist">
           {areas.map((a) => (
