@@ -29,6 +29,8 @@ export type FixedAsset = {
   method?: DepreciationMethod | null;
   start_year?: number | null;          // 1–5; the plan year it is bought
   start_month?: number | null;         // 1–12 within that year; depreciation runs from the month it arrives
+  /** False where no tax is charged on the purchase — a private sale, an exempt import (§6.38). */
+  gst_applies?: boolean | null;
 };
 
 export const LIFE_PRESETS = [

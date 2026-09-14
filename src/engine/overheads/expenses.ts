@@ -25,6 +25,7 @@ export type Overhead = {
   monthly_distribution?: MonthlyDistribution | null;
   start_year?: number | null;          // 1–5; the first plan year the expense exists
   on_cost?: boolean | null;            // a wage line: on-costs apply
+  gst_applies?: boolean | null;        // false where no tax is charged — rates, bank fees (§6.38)
 };
 
 /** A typed expense: the value grows from its start year, exactly as a price or a cost does. */

@@ -69,7 +69,11 @@ export const currentCost = (p: CostProduct) => {
 };
 
 // ---------- fixed COGS ----------
-export type FixedCost = { annual_cost: number | null; yearly_growth_rates?: Record<string, number> | null; monthly_distribution?: MonthlyDistribution | null };
+export type FixedCost = {
+  annual_cost: number | null; yearly_growth_rates?: Record<string, number> | null;
+  monthly_distribution?: MonthlyDistribution | null;
+  gst_applies?: boolean | null;
+};
 
 export function fixedCostByYear(f: FixedCost): number[] {
   let v = num(f.annual_cost);

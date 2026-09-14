@@ -19,6 +19,8 @@ export type AnyProduct = {
   yearly_growth: Growth | null; monthly_distribution?: MonthlyDistribution | null;
   sold_as?: string | null; opening_clients?: number | null; client_life_months?: number | null;
   life_mode?: string | null; monthly_new_clients?: Record<string, number> | null;
+  /** False for a GST-free sale — an export, basic food, a medical service (§6.38). */
+  gst_applies?: boolean | null;
 };
 export const recurring = (p: AnyProduct) => p.sold_as === "recurring";
 /** Ongoing lines quote a monthly fee; the column stores what a client is worth in a year. */

@@ -48,7 +48,27 @@ export type YearBase = {
   extraordinaryExpense: number;
   disposalProceeds: number;
   disposedBookValue: number;
+  /**
+   * GST / VAT (§6.38). Every figure above is tax-EXCLUSIVE and stays that way — registering for GST does
+   * not change a business's profit by a cent. All this block does is move cash and put a liability on the
+   * balance sheet. Absent, or all zeros, and the forecast behaves exactly as it did before GST existed.
+   */
+  gst?: GstOnYear;
 };
+
+export type GstOnYear = {
+  /** Charged on this year's sales. It is in the bank, and it is not the business's money. */
+  onSales: number;
+  /** Reclaimable on this year's purchases, split by where the cash goes. */
+  onCogs: number;
+  onOverheads: number;
+  onCapex: number;
+  /** Paid over to the tax office during the year, and what is still owed at the end of it. */
+  remitted: number;
+  payableClosing: number;
+};
+
+const NO_GST: GstOnYear = { onSales: 0, onCogs: 0, onOverheads: 0, onCapex: 0, remitted: 0, payableClosing: 0 };
 
 export type OpeningBalance = {
   cash: number;
@@ -80,6 +100,8 @@ export type ForecastInput = {
   dividendRate: number;
   /** Unrelieved losses the business brings into the plan. Nil unless the client states otherwise. */
   openingTaxLosses?: number;
+  /** Tax collected and not yet remitted when the plan opens — last year's final return. */
+  openingGstPayable?: number;
   /** Accumulated profits — or losses — already on the opening balance sheet, for the dividend test. */
   openingRetainedEarnings?: number;
 };
@@ -107,6 +129,8 @@ export type CashFlowYear = {
   receiptsFromCustomers: number; extraordinaryReceipts: number;
   paidToSuppliersAndEmployees: number; extraordinaryPayments: number; taxPaid: number;
   netOperating: number;
+  /** The BAS payment. Operating cash, and never an expense — it was never the business's money. */
+  gstRemitted: number;
   capex: number; disposalProceeds: number; netInvesting: number;
   debtProceeds: number; equityRaised: number; debtRepaid: number; interestPaid: number; dividendsPaid: number;
   netFinancing: number;
@@ -118,14 +142,19 @@ export type BridgeYear = {
   netProfit: number; depreciation: number; disposalGainLoss: number; interestReclassified: number;
   receivablesMovement: number; inventoryMovement: number; payablesMovement: number;
   prepaidMovement: number; accruedMovement: number; taxTimingMovement: number;
+  /** The change in tax collected and not yet paid over — cash the business holds but does not own. */
+  gstMovement: number;
   operatingCashFlow: number;
 };
 
 export type BalanceSheetYear = {
-  cash: number; accountsReceivable: number; inventory: number; prepaid: number; otherCurrentAssets: number;
+  cash: number; accountsReceivable: number; inventory: number; prepaid: number;
+  /** A net credit position: the tax office owes the business. An asset, never a negative liability. */
+  gstReceivable: number;
+  otherCurrentAssets: number;
   currentAssets: number; fixedAssets: number; otherNonCurrentAssets: number; nonCurrentAssets: number;
   totalAssets: number;
-  accountsPayable: number; accrued: number; taxPayable: number; debtCurrent: number; otherCurrentLiabilities: number;
+  accountsPayable: number; accrued: number; taxPayable: number; gstPayable: number; debtCurrent: number; otherCurrentLiabilities: number;
   currentLiabilities: number; debtNonCurrent: number; otherNonCurrentLiabilities: number; nonCurrentLiabilities: number;
   totalLiabilities: number; equity: number; totalLiabilitiesAndEquity: number;
   /** Assets less liabilities and equity. Zero, or the plan does not hold together. */
@@ -148,6 +177,7 @@ const emptyBase = (): YearBase => ({
   revenue: 0, variableCogs: 0, fixedCogs: 0, overheads: 0, depreciation: 0, capex: 0, interest: 0,
   debtProceeds: 0, debtRepaid: 0, debtCurrent: 0, debtNonCurrent: 0, equityRaised: 0,
   extraordinaryIncome: 0, extraordinaryExpense: 0, disposalProceeds: 0, disposedBookValue: 0,
+  gst: NO_GST,
 });
 
 export function buildForecast(input: ForecastInput): Forecast {
@@ -164,12 +194,14 @@ export function buildForecast(input: ForecastInput): Forecast {
   let priorAR = n(o.accountsReceivable), priorInv = n(o.inventory), priorAP = n(o.accountsPayable);
   let priorPrepaid = 0, priorAccrued = 0, priorTaxPayable = n(o.taxPayable);
   let cash = n(o.cash), fixedAssets = n(o.fixedAssets), equity = n(o.equity);
+  let priorGstPayable = Math.max(0, n(input.openingGstPayable));
   let lossPool = Math.max(0, n(input.openingTaxLosses));
   let retainedEarnings = n(input.openingRetainedEarnings);
 
   for (const year of FORECAST_YEARS) {
     const b = { ...emptyBase(), ...(input.base[year] ?? {}) };
     const days = input.workingCapital[year] ?? { debtorDays: 0, inventoryDays: 0, creditorDays: 0 };
+    const g = { ...NO_GST, ...(b.gst ?? {}) };
     const timing = input.cashTiming[year] ?? { taxPaidPct: 100, prepaidClosing: 0, accruedClosing: 0 };
 
     // ---- profit and loss -------------------------------------------------
@@ -225,9 +257,12 @@ export function buildForecast(input: ForecastInput): Forecast {
     };
 
     // ---- working capital -------------------------------------------------
-    const ar = (n(b.revenue) * Math.max(0, n(days.debtorDays))) / 365;
+    // A customer owes the whole invoice, tax and all, and so does the business to its suppliers. Stock is
+    // the exception: it is carried tax-exclusive, because the credit on it is claimed when the bill arrives,
+    // not when the stock is sold (§6.38).
+    const ar = ((n(b.revenue) + n(g.onSales)) * Math.max(0, n(days.debtorDays))) / 365;
     const inventory = (cogs * Math.max(0, n(days.inventoryDays))) / 365;
-    const ap = (cogs * Math.max(0, n(days.creditorDays))) / 365;
+    const ap = ((cogs + n(g.onCogs)) * Math.max(0, n(days.creditorDays))) / 365;
     const prepaid = Math.max(0, n(timing.prepaidClosing));
     const accrued = Math.max(0, n(timing.accruedClosing));
     const taxPaid = (priorTaxPayable + tax) * Math.min(1, Math.max(0, n(timing.taxPaidPct) / 100));
@@ -242,10 +277,12 @@ export function buildForecast(input: ForecastInput): Forecast {
     const dAR = ar - priorAR, dInv = inventory - priorInv, dAP = ap - priorAP;
     const dPrepaid = prepaid - priorPrepaid, dAccrued = accrued - priorAccrued;
 
-    const receipts = n(b.revenue) - dAR;
-    const suppliers = n(b.overheads) + cogs + dInv - dAP + dPrepaid - dAccrued;
-    const netOperating = receipts + n(b.extraordinaryIncome) - suppliers - n(b.extraordinaryExpense) - taxPaid;
-    const netInvesting = n(b.disposalProceeds) - n(b.capex);
+    const receipts = n(b.revenue) + n(g.onSales) - dAR;
+    const suppliers = n(b.overheads) + cogs + n(g.onCogs) + n(g.onOverheads) + dInv - dAP + dPrepaid - dAccrued;
+    const netOperating = receipts + n(b.extraordinaryIncome) - suppliers - n(b.extraordinaryExpense)
+      - taxPaid - n(g.remitted);
+    // The tax on an asset is paid with the asset, and claimed back through the return like any other credit.
+    const netInvesting = n(b.disposalProceeds) - n(b.capex) - n(g.onCapex);
     const netFinancing = n(b.debtProceeds) + n(b.equityRaised) - n(b.debtRepaid) - n(b.interest) - dividends;
     const netMovement = netOperating + netInvesting + netFinancing;
     const openingCash = cash;
@@ -255,8 +292,8 @@ export function buildForecast(input: ForecastInput): Forecast {
       openingCash: r2(openingCash),
       receiptsFromCustomers: r2(receipts), extraordinaryReceipts: r2(n(b.extraordinaryIncome)),
       paidToSuppliersAndEmployees: r2(suppliers), extraordinaryPayments: r2(n(b.extraordinaryExpense)),
-      taxPaid: r2(taxPaid), netOperating: r2(netOperating),
-      capex: r2(n(b.capex)), disposalProceeds: r2(n(b.disposalProceeds)), netInvesting: r2(netInvesting),
+      taxPaid: r2(taxPaid), gstRemitted: r2(n(g.remitted)), netOperating: r2(netOperating),
+      capex: r2(n(b.capex) + n(g.onCapex)), disposalProceeds: r2(n(b.disposalProceeds)), netInvesting: r2(netInvesting),
       debtProceeds: r2(n(b.debtProceeds)), equityRaised: r2(n(b.equityRaised)), debtRepaid: r2(n(b.debtRepaid)),
       interestPaid: r2(n(b.interest)), dividendsPaid: r2(dividends), netFinancing: r2(netFinancing),
       netMovement: r2(netMovement), closingCash: r2(closingCash),
@@ -268,31 +305,40 @@ export function buildForecast(input: ForecastInput): Forecast {
       interestReclassified: r2(n(b.interest)),
       receivablesMovement: r2(-dAR), inventoryMovement: r2(-dInv), payablesMovement: r2(dAP),
       prepaidMovement: r2(-dPrepaid), accruedMovement: r2(dAccrued), taxTimingMovement: r2(tax - taxPaid),
+      // GST never reaches the profit, so the bridge from profit to cash has to add back the whole movement
+      // in what is collected and not yet paid over — otherwise the two ways of reaching operating cash stop
+      // agreeing, which is precisely what the check below exists to catch.
+      gstMovement: r2(n(g.payableClosing) - priorGstPayable),
       operatingCashFlow: r2(netProfit + n(b.depreciation) - disposalGainLoss + n(b.interest)
-        - dAR - dInv + dAP - dPrepaid + dAccrued + (tax - taxPaid)),
+        - dAR - dInv + dAP - dPrepaid + dAccrued + (tax - taxPaid)
+        + (n(g.payableClosing) - priorGstPayable) + n(g.onCapex)),
     };
 
     // ---- balance sheet ---------------------------------------------------
     fixedAssets = fixedAssets + n(b.capex) - n(b.depreciation) - n(b.disposedBookValue);
     equity = equity + (netProfit - dividends) + n(b.equityRaised);
 
-    const currentAssets = closingCash + ar + inventory + prepaid + n(o.otherCurrentAssets);
+    // One signed figure, presented the way a balance sheet reads it: owed by the business, or owed to it.
+    const gstNet = n(g.payableClosing);
+    const gstPayable = Math.max(0, gstNet), gstReceivable = Math.max(0, -gstNet);
+    const currentAssets = closingCash + ar + inventory + prepaid + gstReceivable + n(o.otherCurrentAssets);
     const nonCurrentAssets = fixedAssets + n(o.otherNonCurrentAssets);
     const totalAssets = currentAssets + nonCurrentAssets;
     // Debt the business already had plus debt the plan raises. Dropping the opening balance is how a
     // balance sheet comes out short by exactly what the business owes its bank (§6.32.4).
     const debtCurrent = n(b.debtCurrent) + n(o.bankLoansCurrent);
     const debtNonCurrent = n(b.debtNonCurrent) + n(o.bankLoansNonCurrent);
-    const currentLiabilities = ap + accrued + taxPayable + debtCurrent + n(o.otherCurrentLiabilities);
+    const currentLiabilities = ap + accrued + taxPayable + gstPayable + debtCurrent + n(o.otherCurrentLiabilities);
     const nonCurrentLiabilities = debtNonCurrent + n(o.otherNonCurrentLiabilities);
     const totalLiabilities = currentLiabilities + nonCurrentLiabilities;
 
     bs[year] = {
       cash: r2(closingCash), accountsReceivable: r2(ar), inventory: r2(inventory), prepaid: r2(prepaid),
+      gstReceivable: r2(gstReceivable),
       otherCurrentAssets: r2(n(o.otherCurrentAssets)), currentAssets: r2(currentAssets),
       fixedAssets: r2(fixedAssets), otherNonCurrentAssets: r2(n(o.otherNonCurrentAssets)),
       nonCurrentAssets: r2(nonCurrentAssets), totalAssets: r2(totalAssets),
-      accountsPayable: r2(ap), accrued: r2(accrued), taxPayable: r2(taxPayable),
+      accountsPayable: r2(ap), accrued: r2(accrued), taxPayable: r2(taxPayable), gstPayable: r2(gstPayable),
       debtCurrent: r2(debtCurrent), otherCurrentLiabilities: r2(n(o.otherCurrentLiabilities)),
       currentLiabilities: r2(currentLiabilities), debtNonCurrent: r2(debtNonCurrent),
       otherNonCurrentLiabilities: r2(n(o.otherNonCurrentLiabilities)),
@@ -301,6 +347,7 @@ export function buildForecast(input: ForecastInput): Forecast {
       balanceCheck: r2(totalAssets - totalLiabilities - equity),
     };
 
+    priorGstPayable = n(g.payableClosing);
     priorAR = ar; priorInv = inventory; priorAP = ap;
     priorPrepaid = prepaid; priorAccrued = accrued; priorTaxPayable = taxPayable;
     cash = closingCash;
