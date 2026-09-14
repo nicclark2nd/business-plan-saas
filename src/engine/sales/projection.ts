@@ -40,10 +40,17 @@ const r2 = (v: number) => Math.round(v * 100) / 100;
  * Year 1 = base × (1 + g₁). A line starting in Year N sells base × units in Year N — no growth applied to its own
  * first year — and compounds from Year N+1. Earlier years are 0 and nothing compounds through them.
  */
+/**
+ * The plan year a line's base figures belong to (§6.33). `start_selling_year` IS a plan year, 1-5: there is
+ * no year before Year 1, because Year 1 is the first projected year and the one the business is in now.
+ * One definition, because this rule had grown three copies and they did not agree.
+ */
+export const firstPlanYear = (startYear: number | null | undefined) =>
+  Math.min(5, Math.max(1, Math.trunc(num(startYear)) || 1));
+
 export function yearlyProjection(basePrice: number, baseUnits: number, growth: Growth | null | undefined, startYear = 1) {
   let price = num(basePrice), units = num(baseUnits);
-  const start = Math.min(6, Math.max(1, Math.trunc(num(startYear)) || 1));   // 1 = now; 2–6 = Year 1–5
-  const firstYear = start - 1;                                                 // plan year whose column holds the base
+  const firstYear = firstPlanYear(startYear);      // the year whose column holds the base; growth starts after
   return YEARS.map((year) => {
     if (year < firstYear) return { year, price: 0, units: 0, sales: 0 };
     if (year > firstYear) {

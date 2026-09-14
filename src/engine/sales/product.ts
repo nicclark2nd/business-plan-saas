@@ -6,7 +6,7 @@
  * Price rises apply to everyone from the year they take effect (indexed fees), which is how a retainer
  * or a membership is normally repriced.
  */
-import { YEARS, yearlyProjection, monthlySales, normalizeDistribution, type Growth, type MonthlyDistribution } from "./projection";
+import { YEARS, yearlyProjection, firstPlanYear, monthlySales, normalizeDistribution, type Growth, type MonthlyDistribution } from "./projection";
 import { recurringProjection, type LifeMode } from "./recurring";
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
@@ -25,7 +25,7 @@ export const recurring = (p: AnyProduct) => p.sold_as === "recurring";
 export const monthlyFee = (p: AnyProduct) => num(p.average_price) / 12;
 
 /** The plan year whose column holds the base: 0 = selling now, 1–5 = the year it starts. */
-const firstYearOf = (p: AnyProduct) => Math.min(5, Math.max(0, (num(p.start_selling_year) || 1) - 1));
+const firstYearOf = (p: AnyProduct) => firstPlanYear(p.start_selling_year);
 
 /** The line this one takes its clients from, if any. */
 export const sourceOf = (p: AnyProduct, all: AnyProduct[]) =>
@@ -49,8 +49,7 @@ const priceFactors = (g: Growth | null | undefined) => {
  * so COGS costed a different number of jobs than Sales billed, and a linked line inherited the wrong count.
  */
 const newByYear = (p: AnyProduct) => {
-  const start = Math.min(6, Math.max(1, Math.trunc(num(p.start_selling_year)) || 1));
-  const firstYear = start - 1;                       // the plan year whose column holds the base
+  const firstYear = firstPlanYear(p.start_selling_year);
   let n = num(p.units_sold);
   return YEARS.map((year) => {
     if (year < firstYear) return 0;

@@ -18,13 +18,19 @@ const coach = {
 };
 
 describe("direct costs", () => {
-  it("matches APeX for a one-off line, unit cost and all", () => {
+  /**
+   * §6.33 is a deliberate break from APeX here. APeX applies a Year 1 rise to a line that is already
+   * selling, because its base sits in a notional year before Year 1. This plan has no such year: Year 1 IS
+   * the year the business is in, so the entered cost is Year 1's cost and the first rise lands in Year 2.
+   * The Year 5 figure is one compounding step lower than APeX's for the same reason.
+   */
+  it("charges the entered cost in Year 1, and compounds from Year 2", () => {
     const y = productCostYears(carports);
-    expect(currentCost(carports)).toBe(57600);        // APeX "Current COGS": 3,200 x 18, before any rise
-    expect(y[0].cost).toBe(58176);                    // APeX Year 1: 3,232 x 18
-    expect(y[4].cost).toBeCloseTo(88621, 0);          // APeX Year 5: 88,621
-    expect(unitCostByYear(carports)[0]).toBe(3232);   // APeX Year 1 $3,232/unit
-    expect(unitCostByYear(carports)[4]).toBeCloseTo(3363, 0);  // APeX Year 5 $3,363/unit
+    expect(currentCost(carports)).toBe(57600);        // 3,200 x 18
+    expect(y[0].cost).toBe(57600);                    // Year 1 IS now: no rise yet (APeX said 58,176)
+    expect(unitCostByYear(carports)[0]).toBe(3200);   // the cost as entered
+    expect(unitCostByYear(carports)[1]).toBe(3232);   // the first 1 % rise lands in Year 2
+    expect(y[0].cost).toBe(currentCost(carports));    // and "current" and Year 1 are the same year
   });
 
   it("gross profit and margin fall out of price less cost", () => {
@@ -50,7 +56,7 @@ describe("direct costs", () => {
   });
 
   it("cost rises compound from the year the line starts, never before", () => {
-    const later = { ...carports, start_selling_year: 4 };          // starts in Year 3
+    const later = { ...carports, start_selling_year: 3 };          // starts in Year 3 (§6.33: the value IS the year)
     const c = unitCostByYear(later);
     expect(c[0]).toBe(0); expect(c[1]).toBe(0);
     expect(c[2]).toBe(3200);                                       // its own first year, no rise yet

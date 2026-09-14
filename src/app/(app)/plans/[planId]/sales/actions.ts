@@ -50,7 +50,7 @@ export async function upsertProduct(planId: string, p: {
     plan_id: planId, name, description: p.description?.trim() || null, notes: p.notes?.trim() || null,
     lifecycle: LIFECYCLES.includes(p.lifecycle ?? "") ? p.lifecycle : null,
     average_price: Math.max(0, Number(p.average_price) || 0), units_sold: Math.max(0, Number(p.units_sold) || 0),
-    start_selling_year: Math.min(6, Math.max(1, Math.trunc(Number(p.start_selling_year)) || 1)),   // 1 = now, 2–6 = plan Year 1–5
+    start_selling_year: Math.min(5, Math.max(1, Math.trunc(Number(p.start_selling_year)) || 1)),   // a plan year, 1-5 (§6.33)
     yearly_growth: growth, monthly_distribution: recurring ? null : (p.monthly_distribution ? exactHundred(p.monthly_distribution) : null),
     sold_as: recurring ? "recurring" : "one_off",
     opening_clients: recurring ? Math.max(0, Number(p.opening_clients) || 0) : 0,

@@ -17,12 +17,25 @@ describe("sales projection (APeX Annual Projections parity, DesignOne)", () => {
     expect(yearlyProjection(1000, 10, {}, 1).map((y) => y.sales)).toEqual([10000, 10000, 10000, 10000, 10000]);
     expect(yearlyProjection(1000, 10, null, 1).every((y) => y.sales === 10000)).toBe(true);
   });
-  it("negative growth shrinks the line", () => {
-    const p = yearlyProjection(1000, 100, { "1": { price: -10, units: -20 } }, 1);
-    expect(p[0].sales).toBe(72000);
+  it("negative growth shrinks the line, from the year after it starts", () => {
+    const p = yearlyProjection(1000, 100, { "2": { price: -10, units: -20 } }, 1);
+    expect(p[0].sales).toBe(100000);   // Year 1 IS now — the entered figures, untouched (§6.33)
+    expect(p[1].sales).toBe(72000);    // 900 × 80
+  });
+
+  /**
+   * The rule §6.33 exists to enforce: a line cannot grow before the first year it sells in, and Year 1 is
+   * the first year there is. A growth entry against a line's own starting year is ignored, always.
+   */
+  it("never grows a line in its own starting year", () => {
+    for (const start of [1, 2, 3, 4, 5]) {
+      const p = yearlyProjection(1000, 10, { [String(start)]: { price: 99, units: 99 } }, start);
+      expect(p[start - 1].sales, `start ${start}`).toBe(10000);
+      for (let i = 0; i < start - 1; i++) expect(p[i].sales, `start ${start}, year ${i + 1}`).toBe(0);
+    }
   });
   it("a line starting in Year 3 sells its base in Year 3 and compounds from Year 4; nothing before", () => {
-    const p = yearlyProjection(500, 10, { "3": { price: 50, units: 50 }, "4": { price: 10, units: 10 } }, 4);   // start 4 = Year 3
+    const p = yearlyProjection(500, 10, { "3": { price: 50, units: 50 }, "4": { price: 10, units: 10 } }, 3);   // the value IS the year (§6.33)
     expect(p.map((y) => y.sales)).toEqual([0, 0, 5000, 6050, 6050]);   // Year 3's own growth is ignored; Year 4 = 550 × 11
   });
   it("totals across products give the forecast's revenue line", () => {

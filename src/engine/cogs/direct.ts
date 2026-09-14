@@ -62,7 +62,7 @@ export function productCostMonths(p: CostProduct, source?: AnyProduct | null): n
 
 /** Today's cost, before any increase — what the toolbar reconciles against Historic. */
 export const currentCost = (p: CostProduct) => {
-  if (baseYear(p) > 0) return 0;                                  // not selling yet, nothing to reconcile
+  if (baseYear(p) > 1) return 0;                                  // starts later, so nothing is selling yet (§6.33)
   return recurring(p)
     ? r2(num(p.opening_clients) * num(p.cost_per_unit))
     : r2(num(p.cost_per_unit) * num(p.units_sold));

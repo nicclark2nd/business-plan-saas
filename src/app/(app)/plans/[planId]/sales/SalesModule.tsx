@@ -10,10 +10,10 @@ import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/Module
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton, SortTh, sortRows, type Sort } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
-import { planMonths, planMonthNames } from "@/engine/plan/calendar";
+import { planMonths, planMonthNames, planYearLabel } from "@/engine/plan/calendar";
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { cn } from "@/lib/utils";
-import { YEARS, yearlyProjection, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, monthlySales, hasValue, impliedPct, type Growth, type MonthlyDistribution } from "@/engine/sales/projection";
+import { YEARS, yearlyProjection, firstPlanYear, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, monthlySales, hasValue, impliedPct, type Growth, type MonthlyDistribution } from "@/engine/sales/projection";
 import { productYears, productYear1Months, productYear1Clients, newClientsYear1, planRevenueByYear, planYear1Months, sourceOf, isLinked, bookNow, monthlyFee, recurring } from "@/engine/sales/product";
 import { useMoney } from "@/components/MoneyProvider";
 import { useProductNoun } from "@/components/VocabularyProvider";
@@ -41,24 +41,27 @@ type AreaKey = "products" | "annual" | "monthly";
 type Dlg = { kind: "product" | "growth" | "monthly"; key: string } | null;
 const STEP = GUIDED_STEPS.find((s) => s.id === "sales")?.step ?? 7;
 const isNew = (r: Row) => r.id.startsWith("tmp-");
-/** start_selling_year: 1 = now (this year's actuals), 2–6 = plan Year 1–5. */
+/** start_selling_year IS a plan year, 1-5. Year 1 is the first projected year and the one you are in (§6.33). */
 const num2 = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
-const firstYear = (r: Pick<Row, "start_selling_year">) => Math.min(5, Math.max(0, (r.start_selling_year || 1) - 1));
+const firstYear = (r: Pick<Row, "start_selling_year">) => firstPlanYear(r.start_selling_year);
 
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
 const box = "h-8";
 
-export function SalesModule({ planId, initial, mode, initialArea, hasHistory, historicRevenue, historicEnd, fyEndMonth, currency }: {
-  planId: string; initial: Product[]; mode: "guided" | "advanced"; initialArea: AreaKey; hasHistory: boolean | null; historicRevenue: number | null; historicEnd: string | null; fyEndMonth: number; currency: string;
+export function SalesModule({ planId, initial, mode, initialArea, hasHistory, historicRevenue, historicEnd, fyEndMonth, planYear, currency }: {
+  planId: string; initial: Product[]; mode: "guided" | "advanced"; initialArea: AreaKey; hasHistory: boolean | null; historicRevenue: number | null; historicEnd: string | null; fyEndMonth: number; planYear: number; currency: string;
 }) {
+  // What Year 1 actually is, from the plan's own calendar (§6.21) — so the client never has to work it out.
+  const yearOne = planYearLabel(planYear, fyEndMonth);
   // What this plan calls a line — Products, Services, Treatments (§6.31.1).
   const noun = useProductNoun();
   const many = noun.many.toLowerCase();
   const num = useMoney();
   const MONTHS = planMonths(fyEndMonth);          // the plan's own twelve, not January to December
   const startup = hasHistory === false;
-  const blank = (): Row => ({ id: `tmp-${crypto.randomUUID()}`, _key: "", name: "", description: "", notes: "", lifecycle: null, average_price: 0, units_sold: 0, start_selling_year: startup ? 2 : 1, yearly_growth: {}, monthly_distribution: null, sort_order: 0, sold_as: "one_off", opening_clients: 0, client_life_months: 12, life_mode: "fixed", monthly_new_clients: null, clients_from_product_id: null });
-  const startOptions = [...(startup ? [] : [{ value: "1", label: "Now — selling today" }]), ...YEARS.map((y) => ({ value: String(y + 1), label: `Year ${y}` }))];
+  const blank = (): Row => ({ id: `tmp-${crypto.randomUUID()}`, _key: "", name: "", description: "", notes: "", lifecycle: null, average_price: 0, units_sold: 0, start_selling_year: 1, yearly_growth: {}, monthly_distribution: null, sort_order: 0, sold_as: "one_off", opening_clients: 0, client_life_months: 12, life_mode: "fixed", monthly_new_clients: null, clients_from_product_id: null });
+  // Year 1 is now: there is no year before it, so the first option names itself rather than inventing one.
+  const startOptions = YEARS.map((y) => ({ value: String(y), label: y === 1 ? "Year 1 — the year you're in now" : `Year ${y}` }));
 
   const router = useRouter();
   const [area, setArea] = useState<AreaKey>(initialArea);
@@ -124,7 +127,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
   };
   const err = serverErr ?? rows.find((r) => r._error)?._error;
   /** "This year" reconciles against Historic — only lines already earning, and for an ongoing line that is its book. */
-  const current = named.reduce((a, r) => recurring(r) ? a + bookNow(r) : (firstYear(r) === 0 ? a + r.average_price * r.units_sold : a), 0);
+  const current = named.reduce((a, r) => recurring(r) ? a + bookNow(r) : (firstYear(r) === 1 ? a + r.average_price * r.units_sold : a), 0);
   const gap = historicRevenue ? ((current - historicRevenue) / historicRevenue) * 100 : null;
   const totals = planRevenueByYear(named);
   const open = dlg ? (draftNew && draftNew._key === dlg.key ? draftNew : rows.find((r) => r._key === dlg.key)) ?? null : null;
@@ -185,7 +188,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
             <tbody>
               {view.map((r) => (
                 <GridRow key={r._key} className={cn(r._error && "[&>td]:bg-bad-soft")} title={r._error}>
-                  <Td><NameLink onClick={() => setDlg({ kind: "product", key: r._key })}>{r.name}</NameLink>{mark(r)}{firstYear(r) > 0 && <span className="ml-2 text-xs text-muted-foreground">from Year {firstYear(r)}</span>}</Td>
+                  <Td><NameLink onClick={() => setDlg({ kind: "product", key: r._key })}>{r.name}</NameLink>{mark(r)}{firstYear(r) > 1 && <span className="ml-2 text-xs text-muted-foreground">from Year {firstYear(r)}</span>}</Td>
                   <Td className="text-muted-foreground">{recurring(r) ? "Ongoing client" : "One-off job"}</Td>
                   <Td className="text-muted-foreground">{LIFECYCLE.find((l) => l.value === r.lifecycle)?.label ?? "—"}</Td>
                   <Td right className="num">{recurring(r) ? <>{num(monthlyFee(r))}<span className="text-[11px] text-muted-foreground">/mo</span></> : num(r.average_price)}</Td>
@@ -205,7 +208,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
       {area === "annual" && (
         <>
           <Toolbar>
-            <Meta className="ml-0">Sales by year. Pencil = growth; calendar = monthly split. Each year starts at 0 % change until you say otherwise.</Meta>
+            <Meta className="ml-0">Sales by year — <b>Year 1 is {yearOne}</b>, the year you are in. Pencil = growth; calendar = monthly split. Each year after Year 1 starts at 0 % change until you say otherwise.</Meta>
             <SortNote sortLabel={sortLabel} onClear={() => setSort(null)} />
           </Toolbar>
           <Grid>
@@ -221,7 +224,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
                 return (
                   <GridRow key={r._key}>
                     <Td><NameLink onClick={() => setDlg({ kind: "growth", key: r._key })}>{r.name}</NameLink>{mark(r)}{recurring(r) && !isLinked(r) && <span className="ml-2 text-xs text-muted-foreground">ongoing</span>}</Td>
-                    <Td right className="num text-muted-foreground">{recurring(r) ? num(bookNow(r)) : fy === 0 || startup ? num(r.average_price * r.units_sold) : `Year ${fy}`}</Td>
+                    <Td right className="num text-muted-foreground">{recurring(r) ? num(bookNow(r)) : fy === 1 ? num(r.average_price * r.units_sold) : `Year ${fy}`}</Td>
                     {p.map((y) => <Td key={y.year} right className={cn("num", y.year < fy && "text-muted-foreground/60")} title={y.clients !== undefined ? `${y.clients} clients at the end of the year` : ""}>{y.year < fy ? "—" : num(y.revenue)}</Td>)}
                     <Td className="whitespace-nowrap text-right"><IconButton title="Edit growth" onClick={() => setDlg({ kind: "growth", key: r._key })}>✎</IconButton><IconButton title="Edit monthly split" onClick={() => setDlg({ kind: "monthly", key: r._key })}>▦</IconButton></Td>
                   </GridRow>
@@ -269,7 +272,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
       )}
 
       {open && dlg?.kind === "product" && <ProductDialog key={open._key} r={open} others={named.filter((x) => x._key !== open._key && !x.clients_from_product_id && !isNew(x))} onSave={(r) => { save(r); close(); }} onClose={close} />}
-      {open && dlg?.kind === "growth" && <GrowthDialog key={open._key} r={open} source={src(open)} startOptions={startOptions} onSave={(r) => { save(r); close(); }} onClose={close} />}
+      {open && dlg?.kind === "growth" && <GrowthDialog key={open._key} r={open} source={src(open)} startOptions={startOptions} yearOne={yearOne} onSave={(r) => { save(r); close(); }} onClose={close} />}
       {confirm && (() => {
         const y1 = productYear1Months(confirm.row, src(confirm.row)).reduce((a, b) => a + b, 0);
         const fed = confirm.fed;
@@ -389,7 +392,7 @@ function ProductDialog({ r, others, onSave, onClose }: { r: Row; others: Row[]; 
 }
 
 /* ---------- Growth dialog (APeX "Edit Growth Rates") ---------- */
-function GrowthDialog({ r, source, startOptions, onSave, onClose }: { r: Row; source: Row | null; startOptions: { value: string; label: string }[]; onSave: (r: Row) => void; onClose: () => void }) {
+function GrowthDialog({ r, source, startOptions, yearOne, onSave, onClose }: { r: Row; source: Row | null; startOptions: { value: string; label: string }[]; yearOne: string; onSave: (r: Row) => void; onClose: () => void }) {
   const num = useMoney();
   const [d, setD] = useState<Row>(r);
   const [text, setText] = useState<Record<string, string>>({});
@@ -452,7 +455,7 @@ function GrowthDialog({ r, source, startOptions, onSave, onClose }: { r: Row; so
           <div className="grid grid-cols-[1fr_auto] items-end gap-4">
             <div className="rounded border border-border bg-secondary px-3 py-2">
               <div className="text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">
-                {fy === 0 ? "Current values" : `Year ${fy} values`}
+                {`Year ${fy} values`}
               </div>
               {recurring(d)
                 ? <div className="mt-1 flex gap-8 text-[13px]"><span>Fee <b className="num">{num(monthlyFee(d))}</b>/mo</span><span>On the books <b className="num">{d.opening_clients || 0}</b></span><span>Worth <b className="num">{num(bookNow(d))}</b> a year</span></div>
@@ -471,12 +474,10 @@ function GrowthDialog({ r, source, startOptions, onSave, onClose }: { r: Row; so
                 ? <div className="col-span-5 self-center text-[12px] text-muted-foreground">Follows {source.name} — change the growth on that line.</div>
                 : YEARS.map((y) => <div key={y}>{cell(y, "units")}</div>)}
             </div>
-            {fy > 0 && (
-              <p className="mt-2 text-[12px] text-muted-foreground">
-                This line starts in <b>Year {fy}</b>, so the price and units above <i>are</i> its Year {fy} figures — there is nothing before them to grow from, which is why Year {fy} has no box. The first change you can make is <b>Year {fy + 1}</b>.
-                {" "}If it is already selling, set <b>Starts selling</b> to <b>Now — selling today</b> and Year 1 becomes a change on today&apos;s figures.
-              </p>
-            )}
+            <p className="mt-2 text-[12px] text-muted-foreground">
+              This line starts in <b>Year {fy}</b>{fy === 1 && yearOne ? <> — {yearOne}, the year you are in now</> : null}, so the price and units above <i>are</i> its Year {fy} figures. There is nothing before them to grow from, which is why Year {fy} has no box; the first change you can make is <b>Year {fy + 1}</b>.
+              {fy > 1 && <> If it is already selling, set <b>Starts selling</b> to <b>Year 1</b>.</>}
+            </p>
           </div>
 
           <div>
