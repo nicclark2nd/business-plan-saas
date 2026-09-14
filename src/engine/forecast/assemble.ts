@@ -24,6 +24,8 @@
  */
 import { FORECAST_YEARS, type OpeningBalance, type YearBase } from "./model";
 import type { MonthlyShapes } from "./monthly";
+import { assembleGst, type GstPlanSources } from "./gst_assemble";
+import { NOT_REGISTERED, type GstSettings } from "../plan/gst";
 import { planRevenueByYear, planRevenueMonths, planYear1Months, sourceOf, type AnyProduct } from "../sales/product";
 import { planCogsByYear, planCogsMonths, type CostProduct, type FixedCost } from "../cogs/direct";
 import { overheadsByYear, overheadsMonths, planOverheadLines, type Overhead } from "../overheads/expenses";
@@ -161,7 +163,11 @@ export function assembleBase(p: PlanSources): Record<number, YearBase> {
  * The one thing decided here is the same one decided for the year — whether a source is borrowed or put in —
  * using the identical test, so a source cannot be equity by the year and debt by the month.
  */
-export function assembleMonths(p: PlanSources): MonthlyShapes {
+export function assembleMonths(p: PlanSources, g: GstSettings = NOT_REGISTERED, openingGstPayable = 0): MonthlyShapes {
+  // The same assembly the year uses, sliced to Year 1 — not a second reading (§6.38).
+  const gst = assembleGst(p as unknown as GstPlanSources, g, openingGstPayable);
+  const rate = g.registered ? g.rate / 100 : 0;
+  const scale = (a: number[]) => a.map((v) => r2(n(v) * rate));
   const revenueMonths = planRevenueMonths(p.products);
   const debtProceeds = Array(12).fill(0) as number[];
   const equityRaised = Array(12).fill(0) as number[];
@@ -201,6 +207,11 @@ export function assembleMonths(p: PlanSources): MonthlyShapes {
     extraordinaryReceipts: cash.receipts,
     extraordinaryPayments: cash.payments,
     disposalProceeds: cash.disposals,
+    gstOnSales: scale(gst.year1.sales),
+    gstOnCogs: scale(gst.year1.cogs),
+    gstOnOverheads: scale(gst.year1.overheads),
+    gstOnCapex: scale(gst.year1.capex),
+    gstRemitted: gst.schedules[1].months.map((m) => m.remitted),
   };
 }
 

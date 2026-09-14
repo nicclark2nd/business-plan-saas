@@ -79,6 +79,10 @@ export type Financial = {
   /** What the business brings in with it (§6.37): unrelieved losses, and accumulated profit or deficit. */
   opening_tax_losses: number;
   opening_retained_earnings: number;
+  /** GST / VAT (§6.38). Off by default; nothing in the forecast moves until it is on. */
+  gst_registered: boolean;
+  gst_rate: number;
+  gst_frequency: "monthly" | "quarterly" | "annually";
   currency: string;
 };
 export type Settings = Profile & Financial & { logo_path: string | null };

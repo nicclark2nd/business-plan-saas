@@ -13,6 +13,7 @@ const shapes = (over: Partial<MonthlyShapes> = {}): MonthlyShapes => ({
   revenue: zero12(), cogs: zero12(), overheads: zero12(), capex: zero12(), depreciation: zero12(),
   debtProceeds: zero12(), equityRaised: zero12(), debtRepaid: zero12(), interest: zero12(),
   extraordinaryReceipts: zero12(), extraordinaryPayments: zero12(), disposalProceeds: zero12(),
+  gstOnSales: zero12(), gstOnCogs: zero12(), gstOnOverheads: zero12(), gstOnCapex: zero12(), gstRemitted: zero12(),
   ...over,
 });
 

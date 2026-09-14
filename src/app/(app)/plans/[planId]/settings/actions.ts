@@ -50,6 +50,9 @@ export async function saveFinancial(planId: string, f: Partial<Financial>): Prom
     // Losses are never negative; accumulated earnings genuinely can be, and a deficit is the case that matters.
     opening_tax_losses: Math.max(0, Number(f.opening_tax_losses) || 0),
     opening_retained_earnings: Number(f.opening_retained_earnings) || 0,
+    gst_registered: !!f.gst_registered,
+    gst_rate: Math.max(0, Math.min(100, Number(f.gst_rate) || 0)),
+    gst_frequency: f.gst_frequency === "monthly" || f.gst_frequency === "annually" ? f.gst_frequency : "quarterly",
     currency: (f.currency || "AUD").toUpperCase().slice(0, 3),
   }, { onConflict: "plan_id" });
   if (error) { console.error("financial", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }

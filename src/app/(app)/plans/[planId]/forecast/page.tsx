@@ -6,6 +6,8 @@ import { ForecastModule } from "./ForecastModule";
 import { assembleBase, assembleMonths, assembleOpening, type PlanSources } from "@/engine/forecast/assemble";
 import { buildForecast } from "@/engine/forecast/model";
 import { buildMonthlyCashFlow, monthlyInvariants } from "@/engine/forecast/monthly";
+import { assembleGst, type GstPlanSources } from "@/engine/forecast/gst_assemble";
+import { gstSettings, taxLabel } from "@/engine/plan/gst";
 import { cashTimingSchedule, daysFromHistory, workingCapitalSchedule } from "@/engine/forecast/assumptions";
 import { firstProjectedYear } from "@/engine/plan/calendar";
 import type { FundingSource } from "@/engine/funding/sources";
@@ -77,8 +79,18 @@ export default async function ForecastPage({ params, searchParams }: {
   const stored = s?.working_capital_schedule as Record<string, unknown> | null | undefined;
 
   const opening = assembleOpening(h ?? null, num(s?.opening_cash), num(s?.opening_tax_payable));
+
+  /**
+   * GST (§6.38). Assembled once and fed into the year and the months from the same place, so the liability
+   * on the balance sheet and the BAS payment on the cash flow can never be two different readings.
+   */
+  const gst = gstSettings(s);
+  const gstParts = assembleGst(sources as unknown as GstPlanSources, gst);
+  const base = assembleBase(sources);
+  for (const y of [1, 2, 3, 4, 5]) base[y].gst = gstParts.byYear[y];
+
   const forecast = buildForecast({
-    base: assembleBase(sources),
+    base,
     opening,
     workingCapital, cashTiming,
     taxRate: Number(s?.tax_rate ?? 25), dividendRate: num(s?.dividend_rate),
@@ -106,7 +118,7 @@ export default async function ForecastPage({ params, searchParams }: {
     },
     taxPaid: forecast.cashFlow[1].taxPaid,
     dividends: forecast.cashFlow[1].dividendsPaid,
-    shapes: assembleMonths(sources),
+    shapes: assembleMonths(sources, gst),
   });
   const checked = {
     ...forecast,
@@ -123,6 +135,7 @@ export default async function ForecastPage({ params, searchParams }: {
       impliedFromHistory={impliedFromHistory}
       assumptionsSet={!!stored && Object.keys(stored).length > 0}
       fyEndMonth={fyEndMonth} firstYear={firstProjectedYear(s?.first_projected_year, fyEndMonth)}
+      gst={gst} gstLabel={taxLabel(s?.country)} gstSchedules={gstParts.schedules}
     />
   );
 }

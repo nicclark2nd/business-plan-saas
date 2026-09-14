@@ -5,6 +5,7 @@ import { ModuleFrame, ModuleStatusFooter, useModule } from "@/components/module/
 import { Section, FieldGrid, Field, FieldInput, FieldSelect } from "@/components/module/FieldGrid";
 import { Toolbar, Meta } from "@/components/module/DataGrid";
 import { currentFinancialYear, firstProjectedYear, planYearEnding, planYearLabel } from "@/engine/plan/calendar";
+import { suggestedRate, taxLabel } from "@/engine/plan/gst";
 import { formatMonth } from "../people/model";
 import { saveProfile, saveFinancial } from "./actions";
 import { legalStructuresFor, CUSTOMER_TYPES, PRODUCT_TYPES, COUNTRIES, CURRENCIES, MONTHS, profileMissing, type Settings, type Profile, type Financial } from "./model";
@@ -77,6 +78,36 @@ export function SettingsModule({ planId, initial, mode, initialArea }: { planId:
               <Field label="Type of customer" span={2} hint="Changes the word the app uses for the people you sell to."><FieldSelect value={s.customer_type} options={opts(CUSTOMER_TYPES)} placeholder="Choose" onValueChange={(v) => edit({ customer_type: v }, "profile", true)} /></Field>
               <Field label="Type of product sold" span={2}><FieldSelect value={s.product_type} options={PRODUCT_TYPES} placeholder="Choose" onValueChange={(v) => edit({ product_type: v }, "profile", true)} /></Field>
             </FieldGrid>
+          </Section>
+          {/* GST/VAT (§6.38). Off is the default and changes nothing; on moves cash, never profit. */}
+          <Section title={`${taxLabel(s.country)} / VAT`}>
+            <FieldGrid>
+              <Field label={`Registered for ${taxLabel(s.country)}`} hint="Off leaves the forecast exactly as it is. On, the tax rides on every sale and purchase and is remitted each period.">
+                <FieldSelect value={s.gst_registered ? "yes" : "no"}
+                  options={[{ value: "no", label: "Not registered" }, { value: "yes", label: `Registered for ${taxLabel(s.country)}` }]}
+                  onValueChange={(v) => edit(v === "yes"
+                    ? { gst_registered: true, gst_rate: s.gst_rate || suggestedRate(s.country) }
+                    : { gst_registered: false }, "financial", true)} />
+              </Field>
+              {s.gst_registered && <>
+                <Field label={`${taxLabel(s.country)} rate %`} hint={`${suggestedRate(s.country)}% is the ordinary rate where this business trades.`}>
+                  <FieldInput numeric value={String(s.gst_rate)} onChange={(e) => edit({ gst_rate: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 }, "financial")} />
+                </Field>
+                <Field label="Returns filed" hint="When the net is paid over. The period that closes with the year is still owed at year end.">
+                  <FieldSelect value={s.gst_frequency}
+                    options={[{ value: "monthly", label: "Monthly" }, { value: "quarterly", label: "Quarterly" }, { value: "annually", label: "Annually" }]}
+                    onValueChange={(v) => edit({ gst_frequency: v as "monthly" | "quarterly" | "annually" }, "financial", true)} />
+                </Field>
+              </>}
+            </FieldGrid>
+            {s.gst_registered && (
+              <p className="mt-2 text-[12.5px] text-muted-foreground">
+                Every price and cost in the plan stays {taxLabel(s.country)}-exclusive, so this does not change the profit.
+                It changes the cash, and puts what you have collected but not yet paid over onto the balance sheet.
+                Lines that carry no {taxLabel(s.country)} — an export, a bank fee, a government charge — are marked on their own row;
+                wages are never taxed and are excluded automatically.
+              </p>
+            )}
           </Section>
         </div>
       )}

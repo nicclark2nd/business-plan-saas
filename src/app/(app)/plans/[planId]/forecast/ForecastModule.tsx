@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { FORECAST_YEARS, type CashTiming, type Forecast, type WorkingCapitalDays } from "@/engine/forecast/model";
 import { creditorBalance, debtorBalance, inventoryBalance } from "@/engine/forecast/assumptions";
 import type { MonthCash, MonthlyCashFlow } from "@/engine/forecast/monthly";
+import type { GstSchedule, GstSettings } from "@/engine/plan/gst";
 import { planMonths, planYearLabel } from "@/engine/plan/calendar";
 import { saveAssumptions } from "./actions";
 
@@ -28,11 +29,12 @@ const STEP = GUIDED_STEPS.find((s) => s.id === "forecast")?.step ?? 13;
 const box = "h-8";
 
 export function ForecastModule({
-  planId, mode, forecast, monthly, initialArea, workingCapital, cashTiming, impliedFromHistory, assumptionsSet, fyEndMonth, firstYear,
+  planId, mode, forecast, monthly, initialArea, workingCapital, cashTiming, impliedFromHistory, assumptionsSet, fyEndMonth, firstYear, gst, gstLabel, gstSchedules,
 }: {
   planId: string; mode: "guided" | "advanced"; forecast: Forecast; monthly: MonthlyCashFlow; initialArea: AreaKey;
   workingCapital: Record<number, WorkingCapitalDays>; cashTiming: Record<number, CashTiming>;
   impliedFromHistory: WorkingCapitalDays | null; assumptionsSet: boolean; fyEndMonth: number; firstYear: number;
+  gst: GstSettings; gstLabel: string; gstSchedules: Record<number, GstSchedule>;
 }) {
   const num = useMoney();
   const router = useRouter();
@@ -137,6 +139,7 @@ export function ForecastModule({
               ["Paid to suppliers and staff", (y) => -cf[y].paidToSuppliersAndEmployees],
               ["One-off payments", (y) => -cf[y].extraordinaryPayments],
               ["Tax paid", (y) => -cf[y].taxPaid],
+              ...(gst.registered ? [[`${gstLabel} paid over`, (y: number) => -cf[y].gstRemitted] as StatementRow] : []),
               ["Operating cash flow", (y) => cf[y].netOperating, "sub"],
               ["Assets bought", (y) => -cf[y].capex],
               ["Assets sold", (y) => cf[y].disposalProceeds],
@@ -150,7 +153,7 @@ export function ForecastModule({
               ["Closing cash", (y) => cf[y].closingCash, "total"],
             ]} num={num} />
           ) : (
-            <MonthlyStatement monthly={monthly} months={MONTHS} num={num} />
+            <MonthlyStatement monthly={monthly} months={MONTHS} num={num} gst={gst} gstLabel={gstLabel} />
           )}
           <Note>
             {span === "years"
@@ -162,6 +165,7 @@ export function ForecastModule({
                   a dividend is taken in the last month, once the year&rsquo;s profit is known.
                 </>}
           </Note>
+          {gst.registered && <GstNote gst={gst} label={gstLabel} schedule={gstSchedules[1]} months={MONTHS} num={num} />}
           {span === "months" && monthly.negative.length > 0 && (
             <div className="mt-2 rounded border border-bad/40 bg-bad-soft px-3 py-2 text-[12.5px]">
               <b className="text-bad">The bank account goes below zero</b>
@@ -186,6 +190,7 @@ export function ForecastModule({
             ["Debtors", (y) => bs[y].accountsReceivable],
             ["Stock and work in progress", (y) => bs[y].inventory],
             ["Prepayments", (y) => bs[y].prepaid],
+            ...(gst.registered ? [[`${gstLabel} refund due`, (y: number) => bs[y].gstReceivable] as StatementRow] : []),
             ["Other current assets", (y) => bs[y].otherCurrentAssets],
             ["Current assets", (y) => bs[y].currentAssets, "sub"],
             ["Fixed assets", (y) => bs[y].fixedAssets],
@@ -194,6 +199,7 @@ export function ForecastModule({
             ["Creditors", (y) => bs[y].accountsPayable],
             ["Accruals", (y) => bs[y].accrued],
             ["Tax owing", (y) => bs[y].taxPayable],
+            ...(gst.registered ? [[`${gstLabel} owing`, (y: number) => bs[y].gstPayable] as StatementRow] : []),
             ["Loans due within a year", (y) => bs[y].debtCurrent],
             ["Other current liabilities", (y) => bs[y].otherCurrentLiabilities],
             ["Current liabilities", (y) => bs[y].currentLiabilities, "sub"],
@@ -377,8 +383,9 @@ function SpanToggle({ span, onSpan }: { span: "years" | "months"; onSpan: (s: "y
  * the same figure the five-year view shows in its Year 1 column, so the client can see the two agree instead
  * of being told they do.
  */
-function MonthlyStatement({ monthly, months, num }: {
+function MonthlyStatement({ monthly, months, num, gst, gstLabel }: {
   monthly: MonthlyCashFlow; months: string[]; num: (v: number) => string;
+  gst: GstSettings; gstLabel: string;
 }) {
   const money = (v: number) => (v < 0 ? `(${num(Math.abs(v))})` : v === 0 ? "—" : num(v));
   const rows: [string, (m: MonthCash) => number, (t: MonthlyCashFlow["total"]) => number, ("head" | "sub" | "total")?][] = [
@@ -388,6 +395,9 @@ function MonthlyStatement({ monthly, months, num }: {
     ["Paid to suppliers and staff", (m) => -m.paidToSuppliersAndEmployees, (t) => -t.paidToSuppliersAndEmployees],
     ["One-off payments", (m) => -m.extraordinaryPayments, (t) => -t.extraordinaryPayments],
     ["Tax paid", (m) => -m.taxPaid, (t) => -t.taxPaid],
+    ...(gst.registered
+      ? [[`${gstLabel} paid over`, (m: MonthCash) => -m.gstRemitted, (t: MonthlyCashFlow["total"]) => -t.gstRemitted] as typeof rows[number]]
+      : []),
     ["Operating cash flow", (m) => m.netOperating, (t) => t.netOperating, "sub"],
     ["Assets bought", (m) => -m.capex, (t) => -t.capex],
     ["Assets sold", (m) => m.disposalProceeds, (t) => t.disposalProceeds],
@@ -486,6 +496,34 @@ function TaxNotes({ pnl, num }: { pnl: Forecast["pnl"]; num: (v: number) => stri
           profit. Set the accumulated profit the business starts with in Plan settings if it has reserves already.
         </span>
       )}
+    </Note>
+  );
+}
+
+/**
+ * What the tax is doing to the cash, in a sentence. The figure that surprises a client is never the rate —
+ * it is how much of the bank balance was never theirs, and which month it leaves in (§6.38).
+ */
+function GstNote({ gst, label, schedule, months, num }: {
+  gst: GstSettings; label: string; schedule: GstSchedule | undefined; months: string[]; num: (v: number) => string;
+}) {
+  if (!schedule) return null;
+  const due = schedule.months.filter((m) => m.remitted !== 0);
+  const refunds = due.filter((m) => m.remitted < 0);
+  const owed = schedule.closingPayable;
+  return (
+    <Note>
+      Registered at {gst.rate}%, filing {gst.frequency}.{" "}
+      {due.length > 0 && <>
+        {label} settles in {due.map((m) => months[m.month - 1]).join(", ")}
+        {refunds.length > 0 && <> — {refunds.length === 1 ? "one of those is a refund coming back" : `${refunds.length} of those are refunds coming back`}</>}.{" "}
+      </>}
+      {owed > 0
+        ? <><b>{num(owed)}</b> is still owed at the end of Year 1 and is sitting in the bank. It is on the balance sheet as {label} owing, not as cash.</>
+        : owed < 0
+          ? <><b>{num(-owed)}</b> is owed back to the business at the end of Year 1, shown as a {label} refund due.</>
+          : <>Nothing is outstanding at the end of Year 1.</>}
+      {" "}Sales and costs everywhere else in the plan are {label}-exclusive, so registering has not changed the profit by a cent.
     </Note>
   );
 }

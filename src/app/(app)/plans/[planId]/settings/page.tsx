@@ -21,6 +21,8 @@ export default async function SettingsPage({ params, searchParams }: { params: P
     financial_year_end_month: s.financial_year_end_month ?? 6, first_projected_year: s.first_projected_year ?? null,
     tax_rate: Number(s.tax_rate ?? 25), dividend_rate: Number(s.dividend_rate ?? 0),
     opening_tax_losses: Number(s.opening_tax_losses ?? 0), opening_retained_earnings: Number(s.opening_retained_earnings ?? 0),
+    gst_registered: !!s.gst_registered, gst_rate: Number(s.gst_rate ?? 10),
+    gst_frequency: (s.gst_frequency ?? "quarterly") as "monthly" | "quarterly" | "annually",
     currency: s.currency ?? "AUD", logo_path: s.logo_path ?? null,
   };
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";

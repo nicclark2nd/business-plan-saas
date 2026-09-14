@@ -142,3 +142,63 @@ describe("the shape a later year borrows from Year 1", () => {
     expect(onShape(1200, shapeOf(Array(12).fill(0)))).toEqual(Array(12).fill(100));
   });
 });
+
+/**
+ * The §6.21.1 check, with tax switched on. Six modules publish a year and twelve months; GST now rides on
+ * four of those lines and adds a fifth of its own. If any of them stops adding up, this is where it shows.
+ */
+describe("Year 1 still equals its own twelve months, with GST on", () => {
+  const assembleMonthsWith = async (g: GstSettings) => {
+    const { assembleMonths } = await import("./assemble");
+    const { buildMonthlyCashFlow, monthlyInvariants } = await import("./monthly");
+    const gst = assembleGst(sources, g);
+    const base = assembleBase(sources);
+    for (const y of FORECAST_YEARS) base[y].gst = gst.byYear[y];
+    const f = buildForecast({
+      base,
+      opening: assembleOpening(null, 150000, 0),
+      workingCapital: Object.fromEntries(FORECAST_YEARS.map((y) => [y, { debtorDays: 45, inventoryDays: 15, creditorDays: 30 }])),
+      cashTiming: Object.fromEntries(FORECAST_YEARS.map((y) => [y, { taxPaidPct: 80, prepaidClosing: 0, accruedClosing: 0 }])),
+      taxRate: 25, dividendRate: 20,
+    });
+    const monthly = buildMonthlyCashFlow({
+      openingCash: f.cashFlow[1].openingCash,
+      opening: { accountsReceivable: 0, inventory: 0, accountsPayable: 0, prepaid: 0, accrued: 0 },
+      closing: {
+        accountsReceivable: f.workingCapital[1].accountsReceivable,
+        inventory: f.workingCapital[1].inventory,
+        accountsPayable: f.workingCapital[1].accountsPayable,
+        prepaid: f.workingCapital[1].prepaid,
+        accrued: f.workingCapital[1].accrued,
+      },
+      taxPaid: f.cashFlow[1].taxPaid,
+      dividends: f.cashFlow[1].dividendsPaid,
+      shapes: assembleMonths(sources, g),
+    });
+    return { f, monthly, failures: monthlyInvariants(monthly, f.cashFlow[1]).filter((i) => !i.passed) };
+  };
+
+  it("agrees line by line when registered", async () => {
+    const r = await assembleMonthsWith(AU);
+    expect(r.failures.map((x) => `${x.label} out by ${x.difference}`)).toEqual([]);
+  });
+
+  it("agrees line by line when not registered", async () => {
+    const r = await assembleMonthsWith(NOT_REGISTERED);
+    expect(r.failures.map((x) => `${x.label} out by ${x.difference}`)).toEqual([]);
+  });
+
+  it("agrees at every filing frequency, which is what moves the remittance months", async () => {
+    for (const frequency of ["monthly", "quarterly", "annually"] as const) {
+      const r = await assembleMonthsWith({ registered: true, rate: 10, frequency });
+      expect(r.failures.map((x) => `${frequency}: ${x.label} out by ${x.difference}`)).toEqual([]);
+    }
+  });
+
+  it("shows the BAS leaving the bank in the months it actually leaves", async () => {
+    const r = await assembleMonthsWith(AU);
+    const paid = r.monthly.months.filter((m) => m.gstRemitted !== 0).map((m) => m.month);
+    expect(paid).toEqual([4, 7, 10]);                   // three returns inside the year, the fourth after it
+    expect(r.monthly.total.gstRemitted).toBe(r.f.cashFlow[1].gstRemitted);
+  });
+});

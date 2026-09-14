@@ -53,6 +53,16 @@ export type MonthlyShapes = {
   extraordinaryReceipts: number[];
   extraordinaryPayments: number[];
   disposalProceeds: number[];
+  /**
+   * GST (§6.38), month by month. `onSales` and the three credit lines ride along with the figures they
+   * belong to; `remitted` is the BAS payment itself, which lands in one month and is signed — negative is
+   * a refund coming back. All zero when the business is not registered.
+   */
+  gstOnSales: number[];
+  gstOnCogs: number[];
+  gstOnOverheads: number[];
+  gstOnCapex: number[];
+  gstRemitted: number[];
 };
 
 export type Balances = {
@@ -79,6 +89,8 @@ export type MonthCash = {
   capex: number; disposalProceeds: number; netInvesting: number;
   debtProceeds: number; equityRaised: number; debtRepaid: number; interestPaid: number; dividendsPaid: number;
   netFinancing: number;
+  /** The BAS payment, or the refund. Operating cash, and never an expense. */
+  gstRemitted: number;
   netMovement: number; closingCash: number;
   /** Month-end balances, so the path between opening and closing is visible rather than asserted. */
   accountsReceivable: number; inventory: number; accountsPayable: number;
@@ -86,7 +98,7 @@ export type MonthCash = {
 
 export type MonthlyTotal = Pick<MonthCash,
   "openingCash" | "receiptsFromCustomers" | "extraordinaryReceipts" | "paidToSuppliersAndEmployees"
-  | "extraordinaryPayments" | "taxPaid" | "netOperating" | "capex" | "disposalProceeds" | "netInvesting"
+  | "extraordinaryPayments" | "taxPaid" | "gstRemitted" | "netOperating" | "capex" | "disposalProceeds" | "netInvesting"
   | "debtProceeds" | "equityRaised" | "debtRepaid" | "interestPaid" | "dividendsPaid" | "netFinancing"
   | "netMovement" | "closingCash">;
 
@@ -165,9 +177,9 @@ export function buildMonthlyCashFlow(input: MonthlyInput): MonthlyCashFlow {
   // else arrives from its own module already adding to its own year.
   const prior = (path: number[], open: number, i: number) => (i === 0 ? n(open) : path[i - 1]);
   const receiptsRaw = Array.from({ length: MONTHS }, (_, i) =>
-    at(s.revenue, i) - (arPath[i] - prior(arPath, input.opening.accountsReceivable, i)));
+    at(s.revenue, i) + at(s.gstOnSales, i) - (arPath[i] - prior(arPath, input.opening.accountsReceivable, i)));
   const suppliersRaw = Array.from({ length: MONTHS }, (_, i) =>
-    at(s.overheads, i) + at(s.cogs, i)
+    at(s.overheads, i) + at(s.cogs, i) + at(s.gstOnCogs, i) + at(s.gstOnOverheads, i)
     + (invPath[i] - prior(invPath, input.opening.inventory, i))
     - (apPath[i] - prior(apPath, input.opening.accountsPayable, i))
     + (prePath[i] - prior(prePath, input.opening.prepaid, i))
@@ -185,9 +197,10 @@ export function buildMonthlyCashFlow(input: MonthlyInput): MonthlyCashFlow {
     const extraIn = at(s.extraordinaryReceipts, i);
     const extraOut = at(s.extraordinaryPayments, i);
     const tax = taxMonths[i];
-    const netOperating = receipts + extraIn - suppliers - extraOut - tax;
+    const gstRemitted = at(s.gstRemitted, i);
+    const netOperating = receipts + extraIn - suppliers - extraOut - tax - gstRemitted;
 
-    const capex = at(s.capex, i);
+    const capex = at(s.capex, i) + at(s.gstOnCapex, i);
     const disposal = at(s.disposalProceeds, i);
     const netInvesting = disposal - capex;
 
@@ -207,7 +220,7 @@ export function buildMonthlyCashFlow(input: MonthlyInput): MonthlyCashFlow {
       openingCash: r2(openingCash),
       receiptsFromCustomers: r2(receipts), extraordinaryReceipts: r2(extraIn),
       paidToSuppliersAndEmployees: r2(suppliers), extraordinaryPayments: r2(extraOut), taxPaid: r2(tax),
-      netOperating: r2(netOperating),
+      gstRemitted: r2(gstRemitted), netOperating: r2(netOperating),
       capex: r2(capex), disposalProceeds: r2(disposal), netInvesting: r2(netInvesting),
       debtProceeds: r2(debtIn), equityRaised: r2(equityIn), debtRepaid: r2(debtOut),
       interestPaid: r2(interest), dividendsPaid: r2(dividend), netFinancing: r2(netFinancing),
@@ -230,6 +243,7 @@ export function buildMonthlyCashFlow(input: MonthlyInput): MonthlyCashFlow {
       receiptsFromCustomers: add("receiptsFromCustomers"), extraordinaryReceipts: add("extraordinaryReceipts"),
       paidToSuppliersAndEmployees: add("paidToSuppliersAndEmployees"),
       extraordinaryPayments: add("extraordinaryPayments"), taxPaid: add("taxPaid"),
+      gstRemitted: add("gstRemitted"),
       netOperating: add("netOperating"), capex: add("capex"), disposalProceeds: add("disposalProceeds"),
       netInvesting: add("netInvesting"), debtProceeds: add("debtProceeds"), equityRaised: add("equityRaised"),
       debtRepaid: add("debtRepaid"), interestPaid: add("interestPaid"), dividendsPaid: add("dividendsPaid"),
@@ -252,6 +266,7 @@ export function monthlyInvariants(monthly: MonthlyCashFlow, year1: CashFlowYear)
     ["paidToSuppliersAndEmployees", "Paid to suppliers and staff"],
     ["extraordinaryPayments", "One-off payments"],
     ["taxPaid", "Tax paid"],
+    ["gstRemitted", "GST paid over"],
     ["netOperating", "Operating cash flow"],
     ["capex", "Assets bought"],
     ["disposalProceeds", "Assets sold"],
