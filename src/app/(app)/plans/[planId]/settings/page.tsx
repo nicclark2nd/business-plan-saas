@@ -19,7 +19,9 @@ export default async function SettingsPage({ params, searchParams }: { params: P
     date_established: s.date_established ?? null, industry: s.industry ?? null, country: s.country ?? null, legal_structure: s.legal_structure ?? null,
     customer_type: s.customer_type ?? null, product_type: s.product_type ?? null, products_services_statement: s.products_services_statement ?? null,
     financial_year_end_month: s.financial_year_end_month ?? 6, first_projected_year: s.first_projected_year ?? null,
-    tax_rate: Number(s.tax_rate ?? 25), dividend_rate: Number(s.dividend_rate ?? 0), currency: s.currency ?? "AUD", logo_path: s.logo_path ?? null,
+    tax_rate: Number(s.tax_rate ?? 25), dividend_rate: Number(s.dividend_rate ?? 0),
+    opening_tax_losses: Number(s.opening_tax_losses ?? 0), opening_retained_earnings: Number(s.opening_retained_earnings ?? 0),
+    currency: s.currency ?? "AUD", logo_path: s.logo_path ?? null,
   };
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
   return <SettingsModule planId={planId} initial={initial} mode={mode} initialArea={area === "financial" || area === "branding" ? area : "profile"} />;

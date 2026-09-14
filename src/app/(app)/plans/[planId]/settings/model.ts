@@ -76,6 +76,9 @@ export type Financial = {
   first_projected_year: number | null;
   tax_rate: number;
   dividend_rate: number;
+  /** What the business brings in with it (§6.37): unrelieved losses, and accumulated profit or deficit. */
+  opening_tax_losses: number;
+  opening_retained_earnings: number;
   currency: string;
 };
 export type Settings = Profile & Financial & { logo_path: string | null };

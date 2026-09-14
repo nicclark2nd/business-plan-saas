@@ -108,11 +108,14 @@ export function ForecastModule({
             ["Gain on asset sales", (y) => pnl[y].disposalGainLoss],
             ["Interest", (y) => -pnl[y].interest],
             ["Profit before tax", (y) => pnl[y].profitBeforeTax, "sub"],
+            ["Losses brought forward", (y) => -pnl[y].lossRelief],
+            ["Taxable profit", (y) => pnl[y].taxableProfit],
             ["Tax", (y) => -pnl[y].tax],
             ["Net profit", (y) => pnl[y].netProfit, "total"],
             ["Dividends", (y) => -pnl[y].dividends],
             ["Retained profit", (y) => pnl[y].retainedProfit, "sub"],
           ]} num={num} />
+          <TaxNotes pnl={pnl} num={num} />
         </>
       )}
 
@@ -454,4 +457,35 @@ function cashShape(monthly: MonthlyCashFlow, months: string[], num: (v: number) 
   if (falls) return <>down every month, from {num(closes[0])} to {num(closes[11])}</>;
   if (rises) return <>up every month, from {num(closes[0])} to {num(closes[11])}</>;
   return <>closes on {num(monthly.total.closingCash)} · tightest in {low} at {num(monthly.low.closingCash)}</>;
+}
+
+/**
+ * The two things the profit and loss does that a client did not ask for, said out loud. Both are ordinary
+ * law and ordinary tax, and both change the figure they were expecting — so neither gets to be silent.
+ */
+function TaxNotes({ pnl, num }: { pnl: Forecast["pnl"]; num: (v: number) => string }) {
+  const relieved = FORECAST_YEARS.filter((y) => pnl[y].lossRelief > 0);
+  const carried = FORECAST_YEARS.filter((y) => pnl[y].lossesCarriedForward > 0);
+  const withheld = FORECAST_YEARS.filter((y) => pnl[y].dividendsWithheld > 0);
+  if (!relieved.length && !carried.length && !withheld.length) return null;
+  const list = (ys: number[]) => (ys.length === 1 ? `Year ${ys[0]}` : `Years ${ys.join(", ")}`);
+  return (
+    <Note>
+      {relieved.length > 0 && (
+        <>Losses from earlier years come off the profit in {list(relieved)}, so the tax is charged on what is
+          left rather than on the whole year.{" "}</>
+      )}
+      {carried.length > 0 && (
+        <><b>{num(pnl[carried[carried.length - 1]].lossesCarriedForward)}</b> of losses is still unrelieved at
+          the end of {list([carried[carried.length - 1]])}.{" "}</>
+      )}
+      {withheld.length > 0 && (
+        <span className="text-warn">
+          The dividend policy asks for more than the company has made: {num(withheld.reduce((a, y) => a + pnl[y].dividendsWithheld, 0))}
+          {" "}could not be paid across {list(withheld)}, because a dividend can only come out of accumulated
+          profit. Set the accumulated profit the business starts with in Plan settings if it has reserves already.
+        </span>
+      )}
+    </Note>
+  );
 }

@@ -97,7 +97,13 @@ export function SettingsModule({ planId, initial, mode, initialArea }: { planId:
           <Section title="Tax and distributions">
             <FieldGrid>
               <Field label="Company tax rate %" hint="Applied to profit before tax in the forecast."><FieldInput numeric value={String(s.tax_rate)} onChange={(e) => edit({ tax_rate: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 }, "financial")} /></Field>
-              <Field label="Dividend %" hint="Share of after-tax profit paid out to owners."><FieldInput numeric value={String(s.dividend_rate)} onChange={(e) => edit({ dividend_rate: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 }, "financial")} /></Field>
+              <Field label="Dividend %" hint="Share of after-tax profit paid out to owners. Never more than the company has made."><FieldInput numeric value={String(s.dividend_rate)} onChange={(e) => edit({ dividend_rate: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 }, "financial")} /></Field>
+              <Field label="Tax losses brought forward" hint="Unrelieved losses from before the plan. They come off the first profits the plan makes.">
+                <FieldInput numeric value={String(s.opening_tax_losses)} onChange={(e) => edit({ opening_tax_losses: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 }, "financial")} />
+              </Field>
+              <Field label="Accumulated profit at the start" hint="Profits already retained in the business. Negative if it is carrying a deficit. A dividend cannot exceed it.">
+                <FieldInput numeric value={String(s.opening_retained_earnings)} onChange={(e) => edit({ opening_retained_earnings: Number(e.target.value.replace(/[^\d.-]/g, "")) || 0 }, "financial")} />
+              </Field>
             </FieldGrid>
           </Section>
         </div>

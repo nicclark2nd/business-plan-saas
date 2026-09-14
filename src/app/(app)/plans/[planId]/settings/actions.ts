@@ -47,6 +47,9 @@ export async function saveFinancial(planId: string, f: Partial<Financial>): Prom
     first_projected_year: f.first_projected_year ? Math.trunc(Number(f.first_projected_year)) : null,
     tax_rate: Math.max(0, Math.min(100, Number(f.tax_rate) || 0)),
     dividend_rate: Math.max(0, Math.min(100, Number(f.dividend_rate) || 0)),
+    // Losses are never negative; accumulated earnings genuinely can be, and a deficit is the case that matters.
+    opening_tax_losses: Math.max(0, Number(f.opening_tax_losses) || 0),
+    opening_retained_earnings: Number(f.opening_retained_earnings) || 0,
     currency: (f.currency || "AUD").toUpperCase().slice(0, 3),
   }, { onConflict: "plan_id" });
   if (error) { console.error("financial", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }

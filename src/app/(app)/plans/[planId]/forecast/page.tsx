@@ -82,6 +82,7 @@ export default async function ForecastPage({ params, searchParams }: {
     opening,
     workingCapital, cashTiming,
     taxRate: Number(s?.tax_rate ?? 25), dividendRate: num(s?.dividend_rate),
+    openingTaxLosses: num(s?.opening_tax_losses), openingRetainedEarnings: num(s?.opening_retained_earnings),
   });
 
   /**

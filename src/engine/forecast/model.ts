@@ -25,7 +25,9 @@ export const FORECAST_YEARS = [1, 2, 3, 4, 5] as const;
 export type ForecastYear = (typeof FORECAST_YEARS)[number];
 
 const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
-const r2 = (v: number) => Math.round(v * 100) / 100;
+// `+ 0` normalises negative zero: Math.round(-0.004 * 100) / 100 is -0, and a balance sheet that reports
+// its check as "-0" reads as a fault to anyone who looks twice.
+const r2 = (v: number) => Math.round(v * 100) / 100 + 0;
 
 /** What the plan's own modules produce, per year. Nothing here is computed twice. */
 export type YearBase = {
@@ -76,14 +78,23 @@ export type ForecastInput = {
   cashTiming: Record<number, CashTiming>;
   taxRate: number;
   dividendRate: number;
+  /** Unrelieved losses the business brings into the plan. Nil unless the client states otherwise. */
+  openingTaxLosses?: number;
+  /** Accumulated profits — or losses — already on the opening balance sheet, for the dividend test. */
+  openingRetainedEarnings?: number;
 };
 
 export type PnlYear = {
   revenue: number; variableCogs: number; fixedCogs: number; cogs: number; grossProfit: number;
   grossMargin: number | null; overheads: number; depreciation: number; operatingProfit: number;
   extraordinaryIncome: number; extraordinaryExpense: number; disposalGainLoss: number;
-  interest: number; profitBeforeTax: number; tax: number; netProfit: number;
+  interest: number; profitBeforeTax: number;
+  /** Losses from earlier years set against this year's profit, and what is still unrelieved at year end. */
+  lossRelief: number; taxableProfit: number; lossesCarriedForward: number;
+  tax: number; netProfit: number;
   dividends: number; retainedProfit: number;
+  /** Dividends the policy called for but the company could not lawfully pay. Shown, not silently dropped. */
+  dividendsWithheld: number;
 };
 
 export type WorkingCapitalYear = {
@@ -153,6 +164,8 @@ export function buildForecast(input: ForecastInput): Forecast {
   let priorAR = n(o.accountsReceivable), priorInv = n(o.inventory), priorAP = n(o.accountsPayable);
   let priorPrepaid = 0, priorAccrued = 0, priorTaxPayable = n(o.taxPayable);
   let cash = n(o.cash), fixedAssets = n(o.fixedAssets), equity = n(o.equity);
+  let lossPool = Math.max(0, n(input.openingTaxLosses));
+  let retainedEarnings = n(input.openingRetainedEarnings);
 
   for (const year of FORECAST_YEARS) {
     const b = { ...emptyBase(), ...(input.base[year] ?? {}) };
@@ -167,10 +180,35 @@ export function buildForecast(input: ForecastInput): Forecast {
     const disposalGainLoss = n(b.disposalProceeds) - n(b.disposedBookValue);
     const profitBeforeTax = operatingProfit + n(b.extraordinaryIncome) - n(b.extraordinaryExpense)
       + disposalGainLoss - n(b.interest);
-    // A loss carries no charge. Carry-forward relief is a refinement this deliberately does not claim.
-    const tax = profitBeforeTax > 0 ? profitBeforeTax * taxRate : 0;
+
+    /**
+     * Losses carried forward (§6.37). A loss year carries no charge — but the loss does not then evaporate,
+     * and a plan that lets it evaporate taxes the first profitable year in full. On a business that loses
+     * money in Years 1 and 2, which is most of the plans this app exists to write, that overstates the tax
+     * bill and understates the cash in precisely the years a lender is deciding on. Relief is given against
+     * the earliest profit available, which is the ordinary rule and the one a client can check.
+     *
+     * What this deliberately does not model: time limits, the tests some jurisdictions apply on a change of
+     * ownership or of business, and group relief. Those are advice, not arithmetic, and the plan says so.
+     */
+    const lossRelief = profitBeforeTax > 0 ? Math.min(profitBeforeTax, lossPool) : 0;
+    const taxableProfit = Math.max(0, profitBeforeTax - lossRelief);
+    lossPool = lossPool - lossRelief + (profitBeforeTax < 0 ? -profitBeforeTax : 0);
+
+    const tax = taxableProfit * taxRate;
     const netProfit = profitBeforeTax - tax;
-    const dividends = netProfit > 0 ? netProfit * dividendRate : 0;
+
+    /**
+     * A dividend can only come out of accumulated profit. Paying one while the company is still carrying
+     * losses is not a modelling choice, it is unlawful in every jurisdiction this plan is written for, and
+     * it is the first thing a CFO tests. What the policy asked for and could not be paid is reported rather
+     * than quietly dropped, so the client can see why the figure is not what they set.
+     */
+    const wanted = netProfit > 0 ? netProfit * dividendRate : 0;
+    const distributable = Math.max(0, retainedEarnings + netProfit);
+    const dividends = Math.min(wanted, distributable);
+    const dividendsWithheld = wanted - dividends;
+    retainedEarnings = retainedEarnings + netProfit - dividends;
 
     pnl[year] = {
       revenue: r2(n(b.revenue)), variableCogs: r2(n(b.variableCogs)), fixedCogs: r2(n(b.fixedCogs)),
@@ -179,8 +217,11 @@ export function buildForecast(input: ForecastInput): Forecast {
       overheads: r2(n(b.overheads)), depreciation: r2(n(b.depreciation)), operatingProfit: r2(operatingProfit),
       extraordinaryIncome: r2(n(b.extraordinaryIncome)), extraordinaryExpense: r2(n(b.extraordinaryExpense)),
       disposalGainLoss: r2(disposalGainLoss), interest: r2(n(b.interest)),
-      profitBeforeTax: r2(profitBeforeTax), tax: r2(tax), netProfit: r2(netProfit),
+      profitBeforeTax: r2(profitBeforeTax),
+      lossRelief: r2(lossRelief), taxableProfit: r2(taxableProfit), lossesCarriedForward: r2(lossPool),
+      tax: r2(tax), netProfit: r2(netProfit),
       dividends: r2(dividends), retainedProfit: r2(netProfit - dividends),
+      dividendsWithheld: r2(dividendsWithheld),
     };
 
     // ---- working capital -------------------------------------------------
