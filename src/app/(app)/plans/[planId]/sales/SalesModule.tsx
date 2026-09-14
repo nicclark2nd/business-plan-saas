@@ -17,7 +17,7 @@ import { YEARS, yearlyProjection, firstPlanYear, evenDistribution, moderateDistr
 import { productYears, productYear1Months, productYear1Clients, newClientsYear1, planRevenueByYear, planYear1Months, sourceOf, isLinked, bookNow, monthlyFee, recurring } from "@/engine/sales/product";
 import { useMoney } from "@/components/MoneyProvider";
 import { useProductNoun } from "@/components/VocabularyProvider";
-import { upsertProduct, deleteProduct, continueFromSales } from "./actions";
+import { upsertProduct, deleteProduct, continueFromSales, saveProductsStatement } from "./actions";
 import { LIFECYCLE, LIFE_MODE, SOLD_AS, type Product } from "./model";
 
 /**
@@ -48,8 +48,8 @@ const firstYear = (r: Pick<Row, "start_selling_year">) => firstPlanYear(r.start_
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
 const box = "h-8";
 
-export function SalesModule({ planId, initial, mode, initialArea, hasHistory, historicRevenue, historicEnd, fyEndMonth, firstProjectedYear: firstYearEnding, currency }: {
-  planId: string; initial: Product[]; mode: "guided" | "advanced"; initialArea: AreaKey; hasHistory: boolean | null; historicRevenue: number | null; historicEnd: string | null; fyEndMonth: number; firstProjectedYear: number | null; currency: string;
+export function SalesModule({ planId, initial, mode, initialArea, hasHistory, historicRevenue, historicEnd, fyEndMonth, firstProjectedYear: firstYearEnding, statement, currency }: {
+  planId: string; initial: Product[]; mode: "guided" | "advanced"; initialArea: AreaKey; hasHistory: boolean | null; historicRevenue: number | null; historicEnd: string | null; fyEndMonth: number; firstProjectedYear: number | null; statement: string; currency: string;
 }) {
   // What Year 1 actually is, from the two Settings fields that define the financial year (§6.33.1).
   const yearOne = planYearLabel(firstProjectedYear(firstYearEnding, fyEndMonth), fyEndMonth);
@@ -202,6 +202,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
             {named.length > 0 && <FootRow><Td colSpan={5}>Total</Td><Td right className="num">{num(named.reduce((a, r) => a + years(r)[0].revenue, 0))}</Td><Td /></FootRow>}
           </Grid>
           <Note>Click a {noun.one} to open it. Growth and the monthly split are on the next two tabs.</Note>
+          <ProductsStatement planId={planId} initial={statement} noun={noun.many.toLowerCase()} />
         </>
       )}
 
@@ -300,6 +301,49 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
         ? <ClientsDialog key={open._key} r={open} fyEndMonth={fyEndMonth} source={src(open)} onSave={(r) => { save(r); close(); }} onClose={close} />
         : <MonthlyDialog key={open._key} r={open} fyEndMonth={fyEndMonth} currency={currency} others={named.filter((x) => x._key !== open._key && !recurring(x) && x.monthly_distribution)} onSave={(r) => { save(r); close(); }} onClose={close} />)}
     </ModuleFrame>
+  );
+}
+
+/**
+ * The paragraph that opens the report's products and services section (§6.34).
+ *
+ * It used to live in Plan settings, next to currency and tax rates — and a narrative is not configuration.
+ * It sits here, under the lines it summarises, because that is the section of the document it opens: one
+ * screen owns one section. Under the grid rather than above it, so the list a client came here for stays
+ * where they left it and the summary reads as the thing that follows, not the toll for reaching it.
+ *
+ * It saves on leaving the field, like every other text in the app.
+ */
+function ProductsStatement({ planId, initial, noun }: { planId: string; initial: string; noun: string }) {
+  const [text, setText] = useState(initial);
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string>();
+  const saved = useRef(initial);
+
+  const commit = () => {
+    if (text.trim() === saved.current.trim()) return;
+    const next = text;
+    start(async () => {
+      const r = await saveProductsStatement(planId, next);
+      if (r.ok) { saved.current = next; setError(undefined); } else setError(r.error);
+    });
+  };
+
+  return (
+    <div className="mt-5 max-w-[860px]">
+      <label className="mb-[3px] block text-[11.5px] font-semibold text-muted-foreground" htmlFor="products-statement">
+        About what you sell
+      </label>
+      <Textarea
+        id="products-statement" value={text} disabled={pending} onChange={(e) => setText(e.target.value)} onBlur={commit}
+        placeholder={`e.g. We pour, finish and guarantee residential and light-commercial concrete for builders and homeowners across the South Coast. Quoted price is the final price, and a slab is poured within ten working days of the site being ready.`}
+        className="min-h-[72px]"
+      />
+      <p className="mt-1 text-[11.5px] text-muted-foreground">
+        {error ? <span className="text-bad">{error}</span>
+          : <>Two or three sentences: what you sell, to whom, and what makes a customer pick you. Opens the {noun} section of the report, above the list.</>}
+      </p>
+    </div>
   );
 }
 

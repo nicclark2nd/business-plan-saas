@@ -30,7 +30,6 @@ export async function saveProfile(planId: string, p: Partial<Profile> & { establ
       legal_structure: p.legal_structure?.trim() || null,
       customer_type: p.customer_type?.trim() || null,
       product_type: p.product_type?.trim() || null,
-      products_services_statement: p.products_services_statement?.trim() || null,
     }, { onConflict: "plan_id" }),
   ]);
   const error = plans.error ?? settings.error;

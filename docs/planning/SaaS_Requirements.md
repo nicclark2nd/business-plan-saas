@@ -871,3 +871,25 @@ Two changes, both about asking for a fact at the moment the answer is known.
 **`plan_year` is now editable, on Business profile, where it belongs.** It is the year on the front cover of the report — *"not the financial year"*, says the hint, because that confusion cost a whole diagnosis. It still defaults to the year the plan was created, which is right for a plan written once; a plan revised and reissued next March can now say so. Validated as a four-digit year, and `Settings` stopped carrying it as a read-only extra: it is part of the profile, saved with it.
 
 **The rule: a field that defines how everything else is read must be asked for at creation, not left blank with a hint explaining what happens if you skip it.** The old hint — *"Leave blank to use the plan year"* — was the entire confusion in one sentence, and it survived because nothing forced the question.
+
+## 6.34 Settings holds configuration, not prose (14 Sep 2026)
+
+Noticed on review: *"the field 'Products & services statement' — should this be collected in another part of the plan? It now seems out of place."*
+
+It was, and for a sharper reason than placement: **the app asked the same question at three levels of zoom, in three different places.**
+
+| Field | Where | Asks for |
+|---|---|---|
+| Mission | Vision & Purpose, step 1 | what you do, for whom, every day |
+| Brand promise | Vision & Purpose, step 1 | what a customer can count on |
+| Products & services statement | **Plan settings** | what you sell, to whom, and why they choose you |
+
+The third is the first two added together — and the Mission placeholder is itself a products-and-services sentence. Below all of it, every Sales line already carries **What it is** and **Why they buy it**. It was also **required**, so it drove *"Reports need 1 more field: products & services"* on Settings and the Dashboard: not merely misplaced, actively nagging.
+
+**It now sits on Sales, under the lines it summarises.** The report section it opens is assembled from those lines, so one screen owns one section of the document. Under the grid rather than above it, because the list is what a client came for: the summary should read as the thing that follows, not the toll for reaching it.
+
+The column stays on `plan_settings` — only the screen that owns it moved, so **no migration**. `PROFILE_REQUIRED` drops it, and the completeness nudge goes with it.
+
+**The rule: Plan settings holds what configures the app — currency, financial year, tax rates, the vocabulary. A narrative belongs with the thing it narrates.**
+
+*Also fixed in passing:* the "all done" message rendered a literal `&apos;` — an HTML entity inside a JavaScript string, which JSX never unescapes — and the missing-field list still carried a rename rule for the field that has just left.

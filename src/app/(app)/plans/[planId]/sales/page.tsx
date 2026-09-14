@@ -11,7 +11,7 @@ export default async function SalesPage({ params, searchParams }: { params: Prom
     getSession(),
     supabase.from("plan_products").select("*").eq("plan_id", planId).order("sort_order").order("created_at"),
     supabase.from("plan_historic_periods").select("revenue, period_end").eq("plan_id", planId).eq("period_number", 1).maybeSingle(),
-    supabase.from("plan_settings").select("has_history, financial_year_end_month, first_projected_year, currency").eq("plan_id", planId).maybeSingle(),
+    supabase.from("plan_settings").select("has_history, financial_year_end_month, first_projected_year, currency, products_services_statement").eq("plan_id", planId).maybeSingle(),
   ]);
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
   // Defaults keep the module honest if a column has not reached this database yet (§6.17, migration 0013).
@@ -31,6 +31,6 @@ export default async function SalesPage({ params, searchParams }: { params: Prom
   return (
     <SalesModule planId={planId} initial={rows} mode={mode} initialArea={area === "annual" || area === "monthly" ? area : "products"} hasHistory={settings.data?.has_history ?? null}
       historicRevenue={historic.data ? Number(historic.data.revenue) : null} historicEnd={historic.data?.period_end ?? null}
-      fyEndMonth={settings.data?.financial_year_end_month ?? 6} firstProjectedYear={settings.data?.first_projected_year ?? null} currency={settings.data?.currency ?? "AUD"} />
+      fyEndMonth={settings.data?.financial_year_end_month ?? 6} firstProjectedYear={settings.data?.first_projected_year ?? null} statement={settings.data?.products_services_statement ?? ""} currency={settings.data?.currency ?? "AUD"} />
   );
 }

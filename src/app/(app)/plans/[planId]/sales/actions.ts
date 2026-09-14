@@ -93,3 +93,22 @@ export async function deleteProduct(planId: string, id: string): Promise<Result>
 export async function continueFromSales(planId: string, intent: "next" | "later") {
   redirect(intent === "next" ? `/plans/${planId}/cogs` : `/plans/${planId}/dashboard`);
 }
+
+/**
+ * The statement that opens the report's products and services section (§6.34).
+ *
+ * It lived in Plan settings, which is where the app's configuration lives — currency, financial year, tax
+ * rates, the vocabulary — and a two-or-three sentence narrative is not configuration. It belongs with the
+ * lines it summarises, because the report section it opens is built from them.
+ *
+ * The column stays on `plan_settings`; only the screen that owns it has moved. No migration.
+ */
+export async function saveProductsStatement(planId: string, statement: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("plan_settings")
+    .update({ products_services_statement: statement.trim() || null })
+    .eq("plan_id", planId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/plans/${planId}`, "layout");
+  return { ok: true };
+}

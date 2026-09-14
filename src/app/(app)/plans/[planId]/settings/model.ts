@@ -81,5 +81,6 @@ export type Financial = {
 export type Settings = Profile & Financial & { logo_path: string | null };
 
 /** The fields a report's business overview cannot do without. */
-export const PROFILE_REQUIRED: (keyof Profile)[] = ["business_name", "industry", "country", "legal_structure", "products_services_statement"];
+/** What a report cannot open without. The products & services statement moved to Sales (§6.34). */
+export const PROFILE_REQUIRED: (keyof Profile)[] = ["business_name", "industry", "country", "legal_structure"];
 export const profileMissing = (p: Partial<Profile>) => PROFILE_REQUIRED.filter((k) => !String(p[k] ?? "").trim());

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { ModuleFrame, ModuleStatusFooter, useModule } from "@/components/module/ModuleFrame";
-import { Section, FieldGrid, Field, FieldInput, FieldTextarea, FieldSelect } from "@/components/module/FieldGrid";
+import { Section, FieldGrid, Field, FieldInput, FieldSelect } from "@/components/module/FieldGrid";
 import { Toolbar, Meta } from "@/components/module/DataGrid";
 import { currentFinancialYear, firstProjectedYear, planYearEnding, planYearLabel } from "@/engine/plan/calendar";
 import { formatMonth } from "../people/model";
@@ -65,7 +65,7 @@ export function SettingsModule({ planId, initial, mode, initialArea }: { planId:
 
       {area === "profile" && (
         <div onBlur={(e) => left(e) && dirty === "profile" && commit("profile")}>
-          <Toolbar><Meta className="ml-0">{missing.length ? <>Reports need {missing.length} more field{missing.length === 1 ? "" : "s"}: <b>{missing.map((k) => k.replace(/_/g, " ").replace("products services statement", "products & services")).join(", ")}</b>.</> : "Everything a report&apos;s business overview needs is here."}</Meta></Toolbar>
+          <Toolbar><Meta className="ml-0">{missing.length ? <>Reports need {missing.length} more field{missing.length === 1 ? "" : "s"}: <b>{missing.map((k) => k.replace(/_/g, " ")).join(", ")}</b>.</> : "Everything a report\u2019s business overview needs is here."}</Meta></Toolbar>
           <Section title="Business">
             <FieldGrid>
               <Field label="Business name" span={2}><FieldInput value={s.business_name} onChange={(e) => edit({ business_name: e.target.value }, "profile")} /></Field>
@@ -76,7 +76,6 @@ export function SettingsModule({ planId, initial, mode, initialArea }: { planId:
               <Field label="Legal structure" span={2} hint="Grouped by liability; your country's names come first."><FieldSelect value={s.legal_structure} groups={legalStructuresFor(s.country)} placeholder="Choose" onValueChange={(v) => edit({ legal_structure: v }, "profile", true)} /></Field>
               <Field label="Type of customer" span={2} hint="Changes the word the app uses for the people you sell to."><FieldSelect value={s.customer_type} options={opts(CUSTOMER_TYPES)} placeholder="Choose" onValueChange={(v) => edit({ customer_type: v }, "profile", true)} /></Field>
               <Field label="Type of product sold" span={2}><FieldSelect value={s.product_type} options={PRODUCT_TYPES} placeholder="Choose" onValueChange={(v) => edit({ product_type: v }, "profile", true)} /></Field>
-              <Field label="Products & services statement" span={6} hint="Two or three sentences: what you sell, to whom, and why they choose you. Opens the business overview in the report."><FieldTextarea value={s.products_services_statement ?? ""} onChange={(e) => edit({ products_services_statement: e.target.value }, "profile")} /></Field>
             </FieldGrid>
           </Section>
         </div>
