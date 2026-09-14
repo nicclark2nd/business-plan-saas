@@ -23,12 +23,13 @@
  * `loanByYear` already produces, so it is read rather than modelled.
  */
 import { FORECAST_YEARS, type OpeningBalance, type YearBase } from "./model";
-import { planRevenueByYear, type AnyProduct } from "../sales/product";
-import { planCogsByYear, type CostProduct, type FixedCost } from "../cogs/direct";
-import { overheadsByYear, planOverheadLines, type Overhead } from "../overheads/expenses";
-import { debtByYear, interestByYear, loanByYear, type FundingSource } from "../funding/sources";
-import { assetsByYear, bookValueByYear, type FixedAsset } from "../assets/depreciation";
-import { extraordinaryByYear, isDisposal, type ExtraordinaryItem } from "../extraordinary/items";
+import type { MonthlyShapes } from "./monthly";
+import { planRevenueByYear, planYear1Months, sourceOf, type AnyProduct } from "../sales/product";
+import { planCogsByYear, planCogsMonths, type CostProduct, type FixedCost } from "../cogs/direct";
+import { overheadsByYear, overheadsMonths, planOverheadLines, type Overhead } from "../overheads/expenses";
+import { debtByYear, interestByYear, loanByYear, loanMonths, type FundingSource } from "../funding/sources";
+import { assetsByYear, assetsMonths, bookValueByYear, capexMonths, type FixedAsset } from "../assets/depreciation";
+import { extraordinaryByYear, extraordinaryCashMonths, isDisposal, type ExtraordinaryItem } from "../extraordinary/items";
 
 const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -90,7 +91,12 @@ export function raisedByYear(funding: FundingSource[]): { debt: number[]; equity
 
 export function assembleBase(p: PlanSources): Record<number, YearBase> {
   const revenue = planRevenueByYear(p.products);
-  const cogs = planCogsByYear(p.costProducts, p.fixedCogs, () => null);
+  // An ongoing line whose clients come from another line costs what THAT line wins (§6.36). Passing
+  // `() => null` here silently unlinked them, so the forecast costed a book of clients it never counted:
+  // 28,800 against the COGS screen's 42,247 on the same plan, with all three statements still agreeing
+  // perfectly with each other. Reconciliation proves the statements agree, never that they agree with the
+  // plan — which is why this reads the link exactly as Sales and COGS already do.
+  const cogs = planCogsByYear(p.costProducts, p.fixedCogs, (c) => sourceOf(c, p.products));
   const overheads = overheadsByYear(planOverheadLines(p.overheads, p.salaries, p.marketing), p.onCostPct);
   const interest = interestByYear(p.funding);
   const assets = assetsByYear(p.assets);
@@ -142,6 +148,49 @@ export function assembleBase(p: PlanSources): Record<number, YearBase> {
       disposedBookValue: d.bookValue,
     } satisfies YearBase];
   }));
+}
+
+/**
+ * The same assembly, for the twelve months of Year 1 (§6.36). Every line is the month series its own module
+ * publishes, sliced to Year 1 and not touched: if any of them stops adding to the year above it, the
+ * forecast's own reconciliation strip says so rather than the plan quietly drifting.
+ *
+ * The one thing decided here is the same one decided for the year — whether a source is borrowed or put in —
+ * using the identical test, so a source cannot be equity by the year and debt by the month.
+ */
+export function assembleMonths(p: PlanSources): MonthlyShapes {
+  const debtProceeds = Array(12).fill(0) as number[];
+  const equityRaised = Array(12).fill(0) as number[];
+  const debtRepaid = Array(12).fill(0) as number[];
+  const interest = Array(12).fill(0) as number[];
+
+  for (const s of p.funding) {
+    if ((Math.trunc(n(s.start_year)) || 1) === 1) {
+      const m = Math.min(12, Math.max(1, Math.trunc(n(s.start_month)) || 1));
+      const borrowed = s.kind === "debt" || s.kind === "revenue_linked" || (s.kind === "owner" && !!s.loan);
+      const bucket = borrowed ? debtProceeds : equityRaised;
+      bucket[m - 1] = r2(bucket[m - 1] + n(s.amount));
+    }
+    if (!s.loan) continue;
+    const months = loanMonths(s.loan);
+    for (let i = 0; i < 12; i++) {
+      debtRepaid[i] = r2(debtRepaid[i] + n(months[i]?.principal));
+      interest[i] = r2(interest[i] + n(months[i]?.interest) + n(months[i]?.fees));
+    }
+  }
+
+  const cash = extraordinaryCashMonths(p.extraordinary, 1);
+  return {
+    revenue: planYear1Months(p.products),
+    cogs: planCogsMonths(p.costProducts, p.fixedCogs, (c) => sourceOf(c, p.products)),
+    overheads: overheadsMonths(planOverheadLines(p.overheads, p.salaries, p.marketing), p.onCostPct),
+    capex: capexMonths(p.assets),
+    depreciation: assetsMonths(p.assets),
+    debtProceeds, equityRaised, debtRepaid, interest,
+    extraordinaryReceipts: cash.receipts,
+    extraordinaryPayments: cash.payments,
+    disposalProceeds: cash.disposals,
+  };
 }
 
 /**

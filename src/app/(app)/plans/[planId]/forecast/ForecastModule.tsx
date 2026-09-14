@@ -10,6 +10,8 @@ import { GUIDED_STEPS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { FORECAST_YEARS, type CashTiming, type Forecast, type WorkingCapitalDays } from "@/engine/forecast/model";
 import { creditorBalance, debtorBalance, inventoryBalance } from "@/engine/forecast/assumptions";
+import type { MonthCash, MonthlyCashFlow } from "@/engine/forecast/monthly";
+import { planMonths, planYearLabel } from "@/engine/plan/calendar";
 import { saveAssumptions } from "./actions";
 
 /**
@@ -26,16 +28,19 @@ const STEP = GUIDED_STEPS.find((s) => s.id === "forecast")?.step ?? 13;
 const box = "h-8";
 
 export function ForecastModule({
-  planId, mode, forecast, initialArea, workingCapital, cashTiming, impliedFromHistory, assumptionsSet, fyEndMonth,
+  planId, mode, forecast, monthly, initialArea, workingCapital, cashTiming, impliedFromHistory, assumptionsSet, fyEndMonth, firstYear,
 }: {
-  planId: string; mode: "guided" | "advanced"; forecast: Forecast; initialArea: AreaKey;
+  planId: string; mode: "guided" | "advanced"; forecast: Forecast; monthly: MonthlyCashFlow; initialArea: AreaKey;
   workingCapital: Record<number, WorkingCapitalDays>; cashTiming: Record<number, CashTiming>;
-  impliedFromHistory: WorkingCapitalDays | null; assumptionsSet: boolean; fyEndMonth: number;
+  impliedFromHistory: WorkingCapitalDays | null; assumptionsSet: boolean; fyEndMonth: number; firstYear: number;
 }) {
-  void fyEndMonth;
   const num = useMoney();
   const router = useRouter();
   const [area, setArea] = useState<AreaKey>(initialArea);
+  // The cash flow is the one statement with two useful spans: the five years a lender reads, and the twelve
+  // months that decide whether the business survives to year two.
+  const [span, setSpan] = useState<"years" | "months">("years");
+  const MONTHS = useMemo(() => planMonths(fyEndMonth), [fyEndMonth]);
   const [pending, start] = useTransition();
   const [wc, setWc] = useState(workingCapital);
   const [ct, setCt] = useState(cashTiming);
@@ -113,29 +118,56 @@ export function ForecastModule({
 
       {area === "cash" && (
         <>
-          <Toolbar><Meta className="ml-0">
-            Year 1 closes on {num(cf[1].closingCash)} · lowest close over five years {num(Math.min(...FORECAST_YEARS.map((y) => cf[y].closingCash)))}
-          </Meta></Toolbar>
-          <Statement rows={[
-            ["Opening cash", (y) => cf[y].openingCash, "head"],
-            ["Received from customers", (y) => cf[y].receiptsFromCustomers],
-            ["One-off receipts", (y) => cf[y].extraordinaryReceipts],
-            ["Paid to suppliers and staff", (y) => -cf[y].paidToSuppliersAndEmployees],
-            ["One-off payments", (y) => -cf[y].extraordinaryPayments],
-            ["Tax paid", (y) => -cf[y].taxPaid],
-            ["Operating cash flow", (y) => cf[y].netOperating, "sub"],
-            ["Assets bought", (y) => -cf[y].capex],
-            ["Assets sold", (y) => cf[y].disposalProceeds],
-            ["Investing cash flow", (y) => cf[y].netInvesting, "sub"],
-            ["Money borrowed", (y) => cf[y].debtProceeds],
-            ["Money invested", (y) => cf[y].equityRaised],
-            ["Loan repayments", (y) => -cf[y].debtRepaid],
-            ["Interest paid", (y) => -cf[y].interestPaid],
-            ["Dividends paid", (y) => -cf[y].dividendsPaid],
-            ["Financing cash flow", (y) => cf[y].netFinancing, "sub"],
-            ["Closing cash", (y) => cf[y].closingCash, "total"],
-          ]} num={num} />
-          <Note>Interest is financing, not operating. Money from selling an asset is investing, never revenue.</Note>
+          <Toolbar>
+            <Meta className="ml-0">
+              {span === "years"
+                ? <>Year 1 closes on {num(cf[1].closingCash)} · lowest close over five years {num(Math.min(...FORECAST_YEARS.map((y) => cf[y].closingCash)))}</>
+                : <>{planYearLabel(firstYear, fyEndMonth)} · {cashShape(monthly, MONTHS, num)}</>}
+            </Meta>
+            <SpanToggle span={span} onSpan={setSpan} />
+          </Toolbar>
+          {span === "years" ? (
+            <Statement rows={[
+              ["Opening cash", (y) => cf[y].openingCash, "head"],
+              ["Received from customers", (y) => cf[y].receiptsFromCustomers],
+              ["One-off receipts", (y) => cf[y].extraordinaryReceipts],
+              ["Paid to suppliers and staff", (y) => -cf[y].paidToSuppliersAndEmployees],
+              ["One-off payments", (y) => -cf[y].extraordinaryPayments],
+              ["Tax paid", (y) => -cf[y].taxPaid],
+              ["Operating cash flow", (y) => cf[y].netOperating, "sub"],
+              ["Assets bought", (y) => -cf[y].capex],
+              ["Assets sold", (y) => cf[y].disposalProceeds],
+              ["Investing cash flow", (y) => cf[y].netInvesting, "sub"],
+              ["Money borrowed", (y) => cf[y].debtProceeds],
+              ["Money invested", (y) => cf[y].equityRaised],
+              ["Loan repayments", (y) => -cf[y].debtRepaid],
+              ["Interest paid", (y) => -cf[y].interestPaid],
+              ["Dividends paid", (y) => -cf[y].dividendsPaid],
+              ["Financing cash flow", (y) => cf[y].netFinancing, "sub"],
+              ["Closing cash", (y) => cf[y].closingCash, "total"],
+            ]} num={num} />
+          ) : (
+            <MonthlyStatement monthly={monthly} months={MONTHS} num={num} />
+          )}
+          <Note>
+            {span === "years"
+              ? <>Interest is financing, not operating. Money from selling an asset is investing, never revenue.</>
+              : <>
+                  The twelve add to Year 1 exactly — the column on the right is the same figure the five-year view shows.
+                  Debtors, stock and creditors move across the year on their own driver&rsquo;s shape, so a busy quarter
+                  builds receivables rather than a twelfth arriving each month. Tax is spread the way instalments fall;
+                  a dividend is taken in the last month, once the year&rsquo;s profit is known.
+                </>}
+          </Note>
+          {span === "months" && monthly.negative.length > 0 && (
+            <div className="mt-2 rounded border border-bad/40 bg-bad-soft px-3 py-2 text-[12.5px]">
+              <b className="text-bad">The bank account goes below zero</b>
+              <span className="ml-2 text-muted-foreground">
+                In {monthly.negative.length === 1 ? MONTHS[monthly.negative[0] - 1] : `${monthly.negative.length} months — ${monthly.negative.map((m) => MONTHS[m - 1]).join(", ")}`}.
+                {" "}The year still closes on {num(monthly.total.closingCash)}, which is exactly why the annual column cannot be trusted on its own.
+              </span>
+            </div>
+          )}
         </>
       )}
 
@@ -319,4 +351,107 @@ function MoneyRow({ label, hint, value, onChange, onBlur, pending }: {
       ))}
     </GridRow>
   );
+}
+
+/** Five years, or the twelve months inside the first one. One statement, two spans. */
+function SpanToggle({ span, onSpan }: { span: "years" | "months"; onSpan: (s: "years" | "months") => void }) {
+  return (
+    <div className="ml-auto inline-flex overflow-hidden rounded border border-input">
+      {(["years", "months"] as const).map((k) => (
+        <button key={k} type="button" onClick={() => onSpan(k)}
+          aria-pressed={span === k}
+          className={cn("px-2.5 py-1 text-[12px] leading-none",
+            span === k ? "bg-primary text-primary-foreground font-semibold" : "bg-background text-muted-foreground hover:bg-secondary")}>
+          {k === "years" ? "Five years" : "Year 1 by month"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The twelve months of Year 1, with the year beside them (§6.36). The total column is not decoration: it is
+ * the same figure the five-year view shows in its Year 1 column, so the client can see the two agree instead
+ * of being told they do.
+ */
+function MonthlyStatement({ monthly, months, num }: {
+  monthly: MonthlyCashFlow; months: string[]; num: (v: number) => string;
+}) {
+  const money = (v: number) => (v < 0 ? `(${num(Math.abs(v))})` : v === 0 ? "—" : num(v));
+  const rows: [string, (m: MonthCash) => number, (t: MonthlyCashFlow["total"]) => number, ("head" | "sub" | "total")?][] = [
+    ["Opening cash", (m) => m.openingCash, (t) => t.openingCash, "head"],
+    ["Received from customers", (m) => m.receiptsFromCustomers, (t) => t.receiptsFromCustomers],
+    ["One-off receipts", (m) => m.extraordinaryReceipts, (t) => t.extraordinaryReceipts],
+    ["Paid to suppliers and staff", (m) => -m.paidToSuppliersAndEmployees, (t) => -t.paidToSuppliersAndEmployees],
+    ["One-off payments", (m) => -m.extraordinaryPayments, (t) => -t.extraordinaryPayments],
+    ["Tax paid", (m) => -m.taxPaid, (t) => -t.taxPaid],
+    ["Operating cash flow", (m) => m.netOperating, (t) => t.netOperating, "sub"],
+    ["Assets bought", (m) => -m.capex, (t) => -t.capex],
+    ["Assets sold", (m) => m.disposalProceeds, (t) => t.disposalProceeds],
+    ["Investing cash flow", (m) => m.netInvesting, (t) => t.netInvesting, "sub"],
+    ["Money borrowed", (m) => m.debtProceeds, (t) => t.debtProceeds],
+    ["Money invested", (m) => m.equityRaised, (t) => t.equityRaised],
+    ["Loan repayments", (m) => -m.debtRepaid, (t) => -t.debtRepaid],
+    ["Interest paid", (m) => -m.interestPaid, (t) => -t.interestPaid],
+    ["Dividends paid", (m) => -m.dividendsPaid, (t) => -t.dividendsPaid],
+    ["Financing cash flow", (m) => m.netFinancing, (t) => t.netFinancing, "sub"],
+    ["Movement in cash", (m) => m.netMovement, (t) => t.netMovement, "sub"],
+    ["Closing cash", (m) => m.closingCash, (t) => t.closingCash, "total"],
+  ];
+  return (
+    <Grid className="min-w-[1120px]">
+      <thead><tr>
+        {/* Thirteen columns do not fit a laptop, so the line name stays put while the year scrolls under it. */}
+        <Th style={{ width: 190 }} className="sticky left-0 z-[2] border-r border-input" />
+        {months.map((label, i) => (
+          <Th key={label + i} right style={{ width: 72 }}
+            className={cn(monthly.low.month === i + 1 && "text-foreground")}>
+            {label}{monthly.low.month === i + 1 && <span aria-hidden className="ml-0.5">▼</span>}
+          </Th>
+        ))}
+        <Th right style={{ width: 112 }} className="border-l border-input">Year 1</Th>
+      </tr></thead>
+      <tbody>
+        {rows.map(([label, get, total, weight]) => {
+          const cells = monthly.months.map((m) => get(m));
+          const body = (
+            <>
+              {/* Opaque, and the table's own white — not the page grey — or the pinned column reads as a band. */}
+              <Td className={cn("sticky left-0 z-[1] border-r border-input",
+                weight === "sub" || weight === "total" ? "bg-secondary font-semibold" : "bg-card",
+                weight === "head" && "font-semibold", !weight && "text-muted-foreground")}>{label}</Td>
+              {cells.map((v, i) => (
+                <Td key={i} right className={cn("num", weight && "font-semibold",
+                  v < 0 && "text-bad",
+                  label === "Closing cash" && monthly.months[i].closingCash < 0 && "font-semibold text-destructive")}>
+                  {money(v)}
+                </Td>
+              ))}
+              <Td right className={cn("num border-l border-input font-semibold")}>{money(total(monthly.total))}</Td>
+            </>
+          );
+          // A plain row, not GridRow: its hover tint is translucent, and a translucent pinned cell shows the
+          // months scrolling underneath it. Nothing on a statement is clickable, so the hover bought nothing.
+          return weight === "total"
+            ? <FootRow key={label}>{body}</FootRow>
+            : <tr key={label} className={cn(weight === "sub" && "[&>td]:bg-secondary")}>{body}</tr>;
+        })}
+      </tbody>
+    </Grid>
+  );
+}
+
+/**
+ * What the twelve months actually say, in a sentence that cannot come out meaningless. "Tightest in June" is
+ * no reading at all when June is simply the last month of a year that falls every single month — that is a
+ * business burning cash, and it should be told so.
+ */
+function cashShape(monthly: MonthlyCashFlow, months: string[], num: (v: number) => string) {
+  const closes = monthly.months.map((m) => m.closingCash);
+  const falls = closes.every((v, i) => i === 0 || v <= closes[i - 1]);
+  const rises = closes.every((v, i) => i === 0 || v >= closes[i - 1]);
+  const low = months[monthly.low.month - 1];
+  if (falls) return <>down every month, from {num(closes[0])} to {num(closes[11])}</>;
+  if (rises) return <>up every month, from {num(closes[0])} to {num(closes[11])}</>;
+  return <>closes on {num(monthly.total.closingCash)} · tightest in {low} at {num(monthly.low.closingCash)}</>;
 }

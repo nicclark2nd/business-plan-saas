@@ -5,7 +5,7 @@ import { YEARS } from "@/engine/sales/projection";
 import { planYear1Months, type AnyProduct } from "@/engine/sales/product";
 import { planCogsMonths, type CostProduct } from "@/engine/cogs/direct";
 import { overheadsMonths, planOverheadLines, type Overhead } from "@/engine/overheads/expenses";
-import { assetsMonths, capexByYear, type FixedAsset } from "@/engine/assets/depreciation";
+import { assetsMonths, capexMonths, type FixedAsset } from "@/engine/assets/depreciation";
 import { FundingModule } from "./FundingModule";
 import type { FundingRow } from "./model";
 import { firstProjectedYear } from "@/engine/plan/calendar";
@@ -104,18 +104,15 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
     start_year: Number(a.start_year ?? 1) || 1, start_month: Number(a.start_month ?? 1) || 1,
   })) as FixedAsset[];
   // Buying an asset for cash is money out in the month it arrives; a financed one costs nothing here.
-  const capexMonths = Array(12).fill(0) as number[];
-  for (const a of assetRows) {
-    if (a.source === "finance" || (a.start_year ?? 1) !== 1) continue;
-    capexMonths[(a.start_month ?? 1) - 1] += capexByYear(a)[0];
-  }
+  // The loop that used to sit here now lives with the year it has to agree with (§6.36).
+  const capex = capexMonths(assetRows);
 
   return (
     <FundingModule
       planId={planId} initial={rows} mode={mode}
       openingCash={Number(settings.data?.opening_cash ?? 0)}
       fyEndMonth={settings.data?.financial_year_end_month ?? 6}
-      cash={{ revenueMonths, cogsMonths, overheadsMonths: ohMonths, capexMonths }}
+      cash={{ revenueMonths, cogsMonths, overheadsMonths: ohMonths, capexMonths: capex }}
       year1={{ revenue: revenueYear1, cogs: cogsYear1, overheads: ohYear1, depreciation: assetsMonths(assetRows).reduce((a, b) => a + b, 0) }}
     />
   );

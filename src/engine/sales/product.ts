@@ -61,16 +61,24 @@ const newByYear = (p: AnyProduct) => {
   });
 };
 
-/** Units — jobs, or clients won — in each of the twelve months of Year 1. What a linked line inherits. */
+/**
+ * Units — jobs, or clients won — in each of the twelve months of Year 1. What a linked line inherits.
+ *
+ * A monthly split is WEIGHTS, not percentages that must add to 100 (§6.17), and this divided by 100 while
+ * `monthlySales` — which the same product's revenue goes through — divides by the weights' actual total. So
+ * on any line whose split did not happen to add to exactly 100, revenue by month added to its year and units
+ * by month did not, and cost of sales quietly disagreed with itself: 1,207 out on the live plan, found by the
+ * twelve-months check the moment it went on screen (§6.36). One rule for splitting a year, used by both.
+ */
 export function unitsByMonth(p: AnyProduct): number[] {
   if (firstYearOf(p) > 1) return Array(12).fill(0);
   const y1 = newByYear(p)[0];
   if (recurring(p)) {
+    // Clients won each month are counts the client typed, not shares of a year, so they are taken as given.
     const monthly = Array.from({ length: 12 }, (_, i) => num(p.monthly_new_clients?.[String(i + 1)]));
     return monthly.some((v) => v > 0) ? monthly : Array(12).fill(y1 / 12);
   }
-  const d = normalizeDistribution(p.monthly_distribution);
-  return Array.from({ length: 12 }, (_, i) => r2((y1 * num(d[String(i + 1)])) / 100));
+  return monthlySales(y1, normalizeDistribution(p.monthly_distribution));
 }
 /** Units won in each plan year. */
 export const unitsByYear = (p: AnyProduct) => newByYear(p);

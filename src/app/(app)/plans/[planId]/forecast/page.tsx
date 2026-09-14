@@ -3,8 +3,9 @@ import { getSession } from "@/lib/plan";
 import { loadFundingRows, loadMarketingByYear, loadSalariesByYear } from "@/lib/planSources";
 import { loanOf, rbfOf } from "../funding/model";
 import { ForecastModule } from "./ForecastModule";
-import { assembleBase, assembleOpening, type PlanSources } from "@/engine/forecast/assemble";
+import { assembleBase, assembleMonths, assembleOpening, type PlanSources } from "@/engine/forecast/assemble";
 import { buildForecast } from "@/engine/forecast/model";
+import { buildMonthlyCashFlow, monthlyInvariants } from "@/engine/forecast/monthly";
 import { cashTimingSchedule, daysFromHistory, workingCapitalSchedule } from "@/engine/forecast/assumptions";
 import { firstProjectedYear } from "@/engine/plan/calendar";
 import type { FundingSource } from "@/engine/funding/sources";
@@ -75,22 +76,52 @@ export default async function ForecastPage({ params, searchParams }: {
   const cashTiming = cashTimingSchedule(s?.cash_flow_assumptions);
   const stored = s?.working_capital_schedule as Record<string, unknown> | null | undefined;
 
+  const opening = assembleOpening(h ?? null, num(s?.opening_cash), num(s?.opening_tax_payable));
   const forecast = buildForecast({
     base: assembleBase(sources),
-    opening: assembleOpening(h ?? null, num(s?.opening_cash), num(s?.opening_tax_payable)),
+    opening,
     workingCapital, cashTiming,
     taxRate: Number(s?.tax_rate ?? 25), dividendRate: num(s?.dividend_rate),
   });
 
+  /**
+   * Year 1 month by month (§6.36), off the same annual figures rather than a second reading of the plan:
+   * the opening balances the forecast opened on, the closing balances it computed, and the month series each
+   * module already publishes. The invariants it returns are appended to the strip, so a module whose twelve
+   * months stop adding to its own year fails visibly here rather than drifting quietly.
+   */
+  const monthly = buildMonthlyCashFlow({
+    openingCash: forecast.cashFlow[1].openingCash,
+    opening: {
+      accountsReceivable: opening.accountsReceivable, inventory: opening.inventory,
+      accountsPayable: opening.accountsPayable, prepaid: 0, accrued: 0,
+    },
+    closing: {
+      accountsReceivable: forecast.workingCapital[1].accountsReceivable,
+      inventory: forecast.workingCapital[1].inventory,
+      accountsPayable: forecast.workingCapital[1].accountsPayable,
+      prepaid: forecast.workingCapital[1].prepaid,
+      accrued: forecast.workingCapital[1].accrued,
+    },
+    taxPaid: forecast.cashFlow[1].taxPaid,
+    dividends: forecast.cashFlow[1].dividendsPaid,
+    shapes: assembleMonths(sources),
+  });
+  const checked = {
+    ...forecast,
+    invariants: [...forecast.invariants, ...monthlyInvariants(monthly, forecast.cashFlow[1])],
+  };
+  checked.reconciled = checked.invariants.every((i) => i.passed);
+
   const areas = ["pnl", "cash", "balance", "assumptions"] as const;
   return (
     <ForecastModule
-      planId={planId} mode={mode} forecast={forecast}
+      planId={planId} mode={mode} forecast={checked} monthly={monthly}
       initialArea={areas.includes((area ?? "") as typeof areas[number]) ? (area as typeof areas[number]) : "pnl"}
       workingCapital={workingCapital} cashTiming={cashTiming}
       impliedFromHistory={impliedFromHistory}
       assumptionsSet={!!stored && Object.keys(stored).length > 0}
-      fyEndMonth={fyEndMonth}
+      fyEndMonth={fyEndMonth} firstYear={firstProjectedYear(s?.first_projected_year, fyEndMonth)}
     />
   );
 }

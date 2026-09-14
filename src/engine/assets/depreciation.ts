@@ -114,6 +114,22 @@ export function capexByYear(a: FixedAsset): number[] {
   return out;
 }
 
+/**
+ * What leaves the bank month by month in Year 1 — the asset's own purchase month, nil if it is financed.
+ * The Funding page carried this loop inline; the moment the forecast needed the same twelve months it
+ * became a fact with two computations, so it lives here with the year it has to agree with.
+ */
+export function capexMonths(assets: FixedAsset[]): number[] {
+  const out = Array(12).fill(0) as number[];
+  for (const a of assets) {
+    const cash = capexByYear(a)[0];                 // nil unless this asset is bought for cash in Year 1
+    if (!cash) continue;
+    const m = Math.min(12, Math.max(1, Math.trunc(num(a.start_month)) || 1));
+    out[m - 1] = r2(out[m - 1] + cash);
+  }
+  return out;
+}
+
 export type AssetYear = { year: number; depreciation: number; bookValue: number; capex: number };
 
 /** Every asset in the plan, added up. */
