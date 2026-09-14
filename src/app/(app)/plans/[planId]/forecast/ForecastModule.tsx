@@ -1,0 +1,322 @@
+"use client";
+
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Input } from "@/components/ui/input";
+import { ModuleFrame, ModuleFooter } from "@/components/module/ModuleFrame";
+import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note } from "@/components/module/DataGrid";
+import { useMoney } from "@/components/MoneyProvider";
+import { GUIDED_STEPS } from "@/lib/nav";
+import { cn } from "@/lib/utils";
+import { FORECAST_YEARS, type CashTiming, type Forecast, type WorkingCapitalDays } from "@/engine/forecast/model";
+import { creditorBalance, debtorBalance, inventoryBalance } from "@/engine/forecast/assumptions";
+import { saveAssumptions } from "./actions";
+
+/**
+ * Review forecast (§6.32.3) — profit and loss, cash flow, balance sheet and the assumptions behind them, on
+ * one module bar with a reconciliation strip above all four.
+ *
+ * They are tabs rather than the four separate pages APeX uses, for one reason: **three statements that must
+ * agree belong on one screen.** Every fault this project has had was two views of the same number that never
+ * met, and the forecast is where that is most expensive. The strip says whether they agree before the client
+ * reads a single figure.
+ */
+type AreaKey = "pnl" | "cash" | "balance" | "assumptions";
+const STEP = GUIDED_STEPS.find((s) => s.id === "forecast")?.step ?? 13;
+const box = "h-8";
+
+export function ForecastModule({
+  planId, mode, forecast, initialArea, workingCapital, cashTiming, impliedFromHistory, assumptionsSet, fyEndMonth,
+}: {
+  planId: string; mode: "guided" | "advanced"; forecast: Forecast; initialArea: AreaKey;
+  workingCapital: Record<number, WorkingCapitalDays>; cashTiming: Record<number, CashTiming>;
+  impliedFromHistory: WorkingCapitalDays | null; assumptionsSet: boolean; fyEndMonth: number;
+}) {
+  void fyEndMonth;
+  const num = useMoney();
+  const router = useRouter();
+  const [area, setArea] = useState<AreaKey>(initialArea);
+  const [pending, start] = useTransition();
+  const [wc, setWc] = useState(workingCapital);
+  const [ct, setCt] = useState(cashTiming);
+  const [err, setErr] = useState<string>();
+
+  const failures = forecast.invariants.filter((i) => !i.passed);
+  const pnl = forecast.pnl, cf = forecast.cashFlow, bs = forecast.balanceSheet;
+
+  const save = (nextWc = wc, nextCt = ct) => start(async () => {
+    const r = await saveAssumptions(planId, { workingCapital: nextWc, cashTiming: nextCt });
+    if (!r.ok) setErr(r.error); else { setErr(undefined); router.refresh(); }
+  });
+  const setDays = (year: number, key: keyof WorkingCapitalDays, raw: string) => {
+    const next = { ...wc, [year]: { ...wc[year], [key]: Math.min(365, Math.max(0, Math.round(Number(raw) || 0))) } };
+    setWc(next);
+  };
+  const setTiming = (year: number, key: keyof CashTiming, raw: string) => {
+    const v = Number(raw) || 0;
+    const next = { ...ct, [year]: { ...ct[year], [key]: key === "taxPaidPct" ? Math.min(100, Math.max(0, v)) : Math.max(0, v) } };
+    setCt(next);
+  };
+
+  const revenue = useMemo(() => FORECAST_YEARS.map((y) => pnl[y].revenue), [pnl]);
+  const cogs = useMemo(() => FORECAST_YEARS.map((y) => pnl[y].cogs), [pnl]);
+
+  return (
+    <ModuleFrame
+      step={STEP} total={GUIDED_STEPS.length} group="Forecasts" title="Review forecast"
+      subtitle="Profit, cash and the balance sheet — whether the plan holds together" mode={mode}
+      areas={[
+        { key: "pnl", label: "Profit & loss" },
+        { key: "cash", label: "Cash flow" },
+        { key: "balance", label: "Balance sheet" },
+        { key: "assumptions", label: "Assumptions", tag: assumptionsSet ? undefined : "not set" },
+      ]}
+      area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "Five years" }}
+      footer={<ModuleFooter planId={planId} prevId="extraordinary" formId="forecast-form" />}
+      help={<>
+        <h3>What good looks like</h3>
+        <p><b>Profit &amp; loss</b> — one-off income and costs sit below operating profit and above tax, so a windfall never flatters the trading line and never dodges the tax on it. Selling an asset is not revenue: only the gain or loss against book value appears here.</p>
+        <p><b>Cash flow</b> — interest is financing, not operating; asset proceeds are investing. A profitable business that runs out of cash in month seven is the ordinary way a good plan fails, which is why this is the statement a lender tests hardest.</p>
+        <p><b>Assumptions</b> — debtor days, creditor days and tax timing. Leave them at zero and the forecast assumes every client pays on the day of the job and every bill is settled the same day. That is not conservative, it is the most optimistic cash flow that can be drawn.</p>
+        <h3>Where this goes</h3>
+        <p>All three statements → the business plan, where a bank reads them first. The checks above have to pass before the plan is worth printing.</p>
+      </>}
+    >
+      <form id="forecast-form" className="hidden" />
+      <Reconciled failures={failures} />
+      {err && <Note><span className="text-bad">{err}</span></Note>}
+
+      {area === "pnl" && (
+        <>
+          <Toolbar><Meta className="ml-0">
+            Year 1 revenue {num(pnl[1].revenue)} · gross margin {pnl[1].grossMargin === null ? "—" : `${pnl[1].grossMargin}%`} · net profit {num(pnl[1].netProfit)}
+          </Meta></Toolbar>
+          <Statement rows={[
+            ["Revenue", (y) => pnl[y].revenue, "head"],
+            ["Cost of sales", (y) => -pnl[y].cogs],
+            ["Gross profit", (y) => pnl[y].grossProfit, "sub"],
+            ["Overheads", (y) => -pnl[y].overheads],
+            ["Depreciation", (y) => -pnl[y].depreciation],
+            ["Operating profit", (y) => pnl[y].operatingProfit, "sub"],
+            ["One-off income", (y) => pnl[y].extraordinaryIncome],
+            ["One-off costs", (y) => -pnl[y].extraordinaryExpense],
+            ["Gain on asset sales", (y) => pnl[y].disposalGainLoss],
+            ["Interest", (y) => -pnl[y].interest],
+            ["Profit before tax", (y) => pnl[y].profitBeforeTax, "sub"],
+            ["Tax", (y) => -pnl[y].tax],
+            ["Net profit", (y) => pnl[y].netProfit, "total"],
+            ["Dividends", (y) => -pnl[y].dividends],
+            ["Retained profit", (y) => pnl[y].retainedProfit, "sub"],
+          ]} num={num} />
+        </>
+      )}
+
+      {area === "cash" && (
+        <>
+          <Toolbar><Meta className="ml-0">
+            Year 1 closes on {num(cf[1].closingCash)} · lowest close over five years {num(Math.min(...FORECAST_YEARS.map((y) => cf[y].closingCash)))}
+          </Meta></Toolbar>
+          <Statement rows={[
+            ["Opening cash", (y) => cf[y].openingCash, "head"],
+            ["Received from customers", (y) => cf[y].receiptsFromCustomers],
+            ["One-off receipts", (y) => cf[y].extraordinaryReceipts],
+            ["Paid to suppliers and staff", (y) => -cf[y].paidToSuppliersAndEmployees],
+            ["One-off payments", (y) => -cf[y].extraordinaryPayments],
+            ["Tax paid", (y) => -cf[y].taxPaid],
+            ["Operating cash flow", (y) => cf[y].netOperating, "sub"],
+            ["Assets bought", (y) => -cf[y].capex],
+            ["Assets sold", (y) => cf[y].disposalProceeds],
+            ["Investing cash flow", (y) => cf[y].netInvesting, "sub"],
+            ["Money borrowed", (y) => cf[y].debtProceeds],
+            ["Money invested", (y) => cf[y].equityRaised],
+            ["Loan repayments", (y) => -cf[y].debtRepaid],
+            ["Interest paid", (y) => -cf[y].interestPaid],
+            ["Dividends paid", (y) => -cf[y].dividendsPaid],
+            ["Financing cash flow", (y) => cf[y].netFinancing, "sub"],
+            ["Closing cash", (y) => cf[y].closingCash, "total"],
+          ]} num={num} />
+          <Note>Interest is financing, not operating. Money from selling an asset is investing, never revenue.</Note>
+        </>
+      )}
+
+      {area === "balance" && (
+        <>
+          <Toolbar><Meta className="ml-0">
+            {failures.some((f) => f.key === "balance-sheet-equation")
+              ? <span className="text-bad">The balance sheet does not balance — see the checks above.</span>
+              : <>Balances in every year · Year 5 equity {num(bs[5].equity)}</>}
+          </Meta></Toolbar>
+          <Statement rows={[
+            ["Cash", (y) => bs[y].cash, "head"],
+            ["Debtors", (y) => bs[y].accountsReceivable],
+            ["Stock and work in progress", (y) => bs[y].inventory],
+            ["Prepayments", (y) => bs[y].prepaid],
+            ["Other current assets", (y) => bs[y].otherCurrentAssets],
+            ["Current assets", (y) => bs[y].currentAssets, "sub"],
+            ["Fixed assets", (y) => bs[y].fixedAssets],
+            ["Other non-current assets", (y) => bs[y].otherNonCurrentAssets],
+            ["Total assets", (y) => bs[y].totalAssets, "total"],
+            ["Creditors", (y) => bs[y].accountsPayable],
+            ["Accruals", (y) => bs[y].accrued],
+            ["Tax owing", (y) => bs[y].taxPayable],
+            ["Loans due within a year", (y) => bs[y].debtCurrent],
+            ["Other current liabilities", (y) => bs[y].otherCurrentLiabilities],
+            ["Current liabilities", (y) => bs[y].currentLiabilities, "sub"],
+            ["Loans due later", (y) => bs[y].debtNonCurrent],
+            ["Other non-current liabilities", (y) => bs[y].otherNonCurrentLiabilities],
+            ["Total liabilities", (y) => bs[y].totalLiabilities, "sub"],
+            ["Equity", (y) => bs[y].equity],
+            ["Liabilities and equity", (y) => bs[y].totalLiabilitiesAndEquity, "total"],
+          ]} num={num} />
+        </>
+      )}
+
+      {area === "assumptions" && (
+        <>
+          <Toolbar><Meta className="ml-0">
+            {assumptionsSet
+              ? <>How fast money comes in and goes out. Every figure on the cash flow moves with these.</>
+              : <span className="text-warn">Not set yet — the forecast is using {impliedFromHistory ? "days implied by your history" : "30 days in, 30 days out"}. Check them against how the business actually trades.</span>}
+          </Meta></Toolbar>
+          <Grid>
+            <thead><tr>
+              <Th style={{ width: "28%" }}>Assumption</Th>
+              {FORECAST_YEARS.map((y) => <Th key={y} right style={{ width: 130 }}>Year {y}</Th>)}
+            </tr></thead>
+            <tbody>
+              <DaysRow label="Debtor days" hint="How long clients take to pay. Each day holds this much in debtors."
+                value={(y) => wc[y].debtorDays} onChange={(y, v) => setDays(y, "debtorDays", v)} onBlur={() => save()}
+                worth={(y) => debtorBalance(revenue[y - 1], wc[y].debtorDays)} num={num} pending={pending} />
+              <DaysRow label="Stock days" hint="How long stock and work in progress sit before they are sold."
+                value={(y) => wc[y].inventoryDays} onChange={(y, v) => setDays(y, "inventoryDays", v)} onBlur={() => save()}
+                worth={(y) => inventoryBalance(cogs[y - 1], wc[y].inventoryDays)} num={num} pending={pending} />
+              <DaysRow label="Creditor days" hint="How long you take to pay suppliers. Longer is cash in your pocket."
+                value={(y) => wc[y].creditorDays} onChange={(y, v) => setDays(y, "creditorDays", v)} onBlur={() => save()}
+                worth={(y) => creditorBalance(cogs[y - 1], wc[y].creditorDays)} num={num} pending={pending} />
+              <GridRow>
+                <Td><b>Tax paid in year</b><span className="ml-2 text-[11.5px] text-muted-foreground">What is left is owed at year end.</span></Td>
+                {FORECAST_YEARS.map((y) => (
+                  <Td key={y} right>
+                    <span className="relative block">
+                      <Input inputMode="decimal" disabled={pending} className={cn(box, "num pr-6 text-right")}
+                        value={String(ct[y].taxPaidPct)} onChange={(e) => setTiming(y, "taxPaidPct", e.target.value)} onBlur={() => save()} />
+                      <span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+                    </span>
+                  </Td>
+                ))}
+              </GridRow>
+              <MoneyRow label="Prepayments at year end" hint="Paid in advance — insurance, rent, registrations."
+                value={(y) => ct[y].prepaidClosing} onChange={(y, v) => setTiming(y, "prepaidClosing", v)} onBlur={() => save()} pending={pending} />
+              <MoneyRow label="Accruals at year end" hint="Incurred but not yet billed to you."
+                value={(y) => ct[y].accruedClosing} onChange={(y, v) => setTiming(y, "accruedClosing", v)} onBlur={() => save()} pending={pending} />
+            </tbody>
+          </Grid>
+          <Note>
+            {impliedFromHistory
+              ? <>Your own accounts imply {impliedFromHistory.debtorDays} debtor days, {impliedFromHistory.inventoryDays} stock days and {impliedFromHistory.creditorDays} creditor days. A forecast that assumes better terms than the business has ever achieved is the first thing a lender questions.</>
+              : <>With no history to read, these start at ordinary trade terms. They are assumptions, not facts — change them to what you can actually collect and actually pay.</>}
+          </Note>
+        </>
+      )}
+    </ModuleFrame>
+  );
+}
+
+/** Whether the three statements agree, said before any figure is read rather than buried under them. */
+function Reconciled({ failures }: { failures: Forecast["invariants"] }) {
+  const num = useMoney();
+  if (!failures.length) {
+    return (
+      <div className="mb-2 flex items-center gap-2 rounded border border-good/40 bg-good-soft px-3 py-1.5 text-[12.5px]">
+        <b className="text-good">✓ The statements agree</b>
+        <span className="text-muted-foreground">The balance sheet balances, profit explains the cash, and each year opens where the last one closed — in all five years.</span>
+      </div>
+    );
+  }
+  const byKey = new Map<string, { label: string; years: number[]; worst: number }>();
+  for (const f of failures) {
+    const e = byKey.get(f.key) ?? { label: f.label, years: [], worst: 0 };
+    e.years.push(f.year);
+    if (Math.abs(f.difference) > Math.abs(e.worst)) e.worst = f.difference;
+    byKey.set(f.key, e);
+  }
+  return (
+    <div className="mb-2 rounded border border-bad/40 bg-bad-soft px-3 py-2 text-[12.5px]">
+      <b className="text-bad">The statements do not agree</b>
+      <ul className="mt-1 space-y-0.5 text-muted-foreground">
+        {[...byKey.values()].map((e) => (
+          <li key={e.label}>
+            {e.label} — fails in {e.years.length === 5 ? "every year" : `Year ${e.years.join(", ")}`}, out by {num(Math.abs(e.worst))} at worst
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+type StatementRow = [string, (y: number) => number, ("head" | "sub" | "total")?];
+
+/** Five years across, one line per row. Money out shows in brackets, the convention a lender reads. */
+function Statement({ rows, num }: { rows: StatementRow[]; num: (v: number) => string }) {
+  const money = (v: number) => (v < 0 ? `(${num(Math.abs(v))})` : v === 0 ? "—" : num(v));
+  return (
+    <Grid>
+      <thead><tr>
+        <Th style={{ width: "30%" }} />
+        {FORECAST_YEARS.map((y) => <Th key={y} right style={{ width: 130 }}>Year {y}</Th>)}
+      </tr></thead>
+      <tbody>
+        {rows.map(([label, get, weight]) => weight === "total" ? (
+          <FootRow key={label}>
+            <Td>{label}</Td>
+            {FORECAST_YEARS.map((y) => <Td key={y} right className="num">{money(get(y))}</Td>)}
+          </FootRow>
+        ) : (
+          <GridRow key={label} className={cn(weight === "sub" && "bg-secondary/50")}>
+            <Td className={cn(weight ? "font-semibold" : "text-muted-foreground")}>{label}</Td>
+            {FORECAST_YEARS.map((y) => {
+              const v = get(y);
+              return <Td key={y} right className={cn("num", weight && "font-semibold", v < 0 && "text-bad")}>{money(v)}</Td>;
+            })}
+          </GridRow>
+        ))}
+      </tbody>
+    </Grid>
+  );
+}
+
+/** A number of days, with what that many days is actually worth underneath it. */
+function DaysRow({ label, hint, value, onChange, onBlur, worth, num, pending }: {
+  label: string; hint: string; value: (y: number) => number; onChange: (y: number, v: string) => void;
+  onBlur: () => void; worth: (y: number) => number; num: (v: number) => string; pending: boolean;
+}) {
+  return (
+    <GridRow>
+      <Td><b>{label}</b><span className="ml-2 text-[11.5px] text-muted-foreground">{hint}</span></Td>
+      {FORECAST_YEARS.map((y) => (
+        <Td key={y} right>
+          <Input inputMode="numeric" disabled={pending} className={cn(box, "num text-right")}
+            value={String(value(y))} onChange={(e) => onChange(y, e.target.value)} onBlur={onBlur} />
+          <div className="mt-0.5 text-right text-[11px] text-muted-foreground num">{num(worth(y))}</div>
+        </Td>
+      ))}
+    </GridRow>
+  );
+}
+
+function MoneyRow({ label, hint, value, onChange, onBlur, pending }: {
+  label: string; hint: string; value: (y: number) => number;
+  onChange: (y: number, v: string) => void; onBlur: () => void; pending: boolean;
+}) {
+  return (
+    <GridRow>
+      <Td><b>{label}</b><span className="ml-2 text-[11.5px] text-muted-foreground">{hint}</span></Td>
+      {FORECAST_YEARS.map((y) => (
+        <Td key={y} right>
+          <Input inputMode="decimal" disabled={pending} className={cn(box, "num text-right")}
+            value={String(value(y))} onChange={(e) => onChange(y, e.target.value)} onBlur={onBlur} />
+        </Td>
+      ))}
+    </GridRow>
+  );
+}

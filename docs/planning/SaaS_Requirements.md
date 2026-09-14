@@ -779,3 +779,39 @@ British spelling — programme, licence — for Australia, the UK, New Zealand, 
 *Verified on the plan:* Sales reads **Services · All services · + Service · 10 services · SERVICE · Click a service to open it**, and COGS reads **By service · All services · SERVICE**, from the one Settings field and with no data touched.
 
 **Still on products, deliberately:** Dashboard, Funding, `lib/plan.ts` and the report templates. The reports are the prize — a physiotherapist's plan going to a bank should read *treatments* and *patients* the whole way through — and they are a bigger piece than a label sweep. `UNITS / CLIENTS` on Sales should follow *Type of customer*, and Marketing and Competitors still take `customerWord` as a prop rather than the hook.
+
+## 6.32 The forecast — three statements that have to agree (14 Sep 2026)
+
+Asked for as "let's build the reports". There was nothing to print: `forecast`, `goals` and `reports` were all placeholder routes, and `src/engine/` held sales, cogs, overheads, funding, assets, extraordinary, people, historic and plan — **everything that feeds a forecast and nothing that is one.** Building the report first would have meant either empty financial sections, or computing the forecast inside the report: a second copy of the most important numbers in the app, on the statement a bank reads first.
+
+**Three placements, because they are what a lender checks before anything else.**
+
+- **Extraordinary items sit below operating profit and above tax.** A one-off must not flatter the trading line, and must not dodge the tax on it. The test asserts a 100,000 windfall leaves operating profit *identical* to the next year, moves profit before tax by exactly 100,000, and raises the tax charge.
+- **Disposal proceeds are investing, not operating.** Selling the ute is not revenue; only the gain against book value reaches the P&L. 22,000 of proceeds on an 18,000 book value puts 22,000 in investing, 4,000 in profit, and nothing in revenue.
+- **Interest is a P&L cost and a financing outflow — once each.** The bridge reclassifies it explicitly rather than hoping it cancels.
+
+**Four invariants a year, computed from the finished statements rather than alongside them:** the balance sheet balances, profit explains the cash, the cash flow agrees with the balance sheet, each year opens where the last closed. Twenty checks, each naming its year and what it is out by.
+
+### 6.32.1 The adapter reads; it never recomputes
+
+`assemble.ts` is deliberately dull. Revenue comes from `planRevenueByYear`, cost from `planCogsByYear`, overheads from `planOverheadLines`, interest and debt from `interestByYear` / `loanByYear`, depreciation from `assetsByYear`, one-offs from `extraordinaryByYear` — the same functions the screens display from. A wrong figure is wrong on its own screen too, and both move together when it is fixed.
+
+Three things it decides, because nothing else answers them: the **debt split** (what the schedule retires in the next twelve months is current; Year 5's balance is all current, because a balance outstanding at the end of the plan is due, not deferred), **money raised** bucketed by whether it must be repaid, and a **disposal's book value**, read from `bookValueByYear` on the asset the item names rather than stored on the item where it would go stale.
+
+**The invariants earned their keep before a screen existed.** The first run was out by exactly 250,000 in all five years — cash arriving with no matching liability, because a test loan used the wrong field names and silently produced no schedule. The second caught a real adapter bug: `planRevenueByYear` returns `{year, value}`, so revenue was reading as **zero** — and the statements still reconciled perfectly, because zero is consistent. **Reconciliation proves the statements agree with each other, not that they agree with the plan.** Both tests are needed; both now exist.
+
+### 6.32.2 An unset assumption is not a neutral one
+
+`working_capital_schedule` and `cash_flow_assumptions` have existed since migration 0002 and **nothing had ever written to them.** Read as zero they say: every client pays on the day of the job, every supplier is paid the same day, nothing sits in stock, tax is settled the instant it is incurred. That is not a conservative cash flow — **it is the most optimistic one that can be drawn**, and a profitable business running out of cash in month seven is the ordinary way a good plan fails.
+
+So the defaults are deliberate and stated. A plan with history gets its opening days from what the business actually did — `daysFromHistory` reads them out of the accounts, because a client should not be asked to guess at something their own books answer, and 58 debtor days tells them something true where a round 30 does not. A startup gets ordinary trade terms, visibly labelled as assumptions. **An explicit zero is a real answer; a missing key never is.**
+
+The screen says what a day is worth: *"45 days — 261,276 sitting in debtors"*. "45 debtor days" means nothing to a builder; the balance is the sentence that gets the number changed.
+
+### 6.32.3 One module, four tabs, and the checks above all of them
+
+Tabs rather than the four separate pages APeX uses, for one reason: **three statements that must agree belong on one screen.** The reconciliation strip sits above every tab and says whether they agree *before* the client reads a figure — naming the check, the years it fails in, and the worst amount.
+
+The whole forecast is built on the server and handed down finished, so nothing on the client recomputes any part of it and a figure can never differ between the statement showing it and the check verifying it. `lib/planSources.ts` was extracted at the moment a second page needed the funding rows and the salary totals — the first time two pages need the same rows is the moment to extract them, not the moment to paste them.
+
+**Verified so far:** 172 tests, `tsc`, `eslint`, and a production build carrying the new route. **Not yet verified on real data** — the browser connection dropped before the screen could be opened against BNE Concreting, which is exactly where column names and null shapes usually bite.
