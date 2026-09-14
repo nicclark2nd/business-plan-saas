@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { YEARS, yearlyProjection, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, monthlySales, hasValue, impliedPct, type Growth, type MonthlyDistribution } from "@/engine/sales/projection";
 import { productYears, productYear1Months, productYear1Clients, newClientsYear1, planRevenueByYear, planYear1Months, sourceOf, isLinked, bookNow, monthlyFee, recurring } from "@/engine/sales/product";
 import { useMoney } from "@/components/MoneyProvider";
+import { useProductNoun } from "@/components/VocabularyProvider";
 import { upsertProduct, deleteProduct, continueFromSales } from "./actions";
 import { LIFECYCLE, LIFE_MODE, SOLD_AS, type Product } from "./model";
 
@@ -47,9 +48,12 @@ const firstYear = (r: Pick<Row, "start_selling_year">) => Math.min(5, Math.max(0
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
 const box = "h-8";
 
-export function SalesModule({ planId, initial, mode, initialArea, hasHistory, historicRevenue, historicEnd, productWord, fyEndMonth, currency }: {
-  planId: string; initial: Product[]; mode: "guided" | "advanced"; initialArea: AreaKey; hasHistory: boolean | null; historicRevenue: number | null; historicEnd: string | null; productWord: string; fyEndMonth: number; currency: string;
+export function SalesModule({ planId, initial, mode, initialArea, hasHistory, historicRevenue, historicEnd, fyEndMonth, currency }: {
+  planId: string; initial: Product[]; mode: "guided" | "advanced"; initialArea: AreaKey; hasHistory: boolean | null; historicRevenue: number | null; historicEnd: string | null; fyEndMonth: number; currency: string;
 }) {
+  // What this plan calls a line — Products, Services, Treatments (§6.31.1).
+  const noun = useProductNoun();
+  const many = noun.many.toLowerCase();
   const num = useMoney();
   const MONTHS = planMonths(fyEndMonth);          // the plan's own twelve, not January to December
   const startup = hasHistory === false;
@@ -137,23 +141,23 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [named, sort]);
   const sortLabel = !sort ? null
-    : `${sort.key === "name" ? "product" : sort.key === "current" ? (startup ? "base" : "this year") : `Year ${sort.key}`}, ${sort.key === "name" ? (sort.dir === "asc" ? "A to Z" : "Z to A") : sort.dir === "asc" ? "smallest first" : "largest first"}`;
+    : `${sort.key === "name" ? noun.one : sort.key === "current" ? (startup ? "base" : "this year") : `Year ${sort.key}`}, ${sort.key === "name" ? (sort.dir === "asc" ? "A to Z" : "Z to A") : sort.dir === "asc" ? "smallest first" : "largest first"}`;
 
 
   return (
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group="Financials" title="Sales" subtitle="What you sell, what each line earns and how it grows — this is where the forecast's revenue comes from" mode={mode}
-      areas={[{ key: "products", label: "Products", count: named.length }, { key: "annual", label: "Annual projections" }, { key: "monthly", label: "Monthly projections" }]}
-      area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "All products" }}
-      primaryAction={<Button size="sm" type="button" onClick={add}>+ Product</Button>}
+      areas={[{ key: "products", label: noun.many, count: named.length }, { key: "annual", label: "Annual projections" }, { key: "monthly", label: "Monthly projections" }]}
+      area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: `All ${many}` }}
+      primaryAction={<Button size="sm" type="button" onClick={add}>+ {noun.head}</Button>}
       footer={<ModuleFooter planId={planId} prevId="historic" formId="sales-form" />}
       help={<>
         <h3>What good looks like</h3>
-        <p><b>Products</b> — one line for each thing you sell that a customer would recognise on a quote. Open a product to describe it and set what it sells for and how many you sell{startup ? " in Year 1" : " this year"}; annual sales calculates. Check the total against your accounts before you go further.</p>
-        <p><b>Annual projections</b> — five years of sales per product. The pencil opens the growth dialog: a % change in price and in units for each year, an empty box is 0 %, negative is fine for a line you are winding down, and the dialog shows what the numbers become before you save.</p>
+        <p><b>{noun.many}</b> — one line for each thing you sell that a customer would recognise on a quote. Open a {noun.one} to describe it and set what it sells for and how many you sell{startup ? " in Year 1" : " this year"}; annual sales calculates. Check the total against your accounts before you go further.</p>
+        <p><b>Annual projections</b> — five years of sales per {noun.one}. The pencil opens the growth dialog: a % change in price and in units for each year, an empty box is 0 %, negative is fine for a line you are winding down, and the dialog shows what the numbers become before you save.</p>
         <p><b>Monthly projections</b> — how Year 1 falls across the twelve months. Only the first-year cash flow uses it. Leave it even unless your trade genuinely has a quiet season or a line is launching mid-year.</p>
         <h3>Where this goes</h3>
-        <p>Sales by year → the forecast&apos;s top line, break-even and What-If. Year 1 by month → the twelve-month cash flow. Descriptions → the {productWord} section of the report.</p>
+        <p>Sales by year → the forecast&apos;s top line, break-even and What-If. Year 1 by month → the twelve-month cash flow. Descriptions → the {many} section of the report.</p>
       </>}
     >
       <PendingBridge pending={pending} error={err} />
@@ -163,7 +167,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
         <>
           <Toolbar>
             <Meta className="ml-0">
-              {named.length ? <>{named.length} product{named.length === 1 ? "" : "s"} · {startup ? "Year 1" : "this year"} {num(startup ? totals[0].value : current)}</> : "No products yet"}
+              {named.length ? <>{named.length} {named.length === 1 ? noun.one : many} · {startup ? "Year 1" : "this year"} {num(startup ? totals[0].value : current)}</> : `No ${many} yet`}
               {!startup && historicRevenue !== null && gap !== null && named.length > 0 && (Math.abs(gap) > 10
                 ? <span className="text-warn"> · {gap > 0 ? "+" : ""}{gap.toFixed(0)}% against Historic {historicEnd?.slice(0, 4) ?? ""} revenue {num(historicRevenue)} — a line is missing or a price × units is off</span>
                 : <> · within {Math.abs(gap).toFixed(0)}% of Historic {historicEnd?.slice(0, 4) ?? ""} revenue</>)}
@@ -172,7 +176,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
           </Toolbar>
           <Grid>
             <thead><tr>
-              <SortTh label="Product" sortKey="name" sort={sort} onSort={setSort} />
+              <SortTh label={noun.head} sortKey="name" sort={sort} onSort={setSort} />
               <Th style={{ width: 120 }}>Sold as</Th><Th style={{ width: 120 }}>Lifecycle</Th>
               <Th right style={{ width: 130 }}>Price</Th><Th right style={{ width: 130 }}>Units / clients</Th>
               <SortTh right style={{ width: 150 }} label={startup ? "Year 1 sales" : "Sales this year"} sortKey={startup ? "1" : "current"} sort={sort} onSort={setSort} />
@@ -187,14 +191,14 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
                   <Td right className="num">{recurring(r) ? <>{num(monthlyFee(r))}<span className="text-[11px] text-muted-foreground">/mo</span></> : num(r.average_price)}</Td>
                   <Td right className="num">{recurring(r) ? <>{r.opening_clients || 0} + {Number((years(r)[0].newClients ?? 0).toFixed(2))} new</> : r.units_sold}</Td>
                   <Td right className="num font-semibold">{num(years(r)[0].revenue)}</Td>
-                  <Td className="whitespace-nowrap text-right"><IconButton title="Edit product" onClick={() => setDlg({ kind: "product", key: r._key })}>✎</IconButton><RemoveButton onClick={() => askRemove(r)} /></Td>
+                  <Td className="whitespace-nowrap text-right"><IconButton title={`Edit ${noun.one}`} onClick={() => setDlg({ kind: "product", key: r._key })}>✎</IconButton><RemoveButton onClick={() => askRemove(r)} /></Td>
                 </GridRow>
               ))}
-              {named.length === 0 && <tr><Td colSpan={7} className="h-12 text-muted-foreground">Add your first product — what you sell, what it sells for, how many.</Td></tr>}
+              {named.length === 0 && <tr><Td colSpan={7} className="h-12 text-muted-foreground">Add your first {noun.one} — what you sell, what it sells for, how many.</Td></tr>}
             </tbody>
             {named.length > 0 && <FootRow><Td colSpan={5}>Total</Td><Td right className="num">{num(named.reduce((a, r) => a + years(r)[0].revenue, 0))}</Td><Td /></FootRow>}
           </Grid>
-          <Note>Click a product to open it. Growth and the monthly split are on the next two tabs.</Note>
+          <Note>Click a {noun.one} to open it. Growth and the monthly split are on the next two tabs.</Note>
         </>
       )}
 
@@ -206,7 +210,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
           </Toolbar>
           <Grid>
             <thead><tr>
-              <SortTh label="Product" sortKey="name" sort={sort} onSort={setSort} />
+              <SortTh label={noun.head} sortKey="name" sort={sort} onSort={setSort} />
               <SortTh right style={{ width: 120 }} label={startup ? "Base" : "Current"} sortKey="current" sort={sort} onSort={setSort} />
               {YEARS.map((y) => <SortTh key={y} right style={{ width: 120 }} label={`Year ${y}`} sortKey={String(y)} sort={sort} onSort={setSort} />)}
               <Th style={{ width: 80 }} />
@@ -223,7 +227,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
                   </GridRow>
                 );
               })}
-              {named.length === 0 && <tr><Td colSpan={8} className="h-12 text-muted-foreground">Add products first.</Td></tr>}
+              {named.length === 0 && <tr><Td colSpan={8} className="h-12 text-muted-foreground">Add {many} first.</Td></tr>}
             </tbody>
             {named.length > 0 && <FootRow><Td>Total revenue → forecast</Td><Td right className="num">{num(startup ? 0 : current)}</Td>{totals.map((t) => <Td key={t.year} right className="num">{num(t.value)}</Td>)}<Td /></FootRow>}
           </Grid>
@@ -233,12 +237,12 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
       {area === "monthly" && (
         <>
           <Toolbar>
-            <Meta className="ml-0">Year 1 sales by month — the twelve months the cash flow uses. Pencil to change a product&apos;s split.</Meta>
+            <Meta className="ml-0">Year 1 sales by month — the twelve months the cash flow uses. Pencil to change a {noun.one}&apos;s split.</Meta>
             <SortNote sortLabel={sortLabel} onClear={() => setSort(null)} />
           </Toolbar>
           <Grid>
             <thead><tr>
-              <SortTh style={{ width: "16%" }} label="Product" sortKey="name" sort={sort} onSort={setSort} />
+              <SortTh style={{ width: "16%" }} label={noun.head} sortKey="name" sort={sort} onSort={setSort} />
               {MONTHS.map((m) => <Th key={m} right>{m}</Th>)}
               <SortTh right style={{ width: 100 }} label="Total" sortKey="1" sort={sort} onSort={setSort} />
               <Th style={{ width: 44 }} />
@@ -257,7 +261,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
                   </GridRow>
                 );
               })}
-              {named.length === 0 && <tr><Td colSpan={15} className="h-12 text-muted-foreground">Add products first.</Td></tr>}
+              {named.length === 0 && <tr><Td colSpan={15} className="h-12 text-muted-foreground">Add {many} first.</Td></tr>}
             </tbody>
             {named.length > 0 && <FootRow><Td>Total</Td>{monthTotals.map((v, i) => <Td key={i} right className="num">{num(v)}</Td>)}<Td right className="num">{num(totals[0].value)}</Td><Td /></FootRow>}
           </Grid>
@@ -271,7 +275,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
         const fed = confirm.fed;
         return (
           <ConfirmDelete
-            title={`Delete ${confirm.row.name || "this product"}?`}
+            title={`Delete ${confirm.row.name || `this ${noun.one}`}?`}
             what={<>
               {y1 > 0 && <>It contributes <b>{num(y1)}</b> to Year 1 sales. </>}
               Its price, units, yearly growth, monthly split and cost go with it.

@@ -16,6 +16,7 @@ import { YEARS, evenDistribution, moderateDistribution, rampUpDistribution, norm
 import { sourceOf, recurring, monthlyFee, type AnyProduct } from "@/engine/sales/product";
 import { productCostYears, unitCostByYear, fixedCostByYear, fixedCostMonths, planCogsByYear, currentCost } from "@/engine/cogs/direct";
 import { useMoney } from "@/components/MoneyProvider";
+import { useProductNoun } from "@/components/VocabularyProvider";
 import { saveProductCost, upsertFixedCogs, deleteFixedCogs, continueFromCogs } from "./actions";
 import { type CostedProduct, type FixedCogs } from "./model";
 
@@ -48,6 +49,9 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
   historicRevenue: number | null; historicCogs: number | null; historicEnd: string | null; fyEndMonth: number;
 }) {
   const num = useMoney();
+  // COGS names the same lines Sales does, so it uses the same word (§6.31.1).
+  const noun = useProductNoun();
+  const many = noun.many.toLowerCase();
   const MONTHS = planMonths(fyEndMonth);
   const router = useRouter();
   const [area, setArea] = useState<AreaKey>(initialArea);
@@ -121,19 +125,19 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
   return (
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group="Financials" title="COGS" subtitle="What each sale costs you to deliver — the gap between this and your prices is your gross profit" mode={mode}
-      areas={[{ key: "products", label: "By product", count: priced.length, tag: priced.length - costed > 0 ? `${priced.length - costed} without a cost` : undefined },
+      areas={[{ key: "products", label: `By ${noun.one}`, count: priced.length, tag: priced.length - costed > 0 ? `${priced.length - costed} without a cost` : undefined },
               { key: "fixed", label: "Fixed costs", count: items.filter((i) => i.item_name.trim()).length },
               { key: "monthly", label: "Monthly projections" }]}
-      area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "All products" }}
+      area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: `All ${many}` }}
       primaryAction={area === "fixed" ? <Button size="sm" type="button" onClick={addItem}>+ Fixed cost</Button> : undefined}
       footer={<ModuleFooter planId={planId} prevId="sales" formId="cogs-form" />}
       help={<>
         <h3>What good looks like</h3>
-        <p><b>By product</b> — the cost of delivering one sale, and nothing else. Materials, subcontractors, freight, merchant fees: anything you would not spend if you did not make the sale. A cost follows the way the line is sold — a one-off job costs per job, an ongoing client costs for every month they stay. A line with no direct cost at all, like a royalty, is left at zero and says so.</p>
-        <p><b>Fixed costs</b> are production costs that do not move with volume — a production wage, a yard, plant hire. If it would still be there with no sales at all and it is not part of making the product, it belongs in Overheads instead, or you will count it twice.</p>
+        <p><b>By {noun.one}</b> — the cost of delivering one sale, and nothing else. Materials, subcontractors, freight, merchant fees: anything you would not spend if you did not make the sale. A cost follows the way the line is sold — a one-off job costs per job, an ongoing client costs for every month they stay. A line with no direct cost at all, like a royalty, is left at zero and says so.</p>
+        <p><b>Fixed costs</b> are production costs that do not move with volume — a production wage, a yard, plant hire. If it would still be there with no sales at all and it is not part of making the {noun.one}, it belongs in Overheads instead, or you will count it twice.</p>
         <p>Cost rises work like price rises: an empty box is 0 %, and a line that starts later carries its own first-year cost and rises from the year after.</p>
         <h3>Where this goes</h3>
-        <p>Gross profit → the forecast&apos;s profit and loss and your break-even. Year 1 by month → the twelve-month cash flow. Margin by product → the report, where a lender looks first.</p>
+        <p>Gross profit → the forecast&apos;s profit and loss and your break-even. Year 1 by month → the twelve-month cash flow. Margin by {noun.one} → the report, where a lender looks first.</p>
       </>}
     >
       <PendingBridge pending={pending} error={error ?? items.find((i) => i._error)?._error} />
@@ -143,14 +147,14 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
         <>
           <Toolbar>
             <Meta className="ml-0">
-              {priced.length ? <>Gross margin {pctText(totals[0].margin)} in Year 1 · COGS {num(totals[0].total)} on revenue {num(totals[0].revenue)}</> : "No products yet — add them on Sales"}
+              {priced.length ? <>Gross margin {pctText(totals[0].margin)} in Year 1 · COGS {num(totals[0].total)} on revenue {num(totals[0].revenue)}</> : `No ${many} yet — add them on Sales`}
               {gap !== null && (Math.abs(gap) > 5
                 ? <span className="text-warn"> · {gap > 0 ? "+" : ""}{Math.round(gap)} points against your {historicEnd?.slice(0, 4) ?? ""} margin of {pctText(histMargin)} — a cost is missing or a price is optimistic</span>
                 : <> · in line with your {historicEnd?.slice(0, 4) ?? ""} margin of {pctText(histMargin)}</>)}
             </Meta>
           </Toolbar>
           <Grid>
-            <thead><tr><Th>Product</Th><Th style={{ width: 130 }}>Sold as</Th><Th right style={{ width: 130 }}>Cost</Th><Th right style={{ width: 140 }}>COGS Year 1</Th><Th right style={{ width: 150 }}>Gross profit</Th><Th right style={{ width: 100 }}>Margin</Th><Th style={{ width: 44 }} /></tr></thead>
+            <thead><tr><Th>{noun.head}</Th><Th style={{ width: 130 }}>Sold as</Th><Th right style={{ width: 130 }}>Cost</Th><Th right style={{ width: 140 }}>COGS Year 1</Th><Th right style={{ width: 150 }}>Gross profit</Th><Th right style={{ width: 100 }}>Margin</Th><Th style={{ width: 44 }} /></tr></thead>
             <tbody>
               {priced.map((p) => {
                 const y = productCostYears(p, src(p))[0];
@@ -170,7 +174,7 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
                   </GridRow>
                 );
               })}
-              {priced.length === 0 && <tr><Td colSpan={7} className="h-12 text-muted-foreground">Add products on the Sales step first — their costs are set here.</Td></tr>}
+              {priced.length === 0 && <tr><Td colSpan={7} className="h-12 text-muted-foreground">Add {many} on the Sales step first — their costs are set here.</Td></tr>}
             </tbody>
             {priced.length > 0 && (
               <FootRow>

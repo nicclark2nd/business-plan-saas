@@ -4,6 +4,7 @@ import { getSession, getCompleteness } from "@/lib/plan";
 import { createClient } from "@/lib/supabase/server";
 import { ModeToggle } from "@/components/ModeToggle";
 import { MoneyProvider } from "@/components/MoneyProvider";
+import { VocabularyProvider } from "@/components/VocabularyProvider";
 import { ModeProvider } from "@/components/ModeProvider";
 import { Sidebar } from "@/components/Sidebar";
 import { GUIDED_STEPS } from "@/lib/nav";
@@ -17,7 +18,7 @@ export default async function PlanLayout({ children, params }: { children: React
   const mode = (session.profile?.mode ?? "guided") as "guided" | "advanced";
   const completeness = await getCompleteness(planId);
   const supabase = await createClient();
-  const { data: settings } = await supabase.from("plan_settings").select("currency").eq("plan_id", planId).maybeSingle();
+  const { data: settings } = await supabase.from("plan_settings").select("currency, product_type, customer_type").eq("plan_id", planId).maybeSingle();
   const STATUS: Record<string, string> = { draft: "Working draft", active: "Active", complete: "Complete", archived: "Archived" };
   const doneSteps = GUIDED_STEPS.filter((s) => {
     const sec = completeness.sections.find((x) => x.id === s.id);
@@ -28,6 +29,7 @@ export default async function PlanLayout({ children, params }: { children: React
   return (
     <ModeProvider initial={mode}>
     <MoneyProvider currency={settings?.currency ?? "AUD"}>
+    <VocabularyProvider productType={settings?.product_type ?? null} customerType={settings?.customer_type ?? null}>
     <div className="grid h-screen min-h-[640px] grid-cols-[240px_1fr] grid-rows-[48px_1fr]">
       <header className="col-span-2 flex items-center gap-4 border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground">
         <Link href="/setup" className="flex w-[224px] items-center gap-2.5 font-bold text-white">
@@ -44,6 +46,7 @@ export default async function PlanLayout({ children, params }: { children: React
       <Sidebar planId={planId} doneSteps={doneSteps} />
       <main className="min-h-0 overflow-y-auto">{children}</main>
     </div>
+    </VocabularyProvider>
     </MoneyProvider>
     </ModeProvider>
   );

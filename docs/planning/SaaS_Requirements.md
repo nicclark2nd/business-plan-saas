@@ -763,3 +763,19 @@ British spelling — programme, licence — for Australia, the UK, New Zealand, 
 **Where the rollout must not reach:** Settings itself (*"Type of product sold"* cannot rename itself — circular), and anywhere "product" names the app's own concept rather than the client's thing.
 
 **Raised for the rollout, not yet decided:** the reports are the real prize — a physiotherapist's plan going to a bank should say *patients* and *treatments* all the way through the document; `UNITS / CLIENTS` on Sales should follow *Type of customer*, so that plan reads `UNITS / PATIENTS`; and Sales currently defaults an unset `product_type` to *"Products and services"*, the one value in the old list least able to carry a substitution — it should default to *Products*.
+
+### 6.31.1 The vocabulary goes live on Sales and COGS (14 Sep 2026)
+
+§6.31 fixed the words and wired nothing, which is why the tab still said **Products** on a plan set to **Services**. This connects them.
+
+`VocabularyProvider` hangs off the plan layout beside `MoneyProvider` and for the same reason (§6.30): the layout already loads `plan_settings`, so no page selects these again and no module takes them as props. `useProductNoun()` and `useCustomerNoun()` return the noun **already inflected** — `many`, `one`, `head` — because a caller that has to guess a plural is a caller that will guess wrong.
+
+**Sales, sixteen places:** the tab (*Services*), the scope chip (*All services*), the add button (*+ Service*), the count (*10 services*), the column header on all three tabs (*SERVICE*), the empty states (*No services yet*, *Add your first service*, *Add services first*), the note (*Click a service to open it*), the edit tooltip, the delete title, the sort label, and three sentences of help.
+
+**COGS, eight places**, because it names the same lines Sales does and half-doing it would recreate the very inconsistency being fixed: the tab (*By service*), the scope chip, the column header, the empty states, and three sentences of help.
+
+**`productWord` is gone.** It was threaded from `sales/page.tsx` into the module for one sentence of help text, and it is exactly the shape of duplication §6.30 was about — a fact from the plan, delivered by hand, to one place that happened to need it. The page no longer selects `product_type` at all.
+
+*Verified on the plan:* Sales reads **Services · All services · + Service · 10 services · SERVICE · Click a service to open it**, and COGS reads **By service · All services · SERVICE**, from the one Settings field and with no data touched.
+
+**Still on products, deliberately:** Dashboard, Funding, `lib/plan.ts` and the report templates. The reports are the prize — a physiotherapist's plan going to a bank should read *treatments* and *patients* the whole way through — and they are a bigger piece than a label sweep. `UNITS / CLIENTS` on Sales should follow *Type of customer*, and Marketing and Competitors still take `customerWord` as a prop rather than the hook.
