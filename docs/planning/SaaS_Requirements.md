@@ -893,3 +893,21 @@ The column stays on `plan_settings` — only the screen that owns it moved, so *
 **The rule: Plan settings holds what configures the app — currency, financial year, tax rates, the vocabulary. A narrative belongs with the thing it narrates.**
 
 *Also fixed in passing:* the "all done" message rendered a literal `&apos;` — an HTML entity inside a JavaScript string, which JSX never unescapes — and the missing-field list still carried a rename rule for the field that has just left.
+
+## 6.35 The schema audit — what is stored and never read (14 Sep 2026)
+
+Prompted by §6.34: if one field could sit in the wrong place unnoticed, others could. Every column in every `plan_*` table was checked against whether anything in `src/` reads it. **24 unread columns across built modules, and three whole tables never touched.** Four causes, only one of them dangerous.
+
+*(The first pass reported ten more and was wrong: it counted columns that migration 0006 had already `drop column`-ed. A schema audit that does not replay the migrations is not an audit.)*
+
+**1. A second home for a fact already stored — dropped.** Migration 0016 gave every funding source `start_year` + `start_month` and said why in its own comment: *"APeX stores an absolute start_date. Every other module in this app places money by plan year + month."* The absolute dates stayed behind — `plan_funding_debt.start_date`, `plan_funding_grants.date_received`, `plan_funding_owner.date_injected`, `plan_funding_revenue_linked.start_date`. Alongside them, four columns superseded by §6.20 when financed assets moved to `plan_fixed_assets`: `asset_category`, `asset_purchase_price`, `down_payment`, `depreciation_residual`.
+
+Nothing writes any of them today. **That is the hazard, not the reassurance** — a column nothing writes now is a column something writes later, and then one fact has two answers that disagree. Four faults this fortnight were exactly that.
+
+**2, 3, 4 — left alone.** APeX features never designed in (`auto_draw_enabled`, `draw_schedule`, `min_cash_buffer`, `opening_balance`, `subject_to_approval`, `plan_marketing.positioning`); `plan_settings.months_projecting`, dead and defaulting to **12** while the app forecasts 60, so it would be wrong the moment anything read it; and three tables built in 0006 for screens that were never built — `plan_people_duties`, `plan_people_education`, `plan_people_focus`. People uses only `plan_people_capabilities`; SWOT reads `plan_people_succession`. These are inert rather than contradictory, and dropping a table is not reversible.
+
+**Migration 0020 refuses rather than destroys.** Each column is checked for *meaningful* data before it goes — and meaningful is not "not null": three are `not null default 0`, where every row holds a zero nobody typed, so the test for those is `<> 0`. If any row holds real data the migration raises and names the table, the column and the row count.
+
+*Verified on a scratch Postgres:* with default data only, all eight drop and a second run is silent. With `asset_purchase_price = 90000` present, it dropped five, hit the guard, **and rolled the whole block back** — every column still there, the 90,000 untouched. All-or-nothing, which is what a destructive migration has to be.
+
+**The rule: a column no code reads is not harmless. It is a second answer waiting for someone to ask the question.**
