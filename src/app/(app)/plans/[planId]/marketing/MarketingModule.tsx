@@ -9,6 +9,7 @@ import { GUIDED_STEPS } from "@/lib/nav";
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { cn } from "@/lib/utils";
 import { useMoney } from "@/components/MoneyProvider";
+import { customerNoun } from "@/engine/plan/vocabulary";
 import { formatMonth } from "../people/model";
 import { saveMarket, upsertRow, deleteRow, continueFromMarketing, type RowKind } from "./actions";
 import { MARKET_FIELDS, SPEND_KINDS, SPEND_LABEL, type Market, type MarketingData, type Spend, type Evidence, type SpendKind } from "./model";
@@ -97,7 +98,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
   const spendTotal = rows.spend.reduce((a, s) => a + (Number(s.annual_budget) || 0), 0);
   const anyDirty = marketDirty || (["spend", "evidence"] as GridKind[]).some((k) => (rows[k] as AnyRow[]).some((r) => r._dirty));
   const rowError = (["spend", "evidence"] as GridKind[]).flatMap((k) => rows[k] as AnyRow[]).find((r) => r._error)?._error;
-  const plural = customerWord.endsWith("s") ? customerWord : customerWord + "s";
+  const plural = customerNoun(customerWord).many.toLowerCase();
 
   return (
     <ModuleFrame

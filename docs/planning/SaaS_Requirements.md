@@ -737,3 +737,27 @@ The rupee case is not cosmetic. Indian grouping is in lakh, so a client reading 
 *Verified:* six engine tests, the first of which pins AUD output character-for-character so an Australian plan cannot move. On screen, Sales read identically before and after; the plan was switched to INR and every module regrouped to lakh from that one setting — `21,19,240` — then switched back to AUD and confirmed identical again.
 
 **The rule, twice learned now: if a value comes from the plan, exactly one module may decide what it means. The second copy is already a bug — it is just waiting for a client who is not Australian.**
+
+## 6.31 The plan's own nouns — the word list, before any wiring (14 Sep 2026)
+
+Raised on Settings: *"Type of product sold — the value of this field should be displayed for the tab 'Products', the heading 'Products', and any other value in the app that mentions the word 'Product'."* Right, and the app already half-agreed: `productWord` was threaded into Sales and used in **one sentence** of help text, `customerWord` reached Marketing and Competitors, and nothing else. Nic's own plan was the proof — Settings said **Services**, the tab said **Products**, the column said **PRODUCT**. Three names for one thing, two screens apart.
+
+**The two settings are not the same problem.** All eleven customer types are singular count nouns, so plural is agreement and nothing else. The product types were not.
+
+Sales uses the word in **six grammatical shapes** — tab (plural), column header (singular), button, counted noun (*"10 products"*), scope chip (*"All products"*), and mid-sentence with an article (*"Open a product to describe it"*). COGS adds seven more. Substituting the stored string gives **"+ Produce"**, **"10 produce"** and **"Open a produce to describe it"**. Four of the ten values had no usable singular, and *"Products and services"* had none at all and was far too wide for a dense column.
+
+**A word the app has to inflect cannot be stored as one word.** So each type now carries three: plural, singular, and a column header. Where a type has no natural singular — a mass noun, or a compound — the singular is **"line"**, which is already this app's word for a row that carries figures. Nothing had to be dropped from the list to keep the grammar honest, so coverage went **up**, not down.
+
+**Retired**, each for a better-spoken twin: *Access* (nobody plans in access — Memberships), *Applications* (reads as a form before it reads as software — Subscriptions), *Intellectual Property* (mass noun, too wide — Licences), *Produce* (no singular — Crops). `product_type` is free text, so **no migration and no enum to rebuild** — but a plan saved under an old value must not open with a blank Settings field, so the four are mapped on read (the §6.29 rule: the reader bridges the deploy).
+
+**Added**, because these are what clients actually think in: Jobs (a concreter sells jobs, not products), Projects, Contracts, Subscriptions, Treatments, Courses, Programmes, Licences, Crops. Fifteen values, three general ones first and then alphabetical, because a client hunting for their own word scans rather than reads.
+
+British spelling — programme, licence — for Australia, the UK, New Zealand, Singapore, South Africa and India.
+
+`engine/plan/vocabulary.ts` holds the table and both lookups; Settings derives its two dropdowns from it, and the naive pluraliser that had grown inside `MarketingModule` (`endsWith("s") ? w : w + "s"`) now calls the shared one. Ten tests, the central one asserting **every value reads correctly in all six shapes** — which is precisely the test the old list would have failed.
+
+**Not wired yet, deliberately.** This commit changes the words and nothing else; Nic reviews the list before any module starts using them. **The rule: fix the vocabulary before the rollout, because every screen inherits whatever the list gets wrong.**
+
+**Where the rollout must not reach:** Settings itself (*"Type of product sold"* cannot rename itself — circular), and anywhere "product" names the app's own concept rather than the client's thing.
+
+**Raised for the rollout, not yet decided:** the reports are the real prize — a physiotherapist's plan going to a bank should say *patients* and *treatments* all the way through the document; `UNITS / CLIENTS` on Sales should follow *Type of customer*, so that plan reads `UNITS / PATIENTS`; and Sales currently defaults an unset `product_type` to *"Products and services"*, the one value in the old list least able to carry a substitution — it should default to *Products*.

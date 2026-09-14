@@ -1,3 +1,4 @@
+import { CUSTOMER_NOUNS, PRODUCT_NOUNS } from "@/engine/plan/vocabulary";
 /** Plan settings — three small areas (SaaS §6.12): Business profile · Financial year & tax · Branding. */
 /**
  * Legal structures, grouped the way a lender thinks about liability. Country-specific names are real options,
@@ -46,9 +47,13 @@ export const legalStructuresFor = (country: string | null | undefined): LegalGro
     ...g,
     items: [...g.items].sort((a, b) => Number(!!b.regions?.includes(country ?? "")) - Number(!!a.regions?.includes(country ?? ""))),
   }));
-/** Same lists as APeX, so existing plans read across unchanged. */
-export const CUSTOMER_TYPES = ["Agent", "Client", "Customer", "Distributor", "Franchisee", "Licensee", "Member", "Patient", "Patron", "Reseller", "Subscriber"];
-export const PRODUCT_TYPES = ["Access", "Applications", "Goods", "Intellectual Property", "Livestock", "Memberships", "Produce", "Products", "Products and services", "Services"].map((x) => ({ value: x, label: x }));
+/**
+ * Both lists come from `engine/plan/vocabulary.ts` (§6.31), which holds each type's plural, singular and
+ * column header rather than one word — the two fields decide what the whole app calls a line and a buyer, and
+ * a word the app has to inflect cannot be stored as one word.
+ */
+export const CUSTOMER_TYPES = CUSTOMER_NOUNS;
+export const PRODUCT_TYPES = PRODUCT_NOUNS.map((n) => ({ value: n.many, label: n.many }));
 export const COUNTRIES = ["Australia", "New Zealand", "United States", "United Kingdom", "Canada", "Singapore", "Ireland", "South Africa", "India", "Philippines", "Thailand", "Malaysia", "Indonesia", "Other"];
 export const CURRENCIES = ["AUD", "NZD", "USD", "GBP", "CAD", "SGD", "EUR", "ZAR", "INR", "PHP", "THB", "MYR", "IDR"];
 /** Calendar order here on purpose: this picks *which* month the financial year ends in. */
