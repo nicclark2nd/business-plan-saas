@@ -2,7 +2,7 @@
 export const MARKET_FIELDS = [
   { key: "target_market", label: "Target market", hint: "Who buys, where, and what they have in common. Name the customer and the area.", placeholder: "e.g. Residential builders and owner-builders within 90 minutes of Wollongong pouring 20–200 m² slabs." },
   { key: "market_size", label: "Market size", hint: "How many of them, and roughly what they spend a year. A sourced estimate beats a precise guess.", placeholder: "e.g. ~1,400 residential slab approvals a year in the Illawarra; ~$28M of concreting work." },
-  { key: "market_trends", label: "Market trends", hint: "What is changing that helps or hurts — demand, regulation, technology, costs.", placeholder: "e.g. Knock-down-rebuild growing 12% a year; new slab insulation rules from 2027 favour licensed contractors." },
+  { key: "market_trends", label: "Market trends", hint: "Where demand is heading across the whole market, and why. What one competitor might do belongs in What could change, on the Competitors step.", placeholder: "e.g. Knock-down-rebuild growing 12% a year; new slab insulation rules from 2027 favour licensed contractors." },
   { key: "customer_needs", label: "Customer needs", hint: "What they are actually buying: speed, certainty, price, finish. What they complain about now.", placeholder: "e.g. Turn up when booked; pour within 10 days of site-ready; a quote that is the final price." },
 ] as const;
 export type MarketKey = (typeof MARKET_FIELDS)[number]["key"];
@@ -17,9 +17,9 @@ export const SPEND_LABEL: Record<SpendKind, string> = {
 
 /** Plan-level: the moat and the horizon (SBA competitive analysis §4–5). Stored on plan_marketing. */
 export const POSITION_FIELDS = [
-  { key: "our_advantage", label: "Our advantage", hint: "The exact reason a client chooses you over the rows below. One or two sentences.", placeholder: "e.g. The only local concreter that quotes a fixed price and a fixed pour date, with photo sign-off on every job." },
+  { key: "our_advantage", label: "Our advantage", hint: "Why a customer picks you rather than one of the rows below. It only means something said against them. What you guarantee everyone, competitor or not, is your Brand promise on step 1; what stops them copying you is Barriers to entry, below.", placeholder: "e.g. Builders pick us over Costa because we pour after hours, so their trades are not held up a day." },
   { key: "barriers_to_entry", label: "Barriers to entry", hint: "What stops a competitor copying you next week — licences, relationships, skills, contracts, location.", placeholder: "e.g. QBCC open licence; 11-year builder relationships; exclusive supply deal with Boral for after-hours pours." },
-  { key: "future_threats", label: "What could change", hint: "New entrants, regulation, technology or cost shifts that could hand a competitor an advantage. Seeds the Threats in SWOT.", placeholder: "e.g. National franchise entering Brisbane in 2027; 3D-printed formwork cutting labour on simple slabs." },
+  { key: "future_threats", label: "What could change", hint: "What would let one of the rows above beat you — a new entrant, a licence you lack, a deal you could lose. Where the market as a whole is heading is Market trends, on the Marketing step. Seeds the Threats in SWOT.", placeholder: "e.g. A national franchise opening a Wollongong depot; losing the after-hours supply deal." },
 ] as const;
 export type PositionKey = (typeof POSITION_FIELDS)[number]["key"];
 export type Position = Record<PositionKey, string>;

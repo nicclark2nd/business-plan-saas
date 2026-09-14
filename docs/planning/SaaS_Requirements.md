@@ -911,3 +911,25 @@ Nothing writes any of them today. **That is the hazard, not the reassurance** �
 *Verified on a scratch Postgres:* with default data only, all eight drop and a second run is silent. With `asset_purchase_price = 90000` present, it dropped five, hit the guard, **and rolled the whole block back** — every column still there, the 90,000 untouched. All-or-nothing, which is what a destructive migration has to be.
 
 **The rule: a column no code reads is not harmless. It is a second answer waiting for someone to ask the question.**
+
+### 6.35.1 Four questions that had become one (14 Sep 2026)
+
+The second half of the sweep: reading the narrative fields rather than the schema. Three overlaps, one of them bad.
+
+**"Why a customer picks you" was asked three times, and two of them shared a sentence.** Vision's **Brand promise** offered *"Quoted price is the final price. Slab poured within 10 working days of site ready."*; Competitors' **Our advantage** offered *"…quotes a fixed price and a fixed pour date."* We wrote both examples ourselves, two steps apart. In theory they differ — a promise is what you commit to everyone, an advantage is what a rival cannot match — but nothing in the wording kept them apart, so a client reaching step 4 would reasonably wonder why they were being asked again.
+
+**"What is changing" was asked twice**, and two of the four prompt words were identical: Marketing's **Market trends** said *"demand, regulation, technology, costs"*, Competitors' **What could change** said *"regulation, technology or cost shifts"*. Both feed SWOT Threats.
+
+Both kept — they open different sections of the report — but rewritten so they cannot collapse, and each now **names the other and says where it lives**. A field that can be confused with another should point at it.
+
+**And a lesson in the middle of the fix.** The first rewrite made *Our advantage* read *"what the rows below cannot copy next week — a licence, a relationship, a contract, a location"* — which is **Barriers to entry**, the field directly beneath it on the same screen. One overlap removed, a worse one created, between adjacent fields. Caught by reading the finished screen rather than the diff.
+
+The three now divide cleanly, and each says so:
+
+- **Brand promise** — what you guarantee everyone, competitor or not.
+- **Our advantage** — why a customer picks you rather than one of these rows.
+- **Barriers to entry** — what stops them copying it.
+
+**Left alone:** Vision's *Field of play* against Marketing's *Target market* — both examples say "within 90 minutes of Wollongong", but one is what work you take and the other is who buys. Different questions that happen to share an answer's shape. And Mission still overlaps the products & services statement moved in §6.34; moving it found it a sensible home, it did not resolve the overlap.
+
+**The rule: when two fields could take the same answer, the fix is not to delete one — it is to make each say what the other is for.**
