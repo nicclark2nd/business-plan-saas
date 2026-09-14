@@ -47,11 +47,18 @@ describe("product nouns", () => {
     expect(productNoun("Treatments").one).toBe("treatment");
   });
 
+  it("names the line, never one sale — the mistake Jobs made", () => {
+    // A row is a line with a units count beside it: "Driveways", 30. Any noun here has to be the word for
+    // the LINE, because the units column already counts the sales.
+    expect(PRODUCT_NOUNS.map((n) => n.many)).not.toContain("Jobs");
+  });
+
   it("carries a retired value to its replacement rather than blanking the field", () => {
     expect(productNoun("Access").many).toBe("Memberships");
     expect(productNoun("Applications").many).toBe("Subscriptions");
     expect(productNoun("Intellectual Property").many).toBe("Licences");
     expect(productNoun("Produce").many).toBe("Crops");
+    expect(productNoun("Jobs").many).toBe("Services");
   });
 
   it("lands on Products for missing, unknown or malformed", () => {

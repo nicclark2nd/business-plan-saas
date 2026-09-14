@@ -41,7 +41,6 @@ export const PRODUCT_NOUNS: Noun[] = [
   { many: "Courses", one: "course", head: "Course" },
   { many: "Crops", one: "crop", head: "Crop" },
   { many: "Goods", one: "line", head: "Line" },
-  { many: "Jobs", one: "job", head: "Job" },
   { many: "Licences", one: "licence", head: "Licence" },
   { many: "Livestock", one: "line", head: "Line" },
   { many: "Memberships", one: "membership", head: "Membership" },
@@ -65,6 +64,10 @@ const RETIRED: Record<string, string> = {
   "Applications": "Subscriptions",
   "Intellectual Property": "Licences",
   "Produce": "Crops",
+  // Offered for a day and withdrawn: "job" names one SALE, not one line. A concreter's row is "Driveways"
+  // with 30 in the units column — thirty jobs of one job. It also collides with employment, which is exactly
+  // how a lender or a grant assessor reads the word, in the document this vocabulary exists to improve.
+  "Jobs": "Services",
 };
 
 const DEFAULT_PRODUCT = PRODUCT_NOUNS[0];
