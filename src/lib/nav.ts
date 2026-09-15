@@ -17,25 +17,40 @@ export const NAV: NavGroup[] = [
     { id: "overheads", label: "Overheads", step: 9 }, { id: "funding", label: "Funding", step: 10 },
     { id: "assets", label: "Fixed Assets", step: 11 },
     { id: "extraordinary", label: "One-off income & costs", step: 12 },
+    /**
+     * An input, filed with the inputs (§6.43.1). Debtor, stock and creditor days sat in the Forecasts group,
+     * which is a list of things the plan PRODUCES — and they are a thing the client TYPES. It was the only
+     * input in that group, which is exactly why it read as not belonging.
+     *
+     * It lands on the forecast module's fourth tab, because that is where the grid lives and three
+     * statements that must agree still belong on one screen. The client does not know or care which module
+     * owns it; they know that what they type lives under Financials.
+     *
+     * A tool rather than a step: the guided path already walks through these at step 13, so this is the
+     * door for somebody who wants to change them again afterwards and would never think to look behind a
+     * menu item called Profit & Loss.
+     */
+    { id: "assumptions", label: "Assumptions", href: "forecast?area=assumptions", tool: true },
     { id: "what-if", label: "What-If Planner", tool: true },
   ] },
   /**
-   * Four of these are one module (§6.43). Review forecast holds the profit and loss, the cash flow, the
-   * balance sheet and the assumptions on one module bar, because three statements that must agree belong on
-   * one screen. But the left menu listed Balance Sheet and Cash Flow as items of their own pointing at
-   * routes that do not exist, so a client clicking either was told the module was "next in the build queue"
-   * while the real thing sat behind an item labelled Profit & Loss. Assumptions was not listed at all —
-   * the one place debtor, stock and creditor days can be edited for all five years, reachable only by
-   * opening Profit & Loss and finding a fourth tab.
+   * Five outputs, and nothing else (§6.43.1). Everything in this group is something the plan PRODUCES, which
+   * is what makes it a group — the assumptions behind the cash flow are an input and have moved up to
+   * Financials with the rest of the inputs.
    *
-   * `href` deep-links each name to the tab it actually opens. The menu now says what is there, and every
-   * item lands on the thing it is named after.
+   * Three of the five are one module. Review forecast holds the profit and loss, the cash flow and the
+   * balance sheet on one module bar, because three statements that must agree belong on one screen (§6.32.3)
+   * — but the menu used to list Balance Sheet and Cash Flow as items pointing at routes that do not exist,
+   * so a client clicking either was told the module was "next in the build queue" while the real thing sat
+   * behind an item labelled Profit & Loss.
+   *
+   * `href` deep-links each name to the tab it opens. The module bar stays: it switches instantly, with no
+   * round trip, which is what somebody comparing two statements is doing all afternoon.
    */
   { group: "Forecasts", items: [
     { id: "forecast", label: "Review forecast", step: 13, advancedLabel: "Profit & Loss" },
     { id: "cash-flow", label: "Cash Flow", href: "forecast?area=cash" },
     { id: "balance-sheet", label: "Balance Sheet", href: "forecast?area=balance" },
-    { id: "assumptions", label: "Assumptions", href: "forecast?area=assumptions" },
     { id: "break-even", label: "Break-Even" }, { id: "unit-economics", label: "Unit Economics" },
   ] },
   { group: "Strategy (AI)", items: [{ id: "strategy", label: "Recommendations", tag: "soon" }] },

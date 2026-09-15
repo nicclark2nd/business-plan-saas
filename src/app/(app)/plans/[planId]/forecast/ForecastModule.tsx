@@ -40,11 +40,37 @@ export function ForecastModule({
   const num = useMoney();
   const router = useRouter();
   const [area, setArea] = useState<AreaKey>(initialArea);
+  /**
+   * The area lives in two places and they have to agree (§6.43.1).
+   *
+   * The module bar switches instantly on client state, with no round trip — which is the point of it, for
+   * somebody comparing two statements all afternoon. The left menu deep-links to the same four tabs by name.
+   * Those two were fighting: clicking "Cash Flow" in the menu is a navigation within the SAME route, so
+   * React kept the component mounted and `useState` kept whatever tab was already showing. The menu item
+   * appeared to do nothing.
+   *
+   * So the URL follows the bar and the bar follows the URL. Both directions are needed, and the first has to
+   * go through the ROUTER rather than `history.replaceState`: a shallow URL change leaves Next still
+   * believing it is on the old one, so the next menu click to that address is treated as a no-op navigation
+   * and the server component never re-renders. The tab switch still feels instant because local state has
+   * already moved; the router catches up behind it.
+   *
+   * Adjusted during render rather than in an effect: React re-runs this component before touching the DOM,
+   * so the right tab paints first time instead of flashing the old one.
+   */
+  const [cameFrom, setCameFrom] = useState(initialArea);
+  if (initialArea !== cameFrom) { setCameFrom(initialArea); setArea(initialArea); }
+  const goArea = (k: AreaKey) => {
+    setArea(k);
+    const q = k === "pnl" ? "" : `?area=${k}`;
+    startNav(() => router.replace(`/plans/${planId}/forecast${q}`, { scroll: false }));
+  };
   // The cash flow is the one statement with two useful spans: the five years a lender reads, and the twelve
   // months that decide whether the business survives to year two.
   const [span, setSpan] = useState<"years" | "months">("years");
   const MONTHS = useMemo(() => planMonths(fyEndMonth), [fyEndMonth]);
   const [pending, start] = useTransition();
+  const [, startNav] = useTransition();
   const [wc, setWc] = useState(workingCapital);
   const [ct, setCt] = useState(cashTiming);
   const [err, setErr] = useState<string>();
@@ -79,7 +105,7 @@ export function ForecastModule({
         { key: "balance", label: "Balance sheet" },
         { key: "assumptions", label: "Assumptions", tag: assumptionsSet ? undefined : "not set" },
       ]}
-      area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "Five years" }}
+      area={area} onArea={(k) => goArea(k as AreaKey)} scope={{ label: "Five years" }}
       footer={<ModuleFooter planId={planId} prevId="extraordinary" formId="forecast-form" />}
       help={<>
         <h3>What good looks like</h3>
