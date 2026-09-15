@@ -28,14 +28,29 @@ export type Overhead = {
   gst_applies?: boolean | null;        // false where no tax is charged — rates, bank fees (§6.38)
 };
 
-/** A typed expense: the value grows from its start year, exactly as a price or a cost does. */
+/**
+ * A typed expense across the five years (§6.47).
+ *
+ * `current_value` IS the expense in its first plan year — Year 1 for a line running from the start — and the
+ * later years grow from it, exactly as a product's price and units do. Year 1 is the first PROJECTED year,
+ * so there is nothing before it to grow from and it has no change of its own.
+ *
+ * It used to apply `yearly_change["1"]` on top for a line starting in Year 1, which put a sixth year in front
+ * of the five: the same field meant "this year, before the plan" here and "Year 1" in Sales. Migration 0025
+ * folds that change into the amount, so no plan's figures move.
+ *
+ * The `["1"]` branch is kept because the READER bridges the deploy (§6.29): the code ships before the
+ * migration runs, and a plan still carrying a Year 1 change would otherwise lose it between the two — on a
+ * live plan that is Year 1 overheads quietly dropping by whatever was typed there. After 0025 no row has the
+ * key, nothing can create one (the box is gone), and this branch can be deleted in a later release.
+ */
 export function enteredByYear(o: Overhead): number[] {
   const start = Math.min(5, Math.max(1, Math.trunc(num(o.start_year)) || 1));
   let v = num(o.current_value);
   return YEARS.map((year) => {
     if (year < start) return 0;
     if (year > start) v = v * (1 + num(o.yearly_change?.[String(year)]) / 100);
-    else if (start === 1) v = v * (1 + num(o.yearly_change?.["1"]) / 100);
+    else if (start === 1) v = v * (1 + num(o.yearly_change?.["1"]) / 100);   // pre-0025 rows only
     return r2(v);
   });
 }

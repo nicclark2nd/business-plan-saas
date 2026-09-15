@@ -101,29 +101,18 @@ describe("what a scenario would actually change (§6.45)", () => {
   });
 
   /**
-   * The column headed "This year" is what the business spends NOW. A plan to cut overheads a tenth is not a
-   * claim about today's rent, so it goes in Year 1's change box — which the Overheads screen shows and the
-   * engine honours.
+   * An overhead's amount is its Year 1 figure, the same as a product's price (§6.47) — so a Year 1 cut moves
+   * the amount, and there is no sixth year sitting in front of the five for it to hide in.
    */
-  it("cuts overheads in Year 1's change box, not in what the business spends today", () => {
+  it("cuts a Year 1 overhead in the amount itself, the same shape a product has", () => {
     const c = planned(levers({ overheads: -10 })).changes.find((x) => x.table === "plan_overheads")!;
-    expect(c.field).toBe("yearly_change.1");
-    expect(c.unit).toBe("percent");
-    expect(c.from).toBe(0);
-    expect(c.to).toBe(-10);
-    // `current_value` is left exactly alone.
-    expect(planned(levers({ overheads: -10 })).changes.some((x) => x.field === "current_value")).toBe(false);
+    expect(c.field).toBe("current_value");
+    expect(c.unit).toBe("money");
+    expect(c.from).toBe(60000);
+    expect(c.to).toBe(54000);
   });
 
-  it("compounds with a change the client already typed, because that is what happens to the money", () => {
-    const withChange = sources({
-      overheads: [{ id: "o1", name: "Rent", source: "entered", current_value: 60000, yearly_change: { "1": 2 }, start_year: 1, monthly_distribution: null }],
-    });
-    // 2 % already, then a 10 % cut: 1.02 × 0.90 = 0.918, so −8.2 %, not −8 %.
-    expect(find(levers({ overheads: -10 }), "Rent", "yearly_change.1", withChange)!.to).toBe(-8.2);
-  });
-
-  it("a line that starts later has no working box for its own first year, so its amount moves", () => {
+  it("a line that starts later moves its own first year, whichever year the scenario names", () => {
     const later = sources({
       overheads: [{ id: "o1", name: "Second yard", source: "entered", current_value: 40000, yearly_change: {}, start_year: 3, monthly_distribution: null }],
     });
@@ -140,7 +129,7 @@ describe("what a scenario would actually change (§6.45)", () => {
    */
   it("recording the cut as a percentage gives the same years as scaling the amount", () => {
     const own = sources({
-      overheads: [{ id: "o1", name: "Rent", source: "entered", current_value: 60000, yearly_change: { "1": 2, "2": 3 }, start_year: 1, monthly_distribution: null }],
+      overheads: [{ id: "o1", name: "Rent", source: "entered", current_value: 60000, yearly_change: { "2": 3 }, start_year: 1, monthly_distribution: null }],
       salaries: [0, 0, 0, 0, 0], marketing: [0, 0, 0, 0, 0],
     });
     const l = levers({ overheads: -10 });

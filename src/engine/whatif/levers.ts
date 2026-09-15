@@ -191,16 +191,12 @@ export function applyLevers(sources: PlanSources, levers: Levers, from: StartYea
     ...sources,
     products,
     costProducts,
-    /**
-     * An overhead's `current_value` is the column headed "This year", and Year 1 has its own change box that
-     * the engine honours — so for a line running from Year 1 the change lands in a box, and only a line that
-     * starts later (whose first year IS its amount) moves the amount itself.
-     */
+    /** An overhead's amount is its first plan year, the same shape a product has (§6.47). */
     overheads: overheads === 1 ? sources.overheads : sources.overheads.map((o) => {
-      const first = Math.min(5, Math.max(1, Math.trunc(n(o.start_year)) || 1));
-      const year = Math.max(from, first);
-      if (year === first && first > 1) return { ...o, current_value: n(o.current_value) * overheads };
-      return { ...o, yearly_change: { ...(o.yearly_change ?? {}), [String(year)]: compound(o.yearly_change?.[String(year)], overheads) } };
+      const at = lands(o.start_year);
+      return at.isBase
+        ? { ...o, current_value: n(o.current_value) * overheads }
+        : { ...o, yearly_change: { ...(o.yearly_change ?? {}), [String(at.year)]: compound(o.yearly_change?.[String(at.year)], overheads) } };
     }),
     salaries: scale(sources.salaries),
     marketing: scale(sources.marketing),

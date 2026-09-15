@@ -14,14 +14,9 @@
  * **Units keep the shape the client typed.** Somebody who entered 12 driveways should not open Sales to find
  * 13.44 of them; somebody who entered 12.5 tonnes keeps the halves. So a whole number stays whole.
  *
- * **It writes the change where the module keeps changes.** An overhead's `current_value` is what the business
- * spends THIS year, with its own column on the screen and five plan years beside it — so a plan to cut
- * overheads by a tenth does not belong there. It belongs in Year 1's % change box, which the engine already
- * honours, combined with whatever the client has typed. Rewriting `current_value` restated what they spend
- * today, which is a fact about the business and not the plan's to change.
- *
- * A product is the other shape: its price and units ARE its Year 1 figures — the growth dialog says so and
- * gives Year 1 no box — so for a product the base IS where a Year 1 change lives.
+ * **Every module keeps its first-year figure the same way** (§6.47). A product's price and units and an
+ * overhead's amount are all that line's FIRST PLAN YEAR — Year 1 for anything running from the start — so a
+ * Year 1 change moves the figure itself. Only a change aimed at a later year goes into that year's % box.
  *
  * **What it cannot reach, it says.** The overheads lever moves the rows in `plan_overheads`, and a plan's
  * overheads are not only those rows: the People line is each person's salary in the Leadership Team and
@@ -156,24 +151,17 @@ export function plannedChanges(sources: PlanSources, levers: Levers, at: Levers,
       const id = String(o.id ?? "");
       const row = o.name || "Unnamed cost";
       const at = landsIn(o.start_year, from);
-      if (!(at.isBase && at.year > 1)) {
-        /**
-         * Year 1 has its own % change box on the Overheads screen and the engine honours it, so that is
-         * where a Year 1 change belongs — combined with whatever is already typed there. `current_value` is
-         * the column headed "This year": what the business spends NOW, which is a fact about the business
-         * and not the plan's to rewrite.
-         *
-         * Compounded, not added: 2 % already there and a 5 % cut is 0.98 × 0.95, not 3 % off.
-         */
+      if (at.isBase) {
+        // The line's own first year IS its amount, the same shape a product has (§6.47).
+        push({ table: "plan_overheads", id, row, field: "current_value", label: "Cost a year", unit: "money", from: n(o.current_value), to: round(n(o.current_value) * overheads, 2) });
+      } else {
+        // A later year has a % box; compounded with what is typed there, because 2 % then a 5 % cut is
+        // 1.02 × 0.95 rather than 3 % off.
         const existing = n((o.yearly_change as Record<string, number> | null | undefined)?.[String(at.year)]);
         push({
           table: "plan_overheads", id, row, field: `yearly_change.${at.year}`, label: `Year ${at.year} change`, unit: "percent",
           from: round(existing, 2), to: round(compoundPct(existing, overheads), 2),
         });
-      } else {
-        // A line that starts later has no working box for its own first year: that year IS `current_value`,
-        // the same shape a product has.
-        push({ table: "plan_overheads", id, row, field: "current_value", label: "Cost a year", unit: "money", from: n(o.current_value), to: round(n(o.current_value) * overheads, 2) });
       }
     }
   }

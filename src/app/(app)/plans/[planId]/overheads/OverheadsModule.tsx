@@ -67,16 +67,6 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
   const lines: Row[] = [syncedFor("people"), syncedFor("marketing"), ...entered];
   const valuesFor = (r: Row) => r.source === "entered" ? enteredByYear(r as Overhead) : overheadByYear(r as Overhead, syncedValues(r.source as "people" | "marketing"));
   const totals = overheadsByYear(lines.map((r) => ({ o: r as Overhead, synced: r.source === "entered" ? null : syncedValues(r.source as "people" | "marketing") })), onCost);
-  /** Today's figures, on-costs included, so the "This year" column is the same shape as the years beside it. */
-  const thisYear = (() => {
-    let wages = 0, other = 0;
-    for (const r of lines) {
-      const v = r.source === "entered" ? r.current_value : valuesFor(r)[0];
-      if (r.on_cost || r.source === "people") wages += v; else other += v;
-    }
-    const onCosts = Math.round(wages * (Math.max(0, onCost) / 100) * 100) / 100;
-    return { wages, other, onCosts, total: Math.round((wages + onCosts + other) * 100) / 100 };
-  })();
 
   const saveRow = (r: Row) => {
     const key = r._key;
@@ -152,7 +142,9 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
       </Toolbar>
 
       <Grid>
-        <thead><tr><Th>Expense</Th><Th right style={{ width: 120 }}>This year</Th>{YEARS.map((y) => <Th key={y} right style={{ width: 110 }}>Year {y}</Th>)}<Th style={{ width: 80 }} /></tr></thead>
+        {/* Five years, not six. An overhead's amount IS its Year 1 figure, the same as a product's price
+            (§6.47) — the old "This year" column put a year in front of Year 1 that the plan does not have. */}
+        <thead><tr><Th>Expense</Th>{YEARS.map((y) => <Th key={y} right style={{ width: 110 }}>Year {y}</Th>)}<Th style={{ width: 80 }} /></tr></thead>
         <tbody>
           {lines.map((r) => {
             const synced = r.source !== "entered";
@@ -169,7 +161,6 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
                   {r.on_cost && <span className="ml-2 text-[11px] text-muted-foreground">+ on-costs</span>}
                   {!synced && r.start_year > 1 && <span className="ml-2 text-[11px] text-muted-foreground">from Year {r.start_year}</span>}
                 </Td>
-                <Td right className="num text-muted-foreground">{synced ? num(v[0]) : num(r.current_value)}</Td>
                 {v.map((x, i) => <Td key={i} right className="num">{num(x)}</Td>)}
                 <Td className="whitespace-nowrap text-right">
                   {!synced && <IconButton title="Edit expense" onClick={() => setDlg({ kind: "expense", key: r._key })}>✎</IconButton>}
@@ -182,7 +173,6 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
         </tbody>
         <FootRow>
           <Td>Total overheads{onCost > 0 && <span className="ml-2 font-normal text-muted-foreground">including {onCost}% on-costs</span>}</Td>
-          <Td right className="num">{num(thisYear.total)}</Td>
           {totals.map((t) => <Td key={t.year} right className="num">{num(t.total)}</Td>)}
           <Td />
         </FootRow>
@@ -268,7 +258,7 @@ function ExpenseDialog({ r, onSave, onClose }: { r: Row; onSave: (r: Row) => voi
         <form className="grid gap-4" onSubmit={(e) => { e.preventDefault(); if (ok) onSave(d); }}>
           <div className="grid grid-cols-4 gap-3">
             <div className="col-span-2"><label className={label}>What it is</label><Input autoFocus value={d.name} placeholder="e.g. Rent" onChange={(e) => setD((x) => ({ ...x, name: e.target.value }))} className={box} /></div>
-            <div><label className={label}>Cost a year</label><Input inputMode="decimal" value={d.current_value ? num(d.current_value) : ""} placeholder="0" onChange={(e) => setD((x) => ({ ...x, current_value: parseNum(e.target.value) }))} className={cn(box, "num text-right")} /></div>
+            <div><label className={label}>Cost in {(d.start_year || 1) === 1 ? "Year 1" : `Year ${d.start_year}`}</label><Input inputMode="decimal" value={d.current_value ? num(d.current_value) : ""} placeholder="0" onChange={(e) => setD((x) => ({ ...x, current_value: parseNum(e.target.value) }))} className={cn(box, "num text-right")} /></div>
             <div><label className={label}>Starts in</label><FieldSelect value={String(d.start_year || 1)} options={START_OPTIONS} onValueChange={(v) => setD((x) => ({ ...x, start_year: Number(v) }))} /></div>
           </div>
           <label className="flex items-center gap-2 text-[13px]">
@@ -285,12 +275,16 @@ function ExpenseDialog({ r, onSave, onClose }: { r: Row; onSave: (r: Row) => voi
               <div className="text-[12.5px] font-semibold">Change</div>
               {YEARS.map((y) => (
                 <div key={y}>
-                  {y < d.start_year
+                  {y < (d.start_year || 1)
                     ? <div className={cn(box, "flex items-center justify-end pr-2 text-xs text-muted-foreground/70")}>—</div>
-                    : <span className="relative block">
+                    : y === (d.start_year || 1)
+                      /* The line's own first year is the figure above; there is nothing before it to grow
+                         from, which is what the Sales growth dialog says about a product (§6.47). */
+                      ? <div className={cn(box, "flex items-center justify-end pr-2 text-[11px] text-muted-foreground/70")}>base year</div>
+                      : <span className="relative block">
                         <Input inputMode="text" value={g(y)} onChange={(e) => setG(y, e.target.value)} className={cn(box, "num pr-6 text-right")} />
                         <span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
-                      </span>}
+                        </span>}
                   <div className="pr-1.5 text-right text-[11px] text-muted-foreground num">{years[y - 1] ? num(years[y - 1]) : "—"}</div>
                 </div>
               ))}
