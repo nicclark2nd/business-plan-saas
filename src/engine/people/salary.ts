@@ -56,15 +56,12 @@ export function tenureLabel(startedOn: Date | string | null | undefined, fyStart
  * all follow, so every screen in the app can say one sentence: the figure is the first year, the percentages
  * start after it.
  */
-export function salaryForYear(baseSalary: number, adjustments: SalaryAdjustments | null | undefined, startYear: unknown, year: number): number {
+export function salaryForYear(firstYearSalary: number, adjustments: SalaryAdjustments | null | undefined, startYear: unknown, year: number): number {
   const target = normalizeStartYear(year);
   const start = Math.trunc(Number(startYear)) || 1;
   if (start > 5 || target < start) return 0;
-  let salary = Number(baseSalary) || 0;
-  // The loop opens ON the start year rather than after it, so rows not yet folded by migration 0026 keep the
-  // figures they had. The deploy bridge (§6.29): once every plan is migrated the start year's key is gone and
-  // the first pass multiplies by 1, and this can begin at `start + 1`.
-  for (let y = Math.max(1, start); y <= target; y++) salary *= 1 + (Number(adjustments?.[String(y)]) || 0) / 100;
+  let salary = Number(firstYearSalary) || 0;
+  for (let y = Math.max(1, start) + 1; y <= target; y++) salary *= 1 + (Number(adjustments?.[String(y)]) || 0) / 100;
   return Number(salary.toFixed(2));
 }
 
@@ -72,9 +69,14 @@ export function salarySchedule(baseSalary: number, adjustments: SalaryAdjustment
   return SALARY_YEARS.map((year) => ({ year, value: salaryForYear(baseSalary, adjustments, startYear, year) }));
 }
 
-/** APeX "Total Increase From Base": Year 5 salary minus the base salary, and that as a % of base. */
-export function scheduleChangeFromBase(baseSalary: number, adjustments: SalaryAdjustments | null | undefined, startYear: unknown) {
-  const base = Number(baseSalary) || 0;
+/**
+ * Year 5 against the person's FIRST year, and that as a percentage of it — the "Y5 vs first year" column.
+ * APeX called this "Total Increase From Base", where the base was a salary sitting before the plan began.
+ * There is no such year (§6.48): the first figure is Year 1 for someone already employed, and the year they
+ * join for a planned hire.
+ */
+export function scheduleChangeFromFirstYear(firstYearSalary: number, adjustments: SalaryAdjustments | null | undefined, startYear: unknown) {
+  const base = Number(firstYearSalary) || 0;
   const year5 = salaryForYear(base, adjustments, startYear, 5);
   const delta = Number((year5 - base).toFixed(2));
   return { delta, percent: base ? Number(((delta / base) * 100).toFixed(2)) : 0 };

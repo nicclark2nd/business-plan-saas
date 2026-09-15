@@ -80,10 +80,9 @@ describe("direct costs", () => {
     expect(fixedCostMonths(wage).reduce((a, b) => a + b, 0)).toBeCloseTo(30300, 0);
   });
 
-  it("still reads a Year 1 rate on a row migration 0026 has not folded yet (\u00a76.29)", () => {
-    const legacy = { annual_cost: 30000, yearly_growth_rates: { "1": 1, "2": 1, "3": 1, "4": 1, "5": 1 }, monthly_distribution: null };
-    const folded = { annual_cost: 30300, yearly_growth_rates: { "2": 1, "3": 1, "4": 1, "5": 1 }, monthly_distribution: null };
-    expect(fixedCostByYear(legacy)).toEqual(fixedCostByYear(folded));   // the fold changes no figure anywhere
+  it("ignores a Year 1 rate: migration 0026 removed the key and nothing can create one", () => {
+    const stray = { annual_cost: 30300, yearly_growth_rates: { "1": 99, "2": 1 }, monthly_distribution: null };
+    expect(fixedCostByYear(stray)[0]).toBe(30300);
   });
 
   it("the plan totals variable and fixed, and states the margin", () => {

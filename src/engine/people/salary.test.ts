@@ -1,16 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { salarySchedule, scheduleChangeFromBase, salaryForYear, totalSalariesByYear, planYearStart, startYearFromDate, tenureLabel } from "./salary";
+import { salarySchedule, scheduleChangeFromFirstYear, salaryForYear, totalSalariesByYear, planYearStart, startYearFromDate, tenureLabel } from "./salary";
 
 describe("salary schedule (APeX parity)", () => {
-  // Figures from the APeX Key People dialog: 55,000 base, adjustments -50, 2, 2, 2, 2, start Year 1
-  const adj = { "1": -50, "2": 2, "3": 2, "4": 2, "5": 2 };
-  it("compounds year on year from the start year", () => {
-    expect(salarySchedule(55000, adj, 1).map((y) => Math.round(y.value))).toEqual([27500, 28050, 28611, 29183, 29767]);
+  // The APeX Key People dialog held 55,000 with adjustments -50, 2, 2, 2, 2 from Year 1. That -50 was a year
+  // sitting in front of the plan; §6.48 folded it into the figure, so the same person is 27,500 rising 2 %.
+  const adj = { "2": 2, "3": 2, "4": 2, "5": 2 };
+  it("compounds year on year from the year AFTER the start year", () => {
+    expect(salarySchedule(27500, adj, 1).map((y) => Math.round(y.value))).toEqual([27500, 28050, 28611, 29183, 29767]);
   });
-  it("reports total change from base as APeX does", () => {
-    const c = scheduleChangeFromBase(55000, adj, 1);
-    expect(Math.round(c.delta)).toBe(-25233);   // APeX dialog: -A$25,233 (-45.88%)
-    expect(c.percent).toBeCloseTo(-45.88, 1);
+  it("reports Year 5 against the first year", () => {
+    const c = scheduleChangeFromFirstYear(27500, adj, 1);
+    expect(Math.round(c.delta)).toBe(2267);
+    expect(c.percent).toBeCloseTo(8.24, 1);
+  });
+  it("ignores an adjustment on the person's own first year: 0026 removed those keys", () => {
+    expect(salaryForYear(90000, { "1": 99 }, 1, 1)).toBe(90000);
+    expect(salaryForYear(90000, { "3": 99 }, 3, 3)).toBe(90000);
   });
   it("is zero before the start year, and for a start after the plan", () => {
     expect(salaryForYear(90000, {}, 3, 2)).toBe(0);
@@ -25,24 +30,16 @@ describe("salary schedule (APeX parity)", () => {
     expect(salarySchedule(90000, { "4": 5 }, 3).map((y) => y.value)).toEqual([0, 0, 90000, 94500, 94500]);
   });
 
-  it("still reads the start year's key on a row migration 0026 has not folded yet (\u00a76.29)", () => {
-    const legacy = salarySchedule(120000, { "1": 3, "2": 3, "3": 3, "4": 3, "5": 3 }, 1).map((y) => y.value);
-    const folded = salarySchedule(123600, { "2": 3, "3": 3, "4": 3, "5": 3 }, 1).map((y) => y.value);
-    expect(folded).toEqual(legacy);                                  // the fold changes no figure anywhere
-  });
-
   it("treats blank adjustments as flat", () => {
     expect(salarySchedule(100000, null, 1).every((y) => y.value === 100000)).toBe(true);
   });
-  // The startYear-2 person below still carries a Year 2 key: the shape migration 0026 folds, kept here so the
-  // deploy bridge stays covered until every plan is migrated.
   it("totals across people and leaves contractors out", () => {
     const t = totalSalariesByYear([
       { annual_salary: 100000, salary_adjustments: null, startYear: 1 },
-      { annual_salary: 50000, salary_adjustments: { "2": 10 }, startYear: 2 },
+      { annual_salary: 50000, salary_adjustments: { "3": 10 }, startYear: 2 },
       { annual_salary: 80000, salary_adjustments: null, startYear: 1, role: "contractor" },
     ]);
-    expect(t.map((y) => y.value)).toEqual([100000, 155000, 155000, 155000, 155000]);
+    expect(t.map((y) => y.value)).toEqual([100000, 150000, 155000, 155000, 155000]);
   });
 });
 

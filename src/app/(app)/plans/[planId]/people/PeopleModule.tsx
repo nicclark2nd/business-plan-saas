@@ -7,7 +7,7 @@ import { Grid, Th, Td, Row, FootRow, GroupRow, Toolbar, Meta, Note, NameLink, Li
 import { cn } from "@/lib/utils";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
-import { SALARY_YEARS, planYearStart, startYearFromDate, tenureLabel, salarySchedule, scheduleChangeFromBase, totalSalariesByYear } from "@/engine/people/salary";
+import { SALARY_YEARS, planYearStart, startYearFromDate, tenureLabel, salarySchedule, scheduleChangeFromFirstYear, totalSalariesByYear } from "@/engine/people/salary";
 import { useMoney } from "@/components/MoneyProvider";
 import { upsertPerson, deletePerson, upsertCapability, deleteCapability, continueFromPeople } from "./actions";
 import { PERSON_ROLES, ROLE_LABEL, CAPABILITY_KINDS, KIND_LABEL, formatMonth, type Person, type Capability, type CapabilityKind, type PeopleData } from "./model";
@@ -192,7 +192,7 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
                   <Row key={r._key}><Td><NameLink onClick={() => setScope(r._key)}>{r.name || r.first_name}</NameLink><div className="text-[11.5px] text-muted-foreground">Contractor</div></Td><Td colSpan={7} className="text-muted-foreground">Costed in COGS or Overheads, not here.</Td></Row>
                 );
                 const sched = salarySchedule(r.annual_salary ?? 0, r.salary_adjustments, sy);
-                const change = scheduleChangeFromBase(r.annual_salary ?? 0, r.salary_adjustments, sy);
+                const change = scheduleChangeFromFirstYear(r.annual_salary ?? 0, r.salary_adjustments, sy);
                 return [
                   <tr key={r._key + "a"} data-row={r._key} onBlur={(e) => left(e) && commitPerson(r._key)} className="[&>td]:border-b-0 [&>td]:h-[34px]">
                     <Td rowSpan={2} className="!border-b border-border align-middle">

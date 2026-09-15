@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { enteredByYear, overheadByYear, overheadMonths, overheadsByYear, overheadsMonths, planOverheadLines, type Overhead } from "./expenses";
 
-const rent: Overhead = { name: "Rent", source: "entered", current_value: 125000, yearly_change: { "1": 0, "2": 2, "3": 2, "4": 2, "5": 2 }, monthly_distribution: null, start_year: 1 };
+const rent: Overhead = { name: "Rent", source: "entered", current_value: 125000, yearly_change: { "2": 2, "3": 2, "4": 2, "5": 2 }, monthly_distribution: null, start_year: 1 };
 
 describe("overheads", () => {
   it("grows a typed expense year on year, APeX-style", () => {
@@ -17,7 +17,7 @@ describe("overheads", () => {
   });
 
   it("takes a synced line as given and never grows it — the client set that figure elsewhere", () => {
-    const marketing: Overhead = { name: "Marketing", source: "marketing", current_value: 0, yearly_change: { "1": 50, "2": 50 }, monthly_distribution: null };
+    const marketing: Overhead = { name: "Marketing", source: "marketing", current_value: 0, yearly_change: { "2": 50 }, monthly_distribution: null };
     expect(overheadByYear(marketing, [5000, 5000, 8000, 8000, 8000])).toEqual([5000, 5000, 8000, 8000, 8000]);
   });
 

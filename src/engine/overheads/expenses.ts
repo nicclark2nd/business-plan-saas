@@ -37,12 +37,8 @@ export type Overhead = {
  *
  * It used to apply `yearly_change["1"]` on top for a line starting in Year 1, which put a sixth year in front
  * of the five: the same field meant "this year, before the plan" here and "Year 1" in Sales. Migration 0025
- * folds that change into the amount, so no plan's figures move.
- *
- * The `["1"]` branch is kept because the READER bridges the deploy (§6.29): the code ships before the
- * migration runs, and a plan still carrying a Year 1 change would otherwise lose it between the two — on a
- * live plan that is Year 1 overheads quietly dropping by whatever was typed there. After 0025 no row has the
- * key, nothing can create one (the box is gone), and this branch can be deleted in a later release.
+ * folded that change into the amount without moving any plan's figures, and the reader carried both shapes
+ * until it had run everywhere (§6.29). It has, so there is one shape again.
  */
 export function enteredByYear(o: Overhead): number[] {
   const start = Math.min(5, Math.max(1, Math.trunc(num(o.start_year)) || 1));
@@ -50,7 +46,6 @@ export function enteredByYear(o: Overhead): number[] {
   return YEARS.map((year) => {
     if (year < start) return 0;
     if (year > start) v = v * (1 + num(o.yearly_change?.[String(year)]) / 100);
-    else if (start === 1) v = v * (1 + num(o.yearly_change?.["1"]) / 100);   // pre-0025 rows only
     return r2(v);
   });
 }

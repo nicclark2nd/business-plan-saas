@@ -84,9 +84,6 @@ export function fixedCostByYear(f: FixedCost): number[] {
   let v = num(f.annual_cost);
   return YEARS.map((year) => {
     if (year > 1) v = v * (1 + num(f.yearly_growth_rates?.[String(year)]) / 100);
-    // Rows not yet folded by migration 0026 still carry a Year 1 rate, and keep the figure they had until it
-    // runs. The deploy bridge (§6.29): deletable once every plan is migrated, because the migration drops the key.
-    else v = v * (1 + num(f.yearly_growth_rates?.["1"]) / 100);
     return r2(v);
   });
 }
