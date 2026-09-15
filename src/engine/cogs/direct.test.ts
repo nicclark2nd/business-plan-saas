@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { unitCostByYear, productCostYears, productCostMonths, fixedCostByYear, fixedCostMonths, planCogsByYear, planCogsMonths, currentCost } from "./direct";
+import { unitCostByYear, productCostYears, productCostMonths, fixedCostByYear, fixedCostMonths, planCogsByYear, planCogsMonths } from "./direct";
 
 // APeX, DesignOne Concreting: Carports sell for $6,800, 18 units, costing $3,200 each, cost rising 1 % a year.
 const carports = {
@@ -26,11 +26,9 @@ describe("direct costs", () => {
    */
   it("charges the entered cost in Year 1, and compounds from Year 2", () => {
     const y = productCostYears(carports);
-    expect(currentCost(carports)).toBe(57600);        // 3,200 x 18
-    expect(y[0].cost).toBe(57600);                    // Year 1 IS now: no rise yet (APeX said 58,176)
+    expect(y[0].cost).toBe(57600);                    // 3,200 x 18 — Year 1 IS now (APeX said 58,176)
     expect(unitCostByYear(carports)[0]).toBe(3200);   // the cost as entered
     expect(unitCostByYear(carports)[1]).toBe(3232);   // the first 1 % rise lands in Year 2
-    expect(y[0].cost).toBe(currentCost(carports));    // and "current" and Year 1 are the same year
   });
 
   it("gross profit and margin fall out of price less cost", () => {
@@ -95,10 +93,8 @@ describe("direct costs", () => {
     expect(planCogsMonths([carports, coach], [wage]).reduce((a, b) => a + b, 0)).toBeCloseTo(y.total, 0);
   });
 
-  it("today's cost is only what is already selling", () => {
-    expect(currentCost(carports)).toBe(57600);
-    expect(currentCost({ ...carports, start_selling_year: 4 })).toBe(0);
-    expect(currentCost({ ...coach, opening_clients: 12 })).toBe(12 * 8400);
+  it("a line that starts later costs nothing in Year 1", () => {
+    expect(productCostYears({ ...carports, start_selling_year: 4 })[0].cost).toBe(0);
   });
 });
 const r = (v: number) => Math.round(v * 100) / 100;
