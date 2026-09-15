@@ -155,10 +155,13 @@ export function GoalsModule({ planId, mode, initial, people, quarters, thisQuart
                       <div key={g.id} className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-[13px] last:border-b-0">
                         <span className="w-[74px] flex-none tabular-nums text-[11.5px] text-muted-foreground">{label(g)}</span>
                         <button type="button" className="min-w-0 flex-1 truncate text-left hover:text-primary hover:underline"
-                          title={g.detail ?? undefined} onClick={() => setEditing({ area: key, goal: g })}>
+                          title={g.detail ? `${g.title} — ${g.detail}` : g.title} onClick={() => setEditing({ area: key, goal: g })}>
                           {g.title}
-                          {g.source === "whatif" && <span className="ml-1.5 rounded-full bg-accent px-1.5 text-[10px] font-semibold text-primary">What-If</span>}
                         </button>
+                        {/* Outside the truncating cell: where a goal came from is the first thing truncation ate. */}
+                        {g.source === "whatif" && (
+                          <span className="flex-none rounded-full bg-accent px-1.5 text-[10px] font-semibold text-primary" title="Created from a What-If scenario">What-If</span>
+                        )}
                         <span className="w-[96px] flex-none truncate text-[11.5px] text-muted-foreground">{ownerName(g.owner_person_id) || "—"}</span>
                         <select
                           value={g.status} disabled={pending}

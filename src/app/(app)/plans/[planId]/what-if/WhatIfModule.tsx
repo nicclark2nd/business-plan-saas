@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ModuleFrame, ModuleStatusFooter } from "@/components/module/ModuleFrame";
-import { Grid, Th, Td, Row, Toolbar, Meta, TOTAL_ROW } from "@/components/module/DataGrid";
+import { CellSelect, Grid, Th, Td, Row, Toolbar, Meta, TOTAL_ROW } from "@/components/module/DataGrid";
 import { useMoney } from "@/components/MoneyProvider";
 import { cn } from "@/lib/utils";
 import {
@@ -14,9 +14,10 @@ import {
   type DayScope, type LeverKey, type Levers, type Measures, type WhatIfPlan,
 } from "@/engine/whatif/levers";
 import { realityChecks, type Check } from "@/engine/whatif/checks";
+import { AREA_LABEL, proposedGoals, type ProposedGoal } from "@/engine/whatif/goals";
 import { revenueWorth } from "@/engine/whatif/worth";
 import { FORECAST_YEARS, type WorkingCapitalDays } from "@/engine/forecast/model";
-import { saveDays } from "./actions";
+import { createGoalsFromScenario, saveDays, type GoalToCreate } from "./actions";
 import type { Noun } from "@/engine/plan/vocabulary";
 
 /**
@@ -56,17 +57,25 @@ const HISTORY_OF: Partial<Record<LeverKey, keyof WorkingCapitalDays>> = {
   debtorDays: "debtorDays", stockDays: "inventoryDays", creditorDays: "creditorDays",
 };
 
-export function WhatIfModule({ planId, mode, plan, noun, taxLabel, monthNames, history }: {
+export type QuarterChoice = { planYear: number; quarter: number; label: string; months: string };
+export type Person = { id: string; name: string; role: string | null };
+
+export function WhatIfModule({
+  planId, mode, plan, noun, taxLabel, monthNames, history, people, quarters, thisQuarter,
+}: {
   planId: string; mode: "guided" | "advanced"; plan: WhatIfPlan; noun: Noun; taxLabel: string;
   monthNames: string[];
   /** Days implied by the last set of accounts, or null for a business with no history yet (§6.41.3). */
   history: WorkingCapitalDays | null;
+  /** Who a goal can be given to, and when (§6.44). */
+  people: Person[]; quarters: QuarterChoice[]; thisQuarter: { planYear: number; quarter: number };
 }) {
   const num = useMoney();
   const router = useRouter();
   const [area, setArea] = useState<AreaKey>("levers");
   const [saving, startSave] = useTransition();
   const [saveOpen, setSaveOpen] = useState(false);
+  const [goalsOpen, setGoalsOpen] = useState(false);
   const [savedError, setSavedError] = useState<string>();
   const at = useMemo(() => planLevers(plan.workingCapital[1]), [plan]);
   const [lv, setLv] = useState<Levers>(at);
@@ -156,7 +165,10 @@ export function WhatIfModule({ planId, mode, plan, noun, taxLabel, monthNames, h
       areas={[{ key: "levers", label: "Levers" }, { key: "detail", label: "Baseline vs adjusted" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)}
       scope={{ label: "Year 1" }}
-      primaryAction={<Button variant="outline" size="sm" disabled={!touched} onClick={() => setLv(at)}>Reset levers</Button>}
+      primaryAction={<>
+        <Button variant="outline" size="sm" disabled={!touched} onClick={() => setLv(at)}>Reset levers</Button>
+        <Button size="sm" disabled={!touched} onClick={() => { setSavedError(undefined); setGoalsOpen(true); }}>Turn into goals</Button>
+      </>}
       footer={<ModuleStatusFooter planId={planId} />}
       help={<>
         <h3>What this is</h3>
@@ -328,6 +340,20 @@ export function WhatIfModule({ planId, mode, plan, noun, taxLabel, monthNames, h
         </>
       )}
 
+      {goalsOpen && (
+        <TurnIntoGoalsDialog
+          goals={proposedGoals(what, lv, noun, num)} people={people} quarters={quarters}
+          thisQuarter={thisQuarter} saving={saving} error={savedError}
+          onClose={() => setGoalsOpen(false)}
+          onCreate={(rows) => startSave(async () => {
+            const r = await createGoalsFromScenario(planId, rows);
+            if (!r.ok) { setSavedError(r.error); return; }
+            setGoalsOpen(false);
+            router.push(`/plans/${planId}/goals`);
+          })}
+        />
+      )}
+
       {saveOpen && (
         <SaveDaysDialog
           plan={plan} lv={lv} at={at} days={daysNow} num={num} saving={saving} error={savedError}
@@ -343,6 +369,86 @@ export function WhatIfModule({ planId, mode, plan, noun, taxLabel, monthNames, h
         />
       )}
     </ModuleFrame>
+  );
+}
+
+/**
+ * A scenario, written down as goals (§6.44).
+ *
+ * The gentler of the two exits: it changes no figure anywhere, so a goal can be wrong without the forecast
+ * being wrong. Each row is one lever the client moved, already carrying what that lever is worth — the
+ * measured contribution, not a fresh calculation — and all that is left to decide is when and who.
+ *
+ * Quarter and owner default once at the top and then per row, because in practice a client sets "this
+ * quarter, me" for all of them and changes one.
+ */
+function TurnIntoGoalsDialog({ goals, people, quarters, thisQuarter, saving, error, onClose, onCreate }: {
+  goals: ProposedGoal[]; people: Person[]; quarters: QuarterChoice[];
+  thisQuarter: { planYear: number; quarter: number };
+  saving: boolean; error?: string;
+  onClose: () => void; onCreate: (rows: GoalToCreate[]) => void;
+}) {
+  const key = (q: { planYear: number; quarter: number }) => `${q.planYear}:${q.quarter}`;
+  const fallback = quarters.some((q) => key(q) === key(thisQuarter)) ? key(thisQuarter) : key(quarters[0]);
+  const [when, setWhen] = useState<Record<string, string>>({});
+  const [owner, setOwner] = useState<Record<string, string>>({});
+  const [allWhen, setAllWhen] = useState(fallback);
+  const [allOwner, setAllOwner] = useState("");
+
+  const whenOf = (g: ProposedGoal) => when[g.lever] ?? allWhen;
+  const ownerOf = (g: ProposedGoal) => owner[g.lever] ?? allOwner;
+  const quarterOpts = quarters.map((q) => ({ value: key(q), label: `${q.label} · ${q.months}` }));
+  const ownerOpts = [{ value: "", label: "Nobody yet" }, ...people.map((p) => ({ value: p.id, label: p.name || "Unnamed" }))];
+
+  const rows = (): GoalToCreate[] => goals.map((g) => {
+    const [year, quarter] = whenOf(g).split(":").map(Number);
+    return { area: g.area, title: g.title, detail: g.detail, year, quarter, ownerPersonId: ownerOf(g) || null };
+  });
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-[720px]">
+        <DialogHeader>
+          <DialogTitle>Turn into goals</DialogTitle>
+          <DialogDescription>
+            One goal for each lever you moved, carrying what it is worth. They appear in Goals under their
+            area and on your dashboard for the quarter you pick. Nothing in your forecast changes.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-wrap items-center gap-2 rounded border border-border bg-secondary px-3 py-2">
+          <span className="text-[12.5px] text-muted-foreground">Set all to</span>
+          <CellSelect className="h-7 w-[180px]" value={allWhen} onValueChange={(v) => { setAllWhen(v); setWhen({}); }} options={quarterOpts} />
+          <CellSelect className="h-7 w-[160px]" value={allOwner} onValueChange={(v) => { setAllOwner(v); setOwner({}); }} options={ownerOpts} />
+        </div>
+
+        <div className="max-h-[42vh] overflow-auto rounded border border-border">
+          {goals.map((g) => (
+            <div key={g.lever} className="border-b border-border px-3 py-2 last:border-b-0">
+              <div className="flex items-start gap-2">
+                <span className="mt-[3px] w-[76px] flex-none text-[11px] font-semibold uppercase tracking-[.04em] text-muted-foreground">{AREA_LABEL[g.area]}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-semibold">{g.title}</div>
+                  {g.detail && <div className="text-[12px] text-muted-foreground">{g.detail}</div>}
+                </div>
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-2 pl-[84px]">
+                <CellSelect className="h-7 w-[180px]" value={whenOf(g)} onValueChange={(v) => setWhen((x) => ({ ...x, [g.lever]: v }))} options={quarterOpts} />
+                <CellSelect className="h-7 w-[160px]" value={ownerOf(g)} onValueChange={(v) => setOwner((x) => ({ ...x, [g.lever]: v }))} options={ownerOpts} />
+              </div>
+            </div>
+          ))}
+        </div>
+        {error && <p className="text-[12.5px] font-semibold text-bad">{error}</p>}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button onClick={() => onCreate(rows())} disabled={saving || !goals.length}>
+            {saving ? "Creating…" : `Create ${goals.length} goal${goals.length === 1 ? "" : "s"}`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

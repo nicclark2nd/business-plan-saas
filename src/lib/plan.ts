@@ -26,7 +26,12 @@ export const getCompleteness = cache(async (planId: string) => {
   const supabase = await createClient();
   const count = async (table: string, opts?: { annualOnly?: boolean }) => {
     const base = supabase.from(table).select("*", { count: "exact", head: true }).eq("plan_id", planId);
-    const { count: c } = opts?.annualOnly ? await base.is("parent_id", null) : await base;
+    /**
+     * An annual goal counts once it has been WRITTEN, not once a row exists. Turning a What-If scenario into
+     * goals creates the annual goal its quarterly goals hang from, empty — so counting rows told a client
+     * three of six areas were done when they had written one sentence (§6.44).
+     */
+    const { count: c } = opts?.annualOnly ? await base.is("parent_id", null).neq("title", "") : await base;
     return c ?? 0;
   };
   const [framework] = await Promise.all([supabase.from("plan_framework").select("vision,mission,purpose,brand_promise,ai_direction,field_of_play").eq("plan_id", planId).maybeSingle()]);

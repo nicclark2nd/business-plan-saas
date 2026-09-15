@@ -7,6 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 import { profileMissing } from "../settings/model";
+import { firstProjectedYear, planQuarters, planYearEnding, quarterOf } from "@/engine/plan/calendar";
+import { AREA_LABEL, type GoalArea } from "@/engine/whatif/goals";
+import { STATUS_LABEL, type GoalStatus } from "../goals/model";
 
 function Panel({ title, badge, children, className }: { title: string; badge?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
@@ -23,7 +26,28 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
   const plan = session!.plans.find((p) => p.id === planId)!;
   const c = await getCompleteness(planId);
   const supabase = await createClient();
-  const { data: ps } = await supabase.from("plan_settings").select("industry, country, legal_structure, products_services_statement").eq("plan_id", planId).maybeSingle();
+  const { data: ps } = await supabase.from("plan_settings")
+    .select("industry, country, legal_structure, products_services_statement, financial_year_end_month, first_projected_year")
+    .eq("plan_id", planId).maybeSingle();
+
+  /**
+   * This quarter's goals (§6.44) — the plan's quarter, not the calendar's. A goal set for "Q1" on a June
+   * year-end business belongs to July–September, and showing it against January–March would be telling the
+   * client something false about their own year.
+   */
+  const fyEndMonth = Number(ps?.financial_year_end_month ?? 6);
+  const nowQuarter = quarterOf(fyEndMonth, new Date());
+  const quarterLabel = planQuarters(fyEndMonth, planYearEnding(firstProjectedYear(ps?.first_projected_year, fyEndMonth), 1))
+    .find((q) => q.quarter === nowQuarter);
+  const { data: quarterGoals } = await supabase.from("plan_goals")
+    .select("id, area, title, status, owner_person_id, milestone_date")
+    .eq("plan_id", planId).not("parent_id", "is", null).eq("year", 1).eq("quarter", nowQuarter)
+    .order("area");
+  const { data: goalPeople } = await supabase.from("plan_people").select("id, name").eq("plan_id", planId);
+  const ownerOf = (id: string | null) => goalPeople?.find((p) => p.id === id)?.name ?? "";
+  const DOT: Record<GoalStatus, string> = {
+    not_started: "bg-faint", in_progress: "bg-primary", done: "bg-good", at_risk: "bg-warn",
+  };
   const missingProfile = profileMissing({ business_name: plan.business_name, ...(ps ?? {}) });
   const nextStep = GUIDED_STEPS.find((s) => { const sec = c.sections.find((x) => x.id === s.id); return sec && sec.done < sec.total; }) ?? GUIDED_STEPS[GUIDED_STEPS.length - 1];
   const hasNumbers = c.sections.filter((s) => ["sales", "overheads"].includes(s.id)).every((s) => s.done >= s.total);
@@ -68,8 +92,28 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
             </Link>
           ))}
         </Panel>
-        <Panel title="This quarter's goals" badge={<span className="eyebrow">Q1</span>}>
-          <p className="text-[13px] text-muted-foreground">Goals are drafted for you at step 11, once your forecast exists. <Link className="font-semibold text-primary" href={`${base}/goals`}>Open Goals</Link></p>
+        <Panel title="This quarter's goals" badge={<span className="eyebrow">{quarterLabel?.label ?? "This quarter"}</span>}>
+          {quarterGoals?.length ? (
+            <>
+              {quarterGoals.map((g) => (
+                <Link key={g.id} href={`${base}/goals`} className="flex items-start gap-2.5 py-1.5 text-[13px] hover:text-primary">
+                  <i className={cn("mt-1.5 size-2 flex-none rounded-full", DOT[g.status as GoalStatus])} />
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{g.title}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {AREA_LABEL[g.area as GoalArea]} · {STATUS_LABEL[g.status as GoalStatus]}
+                      {ownerOf(g.owner_person_id) && ` · ${ownerOf(g.owner_person_id)}`}
+                      {g.milestone_date && ` · by ${g.milestone_date}`}
+                    </span>
+                  </span>
+                </Link>
+              ))}
+            </>
+          ) : (
+            <p className="text-[13px] text-muted-foreground">
+              Nothing due in {quarterLabel?.months ?? "this quarter"}. Set them at step {GUIDED_STEPS.find((s) => s.id === "goals")?.step}, or move the levers on the <Link className="font-semibold text-primary" href={`${base}/what-if`}>What-If planner</Link> and turn a scenario into goals. <Link className="font-semibold text-primary" href={`${base}/goals`}>Open Goals</Link>
+            </p>
+          )}
         </Panel>
       </div>
 
