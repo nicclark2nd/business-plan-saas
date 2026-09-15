@@ -98,7 +98,57 @@ describe("what a scenario would actually change (§6.45)", () => {
   it("writes the overhead rows it owns and never a synced line", () => {
     const rows = planned(levers({ overheads: -10 })).changes.filter((c) => c.table === "plan_overheads");
     expect(rows.map((r) => r.row)).toEqual(["Rent"]);
-    expect(rows[0].to).toBe(54000);
+  });
+
+  /**
+   * The column headed "This year" is what the business spends NOW. A plan to cut overheads a tenth is not a
+   * claim about today's rent, so it goes in Year 1's change box — which the Overheads screen shows and the
+   * engine honours.
+   */
+  it("cuts overheads in Year 1's change box, not in what the business spends today", () => {
+    const c = planned(levers({ overheads: -10 })).changes.find((x) => x.table === "plan_overheads")!;
+    expect(c.field).toBe("yearly_change.1");
+    expect(c.unit).toBe("percent");
+    expect(c.from).toBe(0);
+    expect(c.to).toBe(-10);
+    // `current_value` is left exactly alone.
+    expect(planned(levers({ overheads: -10 })).changes.some((x) => x.field === "current_value")).toBe(false);
+  });
+
+  it("compounds with a change the client already typed, because that is what happens to the money", () => {
+    const withChange = sources({
+      overheads: [{ id: "o1", name: "Rent", source: "entered", current_value: 60000, yearly_change: { "1": 2 }, start_year: 1, monthly_distribution: null }],
+    });
+    // 2 % already, then a 10 % cut: 1.02 × 0.90 = 0.918, so −8.2 %, not −8 %.
+    expect(find(levers({ overheads: -10 }), "Rent", "yearly_change.1", withChange)!.to).toBe(-8.2);
+  });
+
+  it("a line that starts later has no working box for its own first year, so its amount moves", () => {
+    const later = sources({
+      overheads: [{ id: "o1", name: "Second yard", source: "entered", current_value: 40000, yearly_change: {}, start_year: 3, monthly_distribution: null }],
+    });
+    const c = find(levers({ overheads: -10 }), "Second yard", "current_value", later)!;
+    expect(c.unit).toBe("money");
+    expect(c.to).toBe(36000);
+  });
+
+  /**
+   * Recording the cut as a Year 1 percentage has to give the same five years as scaling the amount, or the
+   * apply would quietly mean something different from the preview. Tested on a plan with no synced lines,
+   * because salaries and marketing are the part the apply deliberately CANNOT reach — that gap is real, it
+   * is what the dialog states, and it would drown this out.
+   */
+  it("recording the cut as a percentage gives the same years as scaling the amount", () => {
+    const own = sources({
+      overheads: [{ id: "o1", name: "Rent", source: "entered", current_value: 60000, yearly_change: { "1": 2, "2": 3 }, start_year: 1, monthly_distribution: null }],
+      salaries: [0, 0, 0, 0, 0], marketing: [0, 0, 0, 0, 0],
+    });
+    const l = levers({ overheads: -10 });
+    const previewed = runPlan(planOf(own), l).forecast;
+    const written = runPlan(planOf(applyChanges(own, planned(l, own).changes)), NEUTRAL).forecast;
+    for (const y of FORECAST_YEARS) {
+      expect(r2(written.pnl[y].overheads), `year ${y}`).toBe(r2(previewed.pnl[y].overheads));
+    }
   });
 
   it("sizes the overheads it cannot reach, and names them", () => {

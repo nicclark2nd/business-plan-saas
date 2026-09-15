@@ -14,6 +14,15 @@
  * **Units keep the shape the client typed.** Somebody who entered 12 driveways should not open Sales to find
  * 13.44 of them; somebody who entered 12.5 tonnes keeps the halves. So a whole number stays whole.
  *
+ * **It writes the change where the module keeps changes.** An overhead's `current_value` is what the business
+ * spends THIS year, with its own column on the screen and five plan years beside it — so a plan to cut
+ * overheads by a tenth does not belong there. It belongs in Year 1's % change box, which the engine already
+ * honours, combined with whatever the client has typed. Rewriting `current_value` restated what they spend
+ * today, which is a fact about the business and not the plan's to change.
+ *
+ * A product is the other shape: its price and units ARE its Year 1 figures — the growth dialog says so and
+ * gives Year 1 no box — so for a product the base IS where a Year 1 change lives.
+ *
  * **What it cannot reach, it says.** The overheads lever moves the rows in `plan_overheads`, and a plan's
  * overheads are not only those rows: the People line is each person's salary in the Leadership Team and
  * Marketing is its own module. Cutting overheads by a tenth cannot mean cutting every salary by a tenth —
@@ -42,6 +51,9 @@ const likeTyped = (from: number, to: number) => (Number.isInteger(from) ? Math.r
 
 export type ChangeTable = "plan_products" | "plan_overheads";
 
+/** How a figure reads: money in the plan's currency, a count of things, or a percentage change. */
+export type ChangeUnit = "money" | "count" | "percent";
+
 export type Change = {
   table: ChangeTable;
   id: string;
@@ -50,6 +62,7 @@ export type Change = {
   field: string;
   /** What the column is called on the screen that owns it. */
   label: string;
+  unit: ChangeUnit;
   from: number;
   to: number;
 };
@@ -88,13 +101,13 @@ export function plannedChanges(sources: PlanSources, levers: Levers, at: Levers)
     const id = String(p.id ?? "");
     const row = p.name || "Unnamed line";
     if (price !== 1) {
-      push({ table: "plan_products", id, row, field: "average_price", label: "Price", from: n(p.average_price), to: round(n(p.average_price) * price, 2) });
+      push({ table: "plan_products", id, row, field: "average_price", label: "Price", unit: "money", from: n(p.average_price), to: round(n(p.average_price) * price, 2) });
     }
     if (volume !== 1) {
-      push({ table: "plan_products", id, row, field: "units_sold", label: "Units", from: n(p.units_sold), to: likeTyped(n(p.units_sold), n(p.units_sold) * volume) });
+      push({ table: "plan_products", id, row, field: "units_sold", label: "Units", unit: "count", from: n(p.units_sold), to: likeTyped(n(p.units_sold), n(p.units_sold) * volume) });
     }
     if (cogs !== 1 && p.cost_per_unit != null) {
-      push({ table: "plan_products", id, row, field: "cost_per_unit", label: "Cost per unit", from: n(p.cost_per_unit), to: round(n(p.cost_per_unit) * cogs, 4) });
+      push({ table: "plan_products", id, row, field: "cost_per_unit", label: "Cost per unit", unit: "money", from: n(p.cost_per_unit), to: round(n(p.cost_per_unit) * cogs, 4) });
     }
     /**
      * A later year the client typed outright is a figure, not a growth rate, so it moves too — otherwise a
@@ -104,16 +117,16 @@ export function plannedChanges(sources: PlanSources, levers: Levers, at: Levers)
     const g = p.yearly_growth as Growth | null | undefined;
     for (const [year, y] of Object.entries(g ?? {})) {
       if (price !== 1 && y?.priceValue != null) {
-        push({ table: "plan_products", id, row, field: `yearly_growth.${year}.priceValue`, label: `Year ${year} price`, from: n(y.priceValue), to: round(n(y.priceValue) * price, 2) });
+        push({ table: "plan_products", id, row, field: `yearly_growth.${year}.priceValue`, label: `Year ${year} price`, unit: "money", from: n(y.priceValue), to: round(n(y.priceValue) * price, 2) });
       }
       if (volume !== 1 && y?.unitsValue != null) {
-        push({ table: "plan_products", id, row, field: `yearly_growth.${year}.unitsValue`, label: `Year ${year} units`, from: n(y.unitsValue), to: likeTyped(n(y.unitsValue), n(y.unitsValue) * volume) });
+        push({ table: "plan_products", id, row, field: `yearly_growth.${year}.unitsValue`, label: `Year ${year} units`, unit: "count", from: n(y.unitsValue), to: likeTyped(n(y.unitsValue), n(y.unitsValue) * volume) });
       }
     }
     // Clients won month by month are counts the client typed; the twelve must still add to the year (§6.21.1).
     if (volume !== 1 && p.monthly_new_clients) {
       for (const [m, v] of Object.entries(p.monthly_new_clients)) {
-        push({ table: "plan_products", id, row, field: `monthly_new_clients.${m}`, label: `Month ${m} clients won`, from: n(v), to: likeTyped(n(v), n(v) * volume) });
+        push({ table: "plan_products", id, row, field: `monthly_new_clients.${m}`, label: `Month ${m} clients won`, unit: "count", from: n(v), to: likeTyped(n(v), n(v) * volume) });
       }
     }
   }
@@ -122,7 +135,28 @@ export function plannedChanges(sources: PlanSources, levers: Levers, at: Levers)
     for (const o of sources.overheads) {
       // A synced line has no figure of its own to write: it is read from People or Marketing.
       if (o.source && o.source !== "entered") continue;
-      push({ table: "plan_overheads", id: String(o.id ?? ""), row: o.name || "Unnamed cost", field: "current_value", label: "Amount", from: n(o.current_value), to: round(n(o.current_value) * overheads, 2) });
+      const id = String(o.id ?? "");
+      const row = o.name || "Unnamed cost";
+      const start = Math.min(5, Math.max(1, Math.trunc(n(o.start_year)) || 1));
+      if (start === 1) {
+        /**
+         * Year 1 has its own % change box on the Overheads screen and the engine honours it, so that is
+         * where a Year 1 change belongs — combined with whatever is already typed there. `current_value` is
+         * the column headed "This year": what the business spends NOW, which is a fact about the business
+         * and not the plan's to rewrite.
+         *
+         * Compounded, not added: 2 % already there and a 5 % cut is 0.98 × 0.95, not 3 % off.
+         */
+        const existing = n((o.yearly_change as Record<string, number> | null | undefined)?.["1"]);
+        push({
+          table: "plan_overheads", id, row, field: "yearly_change.1", label: "Year 1 change", unit: "percent",
+          from: round(existing, 2), to: round(((1 + existing / 100) * overheads - 1) * 100, 2),
+        });
+      } else {
+        // A line that starts later has no working box for its own first year: that year IS `current_value`,
+        // the same shape a product has.
+        push({ table: "plan_overheads", id, row, field: "current_value", label: "Cost a year", unit: "money", from: n(o.current_value), to: round(n(o.current_value) * overheads, 2) });
+      }
     }
   }
 

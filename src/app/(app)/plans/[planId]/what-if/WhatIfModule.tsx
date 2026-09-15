@@ -490,6 +490,11 @@ function ApplyDialog({ plan, lv, at, num, signed, saving, error, onClose, onAppl
   const base = useMemo(() => runPlan(plan, planLevers(plan.workingCapital[1])).outcome, [plan]);
   const gap = Math.round(real.operatingProfit - preview.operatingProfit);
   const byTable = (t: Change["table"]) => planned.changes.filter((c) => c.table === t);
+  /** A percentage is not money and a count of driveways is not money; each reads as what it is. */
+  const figure = (c: Change, v: number) =>
+    c.unit === "percent" ? `${v > 0 ? "+" : ""}${Math.round(v * 100) / 100}%`
+      : c.unit === "count" ? String(Math.round(v * 100) / 100)
+        : num(v);
   const shown = showAll ? planned.changes : planned.changes.slice(0, 8);
   const oh = planned.overheads;
   const ohShare = oh.reached + oh.untouched > 0 ? Math.round((oh.reached / (oh.reached + oh.untouched)) * 100) : 100;
@@ -517,9 +522,9 @@ function ApplyDialog({ plan, lv, at, num, signed, saving, error, onClose, onAppl
               <div key={`${c.table}${c.id}${c.field}`} className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-[13px] last:border-b-0">
                 <span className="w-[150px] flex-none truncate" title={c.row}>{c.row}</span>
                 <span className="w-[108px] flex-none text-[11.5px] text-muted-foreground">{c.label}</span>
-                <span className="tabular-nums text-muted-foreground">{num(c.from)}</span>
+                <span className="tabular-nums text-muted-foreground">{figure(c, c.from)}</span>
                 <span className="text-muted-foreground">→</span>
-                <span className="font-semibold tabular-nums">{num(c.to)}</span>
+                <span className="font-semibold tabular-nums">{figure(c, c.to)}</span>
               </div>
             ))}
             {planned.changes.length > shown.length && (
