@@ -75,14 +75,14 @@ export function SettingsModule({ planId, initial, mode, initialArea }: { planId:
               <Field label="Industry" span={2}><FieldInput value={s.industry ?? ""} placeholder="e.g. Commercial concreting" onChange={(e) => edit({ industry: e.target.value }, "profile")} /></Field>
               <Field label="Date established"><FieldInput value={established} placeholder="month year" onChange={(e) => { setEstablished(e.target.value); setDirty("profile"); }} /></Field>
               <Field label="Plan year" hint="The year on the front cover of the report — not the financial year."><FieldInput numeric inputMode="numeric" value={s.plan_year ?? ""} onChange={(e) => edit({ plan_year: Number(e.target.value.replace(/\D/g, "")) || 0 }, "profile")} /></Field>
+              {/* Moving country resets the taxes that came with the old one — enforced in `saveProfile`, so
+                  it holds whichever screen changes the country (§6.39.1). */}
               <Field label="Main country of operation"><FieldSelect value={s.country} options={opts(COUNTRIES)} placeholder="Choose" onValueChange={(v) => edit({ country: v }, "profile", true)} /></Field>
               <Field label="Legal structure" span={2} hint="Grouped by liability; your country's names come first."><FieldSelect value={s.legal_structure} groups={legalStructuresFor(s.country)} placeholder="Choose" onValueChange={(v) => edit({ legal_structure: v }, "profile", true)} /></Field>
               <Field label="Type of customer" span={2} hint="Changes the word the app uses for the people you sell to."><FieldSelect value={s.customer_type} options={opts(CUSTOMER_TYPES)} placeholder="Choose" onValueChange={(v) => edit({ customer_type: v }, "profile", true)} /></Field>
               <Field label="Type of product sold" span={2}><FieldSelect value={s.product_type} options={PRODUCT_TYPES} placeholder="Choose" onValueChange={(v) => edit({ product_type: v }, "profile", true)} /></Field>
             </FieldGrid>
           </Section>
-          {/* Tax (§6.39). Off is the default and changes nothing; on moves cash, never profit. */}
-          <TaxSection s={s} edit={edit} />
         </div>
       )}
 
@@ -111,6 +111,8 @@ export function SettingsModule({ planId, initial, mode, initialArea }: { planId:
               </Field>
             </FieldGrid>
           </Section>
+          {/* Tax (§6.39). Off is the default and changes nothing; on moves cash, never profit. */}
+          <TaxSection s={s} edit={edit} />
         </div>
       )}
 
@@ -155,8 +157,9 @@ function TaxSection({ s, edit }: {
   const setComponent = (i: number, patch: Partial<TaxComponent>) =>
     edit({ tax_components: live.map((c, j) => (j === i ? { ...c, ...patch } : c)) }, "financial");
 
+  // "Sales tax / sales tax" is what a fixed suffix gives you in the United States (§6.39.1).
   return (
-    <Section title={`${heading} / sales tax`}>
+    <Section title={heading}>
       <FieldGrid>
         <Field label={`Registered for ${heading}`} hint="Off leaves the forecast exactly as it is. On, the tax rides on every sale and is remitted each period.">
           <FieldSelect value={s.gst_registered ? "yes" : "no"}
@@ -164,8 +167,8 @@ function TaxSection({ s, edit }: {
             onValueChange={(v) => edit({ gst_registered: v === "yes" }, "financial", true)} />
         </Field>
         {s.gst_registered && wantsRegion && (
-          <Field label={regionLabel(s.country)} hint={`The tax depends on it. Changing this replaces the rates below.`}>
-            <FieldSelect value={s.tax_region ?? ""} placeholder="Choose"
+          <Field label={regionLabel(s.country)} hint="The tax depends on it. Changing this replaces the rates below.">
+            <FieldSelect value={s.tax_region ?? ""} placeholder={`Choose a ${regionLabel(s.country).toLowerCase()}`}
               options={regionsFor(s.country).map((r) => ({ value: r, label: r }))}
               onValueChange={(v) => edit({ tax_region: v, tax_components: regimeFor(s.country, v).components }, "financial", true)} />
           </Field>

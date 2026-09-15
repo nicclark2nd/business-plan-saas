@@ -21,13 +21,26 @@ export async function saveProfile(planId: string, p: Partial<Profile> & { establ
     return { ok: false, error: "The plan year should be a four-digit year, e.g. 2026." };
   }
   const planYear = p.plan_year === undefined ? null : year;
+
+  /**
+   * Moving country takes the old country's taxes with it (§6.39.1). A plan switched from British Columbia
+   * to Australia would otherwise keep charging a 7 % PST that Australia has never heard of — a stale answer
+   * to a question the client has just changed. Clearing both sends it back to the new country's own regime,
+   * which is then editable like any other default. Enforced here rather than on the screen, so it holds
+   * whichever screen changes the country.
+   */
+  const country = p.country?.trim() || null;
+  const { data: was } = await supabase.from("plan_settings").select("country").eq("plan_id", planId).maybeSingle();
+  const movedCountry = p.country !== undefined && (was?.country ?? null) !== country;
+
   const [plans, settings] = await Promise.all([
     supabase.from("plans").update({ business_name: name, ...(planYear ? { plan_year: planYear } : {}) }).eq("id", planId),
     supabase.from("plan_settings").upsert({
       plan_id: planId,
+      ...(movedCountry ? { tax_region: null, tax_components: [] } : {}),
       date_established: established ?? null,
       industry: p.industry?.trim() || null,
-      country: p.country?.trim() || null,
+      country,
       legal_structure: p.legal_structure?.trim() || null,
       customer_type: p.customer_type?.trim() || null,
       product_type: p.product_type?.trim() || null,

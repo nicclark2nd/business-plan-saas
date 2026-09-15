@@ -514,11 +514,19 @@ function GstNote({ components, label, schedule, months, num }: {
   const refunds = due.filter((m) => m.remitted < 0);
   const owed = schedule.closingPayable;
   const notReclaimed = components.filter((c) => !c.reclaimable);
+  const many = components.length > 1;
+  /**
+   * A monthly filer settles in eleven of the twelve months, and listing them all reads as noise rather than
+   * information. Past a handful, say the shape instead of the months (§6.39.1).
+   */
+  const when = due.length > 4
+    ? "every month but the first"
+    : due.map((m) => months[m.month - 1]).join(", ");
   return (
     <Note>
       {components.map((c) => `${c.label} at ${c.rate}%, filed ${c.frequency}`).join(" · ")}.{" "}
       {due.length > 0 && <>
-        {label} settles in {due.map((m) => months[m.month - 1]).join(", ")}
+        {label} {many ? "settle" : "settles"} in {when}
         {refunds.length > 0 && <> — {refunds.length === 1 ? "one of those is a refund coming back" : `${refunds.length} of those are refunds coming back`}</>}.{" "}
       </>}
       {owed > 0
