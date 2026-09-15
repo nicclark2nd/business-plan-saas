@@ -85,7 +85,7 @@ export default async function ForecastPage({ params, searchParams }: {
    * on the balance sheet and the BAS payment on the cash flow can never be two different readings.
    */
   const gst = gstSettings(s);
-  const gstParts = assembleGst(sources as unknown as GstPlanSources, gst);
+  const gstParts = assembleGst(sources as unknown as GstPlanSources, [gst]);
   const base = assembleBase(sources);
   for (const y of [1, 2, 3, 4, 5]) base[y].gst = gstParts.byYear[y];
 
@@ -118,7 +118,7 @@ export default async function ForecastPage({ params, searchParams }: {
     },
     taxPaid: forecast.cashFlow[1].taxPaid,
     dividends: forecast.cashFlow[1].dividendsPaid,
-    shapes: assembleMonths(sources, gst),
+    shapes: assembleMonths(sources, [gst]),
   });
   const checked = {
     ...forecast,

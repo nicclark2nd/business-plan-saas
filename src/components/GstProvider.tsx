@@ -13,7 +13,7 @@ import { gstSettings, taxLabel, type GstSettings } from "@/engine/plan/gst";
  * (§6.31.1) here rather than in every page.
  */
 type Gst = GstSettings & { label: string };
-const Ctx = createContext<Gst>({ registered: false, rate: 0, frequency: "quarterly", label: "GST" });
+const Ctx = createContext<Gst>({ registered: false, label: "GST", rate: 0, frequency: "quarterly", lagMonths: 1, reclaimable: true });
 
 export function GstProvider({ registered, rate, frequency, country, children }: {
   registered: boolean | null | undefined;

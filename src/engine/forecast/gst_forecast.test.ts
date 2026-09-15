@@ -4,7 +4,7 @@ import { assembleBase, assembleOpening, type PlanSources } from "./assemble";
 import { buildForecast, FORECAST_YEARS, type ForecastInput } from "./model";
 import { NOT_REGISTERED, type GstSettings } from "../plan/gst";
 
-const AU: GstSettings = { registered: true, rate: 10, frequency: "quarterly" };
+const AU: GstSettings = { registered: true, label: "GST", rate: 10, frequency: "quarterly", lagMonths: 1, reclaimable: true };
 
 const products = [
   { id: "a", name: "House slab", sold_as: "one_off", average_price: 16800, units_sold: 36, start_selling_year: 1,
@@ -25,7 +25,7 @@ const sources = {
 } as unknown as PlanSources & GstPlanSources;
 
 const run = (g: GstSettings, over: Partial<ForecastInput> = {}) => {
-  const gst = assembleGst(sources, g);
+  const gst = assembleGst(sources, [g]);
   const base = assembleBase(sources);
   for (const y of FORECAST_YEARS) base[y].gst = gst.byYear[y];
   return {
@@ -93,7 +93,7 @@ describe("and it still all holds together", () => {
   it("holds at every rate and every filing frequency", () => {
     for (const rate of [5, 10, 15, 20, 25]) {
       for (const frequency of ["monthly", "quarterly", "annually"] as const) {
-        const r = run({ registered: true, rate, frequency });
+        const r = run({ registered: true, label: "GST", rate, frequency, lagMonths: 1, reclaimable: true });
         expect(r.f.reconciled, `${rate}% ${frequency}`).toBe(true);
         for (const y of FORECAST_YEARS) expect(r.f.balanceSheet[y].balanceCheck, `${rate}% ${frequency} Y${y}`).toBe(0);
       }
@@ -151,7 +151,7 @@ describe("Year 1 still equals its own twelve months, with GST on", () => {
   const assembleMonthsWith = async (g: GstSettings) => {
     const { assembleMonths } = await import("./assemble");
     const { buildMonthlyCashFlow, monthlyInvariants } = await import("./monthly");
-    const gst = assembleGst(sources, g);
+    const gst = assembleGst(sources, [g]);
     const base = assembleBase(sources);
     for (const y of FORECAST_YEARS) base[y].gst = gst.byYear[y];
     const f = buildForecast({
@@ -173,7 +173,7 @@ describe("Year 1 still equals its own twelve months, with GST on", () => {
       },
       taxPaid: f.cashFlow[1].taxPaid,
       dividends: f.cashFlow[1].dividendsPaid,
-      shapes: assembleMonths(sources, g),
+      shapes: assembleMonths(sources, [g]),
     });
     return { f, monthly, failures: monthlyInvariants(monthly, f.cashFlow[1]).filter((i) => !i.passed) };
   };
@@ -190,7 +190,7 @@ describe("Year 1 still equals its own twelve months, with GST on", () => {
 
   it("agrees at every filing frequency, which is what moves the remittance months", async () => {
     for (const frequency of ["monthly", "quarterly", "annually"] as const) {
-      const r = await assembleMonthsWith({ registered: true, rate: 10, frequency });
+      const r = await assembleMonthsWith({ registered: true, label: "GST", rate: 10, frequency, lagMonths: 1, reclaimable: true });
       expect(r.failures.map((x) => `${frequency}: ${x.label} out by ${x.difference}`)).toEqual([]);
     }
   });
@@ -228,7 +228,7 @@ describe("a GST-free sale still claims its costs back", () => {
 describe("the yearly figures and the schedule are one computation", () => {
   for (const frequency of ["monthly", "quarterly", "annually"] as const) {
     it(`agrees to the cent — ${frequency}`, () => {
-      const r = run({ registered: true, rate: 10, frequency });
+      const r = run({ registered: true, label: "GST", rate: 10, frequency, lagMonths: 1, reclaimable: true });
       for (const y of FORECAST_YEARS) {
         const b = r.gst.byYear[y], s = r.gst.schedules[y];
         expect(b.onSales, `collected Y${y}`).toBe(s.collected);

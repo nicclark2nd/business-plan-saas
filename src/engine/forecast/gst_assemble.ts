@@ -13,7 +13,7 @@
  * `planRevenueMonths` produces all sixty months for real, so it is used for real.
  */
 import { FORECAST_YEARS, type GstOnYear } from "./model";
-import { gstSchedule, taxOn, type GstSchedule, type GstSettings } from "../plan/gst";
+import { gstScheduleFromTax, taxOn, type GstSchedule, type GstSettings } from "../plan/gst";
 import { planRevenueMonths, sourceOf, type AnyProduct } from "../sales/product";
 import { planCogsMonths, planCogsByYear, type CostProduct, type FixedCost } from "../cogs/direct";
 import { overheadByYear, overheadsMonths, planOverheadLines, type Overhead } from "../overheads/expenses";
@@ -98,23 +98,66 @@ function taxableSeries(p: GstPlanSources) {
 }
 
 export type GstAssembly = {
-  /** The full twelve-month schedule of each year, for the screens that show months. */
+  /** The whole twelve-month schedule of each year, every component added together. */
   schedules: Record<number, GstSchedule>;
+  /** The same, kept apart, so a screen can say what is GST and what is PST. */
+  byComponent: Record<number, { label: string; schedule: GstSchedule }[]>;
   /** What the forecast model consumes. */
   byYear: Record<number, GstOnYear>;
-  /** Cost of sales, overheads and capex month by month in Year 1, so the cash flow can show them. */
-  year1: { sales: number[]; cogs: number[]; overheads: number[]; capex: number[] };
+  /**
+   * Year 1's tax, month by month, ready for the cash flow. Computed here once and read there, rather than
+   * the rate being applied a second time somewhere else (§6.39).
+   */
+  year1: { onSales: number[]; onCogs: number[]; onOverheads: number[]; onCapex: number[]; remitted: number[] };
 };
 
-export function assembleGst(p: GstPlanSources, g: GstSettings, openingPayable = 0): GstAssembly {
+const ZERO_SCHEDULE: GstSchedule = {
+  months: Array.from({ length: 12 }, (_, i) => ({ month: i + 1, collected: 0, credits: 0, net: 0, remitted: 0, payable: 0 })),
+  collected: 0, credits: 0, net: 0, remitted: 0, closingPayable: 0,
+};
+
+/** Two schedules added together — a province with both a GST and a PST files both, and holds both. */
+function addSchedules(a: GstSchedule, b: GstSchedule): GstSchedule {
+  return {
+    months: a.months.map((m, i) => ({
+      month: m.month,
+      collected: r2(m.collected + b.months[i].collected),
+      credits: r2(m.credits + b.months[i].credits),
+      net: r2(m.net + b.months[i].net),
+      remitted: r2(m.remitted + b.months[i].remitted),
+      payable: r2(m.payable + b.months[i].payable),
+    })),
+    collected: r2(a.collected + b.collected), credits: r2(a.credits + b.credits),
+    net: r2(a.net + b.net), remitted: r2(a.remitted + b.remitted),
+    closingPayable: r2(a.closingPayable + b.closingPayable),
+  };
+}
+
+/**
+ * Assemble the plan's tax, however many taxes it has (§6.39).
+ *
+ * Each component runs its own schedule on its own filing cycle, carrying its own balance from year to year,
+ * and the results are added. That is what lets British Columbia charge a reclaimable 5 % GST quarterly and a
+ * non-reclaimable 7 % PST beside it without either one knowing the other exists.
+ */
+export function assembleGst(
+  p: GstPlanSources, components: GstSettings[], openingPayable = 0,
+): GstAssembly {
+  const live = components.filter((c) => c.registered && c.rate > 0);
   const t = taxableSeries(p);
   const cogsShape = shapeOf(t.cogsY1);
   const ohShape = shapeOf(t.ohY1);
   const capexShape = shapeOf(t.capexY1);
 
   const schedules: Record<number, GstSchedule> = {};
+  const byComponent: Record<number, { label: string; schedule: GstSchedule }[]> = {};
   const byYear: Record<number, GstOnYear> = {};
-  let carried = Math.max(0, n(openingPayable));
+  const zero12 = () => Array.from({ length: 12 }, () => 0);
+  const year1 = { onSales: zero12(), onCogs: zero12(), onOverheads: zero12(), onCapex: zero12(), remitted: zero12() };
+
+  // One carried balance per component: each files on its own cycle, so each owes its own closing period.
+  const carried = live.map(() => 0);
+  if (live.length) carried[0] = Math.max(0, n(openingPayable));
 
   for (const year of FORECAST_YEARS) {
     const i = year - 1;
@@ -122,32 +165,51 @@ export function assembleGst(p: GstPlanSources, g: GstSettings, openingPayable = 
     const cogs = year === 1 ? t.cogsY1 : onShape(t.cogsYears[i], cogsShape);
     const oh = year === 1 ? t.ohY1 : onShape(t.ohYears[i], ohShape);
     const capex = year === 1 ? t.capexY1 : onShape(t.capexYears[i], capexShape);
-    const purchases = Array.from({ length: 12 }, (_, m) => n(cogs[m]) + n(oh[m]) + n(capex[m]));
+    let combined = ZERO_SCHEDULE;
+    const parts: { label: string; schedule: GstSchedule }[] = [];
+    const totals = { onSales: 0, onCogs: 0, onOverheads: 0, onCapex: 0, remitted: 0, payableClosing: 0 };
 
-    const schedule = gstSchedule(sales, purchases, g, carried);
-    schedules[year] = schedule;
+    live.forEach((c, ci) => {
+      /**
+       * The rate is applied once, per line, here — and the schedule is handed the results rather than the
+       * bases. Rounding does not distribute: the tax on (cost + overheads + capex) is not always the tax on
+       * each of them added up, and at Quebec's 9.975 % that seam put the balance sheet eleven cents out,
+       * because the liability came from one calculation and the cash lines from the other (§6.39).
+       */
+      const taxed = (a: number[]) => a.map((v) => taxOn(v, c));
+      const onSalesM = taxed(sales);
+      const onCogsM = c.reclaimable ? taxed(cogs) : zero12();
+      const onOhM = c.reclaimable ? taxed(oh) : zero12();
+      const onCapexM = c.reclaimable ? taxed(capex) : zero12();
+      const creditsM = Array.from({ length: 12 }, (_, m) => r2(onCogsM[m] + onOhM[m] + onCapexM[m]));
 
-    /**
-     * Each line's tax is the sum of its MONTHS' tax, not the tax on its year. The two differ by a cent or
-     * two — round per month and add, versus add and round once — and that residue is enough to leave the
-     * balance sheet three cents out, because the liability comes from the schedule and the cash lines came
-     * from the other calculation. One computation: the schedule rounds per month, so these do too, and the
-     * three credit lines add to `schedule.credits` exactly.
-     */
-    const perMonth = (a: number[]) => sum(a.map((v) => taxOn(v, g)));
-    byYear[year] = {
-      onSales: perMonth(sales),
-      onCogs: perMonth(cogs),
-      onOverheads: perMonth(oh),
-      onCapex: perMonth(capex),
-      remitted: schedule.remitted,
-      payableClosing: schedule.closingPayable,
-    };
-    carried = schedule.closingPayable;
+      const schedule = gstScheduleFromTax(onSalesM, creditsM, c, carried[ci]);
+      carried[ci] = schedule.closingPayable;
+      combined = addSchedules(combined, schedule);
+      parts.push({ label: c.label, schedule });
+
+      totals.onSales = r2(totals.onSales + sum(onSalesM));
+      totals.onCogs = r2(totals.onCogs + sum(onCogsM));
+      totals.onOverheads = r2(totals.onOverheads + sum(onOhM));
+      totals.onCapex = r2(totals.onCapex + sum(onCapexM));
+      totals.remitted = r2(totals.remitted + schedule.remitted);
+      totals.payableClosing = r2(totals.payableClosing + schedule.closingPayable);
+
+      if (year === 1) {
+        for (let m = 0; m < 12; m++) {
+          year1.onSales[m] = r2(year1.onSales[m] + onSalesM[m]);
+          year1.onCogs[m] = r2(year1.onCogs[m] + onCogsM[m]);
+          year1.onOverheads[m] = r2(year1.onOverheads[m] + onOhM[m]);
+          year1.onCapex[m] = r2(year1.onCapex[m] + onCapexM[m]);
+          year1.remitted[m] = r2(year1.remitted[m] + schedule.months[m].remitted);
+        }
+      }
+    });
+
+    schedules[year] = combined;
+    byComponent[year] = parts;
+    byYear[year] = { ...totals };
   }
 
-  return {
-    schedules, byYear,
-    year1: { sales: t.salesMonths.slice(0, 12), cogs: t.cogsY1, overheads: t.ohY1, capex: t.capexY1 },
-  };
+  return { schedules, byComponent, byYear, year1 };
 }

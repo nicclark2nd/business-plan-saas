@@ -31,16 +31,41 @@
 const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 const r2 = (v: number) => Math.round(v * 100) / 100 + 0;
 
-export type GstFrequency = "monthly" | "quarterly" | "annually";
+import type { TaxComponent, TaxFrequency } from "./taxRegimes";
+
+export type GstFrequency = TaxFrequency;
 
 export type GstSettings = {
   registered: boolean;
+  /** What the client calls it on their own return: GST, VAT, PST, QST, Sales tax (§6.39). */
+  label: string;
   /** Per cent. 10 in Australia and New Zealand is 15, the UK 20 — the client states it. */
   rate: number;
   frequency: GstFrequency;
+  /**
+   * Whole months between a period closing and the money moving. One almost everywhere, two in the UK
+   * where the deadline is a month and seven days (§6.39).
+   */
+  lagMonths: number;
+  /**
+   * Does the business claim back what it pays on purchases? True for a value-added tax; false for a
+   * single-stage sales tax, where there is nothing to claim and `collected − credits` becomes
+   * `collected`, which is exactly the right answer for that regime.
+   */
+  reclaimable: boolean;
 };
 
-export const NOT_REGISTERED: GstSettings = { registered: false, rate: 0, frequency: "quarterly" };
+export const NOT_REGISTERED: GstSettings = { registered: false, label: "GST", rate: 0, frequency: "quarterly", lagMonths: 1, reclaimable: true };
+
+/** One component of a plan's tax, as this engine consumes it. */
+export const settingsFor = (c: TaxComponent, registered = true): GstSettings => ({
+  registered: registered && n(c.rate) > 0,
+  label: c.label,
+  rate: Math.min(100, Math.max(0, n(c.rate))),
+  frequency: c.frequency,
+  lagMonths: Math.max(0, Math.trunc(n(c.lagMonths)) || 0),
+  reclaimable: c.reclaimable !== false,
+});
 
 /** A stored settings row, cleaned. An unrecognised frequency falls back rather than throwing. */
 export function gstSettings(stored: {
@@ -50,8 +75,11 @@ export function gstSettings(stored: {
   const f = stored.gst_frequency;
   return {
     registered: true,
+    label: "GST",
     rate: Math.min(100, Math.max(0, n(Number(stored.gst_rate)))),
     frequency: f === "monthly" || f === "annually" ? f : "quarterly",
+    lagMonths: 1,
+    reclaimable: true,
   };
 }
 
@@ -75,12 +103,13 @@ export const inclusive = (amount: number, g: GstSettings, applies = true) => r2(
  */
 export type GstPeriod = { months: number[]; paidInMonth: number };
 
-export function gstPeriods(frequency: GstFrequency): GstPeriod[] {
+export function gstPeriods(frequency: GstFrequency, lagMonths = 1): GstPeriod[] {
   const size = frequency === "monthly" ? 1 : frequency === "annually" ? 12 : 3;
+  const lag = Math.max(0, Math.trunc(n(lagMonths)) || 0);
   const out: GstPeriod[] = [];
   for (let start = 0; start < 12; start += size) {
     const months = Array.from({ length: size }, (_, i) => start + i).filter((m) => m < 12);
-    out.push({ months, paidInMonth: months[months.length - 1] + 1 });   // filed after the period closes
+    out.push({ months, paidInMonth: months[months.length - 1] + lag });   // filed after the period closes
   }
   return out;
 }
@@ -117,15 +146,34 @@ export type GstSchedule = {
 export function gstSchedule(
   taxableSales: number[], taxablePurchases: number[], g: GstSettings, openingPayable = 0,
 ): GstSchedule {
+  // A single-stage sales tax has nothing to claim: the business either never paid it (bought for resale)
+  // or wears it inside the cost it already typed. So there are no credits, and `collected − credits`
+  // becomes `collected` — the right remittance for that regime, from the same formula (§6.39).
+  const credits = g.reclaimable
+    ? Array.from({ length: 12 }, (_, i) => taxOn(n(taxablePurchases[i]), g))
+    : Array.from({ length: 12 }, () => 0);
+  return gstScheduleFromTax(Array.from({ length: 12 }, (_, i) => taxOn(n(taxableSales[i]), g)), credits, g, openingPayable);
+}
+
+/**
+ * The same schedule, from tax already worked out (§6.39).
+ *
+ * This is the primitive, and it exists because rounding does not distribute: the tax on
+ * (cost of sales + overheads + capex) is not always the tax on each of them added up, and at a rate like
+ * Quebec's 9.975 % the difference shows — eleven cents out on the balance sheet, because the liability was
+ * computed one way and the cash lines the other. The caller applies the rate once, per line, and hands the
+ * results here, so there is only ever one set of figures.
+ */
+export function gstScheduleFromTax(
+  collected: number[], creditsIn: number[], g: GstSettings, openingPayable = 0,
+): GstSchedule {
   const zero: GstMonth[] = Array.from({ length: 12 }, (_, i) => ({
     month: i + 1, collected: 0, credits: 0, net: 0, remitted: 0, payable: 0,
   }));
   if (!g.registered) {
     return { months: zero, collected: 0, credits: 0, net: 0, remitted: 0, closingPayable: 0 };
   }
-
-  const collected = Array.from({ length: 12 }, (_, i) => taxOn(n(taxableSales[i]), g));
-  const credits = Array.from({ length: 12 }, (_, i) => taxOn(n(taxablePurchases[i]), g));
+  const credits = Array.from({ length: 12 }, (_, i) => n(creditsIn[i]));
 
   /**
    * What each month settles: the net of whichever period closed last month, plus anything brought forward.
@@ -137,7 +185,7 @@ export function gstSchedule(
    * sheet that is not a liability at all. So `remitted` is signed: positive is a payment, negative a refund.
    */
   const remitted = Array.from({ length: 12 }, () => 0);
-  for (const p of gstPeriods(g.frequency)) {
+  for (const p of gstPeriods(g.frequency, g.lagMonths)) {
     if (p.paidInMonth > 11) continue;                       // falls after the year; still owed at year end
     const net = p.months.reduce((a, m) => a + collected[m] - credits[m], 0);
     remitted[p.paidInMonth] = r2(remitted[p.paidInMonth] + net);

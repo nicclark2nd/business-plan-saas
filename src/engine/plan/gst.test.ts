@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { gstPeriods, gstSchedule, gstSettings, inclusive, salesTaxCountry, suggestedRate, taxLabel, taxOn, type GstSettings } from "./gst";
 
-const AU: GstSettings = { registered: true, rate: 10, frequency: "quarterly" };
+const AU: GstSettings = { registered: true, label: "GST", rate: 10, frequency: "quarterly", lagMonths: 1, reclaimable: true };
 const flat = (v: number) => Array(12).fill(v) as number[];
 const sum = (a: number[]) => Math.round(a.reduce((x, y) => x + y, 0) * 100) / 100;
 
