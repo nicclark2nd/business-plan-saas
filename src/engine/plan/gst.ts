@@ -171,21 +171,44 @@ const VAT = new Set([
   "Poland", "Sweden", "Denmark", "Norway", "Finland", "Austria", "Switzerland", "South Africa",
 ]);
 const GST = new Set([
-  "Australia", "New Zealand", "Canada", "Singapore", "India", "Malaysia",
+  "Australia", "New Zealand", "Canada", "Singapore", "India",
 ]);
+/**
+ * Single-stage sales taxes, which are NOT this model (§6.38.2).
+ *
+ * A value-added tax is charged at every stage and every business claims back what it paid, so only the
+ * final consumer bears it. A sales tax is charged once, at retail, to the end customer — a business buying
+ * for resale pays nothing and there is no credit to claim, because there was never any tax to claim back.
+ * Modelling one as the other invents input credits that do not exist and understates the cost of every
+ * purchase. Malaysia replaced its GST with SST in 2018 and belongs here, not above.
+ *
+ * The engine below still charges on sales correctly for these; what it gets wrong is the claim side, which
+ * is why `salesTaxCountry` exists — so the screens can say so rather than quietly producing a wrong number.
+ */
+const SALES_TAX = new Set(["United States", "Malaysia"]);
+export const salesTaxCountry = (country: string | null | undefined) => SALES_TAX.has((country ?? "").trim());
 
 export function taxLabel(country: string | null | undefined): string {
   const c = (country ?? "").trim();
   if (GST.has(c)) return "GST";
   if (VAT.has(c)) return "VAT";
-  return c === "United States" ? "Sales tax" : "GST";
+  if (c === "United States") return "Sales tax";
+  if (c === "Malaysia") return "SST";
+  return "GST";
 }
 
 /** The rate a country ordinarily charges, offered as a starting point rather than imposed. */
+/**
+ * The standard rate each country ordinarily charges, offered as a starting point rather than imposed.
+ * Verified against published rates in September 2026 — Finland moved to 25.5 % and was wrong here.
+ * A rate is a fact with a date on it, so this is a default the client can always overwrite, never a
+ * calculation input the plan depends on.
+ */
 const RATES: Record<string, number> = {
-  Australia: 10, "New Zealand": 15, Singapore: 9, Canada: 5, India: 18, Malaysia: 6,
+  Australia: 10, "New Zealand": 15, Singapore: 9, Canada: 5, India: 18, Malaysia: 10, Japan: 10,
   "United Kingdom": 20, Ireland: 23, Germany: 19, France: 20, Spain: 21, Italy: 22,
   Netherlands: 21, Belgium: 21, Portugal: 23, Poland: 23, Sweden: 25, Denmark: 25,
-  Norway: 25, Finland: 24, Austria: 20, Switzerland: 8.1, "South Africa": 15,
+  Norway: 25, Finland: 25.5, Austria: 20, Switzerland: 8.1, "South Africa": 15,
+  Estonia: 24, Slovakia: 23, Hungary: 27, Luxembourg: 17, "Czech Republic": 21, Greece: 24,
 };
 export const suggestedRate = (country: string | null | undefined) => RATES[(country ?? "").trim()] ?? 10;

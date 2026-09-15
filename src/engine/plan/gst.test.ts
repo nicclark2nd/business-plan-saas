@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gstPeriods, gstSchedule, gstSettings, inclusive, suggestedRate, taxLabel, taxOn, type GstSettings } from "./gst";
+import { gstPeriods, gstSchedule, gstSettings, inclusive, salesTaxCountry, suggestedRate, taxLabel, taxOn, type GstSettings } from "./gst";
 
 const AU: GstSettings = { registered: true, rate: 10, frequency: "quarterly" };
 const flat = (v: number) => Array(12).fill(v) as number[];
@@ -129,6 +129,19 @@ describe("what it is called where the business trades", () => {
     expect(suggestedRate("Australia")).toBe(10);
     expect(suggestedRate("New Zealand")).toBe(15);
     expect(suggestedRate("United Kingdom")).toBe(20);
+    expect(suggestedRate("Finland")).toBe(25.5);      // moved from 24 in 2024; it was wrong here
     expect(suggestedRate("Nowhere")).toBe(10);
+  });
+
+  it("knows which countries charge a single-stage sales tax rather than a value-added one", () => {
+    expect(salesTaxCountry("United States")).toBe(true);
+    expect(salesTaxCountry("Malaysia")).toBe(true);    // replaced GST with SST in 2018
+    expect(salesTaxCountry("Australia")).toBe(false);
+    expect(salesTaxCountry("United Kingdom")).toBe(false);
+    expect(salesTaxCountry(null)).toBe(false);
+  });
+
+  it("calls the tax what it is called there", () => {
+    expect(taxLabel("Malaysia")).toBe("SST");
   });
 });
