@@ -10,5 +10,6 @@ export type FixedCogs = {
   id: string; item_name: string; annual_cost: number;
   yearly_growth_rates: Record<string, number> | null;
   monthly_distribution: MonthlyDistribution | null;
+  gst_applies: boolean;
   sort_order: number;
 };

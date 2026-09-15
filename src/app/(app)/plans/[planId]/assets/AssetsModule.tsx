@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { GstToggle, GstFreeTag } from "@/components/module/GstToggle";
+import { useGst } from "@/components/GstProvider";
+
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
@@ -39,6 +42,7 @@ const LIFE_OPTIONS = LIVES.map((l) => ({ value: String(l.months), label: l.label
 export function AssetsModule({ planId, initial, mode, lenders, fyEndMonth }: {
   planId: string; initial: AssetRow[]; mode: "guided" | "advanced"; lenders: Record<string, string>; fyEndMonth: number;
 }) {
+  const gst = useGst();
   const num = useMoney();
   const MONTHS = planMonths(fyEndMonth);
   const router = useRouter();
@@ -59,7 +63,7 @@ export function AssetsModule({ planId, initial, mode, lenders, fyEndMonth }: {
     setDraft({
       id: key, _key: key, source: "entered", funding_debt_id: null, name: "", category: null,
       purchase_price: 0, residual_value: 0, useful_life_months: 60, method: "straight_line",
-      start_year: 1, start_month: 1, notes: null, sort_order: 0,
+      start_year: 1, start_month: 1, notes: null, gst_applies: true, sort_order: 0,
     });
     setDlg({ key });
   };
@@ -158,6 +162,7 @@ export function AssetsModule({ planId, initial, mode, lenders, fyEndMonth }: {
                   <Td>
                     <span className="inline-flex items-center gap-1">
                       <NameLink onClick={() => setDlg({ key: r._key })}>{r.name || <span className="text-muted-foreground">Untitled asset</span>}</NameLink>
+                      <GstFreeTag registered={gst.registered} label={gst.label} applies={r.gst_applies !== false} />
                       {locked && (
                         <LinkMark
                           title={`Bought with ${lenders[r.funding_debt_id ?? ""] ?? "finance"} — what it cost belongs to that loan. Click to open Funding.`}
@@ -280,6 +285,7 @@ function PendingBridge({ pending, error }: { pending: boolean; error?: string })
 
 /** One asset. A financed line shows what it cost as read-only and lets the write-off be chosen. */
 function AssetDialog({ row, lender, fyEndMonth, onCancel, onSave }: { row: Row & { _key: string }; lender: string; fyEndMonth: number; onCancel: () => void; onSave: (r: Row) => void }) {
+  const gst = useGst();
   const num = useMoney();
   const MONTH_OPTIONS = monthOptions(fyEndMonth);
   const [d, setD] = useState<Row>(row);
@@ -365,6 +371,8 @@ function AssetDialog({ row, lender, fyEndMonth, onCancel, onSave }: { row: Row &
           </div>
         </div>
 
+        <GstToggle registered={gst.registered} label={gst.label} kind="purchase" className="px-1"
+          checked={d.gst_applies !== false} onChange={(v) => setD((x) => ({ ...x, gst_applies: v }))} />
         <DialogFooter>
           <Button variant="outline" size="sm" type="button" onClick={onCancel}>Cancel</Button>
           <Button size="sm" type="button" onClick={() => onSave(d)} disabled={!d.name.trim()}>Save</Button>

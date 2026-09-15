@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { GstToggle, GstFreeTag } from "@/components/module/GstToggle";
+import { useGst } from "@/components/GstProvider";
+
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton, SortTh, sortRows, type Sort } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
@@ -51,6 +54,7 @@ const box = "h-8";
 export function SalesModule({ planId, initial, mode, initialArea, hasHistory, historicRevenue, historicEnd, fyEndMonth, firstProjectedYear: firstYearEnding, statement, currency }: {
   planId: string; initial: Product[]; mode: "guided" | "advanced"; initialArea: AreaKey; hasHistory: boolean | null; historicRevenue: number | null; historicEnd: string | null; fyEndMonth: number; firstProjectedYear: number | null; statement: string; currency: string;
 }) {
+  const gst = useGst();
   // What Year 1 actually is, from the two Settings fields that define the financial year (§6.33.1).
   const yearOne = planYearLabel(firstProjectedYear(firstYearEnding, fyEndMonth), fyEndMonth);
   // What this plan calls a line — Products, Services, Treatments (§6.31.1).
@@ -59,7 +63,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
   const num = useMoney();
   const MONTHS = planMonths(fyEndMonth);          // the plan's own twelve, not January to December
   const startup = hasHistory === false;
-  const blank = (): Row => ({ id: `tmp-${crypto.randomUUID()}`, _key: "", name: "", description: "", notes: "", lifecycle: null, average_price: 0, units_sold: 0, start_selling_year: 1, yearly_growth: {}, monthly_distribution: null, sort_order: 0, sold_as: "one_off", opening_clients: 0, client_life_months: 12, life_mode: "fixed", monthly_new_clients: null, clients_from_product_id: null });
+  const blank = (): Row => ({ id: `tmp-${crypto.randomUUID()}`, _key: "", name: "", description: "", notes: "", lifecycle: null, average_price: 0, units_sold: 0, start_selling_year: 1, yearly_growth: {}, monthly_distribution: null, sort_order: 0, sold_as: "one_off", opening_clients: 0, client_life_months: 12, life_mode: "fixed", monthly_new_clients: null, clients_from_product_id: null, gst_applies: true });
   // Year 1 is now: there is no year before it, so the first option names itself rather than inventing one.
   const startOptions = YEARS.map((y) => ({ value: String(y), label: y === 1 ? "Year 1 — the year you're in now" : `Year ${y}` }));
 
@@ -188,7 +192,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
             <tbody>
               {view.map((r) => (
                 <GridRow key={r._key} className={cn(r._error && "[&>td]:bg-bad-soft")} title={r._error}>
-                  <Td><NameLink onClick={() => setDlg({ kind: "product", key: r._key })}>{r.name}</NameLink>{mark(r)}{firstYear(r) > 1 && <span className="ml-2 text-xs text-muted-foreground">from Year {firstYear(r)}</span>}</Td>
+                  <Td><NameLink onClick={() => setDlg({ kind: "product", key: r._key })}>{r.name}</NameLink>{mark(r)}<GstFreeTag registered={gst.registered} label={gst.label} applies={r.gst_applies !== false} />{firstYear(r) > 1 && <span className="ml-2 text-xs text-muted-foreground">from Year {firstYear(r)}</span>}</Td>
                   <Td className="text-muted-foreground">{recurring(r) ? "Ongoing client" : "One-off job"}</Td>
                   <Td className="text-muted-foreground">{LIFECYCLE.find((l) => l.value === r.lifecycle)?.label ?? "—"}</Td>
                   <Td right className="num">{recurring(r) ? <>{num(monthlyFee(r))}<span className="text-[11px] text-muted-foreground">/mo</span></> : num(r.average_price)}</Td>
@@ -364,6 +368,7 @@ function IconButton({ children, title, onClick }: { children: React.ReactNode; t
 
 /* ---------- Product dialog (APeX "Product") ---------- */
 function ProductDialog({ r, others, onSave, onClose }: { r: Row; others: Row[]; onSave: (r: Row) => void; onClose: () => void }) {
+  const gst = useGst();
   const num = useMoney();
   const [d, setD] = useState<Row>(r);
   const set = (c: Partial<Row>) => setD((x) => ({ ...x, ...c }));
@@ -428,6 +433,8 @@ function ProductDialog({ r, others, onSave, onClose }: { r: Row; others: Row[]; 
               </div>
             )}
           </div>
+          <GstToggle registered={gst.registered} label={gst.label} kind="sale"
+            checked={d.gst_applies !== false} onChange={(v) => set({ gst_applies: v })} />
           <DialogFooter className="mt-1"><Button type="button" variant="outline" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!ok}>Save</Button></DialogFooter>
         </form>
       </DialogContent>

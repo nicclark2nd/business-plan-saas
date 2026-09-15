@@ -63,8 +63,17 @@ function taxableSeries(p: GstPlanSources) {
     ? p.products
     : taxedProducts);
 
-  // Cost of sales: a product's own cost follows the product's flag, a fixed line follows its own.
-  const cogsProducts = p.costProducts.filter(taxed);
+  /**
+   * Cost of sales. A product's flag governs what it CHARGES, not what it CLAIMS, and the two are genuinely
+   * different: a GST-free sale is zero-rated, so an exporter charges nothing on the sale and still claims
+   * every credit on what it cost to make. Filtering the cost side by the sales flag stripped those credits
+   * and quietly understated an exporter's cash. Fixed cost lines keep their own flag, because those are
+   * purchase decisions in their own right.
+   *
+   * Deliberately not modelled: input-taxed supplies — residential rent, most financial services — where
+   * the sale is untaxed AND the credits are denied. That is a different election, and rarer than exporting.
+   */
+  const cogsProducts = p.costProducts;
   const cogsFixed = p.fixedCogs.filter(taxed);
   const cogsY1 = planCogsMonths(cogsProducts, cogsFixed, (c) => sourceOf(c, p.products));
   const cogsYears = FORECAST_YEARS.map((_, i) =>
@@ -117,11 +126,20 @@ export function assembleGst(p: GstPlanSources, g: GstSettings, openingPayable = 
 
     const schedule = gstSchedule(sales, purchases, g, carried);
     schedules[year] = schedule;
+
+    /**
+     * Each line's tax is the sum of its MONTHS' tax, not the tax on its year. The two differ by a cent or
+     * two — round per month and add, versus add and round once — and that residue is enough to leave the
+     * balance sheet three cents out, because the liability comes from the schedule and the cash lines came
+     * from the other calculation. One computation: the schedule rounds per month, so these do too, and the
+     * three credit lines add to `schedule.credits` exactly.
+     */
+    const perMonth = (a: number[]) => sum(a.map((v) => taxOn(v, g)));
     byYear[year] = {
-      onSales: taxOn(sum(sales), g),
-      onCogs: taxOn(sum(cogs), g),
-      onOverheads: taxOn(sum(oh), g),
-      onCapex: taxOn(sum(capex), g),
+      onSales: perMonth(sales),
+      onCogs: perMonth(cogs),
+      onOverheads: perMonth(oh),
+      onCapex: perMonth(capex),
       remitted: schedule.remitted,
       payableClosing: schedule.closingPayable,
     };

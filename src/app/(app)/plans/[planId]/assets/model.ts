@@ -9,7 +9,7 @@ export type AssetRow = {
   purchase_price: number; residual_value: number;
   useful_life_months: number; method: DepreciationMethod;
   start_year: number; start_month: number;
-  notes: string | null; sort_order: number;
+  notes: string | null; gst_applies: boolean; sort_order: number;
 };
 
 export const METHODS: { value: DepreciationMethod; label: string }[] = [

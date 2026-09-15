@@ -32,5 +32,7 @@ export type Product = {
   life_mode: "average" | "fixed"; monthly_new_clients: Record<string, number> | null;
   /** Ongoing lines: every unit this product sells becomes a client here (a royalty following licence sales). */
   clients_from_product_id: string | null;
+  /** Whether GST/VAT is charged on this line's sales (§6.38). */
+  gst_applies: boolean;
 };
 export const isRecurring = (p: Pick<Product, "sold_as">) => p.sold_as === "recurring";

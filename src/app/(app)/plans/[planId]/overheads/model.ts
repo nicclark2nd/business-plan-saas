@@ -7,7 +7,7 @@ export type OverheadRow = {
   id: string; name: string; source: OverheadSource; current_value: number;
   yearly_change: Record<string, number> | null;
   monthly_distribution: MonthlyDistribution | null;
-  start_year: number; on_cost: boolean; sort_order: number;
+  start_year: number; on_cost: boolean; gst_applies: boolean; sort_order: number;
 };
 
 export const SOURCE_LABEL: Record<OverheadSource, string> = {

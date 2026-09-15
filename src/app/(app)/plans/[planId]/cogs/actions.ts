@@ -32,6 +32,7 @@ export async function saveProductCost(planId: string, p: {
 export async function upsertFixedCogs(planId: string, f: {
   id?: string; item_name: string; annual_cost: number;
   yearly_growth_rates?: Record<string, number> | null; monthly_distribution?: MonthlyDistribution | null;
+  gst_applies?: boolean;
 }): Promise<Result<{ id: string }>> {
   const supabase = await createClient();
   const name = (f.item_name ?? "").trim();
@@ -42,6 +43,7 @@ export async function upsertFixedCogs(planId: string, f: {
     annual_cost: Math.max(0, Number(f.annual_cost) || 0),
     yearly_growth_rates: pctMap(f.yearly_growth_rates),
     monthly_distribution: f.monthly_distribution ? exactHundred(f.monthly_distribution) : null,
+    gst_applies: f.gst_applies !== false,
   };
   const q = f.id
     ? supabase.from("plan_fixed_cogs").update(row).eq("id", f.id).eq("plan_id", planId).select("id").single()

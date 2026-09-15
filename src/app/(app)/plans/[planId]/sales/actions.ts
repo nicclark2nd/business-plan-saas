@@ -13,7 +13,7 @@ export async function upsertProduct(planId: string, p: {
   id?: string; name: string; description?: string | null; notes?: string | null; lifecycle?: string | null;
   average_price: number; units_sold: number; start_selling_year: number; yearly_growth?: Growth | null; monthly_distribution?: MonthlyDistribution | null;
   sold_as?: string | null; opening_clients?: number | null; client_life_months?: number | null; life_mode?: string | null;
-  monthly_new_clients?: Record<string, number> | null; clients_from_product_id?: string | null;
+  monthly_new_clients?: Record<string, number> | null; clients_from_product_id?: string | null; gst_applies?: boolean;
 }): Promise<Result<{ id: string }>> {
   const supabase = await createClient();
   const name = (p.name ?? "").trim();
@@ -58,6 +58,7 @@ export async function upsertProduct(planId: string, p: {
     life_mode: p.life_mode === "fixed" ? "fixed" : "average",
     monthly_new_clients: recurring && !source ? clients : null,
     clients_from_product_id: source,
+    gst_applies: p.gst_applies !== false,
   };
   const q = p.id
     ? supabase.from("plan_products").update(row).eq("id", p.id).eq("plan_id", planId).select("id").single()

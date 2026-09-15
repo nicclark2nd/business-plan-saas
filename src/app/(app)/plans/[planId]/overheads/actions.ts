@@ -18,7 +18,7 @@ const pctMap = (raw: Record<string, number> | null | undefined) => {
 
 /** A typed overhead. Synced lines never come through here — their figures belong to the module that owns them. */
 export async function upsertOverhead(planId: string, o: {
-  id?: string; name: string; current_value: number; start_year?: number | null; on_cost?: boolean | null;
+  id?: string; name: string; current_value: number; start_year?: number | null; on_cost?: boolean | null; gst_applies?: boolean;
   yearly_change?: Record<string, number> | null; monthly_distribution?: MonthlyDistribution | null;
 }): Promise<Result<{ id: string }>> {
   const supabase = await createClient();
@@ -30,6 +30,8 @@ export async function upsertOverhead(planId: string, o: {
     current_value: Math.max(0, Number(o.current_value) || 0),
     start_year: Math.min(5, Math.max(1, Math.trunc(Number(o.start_year)) || 1)),
     on_cost: !!o.on_cost,
+    // A wage line is never taxed, whatever the box says — the engine ignores it either way (§6.38).
+    gst_applies: !o.on_cost && o.gst_applies !== false,
     yearly_change: pctMap(o.yearly_change),
     monthly_distribution: o.monthly_distribution ? exactHundred(o.monthly_distribution) : null,
   };

@@ -202,3 +202,40 @@ describe("Year 1 still equals its own twelve months, with GST on", () => {
     expect(r.monthly.total.gstRemitted).toBe(r.f.cashFlow[1].gstRemitted);
   });
 });
+
+/**
+ * A GST-free sale is zero-rated, not exempt: the exporter charges nothing and still claims every credit on
+ * what the job cost. Filtering the cost side by the sales flag stripped those credits (§6.38).
+ */
+describe("a GST-free sale still claims its costs back", () => {
+  const on = run(AU);
+
+  it("charges nothing on the export but claims the credit on making it", () => {
+    // Export work: 4 x 40,000 sold GST-free, costing 4 x 20,000 which DOES carry GST.
+    // Slab line: 36 x 16,800 sold with GST, costing 36 x 9,000.
+    const taxableCost = 36 * 9000 + 4 * 20000;
+    expect(on.gst.byYear[1].onSales).toBeCloseTo(60480, 0);            // only the slab line is charged
+    expect(on.gst.byYear[1].onCogs).toBeCloseTo(taxableCost * 0.1, 0);  // both lines claim
+  });
+
+  it("still balances with the two sides treated differently", () => {
+    for (const y of FORECAST_YEARS) expect(on.f.balanceSheet[y].balanceCheck, `Y${y}`).toBe(0);
+    expect(on.f.reconciled).toBe(true);
+  });
+});
+
+/** The parts must add to the whole, or the balance sheet is out by the rounding between them (§6.38). */
+describe("the yearly figures and the schedule are one computation", () => {
+  for (const frequency of ["monthly", "quarterly", "annually"] as const) {
+    it(`agrees to the cent — ${frequency}`, () => {
+      const r = run({ registered: true, rate: 10, frequency });
+      for (const y of FORECAST_YEARS) {
+        const b = r.gst.byYear[y], s = r.gst.schedules[y];
+        expect(b.onSales, `collected Y${y}`).toBe(s.collected);
+        expect(Math.round((b.onCogs + b.onOverheads + b.onCapex) * 100) / 100, `credits Y${y}`).toBe(s.credits);
+        expect(b.remitted, `remitted Y${y}`).toBe(s.remitted);
+        expect(b.payableClosing, `payable Y${y}`).toBe(s.closingPayable);
+      }
+    });
+  }
+});

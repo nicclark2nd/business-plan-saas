@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { GstToggle, GstFreeTag } from "@/components/module/GstToggle";
+import { useGst } from "@/components/GstProvider";
+
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
@@ -48,6 +51,7 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
   planId: string; products: CostedProduct[]; fixed: FixedCogs[]; mode: "guided" | "advanced"; initialArea: AreaKey;
   historicRevenue: number | null; historicCogs: number | null; historicEnd: string | null; fyEndMonth: number;
 }) {
+  const gst = useGst();
   const num = useMoney();
   // COGS names the same lines Sales does, so it uses the same word (§6.31.1).
   const noun = useProductNoun();
@@ -102,7 +106,7 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
   };
   const addItem = () => {
     const id = `tmp-${crypto.randomUUID()}`;
-    setDraftNew({ id, _key: id, item_name: "", annual_cost: 0, yearly_growth_rates: null, monthly_distribution: null, sort_order: 0 });
+    setDraftNew({ id, _key: id, item_name: "", annual_cost: 0, yearly_growth_rates: null, monthly_distribution: null, gst_applies: true, sort_order: 0 });
     setDlg({ kind: "item", key: id });
   };
   const [error, setErr] = useState<string | undefined>();
@@ -200,7 +204,7 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
                 const y = fixedCostByYear(f);
                 return (
                   <GridRow key={f._key} className={cn(f._error && "[&>td]:bg-bad-soft")} title={f._error}>
-                    <Td><NameLink onClick={() => setDlg({ kind: "item", key: f._key })}>{f.item_name}</NameLink></Td>
+                    <Td><NameLink onClick={() => setDlg({ kind: "item", key: f._key })}>{f.item_name}</NameLink><GstFreeTag registered={gst.registered} label={gst.label} applies={f.gst_applies !== false} /></Td>
                     <Td right className="num text-muted-foreground">{num(f.annual_cost)}</Td>
                     {y.map((v, i) => <Td key={i} right className="num">{num(v)}</Td>)}
                     <Td className="whitespace-nowrap text-right">
@@ -361,6 +365,7 @@ function CostDialog({ p, source, onSave, onClose }: { p: CostedProduct; source: 
 
 /* ---------- Fixed cost item ---------- */
 function ItemDialog({ f, onSave, onClose }: { f: FixRow; onSave: (f: FixRow) => void; onClose: () => void }) {
+  const gst = useGst();
   const num = useMoney();
   const [d, setD] = useState<FixRow>(f);
   const [text, setText] = useState<Record<string, string>>({});
@@ -399,6 +404,8 @@ function ItemDialog({ f, onSave, onClose }: { f: FixRow; onSave: (f: FixRow) => 
               ))}
             </div>
           </div>
+          <GstToggle registered={gst.registered} label={gst.label} kind="purchase"
+            checked={d.gst_applies !== false} onChange={(v) => setD((x) => ({ ...x, gst_applies: v }))} />
           <DialogFooter><Button type="button" variant="outline" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!ok}>Save</Button></DialogFooter>
         </form>
       </DialogContent>

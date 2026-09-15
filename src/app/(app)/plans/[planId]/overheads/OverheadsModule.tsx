@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { GstToggle, GstFreeTag } from "@/components/module/GstToggle";
+import { useGst } from "@/components/GstProvider";
+
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
@@ -40,6 +43,7 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
   planId: string; initial: OverheadRow[]; mode: "guided" | "advanced";
   salaries: number[]; marketing: number[]; peopleCount: number; marketingLines: number; onCostPct: number; fyEndMonth: number;
 }) {
+  const gst = useGst();
   const num = useMoney();
   const MONTHS = planMonths(fyEndMonth);
   const router = useRouter();
@@ -56,7 +60,7 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
   const syncedFor = (source: "people" | "marketing"): Row => rows.find((r) => r.source === source) ?? {
     id: `tmp-${source}`, _key: `synced-${source}`, source, sort_order: source === "people" ? -2 : -1,
     name: source === "people" ? "Leadership Team salaries" : "Marketing spend",
-    current_value: 0, yearly_change: null, monthly_distribution: null, start_year: 1, on_cost: source === "people",
+    current_value: 0, yearly_change: null, monthly_distribution: null, start_year: 1, on_cost: source === "people", gst_applies: source !== "people",
   };
   const syncedValues = (source: "people" | "marketing") => (source === "people" ? salaries : marketing);
   const entered = rows.filter((r) => r.source === "entered" && r.name.trim());
@@ -93,7 +97,7 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
   };
   const add = () => {
     const id = `tmp-${crypto.randomUUID()}`;
-    setDraftNew({ id, _key: id, source: "entered", name: "", current_value: 0, yearly_change: null, monthly_distribution: null, start_year: 1, on_cost: false, sort_order: 0 });
+    setDraftNew({ id, _key: id, source: "entered", name: "", current_value: 0, yearly_change: null, monthly_distribution: null, start_year: 1, on_cost: false, gst_applies: true, sort_order: 0 });
     setDlg({ kind: "expense", key: id });
   };
   const commitOnCost = () => {
@@ -161,6 +165,7 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
                         <LinkMark title={`Set on ${SOURCE_LABEL[r.source]} — ${sourceNote(r)}`} onClick={() => router.push(`/plans/${planId}/${SOURCE_STEP[r.source]}`)} />
                         <span className="ml-2 rounded border border-border bg-secondary px-1.5 py-px text-[10.5px] font-semibold uppercase tracking-[.04em] text-muted-foreground">from {SOURCE_LABEL[r.source]}</span></>
                     : <NameLink onClick={() => setDlg({ kind: "expense", key: r._key })}>{r.name}</NameLink>}
+                    <GstFreeTag registered={gst.registered} label={gst.label} applies={r.source === "people" ? true : r.gst_applies !== false} />
                   {r.on_cost && <span className="ml-2 text-[11px] text-muted-foreground">+ on-costs</span>}
                   {!synced && r.start_year > 1 && <span className="ml-2 text-[11px] text-muted-foreground">from Year {r.start_year}</span>}
                 </Td>
@@ -242,6 +247,7 @@ function IconButton({ children, title, onClick }: { children: React.ReactNode; t
 
 /* ---------- one typed expense ---------- */
 function ExpenseDialog({ r, onSave, onClose }: { r: Row; onSave: (r: Row) => void; onClose: () => void }) {
+  const gst = useGst();
   const num = useMoney();
   const [d, setD] = useState<Row>(r);
   const [text, setText] = useState<Record<string, string>>({});
@@ -269,6 +275,9 @@ function ExpenseDialog({ r, onSave, onClose }: { r: Row; onSave: (r: Row) => voi
             <input type="checkbox" checked={d.on_cost} onChange={(e) => setD((x) => ({ ...x, on_cost: e.target.checked }))} className="size-3.5 accent-primary" />
             This is wages — add on-costs to it
           </label>
+          {/* Wages are never taxed, so the question disappears the moment the line is marked as wages. */}
+          {!d.on_cost && <GstToggle registered={gst.registered} label={gst.label} kind="purchase"
+            checked={d.gst_applies !== false} onChange={(v) => setD((x) => ({ ...x, gst_applies: v }))} />}
           <div>
             <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">% change each year</div>
             <div className="grid grid-cols-[90px_repeat(5,1fr)] items-center gap-x-3 gap-y-2">

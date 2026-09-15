@@ -18,6 +18,7 @@ const mo = (v: unknown) => Math.min(12, Math.max(1, Math.trunc(Number(v)) || 1))
 export async function upsertAsset(planId: string, a: {
   id?: string; name: string; category?: string | null; purchase_price: number; residual_value?: number;
   useful_life_months?: number; method?: DepreciationMethod; start_year?: number; start_month?: number; notes?: string | null;
+  gst_applies?: boolean;
 }): Promise<Result<{ id: string }>> {
   const supabase = await createClient();
   const name = (a.name ?? "").trim();
@@ -33,6 +34,7 @@ export async function upsertAsset(planId: string, a: {
     method: a.method ?? "straight_line",
     start_year: yr(a.start_year), start_month: mo(a.start_month),
     notes: (a.notes ?? "").trim() || null,
+    gst_applies: a.gst_applies !== false,
   };
   const q = a.id && !a.id.startsWith("tmp-")
     ? supabase.from("plan_fixed_assets").update(row).eq("id", a.id).eq("plan_id", planId).eq("source", "entered").select("id").single()
