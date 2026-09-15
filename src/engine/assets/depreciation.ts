@@ -107,14 +107,31 @@ export function bookValueByYear(a: FixedAsset): number[] {
   });
 }
 
-/** What leaves the bank the year the asset is bought — nil for a financed asset, whose cash is the loan. */
+/**
+ * What leaves the bank the year the asset is bought (§6.40).
+ *
+ * This used to return nil for a financed asset, reasoning that the lender paid so no cash moved. But the
+ * loan's own proceeds are already counted as money IN, by Funding and by the forecast alike — so the money
+ * arrived and never left, and the plan gained the asset for free. On the balance sheet that was 86,949 of
+ * assets against 86,949 of debt AND 86,949 of cash; on the Funding cash check it was a business that looked
+ * flush with money it had already spent on an excavator.
+ *
+ * Both flows are real and both are shown: borrowed in, paid to the supplier straight back out, net nil. It
+ * is also what a lender expects to read — a plan that hides the borrowing and the spending because they
+ * cancel is a plan that does not mention its own capital investment.
+ */
 export function capexByYear(a: FixedAsset): number[] {
   const out = YEARS.map(() => 0);
-  if (a.source === "finance") return out;             // the lender paid; repayments are the cash, not this
-  const y = startYear(a);
-  out[y - 1] = r2(num(a.purchase_price));
+  out[startYear(a) - 1] = r2(num(a.purchase_price));
   return out;
 }
+
+/**
+ * What the asset adds to the balance sheet. The same figure as the cash it costs, now that a financed asset
+ * pays its supplier out of the money it borrowed (§6.40) — kept as its own name because the balance sheet
+ * is asking a different question from the cash flow, and one of them may change again.
+ */
+export const additionsByYear = (a: FixedAsset) => capexByYear(a);
 
 /**
  * What leaves the bank month by month in Year 1 — the asset's own purchase month, nil if it is financed.
@@ -132,16 +149,16 @@ export function capexMonths(assets: FixedAsset[]): number[] {
   return out;
 }
 
-export type AssetYear = { year: number; depreciation: number; bookValue: number; capex: number };
+export type AssetYear = { year: number; depreciation: number; bookValue: number; capex: number; additions: number };
 
 /** Every asset in the plan, added up. */
 export function assetsByYear(assets: FixedAsset[]): AssetYear[] {
-  const dep = YEARS.map(() => 0), book = YEARS.map(() => 0), cap = YEARS.map(() => 0);
+  const dep = YEARS.map(() => 0), book = YEARS.map(() => 0), cap = YEARS.map(() => 0), add = YEARS.map(() => 0);
   for (const a of assets) {
-    const d = depreciationByYear(a), b = bookValueByYear(a), c = capexByYear(a);
-    for (let i = 0; i < 5; i++) { dep[i] += d[i]; book[i] += b[i]; cap[i] += c[i]; }
+    const d = depreciationByYear(a), b = bookValueByYear(a), c = capexByYear(a), n2 = additionsByYear(a);
+    for (let i = 0; i < 5; i++) { dep[i] += d[i]; book[i] += b[i]; cap[i] += c[i]; add[i] += n2[i]; }
   }
-  return YEARS.map((year, i) => ({ year, depreciation: r2(dep[i]), bookValue: r2(book[i]), capex: r2(cap[i]) }));
+  return YEARS.map((year, i) => ({ year, depreciation: r2(dep[i]), bookValue: r2(book[i]), capex: r2(cap[i]), additions: r2(add[i]) }));
 }
 
 /** Year 1 depreciation month by month, for the twelve-month cash flow and P&L. */

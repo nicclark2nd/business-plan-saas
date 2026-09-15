@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FORECAST_YEARS, buildForecast, type ForecastInput, type YearBase } from "./model";
 
 const base = (p: Partial<YearBase> = {}): YearBase => ({
-  revenue: 0, variableCogs: 0, fixedCogs: 0, overheads: 0, depreciation: 0, capex: 0, interest: 0,
+  revenue: 0, variableCogs: 0, fixedCogs: 0, overheads: 0, depreciation: 0, capex: 0, assetAdditions: 0, interest: 0,
   debtProceeds: 0, debtRepaid: 0, debtCurrent: 0, debtNonCurrent: 0, equityRaised: 0,
   extraordinaryIncome: 0, extraordinaryExpense: 0, disposalProceeds: 0, disposedBookValue: 0, ...p,
 });
@@ -35,7 +35,7 @@ describe("forecast", () => {
     expectReconciled(buildForecast(input({
       base: Object.fromEntries(FORECAST_YEARS.map((y) => [y, base({
         revenue: 2_119_240, variableCogs: 60_276, fixedCogs: 120_000, overheads: 636_290,
-        depreciation: 24_000, capex: y === 1 ? 90_000 : 12_000, interest: 18_500,
+        depreciation: 24_000, capex: y === 1 ? 90_000 : 12_000, assetAdditions: y === 1 ? 90_000 : 12_000, interest: 18_500,
         debtProceeds: y === 1 ? 250_000 : 0, debtRepaid: 40_000,
         debtCurrent: 40_000, debtNonCurrent: Math.max(0, 210_000 - 40_000 * y),
         equityRaised: y === 1 ? 100_000 : 0,

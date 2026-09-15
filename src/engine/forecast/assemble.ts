@@ -82,7 +82,13 @@ export function principalByYear(funding: FundingSource[], revenueMonths: number[
 export function raisedByYear(funding: FundingSource[]): { debt: number[]; equity: number[] } {
   const debt = FORECAST_YEARS.map(() => 0), equity = FORECAST_YEARS.map(() => 0);
   for (const s of funding) {
-    const year = Math.min(5, Math.max(1, Math.trunc(n(s.start_year)) || 1));
+    /**
+     * The money arrives when the SCHEDULE says it does, not when the row says (§6.40). The two are written from
+     * the same field today, so they agree — but they are two places holding one date, and if they ever
+     * drift the balance sheet carries a liability with no cash behind it, out by the whole loan. Reading
+     * the schedule's own draw date means they cannot drift.
+     */
+    const year = Math.min(5, Math.max(1, Math.trunc(n(s.loan?.start_year ?? s.rbf?.start_year ?? s.start_year)) || 1));
     const amount = n(s.amount);
     const borrowed = s.kind === "debt" || s.kind === "revenue_linked" || (s.kind === "owner" && !!s.loan);
     const bucket = borrowed ? debt : equity;          // grants and owner capital are not repayable
@@ -140,6 +146,7 @@ export function assembleBase(p: PlanSources): Record<number, YearBase> {
       overheads: r2(n(overheads[i]?.total)),
       depreciation: r2(n(assets[i]?.depreciation)),
       capex: r2(n(assets[i]?.capex)),
+      assetAdditions: r2(n(assets[i]?.additions)),
       interest: r2(n(interest[i])),
       debtProceeds: r2(n(raised.debt[i])),
       debtRepaid: r2(n(principal[i])),
@@ -175,8 +182,10 @@ export function assembleMonths(
   const interest = Array(12).fill(0) as number[];
 
   for (const s of p.funding) {
-    if ((Math.trunc(n(s.start_year)) || 1) === 1) {
-      const m = Math.min(12, Math.max(1, Math.trunc(n(s.start_month)) || 1));
+    // The same rule as the year: the schedule's own draw date, so the month and the year cannot disagree.
+    const drawYear = Math.trunc(n(s.loan?.start_year ?? s.rbf?.start_year ?? s.start_year)) || 1;
+    if (drawYear === 1) {
+      const m = Math.min(12, Math.max(1, Math.trunc(n(s.loan?.start_month ?? s.rbf?.start_month ?? s.start_month)) || 1));
       const borrowed = s.kind === "debt" || s.kind === "revenue_linked" || (s.kind === "owner" && !!s.loan);
       const bucket = borrowed ? debtProceeds : equityRaised;
       bucket[m - 1] = r2(bucket[m - 1] + n(s.amount));

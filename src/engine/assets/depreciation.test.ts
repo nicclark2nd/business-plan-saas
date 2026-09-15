@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { depreciationByYear, depreciationMonths, bookValueByYear, capexByYear, assetsByYear, assetsMonths, type FixedAsset } from "./depreciation";
+import { additionsByYear, depreciationByYear, depreciationMonths, bookValueByYear, capexByYear, assetsByYear, assetsMonths, type FixedAsset } from "./depreciation";
 
 const ute: FixedAsset = { name: "Ute", source: "entered", purchase_price: 60000, residual_value: 0, useful_life_months: 60, method: "straight_line", start_year: 1, start_month: 1 };
 
@@ -40,10 +40,22 @@ describe("fixed assets", () => {
     expect(bookValueByYear(dv)[4]).toBeGreaterThanOrEqual(5000);
   });
 
-  it("a financed asset costs no cash the year it is bought — the lender paid for it", () => {
-    expect(capexByYear({ ...ute, source: "finance" })).toEqual([0, 0, 0, 0, 0]);
+  /**
+   * This test used to assert the opposite, and the assertion was the bug (§6.40). A financed asset was
+   * treated as costing nothing — but the loan's proceeds are already counted as money IN, so the plan
+   * received the money and never spent it, and gained an asset for free: 60,000 of asset against 60,000 of
+   * debt AND 60,000 of cash. Both flows are real. Borrowed in, paid to the supplier straight back out.
+   */
+  it("a financed asset still costs what it costs — the borrowing is the other side of it", () => {
+    expect(capexByYear({ ...ute, source: "finance" })).toEqual([60000, 0, 0, 0, 0]);
     expect(capexByYear(ute)).toEqual([60000, 0, 0, 0, 0]);
-    expect(depreciationByYear({ ...ute, source: "finance" })[0]).toBe(12000);   // but it still depreciates
+    expect(depreciationByYear({ ...ute, source: "finance" })[0]).toBe(12000);
+  });
+
+  it("puts on the balance sheet exactly what it took out of the bank", () => {
+    for (const source of ["entered", "finance"] as const) {
+      expect(additionsByYear({ ...ute, source })).toEqual(capexByYear({ ...ute, source }));
+    }
   });
 
   it("adds the assets up and splits Year 1 across the months", () => {

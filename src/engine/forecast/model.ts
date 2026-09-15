@@ -36,7 +36,10 @@ export type YearBase = {
   fixedCogs: number;
   overheads: number;
   depreciation: number;
+  /** Cash out to buy assets. Nil for a financed asset — the lender paid. */
   capex: number;
+  /** What the assets bought add to the balance sheet, financed or not (§6.40). */
+  assetAdditions: number;
   interest: number;
   /** Debt drawn and repaid this year, and what is still owed at year end. */
   debtProceeds: number;
@@ -174,7 +177,7 @@ export type Forecast = {
 };
 
 const emptyBase = (): YearBase => ({
-  revenue: 0, variableCogs: 0, fixedCogs: 0, overheads: 0, depreciation: 0, capex: 0, interest: 0,
+  revenue: 0, variableCogs: 0, fixedCogs: 0, overheads: 0, depreciation: 0, capex: 0, assetAdditions: 0, interest: 0,
   debtProceeds: 0, debtRepaid: 0, debtCurrent: 0, debtNonCurrent: 0, equityRaised: 0,
   extraordinaryIncome: 0, extraordinaryExpense: 0, disposalProceeds: 0, disposedBookValue: 0,
   gst: NO_GST,
@@ -315,7 +318,8 @@ export function buildForecast(input: ForecastInput): Forecast {
     };
 
     // ---- balance sheet ---------------------------------------------------
-    fixedAssets = fixedAssets + n(b.capex) - n(b.depreciation) - n(b.disposedBookValue);
+    // What the business OWNS, not what it paid cash for: a financed asset is on the books too (§6.40).
+    fixedAssets = fixedAssets + n(b.assetAdditions) - n(b.depreciation) - n(b.disposedBookValue);
     equity = equity + (netProfit - dividends) + n(b.equityRaised);
 
     // One signed figure, presented the way a balance sheet reads it: owed by the business, or owed to it.

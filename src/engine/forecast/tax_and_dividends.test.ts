@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildForecast, FORECAST_YEARS, type ForecastInput, type YearBase } from "./model";
 
 const base = (over: Partial<YearBase> = {}): YearBase => ({
-  revenue: 0, variableCogs: 0, fixedCogs: 0, overheads: 0, depreciation: 0, capex: 0, interest: 0,
+  revenue: 0, variableCogs: 0, fixedCogs: 0, overheads: 0, depreciation: 0, capex: 0, assetAdditions: 0, interest: 0,
   debtProceeds: 0, debtRepaid: 0, debtCurrent: 0, debtNonCurrent: 0, equityRaised: 0,
   extraordinaryIncome: 0, extraordinaryExpense: 0, disposalProceeds: 0, disposedBookValue: 0, ...over,
 });
