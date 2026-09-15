@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { loadPlan } from "@/lib/planLoad";
 import { planMonthNames, planQuarters, planYearEnding, quarterOf } from "@/engine/plan/calendar";
 import { WhatIfModule } from "./WhatIfModule";
+import { lastApply } from "./actions";
 
 /**
  * The What-If planner (§6.41).
@@ -25,7 +26,10 @@ export default async function WhatIfPage({ params }: { params: Promise<{ planId:
   const [{ plan, mode, fyEndMonth, firstYear, noun, taxLabel, impliedFromHistory }, supabase] =
     await Promise.all([loadPlan(planId), createClient()]);
   // The people a goal can be given to (§6.42), and the plan's own quarters to give it in (§6.44).
-  const { data: people } = await supabase.from("plan_people").select("id, name, role").eq("plan_id", planId).order("sort_order");
+  const [{ data: people }, lastApplied] = await Promise.all([
+    supabase.from("plan_people").select("id, name, role").eq("plan_id", planId).order("sort_order"),
+    lastApply(planId),
+  ]);
   const quarters = [1, 2].flatMap((planYear) =>
     planQuarters(fyEndMonth, planYearEnding(firstYear, planYear)).map((q) => ({
       planYear, quarter: q.quarter, label: q.label, months: q.months,
@@ -37,6 +41,7 @@ export default async function WhatIfPage({ params }: { params: Promise<{ planId:
       monthNames={planMonthNames(fyEndMonth)} history={impliedFromHistory}
       people={people ?? []} quarters={quarters}
       thisQuarter={{ planYear: 1, quarter: quarterOf(fyEndMonth, new Date()) }}
+      lastApplied={lastApplied}
     />
   );
 }

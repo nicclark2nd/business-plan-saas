@@ -4,10 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { loadPlan } from "@/lib/planLoad";
 import { GOAL_AREAS, type GoalArea } from "@/engine/whatif/goals";
+import { applyChanges, plannedChanges } from "@/engine/whatif/apply";
+import { planLevers, type DayScope, type Levers } from "@/engine/whatif/levers";
 import { FORECAST_YEARS, type WorkingCapitalDays } from "@/engine/forecast/model";
 import { saveAssumptions } from "../forecast/actions";
 
-type Result = { ok: true } | { ok: false; error: string };
+type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 
 /**
  * The days sliders, written back into the plan (§6.43).
@@ -105,4 +107,154 @@ export async function createGoalsFromScenario(planId: string, goals: GoalToCreat
   if (error) return { ok: false, error: `Couldn't save: ${error.message}` };
   revalidatePath(`/plans/${planId}`, "layout");
   return { ok: true };
+}
+
+
+/* ------------------------------------------------------------------ *
+ * Make this the plan                                                  *
+ * ------------------------------------------------------------------ */
+
+/**
+ * The scenario, written into the plan (§6.45).
+ *
+ * The harder exit, and the one the screen is for. Until now the levers were a preview: they scaled COPIES of
+ * the product and overhead rows in memory, re-ran the forecast from those, and threw them away — so a client
+ * could model a price rise and then had to go into Sales and retype ten prices by hand. This writes them.
+ *
+ * Three rules it keeps.
+ *
+ * **It writes the BASE figures, not five years of them.** A product's price and units are the base the
+ * yearly growth compounds from, so one number per product carries the change through all five years exactly
+ * as the preview showed it.
+ *
+ * **It writes what the client was shown.** The rows come from `applyChanges`, the same rounded figures the
+ * confirmation listed line by line — not from the levers a second time. One computation, one set of numbers.
+ *
+ * **It saves the before-state first.** Everything it is about to overwrite goes into `plan_versions` with
+ * reason `whatif_apply`, so applying is reversible rather than a leap.
+ */
+export async function applyScenario(
+  planId: string, levers: Levers, dayScope: DayScope,
+): Promise<Result<{ changed: number }>> {
+  const { plan } = await loadPlan(planId);
+  const at = planLevers(plan.workingCapital[1]);
+  const planned = plannedChanges(plan.sources, levers, at);
+  if (!planned.changes.length && !planned.daysMoved) {
+    return { ok: false, error: "Nothing to apply — move a lever first." };
+  }
+
+  const supabase = await createClient();
+  const after = applyChanges(plan.sources, planned.changes);
+  const touched = new Set(planned.changes.map((c) => `${c.table}:${c.id}`));
+
+  /**
+   * The undo record. It holds the rows exactly as they are now, so restoring is writing them back rather
+   * than reversing arithmetic — which would not survive a client editing something in between.
+   */
+  const before = {
+    products: plan.sources.products.filter((p) => touched.has(`plan_products:${String(p.id ?? "")}`)),
+    overheads: plan.sources.overheads.filter((o) => touched.has(`plan_overheads:${String(o.id ?? "")}`)),
+    workingCapital: plan.workingCapital,
+  };
+  const { error: versionErr } = await supabase.from("plan_versions").insert({
+    plan_id: planId, reason: "whatif_apply",
+    label: `What-If: ${planned.changes.length} record${planned.changes.length === 1 ? "" : "s"}`,
+    snapshot: { levers, dayScope, changes: planned.changes, before },
+  });
+  if (versionErr) return { ok: false, error: `Couldn't save a version first: ${versionErr.message}` };
+
+  // Products: the columns the levers can move, taken from the adjusted row so they match the list exactly.
+  for (const p of after.products) {
+    const id = String(p.id ?? "");
+    if (!touched.has(`plan_products:${id}`)) continue;
+    const row = p as unknown as Record<string, unknown>;
+    const { error } = await supabase.from("plan_products").update({
+      average_price: row.average_price,
+      units_sold: row.units_sold,
+      cost_per_unit: row.cost_per_unit,
+      yearly_growth: row.yearly_growth ?? {},
+      monthly_new_clients: row.monthly_new_clients ?? null,
+    }).eq("id", id).eq("plan_id", planId);
+    if (error) return { ok: false, error: `Couldn't update ${String(row.name ?? "a product")}: ${error.message}` };
+  }
+
+  for (const o of after.overheads) {
+    const id = String(o.id ?? "");
+    if (!touched.has(`plan_overheads:${id}`)) continue;
+    const { error } = await supabase.from("plan_overheads")
+      .update({ current_value: o.current_value }).eq("id", id).eq("plan_id", planId);
+    if (error) return { ok: false, error: `Couldn't update ${o.name}: ${error.message}` };
+  }
+
+  if (planned.daysMoved) {
+    const days = {
+      debtorDays: Math.round(Number(levers.debtorDays ?? at.debtorDays)),
+      inventoryDays: Math.round(Number(levers.stockDays ?? at.stockDays)),
+      creditorDays: Math.round(Number(levers.creditorDays ?? at.creditorDays)),
+    };
+    const r = await saveDays(planId, days, dayScope);
+    if (!r.ok) return r;
+  }
+
+  revalidatePath(`/plans/${planId}`, "layout");
+  return { ok: true, data: { changed: planned.changes.length } };
+}
+
+/**
+ * Put it back (§6.45.1).
+ *
+ * A saved version is only a safety net if something can restore it. This takes the most recent
+ * `whatif_apply` and writes its stored rows back as they were — restoring the figures rather than reversing
+ * the arithmetic, which would not survive the client having edited something in between.
+ */
+export async function undoLastApply(planId: string): Promise<Result<{ label: string }>> {
+  const supabase = await createClient();
+  const { data: version, error } = await supabase.from("plan_versions")
+    .select("id, label, snapshot, created_at").eq("plan_id", planId).eq("reason", "whatif_apply")
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (!version) return { ok: false, error: "There is nothing to undo." };
+
+  const snap = version.snapshot as {
+    before?: {
+      products?: Record<string, unknown>[];
+      overheads?: Record<string, unknown>[];
+      workingCapital?: Record<number, { debtorDays: number; inventoryDays: number; creditorDays: number }>;
+    };
+  };
+  const before = snap.before ?? {};
+
+  for (const p of before.products ?? []) {
+    const { error: e } = await supabase.from("plan_products").update({
+      average_price: p.average_price, units_sold: p.units_sold, cost_per_unit: p.cost_per_unit,
+      yearly_growth: p.yearly_growth ?? {}, monthly_new_clients: p.monthly_new_clients ?? null,
+    }).eq("id", String(p.id)).eq("plan_id", planId);
+    if (e) return { ok: false, error: `Couldn't restore ${String(p.name ?? "a product")}: ${e.message}` };
+  }
+  for (const o of before.overheads ?? []) {
+    const { error: e } = await supabase.from("plan_overheads")
+      .update({ current_value: o.current_value }).eq("id", String(o.id)).eq("plan_id", planId);
+    if (e) return { ok: false, error: `Couldn't restore ${String(o.name ?? "an overhead")}: ${e.message}` };
+  }
+  if (before.workingCapital) {
+    const { data: s } = await supabase.from("plan_settings").select("cash_flow_assumptions").eq("plan_id", planId).maybeSingle();
+    const { error: e } = await supabase.from("plan_settings")
+      .update({ working_capital_schedule: before.workingCapital }).eq("plan_id", planId);
+    if (e) return { ok: false, error: e.message };
+    void s;
+  }
+
+  // The version has done its job; leaving it would let a second undo restore figures already restored.
+  await supabase.from("plan_versions").delete().eq("id", version.id).eq("plan_id", planId);
+  revalidatePath(`/plans/${planId}`, "layout");
+  return { ok: true, data: { label: String(version.label ?? "the last change") } };
+}
+
+/** Whether there is an applied scenario waiting to be undone, for the screen to offer it. */
+export async function lastApply(planId: string): Promise<{ label: string; at: string } | null> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("plan_versions")
+    .select("label, created_at").eq("plan_id", planId).eq("reason", "whatif_apply")
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  return data ? { label: String(data.label ?? "What-If change"), at: String(data.created_at) } : null;
 }
