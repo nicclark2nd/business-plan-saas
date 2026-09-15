@@ -17,7 +17,7 @@ import { productCostMonths } from "@/engine/cogs/direct";
 import { cn } from "@/lib/utils";
 import { YEARS, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, distributionTotal, type MonthlyDistribution } from "@/engine/sales/projection";
 import { sourceOf, recurring, monthlyFee, type AnyProduct } from "@/engine/sales/product";
-import { productCostYears, unitCostByYear, fixedCostByYear, fixedCostMonths, planCogsByYear, currentCost } from "@/engine/cogs/direct";
+import { productCostYears, unitCostByYear, fixedCostByYear, fixedCostMonths, planCogsByYear } from "@/engine/cogs/direct";
 import { useMoney } from "@/components/MoneyProvider";
 import { useProductNoun } from "@/components/VocabularyProvider";
 import { saveProductCost, upsertFixedCogs, deleteFixedCogs, continueFromCogs } from "./actions";
@@ -117,9 +117,6 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
   };
 
   const totals = planCogsByYear(priced, items, (p) => src(p as CostedProduct));
-  const currentVariable = priced.reduce((a, p) => a + currentCost(p), 0);
-  const currentFixed = items.reduce((a, f) => a + Number(f.annual_cost || 0), 0);
-  const currentTotal = currentVariable + currentFixed;
   const histMargin = historicRevenue && historicCogs !== null ? ((historicRevenue - historicCogs) / historicRevenue) * 100 : null;
   const gap = histMargin !== null && totals[0].margin !== null ? totals[0].margin - histMargin : null;
   const openItem = dlg && dlg.kind !== "cost" ? (draftNew && draftNew._key === dlg.key ? draftNew : items.find((x) => x._key === dlg.key)) ?? null : null;
@@ -198,14 +195,13 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
         <>
           <Toolbar><Meta className="ml-0">Production costs that do not move with volume. If it would be there with no sales at all, it belongs in Overheads instead.</Meta></Toolbar>
           <Grid>
-            <thead><tr><Th>Cost</Th><Th right style={{ width: 130 }}>This year</Th>{YEARS.map((y) => <Th key={y} right style={{ width: 110 }}>Year {y}</Th>)}<Th style={{ width: 70 }} /></tr></thead>
+            <thead><tr><Th>Cost</Th>{YEARS.map((y) => <Th key={y} right style={{ width: 110 }}>Year {y}</Th>)}<Th style={{ width: 70 }} /></tr></thead>
             <tbody>
               {items.filter((f) => f.item_name.trim()).map((f) => {
                 const y = fixedCostByYear(f);
                 return (
                   <GridRow key={f._key} className={cn(f._error && "[&>td]:bg-bad-soft")} title={f._error}>
                     <Td><NameLink onClick={() => setDlg({ kind: "item", key: f._key })}>{f.item_name}</NameLink><GstFreeTag registered={gst.registered} label={gst.label} applies={f.gst_applies !== false} /></Td>
-                    <Td right className="num text-muted-foreground">{num(f.annual_cost)}</Td>
                     {y.map((v, i) => <Td key={i} right className="num">{num(v)}</Td>)}
                     <Td className="whitespace-nowrap text-right">
                       <IconButton title="Edit cost" onClick={() => setDlg({ kind: "item", key: f._key })}>✎</IconButton>
@@ -215,10 +211,10 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
                   </GridRow>
                 );
               })}
-              {items.filter((f) => f.item_name.trim()).length === 0 && <tr><Td colSpan={8} className="h-12 text-muted-foreground">Nothing here yet — many businesses have none, and that is a fine answer.</Td></tr>}
+              {items.filter((f) => f.item_name.trim()).length === 0 && <tr><Td colSpan={7} className="h-12 text-muted-foreground">Nothing here yet — many businesses have none, and that is a fine answer.</Td></tr>}
             </tbody>
             {items.filter((f) => f.item_name.trim()).length > 0 && (
-              <FootRow><Td>Total</Td><Td right className="num">{num(currentFixed)}</Td>{totals.map((t) => <Td key={t.year} right className="num">{num(t.fixed)}</Td>)}<Td /></FootRow>
+              <FootRow><Td>Total</Td>{totals.map((t) => <Td key={t.year} right className="num">{num(t.fixed)}</Td>)}<Td /></FootRow>
             )}
           </Grid>
           <Note>Each cost carries its own yearly rises and its own split across the twelve months — the ▦ icon.</Note>
@@ -265,14 +261,14 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
       })()}
 
       <div className="border-t border-border px-5 py-2.5 text-xs text-muted-foreground">
-        Total COGS {num(currentTotal)} this year → {totals.map((t) => `${num(t.total)}`).join(" · ")} · gross margin {totals.map((t) => pctText(t.margin)).join(" · ")}
+        Total COGS {totals.map((t) => `${num(t.total)}`).join(" · ")} · gross margin {totals.map((t) => pctText(t.margin)).join(" · ")}
       </div>
 
       {openProduct && <CostDialog key={openProduct.id} p={openProduct} source={src(openProduct)} onSave={(p) => { saveCost(p); close(); }} onClose={close} />}
       {kill && (
         <ConfirmDelete
           title={`Delete ${kill.item_name || "this fixed cost"}?`}
-          what={<>{num(fixedCostByYear(kill)[0])} a year comes out of cost of sales, along with its yearly rises and its monthly split. Gross margin will move.</>}
+          what={<>{num(fixedCostByYear(kill)[0])} in Year 1 comes out of cost of sales, along with its yearly rises and its monthly split. Gross margin will move.</>}
           onCancel={() => setKill(null)}
           onConfirm={() => removeItem(kill)}
         />
@@ -386,7 +382,7 @@ function ItemDialog({ f, onSave, onClose }: { f: FixRow; onSave: (f: FixRow) => 
         <form className="grid gap-4" onSubmit={(e) => { e.preventDefault(); if (ok) onSave(d); }}>
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2"><label className={label}>What it is</label><Input autoFocus value={d.item_name} placeholder="e.g. Production wages" onChange={(e) => setD((x) => ({ ...x, item_name: e.target.value }))} className={box} /></div>
-            <div><label className={label}>Cost a year</label><Input inputMode="decimal" value={d.annual_cost ? num(d.annual_cost) : ""} placeholder="0" onChange={(e) => setD((x) => ({ ...x, annual_cost: parseNum(e.target.value) }))} className={cn(box, "num text-right")} /></div>
+            <div><label className={label}>Cost in Year 1</label><Input inputMode="decimal" value={d.annual_cost ? num(d.annual_cost) : ""} placeholder="0" onChange={(e) => setD((x) => ({ ...x, annual_cost: parseNum(e.target.value) }))} className={cn(box, "num text-right")} /></div>
           </div>
           <div>
             <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">% rise each year</div>
@@ -395,10 +391,14 @@ function ItemDialog({ f, onSave, onClose }: { f: FixRow; onSave: (f: FixRow) => 
               <div className="text-[12.5px] font-semibold">Rise</div>
               {YEARS.map((y) => (
                 <div key={y}>
-                  <span className="relative block">
-                    <Input inputMode="text" value={g(y)} onChange={(e) => setG(y, e.target.value)} className={cn(box, "num pr-6 text-right")} />
-                    <span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
-                  </span>
+                  {y === 1
+                    /* The cost above IS Year 1; there is nothing before it to rise from, which is what the
+                       Overheads dialog and the Sales growth dialog both say (§6.48). */
+                    ? <div className={cn(box, "flex items-center justify-end pr-2 text-[11px] text-muted-foreground/70")}>base year</div>
+                    : <span className="relative block">
+                      <Input inputMode="text" value={g(y)} onChange={(e) => setG(y, e.target.value)} className={cn(box, "num pr-6 text-right")} />
+                      <span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+                      </span>}
                   <div className="pr-1.5 text-right text-[11px] text-muted-foreground num">{num(years[y - 1])}</div>
                 </div>
               ))}

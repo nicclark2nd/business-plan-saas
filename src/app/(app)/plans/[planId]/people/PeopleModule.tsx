@@ -182,14 +182,14 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
 
       {area === "salary" && (
         <>
-          <Toolbar><Meta className="ml-0">Adjust % compounds on the year before (negative for a cut); the Salary row calculates and the total feeds Overheads.</Meta></Toolbar>
+          <Toolbar><Meta className="ml-0">Type the salary in the person&apos;s first year; Adjust % compounds on the year before from the year after that (negative for a cut). The total feeds Overheads.</Meta></Toolbar>
           <Grid>
-            <thead><tr><Th style={{ width: "20%" }}>Name</Th><Th right style={{ width: 120 }}>Base</Th><Th style={{ width: 100 }} />{SALARY_YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}<Th right style={{ width: 150 }} className="max-[1280px]:hidden">Y5 vs base</Th></tr></thead>
+            <thead><tr><Th style={{ width: "20%" }}>Name</Th><Th style={{ width: 100 }} />{SALARY_YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}<Th right style={{ width: 150 }} className="max-[1280px]:hidden">Y5 vs first year</Th></tr></thead>
             <tbody>
               {visible.map((r) => {
                 const sy = startYear(r);
                 if (r.role === "contractor") return (
-                  <Row key={r._key}><Td><NameLink onClick={() => setScope(r._key)}>{r.name || r.first_name}</NameLink><div className="text-[11.5px] text-muted-foreground">Contractor</div></Td><Td colSpan={8} className="text-muted-foreground">Costed in COGS or Overheads, not here.</Td></Row>
+                  <Row key={r._key}><Td><NameLink onClick={() => setScope(r._key)}>{r.name || r.first_name}</NameLink><div className="text-[11.5px] text-muted-foreground">Contractor</div></Td><Td colSpan={7} className="text-muted-foreground">Costed in COGS or Overheads, not here.</Td></Row>
                 );
                 const sched = salarySchedule(r.annual_salary ?? 0, r.salary_adjustments, sy);
                 const change = scheduleChangeFromBase(r.annual_salary ?? 0, r.salary_adjustments, sy);
@@ -199,15 +199,21 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
                       <NameLink onClick={() => setScope(r._key)}>{r.name || r.first_name || "New person"}</NameLink>
                       <div className={cn("text-[11.5px]", sy > 1 ? "text-warn" : "text-muted-foreground")}>{sy > 5 ? "starts after Year 5" : sy > 1 ? `joins Year ${sy} · ${r.started_text}` : "from Year 1"}</div>
                     </Td>
-                    <Td />
                     <Td className="text-[11px] font-semibold uppercase tracking-[.04em] text-muted-foreground">Adjust %</Td>
-                    {SALARY_YEARS.map((y) => <Td key={y} right className="text-muted-foreground">{y < sy ? "—" : <CellInput numeric value={String(r.salary_adjustments?.[String(y)] ?? "")} placeholder="0" onChange={(e) => edit(r._key, { salary_adjustments: { ...r.salary_adjustments, [String(y)]: Number(e.target.value.replace(/[^\d.-]/g, "")) || 0 } })} />}</Td>)}
+                    {/* Their own first year is the salary typed below it; there is nothing before it to grow
+                        from, which is what Overheads and the Sales growth dialog both say (§6.48). */}
+                    {SALARY_YEARS.map((y) => <Td key={y} right className="text-muted-foreground">{y < sy ? "—" : y === sy ? <span className="text-[11px] text-muted-foreground/70">base year</span> : <CellInput numeric value={String(r.salary_adjustments?.[String(y)] ?? "")} placeholder="0" onChange={(e) => edit(r._key, { salary_adjustments: { ...r.salary_adjustments, [String(y)]: Number(e.target.value.replace(/[^\d.-]/g, "")) || 0 } })} />}</Td>)}
                     <Td className="max-[1280px]:hidden" />
                   </tr>,
                   <tr key={r._key + "b"} data-row={r._key} onBlur={(e) => left(e) && commitPerson(r._key)} className="[&>td]:h-[30px] [&>td]:font-semibold">
-                    <Td right className="!font-normal"><CellInput numeric value={num(r.annual_salary)} onChange={(e) => edit(r._key, { annual_salary: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} /></Td>
                     <Td className="text-[11px] font-semibold uppercase tracking-[.04em] text-muted-foreground">Salary</Td>
-                    {sched.map((s) => <Td key={s.year} right className={cn("num", s.year < sy && "text-muted-foreground")}>{s.year < sy ? "—" : num(s.value)}</Td>)}
+                    {sched.map((s) => (
+                      <Td key={s.year} right className={cn("num", s.year < sy && "text-muted-foreground", s.year === sy && "!font-normal")}>
+                        {s.year < sy ? "—"
+                          : s.year === sy ? <CellInput numeric value={num(r.annual_salary)} onChange={(e) => edit(r._key, { annual_salary: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} />
+                          : num(s.value)}
+                      </Td>
+                    ))}
                     <Td right className={cn("num max-[1280px]:hidden", change.delta < 0 ? "text-bad" : change.delta > 0 ? "text-good" : "text-muted-foreground")}>{change.delta >= 0 ? "+" : "−"}{num(Math.abs(change.delta))} ({change.percent >= 0 ? "+" : ""}{change.percent.toFixed(1)}%)</Td>
                   </tr>,
                 ];
@@ -215,7 +221,6 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
             </tbody>
             <FootRow>
               <Td>Total → Overheads</Td>
-              <Td right className="num">{num(people.filter((p) => p.role !== "contractor").reduce((a, p) => a + (Number(p.annual_salary) || 0), 0))}</Td>
               <Td />
               {totalSalariesByYear(people.map((p) => ({ ...p, startYear: startYear(p) }))).map((t) => <Td key={t.year} right className="num">{num(t.value)}</Td>)}
               <Td className="max-[1280px]:hidden" />

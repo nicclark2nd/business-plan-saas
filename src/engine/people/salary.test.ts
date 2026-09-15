@@ -17,9 +17,25 @@ describe("salary schedule (APeX parity)", () => {
     expect(salaryForYear(90000, {}, 3, 3)).toBe(90000);
     expect(salaryForYear(90000, {}, 6, 5)).toBe(0);
   });
+  it("a salary IS the person's first-year figure, and adjustments compound from the year after", () => {
+    // 120,000 joining in Year 1, rising 3 % a year: Year 1 is what was typed (\u00a76.48).
+    expect(salarySchedule(120000, { "2": 3, "3": 3, "4": 3, "5": 3 }, 1).map((y) => y.value))
+      .toEqual([120000, 123600, 127308, 131127.24, 135061.06]);
+    // And for someone joining later, their own first year is the figure, not a year to grow through.
+    expect(salarySchedule(90000, { "4": 5 }, 3).map((y) => y.value)).toEqual([0, 0, 90000, 94500, 94500]);
+  });
+
+  it("still reads the start year's key on a row migration 0026 has not folded yet (\u00a76.29)", () => {
+    const legacy = salarySchedule(120000, { "1": 3, "2": 3, "3": 3, "4": 3, "5": 3 }, 1).map((y) => y.value);
+    const folded = salarySchedule(123600, { "2": 3, "3": 3, "4": 3, "5": 3 }, 1).map((y) => y.value);
+    expect(folded).toEqual(legacy);                                  // the fold changes no figure anywhere
+  });
+
   it("treats blank adjustments as flat", () => {
     expect(salarySchedule(100000, null, 1).every((y) => y.value === 100000)).toBe(true);
   });
+  // The startYear-2 person below still carries a Year 2 key: the shape migration 0026 folds, kept here so the
+  // deploy bridge stays covered until every plan is migrated.
   it("totals across people and leaves contractors out", () => {
     const t = totalSalariesByYear([
       { annual_salary: 100000, salary_adjustments: null, startYear: 1 },

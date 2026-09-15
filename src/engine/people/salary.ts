@@ -1,8 +1,8 @@
 /**
  * Key-person salary schedule — ported from APeX `ownerSalaryProjectionUtils.ts`, with one change (SaaS §6.11):
  * the year a person's salary starts is DERIVED from their Started date against the plan's first financial year,
- * not typed separately. A person's salary applies from that year; each year's adjustment % compounds on the
- * previous year. Years before the start year are 0 (the person is not yet employed in the plan).
+ * not typed separately. Their salary is the figure for that year, and each later year's adjustment % compounds
+ * on the year before. Years before the start year are 0 (the person is not yet employed in the plan).
  */
 export type SalaryYear = 1 | 2 | 3 | 4 | 5;
 export const SALARY_YEARS: SalaryYear[] = [1, 2, 3, 4, 5];
@@ -49,11 +49,21 @@ export function tenureLabel(startedOn: Date | string | null | undefined, fyStart
   return years < 1 ? "< 1 yr" : `${years} yr${years === 1 ? "" : "s"}`;
 }
 
+/**
+ * What a person is paid in one plan year. `annual_salary` IS their FIRST year's salary — Year 1 for someone
+ * already employed, the year they join for a planned hire — and the adjustments compound from the year after
+ * (§6.48). That is the same rule a product's price, a per-unit cost, an overhead and a fixed cost of sales
+ * all follow, so every screen in the app can say one sentence: the figure is the first year, the percentages
+ * start after it.
+ */
 export function salaryForYear(baseSalary: number, adjustments: SalaryAdjustments | null | undefined, startYear: unknown, year: number): number {
   const target = normalizeStartYear(year);
   const start = Math.trunc(Number(startYear)) || 1;
   if (start > 5 || target < start) return 0;
   let salary = Number(baseSalary) || 0;
+  // The loop opens ON the start year rather than after it, so rows not yet folded by migration 0026 keep the
+  // figures they had. The deploy bridge (§6.29): once every plan is migrated the start year's key is gone and
+  // the first pass multiplies by 1, and this can begin at `start + 1`.
   for (let y = Math.max(1, start); y <= target; y++) salary *= 1 + (Number(adjustments?.[String(y)]) || 0) / 100;
   return Number(salary.toFixed(2));
 }

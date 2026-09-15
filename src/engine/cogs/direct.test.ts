@@ -73,10 +73,17 @@ describe("direct costs", () => {
     expect(km.reduce((a, b) => a + b, 0)).toBeCloseTo(productCostYears(coach)[0].cost, 0);
   });
 
-  it("fixed COGS grows on its own and splits across the year", () => {
-    const wage = { annual_cost: 30000, yearly_growth_rates: { "1": 1, "2": 1, "3": 1, "4": 1, "5": 1 }, monthly_distribution: null };
+  it("a fixed cost IS its Year 1 figure, and rises from Year 2", () => {
+    const wage = { annual_cost: 30300, yearly_growth_rates: { "2": 1, "3": 1, "4": 1, "5": 1 }, monthly_distribution: null };
     expect(fixedCostByYear(wage)).toEqual([30300, 30603, 30909.03, 31218.12, 31530.3]);   // APeX Base Salary
+    expect(fixedCostByYear(wage)[0]).toBe(30300);                   // what was typed is what Year 1 shows
     expect(fixedCostMonths(wage).reduce((a, b) => a + b, 0)).toBeCloseTo(30300, 0);
+  });
+
+  it("still reads a Year 1 rate on a row migration 0026 has not folded yet (\u00a76.29)", () => {
+    const legacy = { annual_cost: 30000, yearly_growth_rates: { "1": 1, "2": 1, "3": 1, "4": 1, "5": 1 }, monthly_distribution: null };
+    const folded = { annual_cost: 30300, yearly_growth_rates: { "2": 1, "3": 1, "4": 1, "5": 1 }, monthly_distribution: null };
+    expect(fixedCostByYear(legacy)).toEqual(fixedCostByYear(folded));   // the fold changes no figure anywhere
   });
 
   it("the plan totals variable and fixed, and states the margin", () => {

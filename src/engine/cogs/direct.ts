@@ -10,7 +10,7 @@
  * Year 3 carries its Year 3 cost and rises from Year 4. A line with no direct cost — a royalty, a licence fee —
  * is simply left at zero, which the per-unit model can state honestly rather than fudge.
  *
- * Fixed COGS (a production wage, a yard) does not vary with volume: an annual amount, its own yearly increases
+ * Fixed COGS (a production wage, a yard) does not vary with volume: a Year 1 amount, its own rises from Year 2
  * and its own split across the twelve months.
  */
 import { YEARS, yearlyProjection, normalizeDistribution, monthlySales, type MonthlyDistribution } from "../sales/projection";
@@ -75,9 +75,20 @@ export type FixedCost = {
   gst_applies?: boolean | null;
 };
 
+/**
+ * A fixed cost across the five years. `annual_cost` IS the Year 1 figure — the same shape a product's price
+ * and an overhead's amount have (§6.48) — and the rises compound from Year 2. A fixed cost has no start year:
+ * a yard or a production wage is there from the first day the plan covers.
+ */
 export function fixedCostByYear(f: FixedCost): number[] {
   let v = num(f.annual_cost);
-  return YEARS.map((year) => { v = v * (1 + num(f.yearly_growth_rates?.[String(year)]) / 100); return r2(v); });
+  return YEARS.map((year) => {
+    if (year > 1) v = v * (1 + num(f.yearly_growth_rates?.[String(year)]) / 100);
+    // Rows not yet folded by migration 0026 still carry a Year 1 rate, and keep the figure they had until it
+    // runs. The deploy bridge (§6.29): deletable once every plan is migrated, because the migration drops the key.
+    else v = v * (1 + num(f.yearly_growth_rates?.["1"]) / 100);
+    return r2(v);
+  });
 }
 export const fixedCostMonths = (f: FixedCost) => monthlySales(fixedCostByYear(f)[0], normalizeDistribution(f.monthly_distribution));
 
