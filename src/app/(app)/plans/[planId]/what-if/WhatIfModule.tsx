@@ -559,10 +559,19 @@ function LeverRow({ k, lv, at, set, note, check, history }: {
   const mark = history == null ? null : Math.min(100, Math.max(0, ((history - r.min) / (r.max - r.min)) * 100));
   return (
     <div className="grid grid-cols-[112px_minmax(0,1fr)_88px] items-center gap-x-3 gap-y-1 border-b border-border px-3 py-2 last:border-b-0">
-      <label className={cn("text-[13px]", moved ? "font-semibold text-foreground" : "text-muted-foreground")} htmlFor={`lv-${k}`}>
-        {LABEL[k]}
-        {history != null && <span className="block text-[10.5px] font-normal tabular-nums text-faint">{history} in history</span>}
-      </label>
+      <div className="flex flex-col items-start">
+        <label className={cn("text-[13px]", moved ? "font-semibold text-foreground" : "text-muted-foreground")} htmlFor={`lv-${k}`}>
+          {LABEL[k]}
+        </label>
+        {/* The business's own record, and a way back to it: one click puts the slider where the accounts are. */}
+        {history != null && (
+          <button type="button" onClick={() => set(k, clamp(history))}
+            title={`Set ${LABEL[k].toLowerCase()} back to what your accounts imply`}
+            className="text-[10.5px] tabular-nums text-faint underline-offset-2 hover:text-primary hover:underline">
+            {history} in history
+          </button>
+        )}
+      </div>
       <div className="relative flex items-center">
         <input
           id={`lv-${k}`} type="range" min={r.min} max={r.max} step={r.step} value={value}

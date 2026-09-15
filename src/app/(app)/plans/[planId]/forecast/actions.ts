@@ -30,6 +30,30 @@ export async function saveAssumptions(planId: string, input: {
   return { ok: true };
 }
 
+/**
+ * Back to the days the business's own accounts imply (§6.43.2).
+ *
+ * `working_capital_schedule` starts empty, and while it is empty the forecast reads the days implied by the
+ * last historic period — so the plan tracks the business. The moment anything is saved the grid is populated
+ * and that link is cut: the figures stay right, but they stop following the accounts, and there was no way
+ * back. A client who corrected their Historic balance sheet after touching this screen would have been
+ * forecasting on the old reading with nothing to tell them.
+ *
+ * Emptying the column restores the fallback rather than writing today's implied figures into it, which is
+ * the difference between reverting and copying: a later correction to Historic moves the forecast again.
+ *
+ * Only the working-capital column. Tax timing, prepayments and accruals are the client's own judgement and
+ * have nothing to do with what the accounts imply.
+ */
+export async function revertToHistoricDays(planId: string): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("plan_settings")
+    .update({ working_capital_schedule: {} }).eq("plan_id", planId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/plans/${planId}`, "layout");
+  return { ok: true };
+}
+
 export async function continueFromForecast(planId: string) {
   redirect(`/plans/${planId}/goals`);
 }

@@ -3,6 +3,8 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ModuleFrame, ModuleFooter } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row as GridRow, TOTAL_ROW, Toolbar, Meta, Note } from "@/components/module/DataGrid";
 import { useMoney } from "@/components/MoneyProvider";
@@ -13,7 +15,7 @@ import { creditorBalance, debtorBalance, inventoryBalance } from "@/engine/forec
 import type { MonthCash, MonthlyCashFlow } from "@/engine/forecast/monthly";
 import type { GstSchedule } from "@/engine/plan/gst";
 import { planMonths, planYearLabel } from "@/engine/plan/calendar";
-import { saveAssumptions } from "./actions";
+import { revertToHistoricDays, saveAssumptions } from "./actions";
 
 /**
  * Review forecast (§6.32.3) — profit and loss, cash flow, balance sheet and the assumptions behind them, on
@@ -74,6 +76,15 @@ export function ForecastModule({
   const [wc, setWc] = useState(workingCapital);
   const [ct, setCt] = useState(cashTiming);
   const [err, setErr] = useState<string>();
+  const [revert, setRevert] = useState(false);
+  /**
+   * The grids are edited locally and saved on blur, so they are state — but the plan can move underneath
+   * them (a revert here, or the days saved from the What-If planner), and `useState` would hold the old
+   * figures on screen while the statements above showed the new ones. Same rule as the area: adjusted during
+   * render off the prop, so the corrected grid paints first time.
+   */
+  const [gridFrom, setGridFrom] = useState(workingCapital);
+  if (workingCapital !== gridFrom) { setGridFrom(workingCapital); setWc(workingCapital); setCt(cashTiming); }
 
   const failures = forecast.invariants.filter((i) => !i.passed);
   const pnl = forecast.pnl, cf = forecast.cashFlow, bs = forecast.balanceSheet;
@@ -281,12 +292,75 @@ export function ForecastModule({
           </Grid>
           <Note>
             {impliedFromHistory
-              ? <>Your own accounts imply {impliedFromHistory.debtorDays} debtor days, {impliedFromHistory.inventoryDays} stock days and {impliedFromHistory.creditorDays} creditor days. A forecast that assumes better terms than the business has ever achieved is the first thing a lender questions.</>
+              ? <span className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                  <span>Your own accounts imply {impliedFromHistory.debtorDays} debtor days, {impliedFromHistory.inventoryDays} stock days and {impliedFromHistory.creditorDays} creditor days. A forecast that assumes better terms than the business has ever achieved is the first thing a lender questions.</span>
+                  {assumptionsSet && <Button size="sm" variant="outline" onClick={() => setRevert(true)}>Use the days my history implies</Button>}
+                </span>
               : <>With no history to read, these start at ordinary trade terms. They are assumptions, not facts — change them to what you can actually collect and actually pay.</>}
           </Note>
         </>
       )}
+
+      {revert && impliedFromHistory && (
+        <RevertDays
+          implied={impliedFromHistory} current={wc[1]} pending={pending}
+          onClose={() => setRevert(false)}
+          onConfirm={() => start(async () => {
+            const r = await revertToHistoricDays(planId);
+            if (!r.ok) { setErr(r.error); return; }
+            setErr(undefined); setRevert(false); router.refresh();
+          })}
+        />
+      )}
     </ModuleFrame>
+  );
+}
+
+/**
+ * Handing the days back to the accounts (§6.43.2).
+ *
+ * Worth confirming, because it overwrites five years of figures somebody may have meant — and worth saying
+ * what it really does, which is not "copy today's implied numbers in" but "stop overriding them", so a
+ * correction to Historic moves the forecast again.
+ */
+function RevertDays({ implied, current, pending, onClose, onConfirm }: {
+  implied: WorkingCapitalDays; current: WorkingCapitalDays; pending: boolean;
+  onClose: () => void; onConfirm: () => void;
+}) {
+  const rows: [string, number, number][] = [
+    ["Debtor days", current.debtorDays, implied.debtorDays],
+    ["Stock days", current.inventoryDays, implied.inventoryDays],
+    ["Creditor days", current.creditorDays, implied.creditorDays],
+  ];
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-[520px]">
+        <DialogHeader>
+          <DialogTitle>Use the days my history implies</DialogTitle>
+          <DialogDescription>
+            All five years go back to reading your last set of accounts. They will keep reading them, so if
+            you correct your Historic figures later the forecast follows.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="rounded border border-border">
+          {rows.map(([label, from, to]) => (
+            <div key={label} className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-[13px] last:border-b-0">
+              <span className="w-28">{label}</span>
+              <span className="tabular-nums text-muted-foreground">Year 1: {from}</span>
+              <span className="text-muted-foreground">→</span>
+              <span className={cn("font-semibold tabular-nums", from !== to && "text-primary")}>{to}</span>
+            </div>
+          ))}
+        </div>
+        <p className="text-[12px] text-muted-foreground">
+          Tax timing, prepayments and accruals are your own judgement and are left exactly as they are.
+        </p>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={pending}>Cancel</Button>
+          <Button onClick={onConfirm} disabled={pending}>{pending ? "Reverting…" : "Use my history"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
