@@ -105,15 +105,24 @@ export function Row({ children, className, ...props }: React.ComponentProps<"tr"
   return <tr className={cn("hover:[&>td]:bg-secondary/60", className)} {...props}>{children}</tr>;
 }
 /**
- * The totals row. It is a plain `<tr>` on purpose: a `<tfoot>` written inside a `<tbody>` — which is what a
- * mapped list of rows produces — is not part of that table at all. The browser lays it out as its own
- * anonymous table, so it takes its own column widths and the totals stop lining up with the figures they
- * total: 84 px out on the forecast's statements, in a product whose whole claim is that the numbers agree
- * (§6.36). As a `<tr>` it belongs to the table wherever it is written.
+ * The totals row at the END of a grid — a real `<tfoot>`, which is what every list module wants and where
+ * they all put it: as a direct child of `<table>`, after the `<tbody>`.
+ *
+ * It is NOT for an emphasised row in the middle of a statement. A `<tfoot>` written inside a `<tbody>` is
+ * not part of that table at all — the browser lays it out as its own anonymous table, takes its own column
+ * widths, and the totals stop lining up with the figures above them (§6.36). A bare `<tr>` as a direct child
+ * of `<table>` is the mirror fault: valid-looking in JSX, but the parser inserts a `<tbody>` around it, the
+ * server's HTML and the browser's DOM disagree, and React refuses to hydrate the page (§6.40.1).
+ *
+ * So: this belongs after `</tbody>`. A total in the middle of a statement — Net profit, with Dividends
+ * under it — is an ordinary row that is merely bold, and the forecast styles it as one.
  */
 export function FootRow({ children }: { children: React.ReactNode }) {
-  return <tr className="[&>td]:border-t-2 [&>td]:border-input [&>td]:bg-secondary [&>td]:font-bold">{children}</tr>;
+  return <tfoot><tr className="[&>td]:border-t-2 [&>td]:border-input [&>td]:bg-secondary [&>td]:font-bold">{children}</tr></tfoot>;
 }
+/** The same emphasis, as an ordinary row, for a subtotal that has more lines beneath it. */
+export const TOTAL_ROW = "[&>td]:border-t-2 [&>td]:border-input [&>td]:bg-secondary [&>td]:font-bold";
+
 /** Group header row (one per person in an all-people scope). */
 export function GroupRow({ colSpan, children }: { colSpan: number; children: React.ReactNode }) {
   return <tr><td colSpan={colSpan} className="h-8 border-b border-border bg-secondary px-5 font-semibold"><div className="flex items-center gap-3">{children}</div></td></tr>;

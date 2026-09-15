@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { ModuleFrame, ModuleFooter } from "@/components/module/ModuleFrame";
-import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note } from "@/components/module/DataGrid";
+import { Grid, Th, Td, Row as GridRow, TOTAL_ROW, Toolbar, Meta, Note } from "@/components/module/DataGrid";
 import { useMoney } from "@/components/MoneyProvider";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
@@ -309,10 +309,11 @@ function Statement({ rows, num }: { rows: StatementRow[]; num: (v: number) => st
       </tr></thead>
       <tbody>
         {rows.map(([label, get, weight]) => weight === "total" ? (
-          <FootRow key={label}>
+          // A statement's totals are not table footers: Net profit has Dividends under it (§6.40.1).
+          <tr key={label} className={TOTAL_ROW}>
             <Td>{label}</Td>
             {FORECAST_YEARS.map((y) => <Td key={y} right className="num">{money(get(y))}</Td>)}
-          </FootRow>
+          </tr>
         ) : (
           <GridRow key={label} className={cn(weight === "sub" && "bg-secondary/50")}>
             <Td className={cn(weight ? "font-semibold" : "text-muted-foreground")}>{label}</Td>
@@ -446,9 +447,7 @@ function MonthlyStatement({ monthly, months, num, registered, gstLabel }: {
           );
           // A plain row, not GridRow: its hover tint is translucent, and a translucent pinned cell shows the
           // months scrolling underneath it. Nothing on a statement is clickable, so the hover bought nothing.
-          return weight === "total"
-            ? <FootRow key={label}>{body}</FootRow>
-            : <tr key={label} className={cn(weight === "sub" && "[&>td]:bg-secondary")}>{body}</tr>;
+          return <tr key={label} className={cn(weight === "total" ? TOTAL_ROW : weight === "sub" && "[&>td]:bg-secondary")}>{body}</tr>;
         })}
       </tbody>
     </Grid>
