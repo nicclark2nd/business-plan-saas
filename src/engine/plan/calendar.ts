@@ -34,6 +34,42 @@ export const planMonths = (fyEndMonth: number | null | undefined) =>
 export const planMonthNames = (fyEndMonth: number | null | undefined) =>
   Array.from({ length: 12 }, (_, i) => MONTH_LONG[monthAt(fyEndMonth, i) - 1]);
 
+/**
+ * The plan's four quarters, in its own year (§6.44).
+ *
+ * Q1 is the first three months of the FINANCIAL year, not of the calendar: a June year-end means Q1 is
+ * July to September. Goals carry a quarter, and a client who sets one for "Q1" and finds it on the
+ * dashboard against January to March has been told something false about their own business — the same
+ * fault the months had before §6.21, one level up.
+ *
+ * `FY` is named for the year the financial year ENDS in, which is how every market this app serves refers
+ * to it and how `planYearLabel` already describes a plan year.
+ */
+export type PlanQuarter = { quarter: 1 | 2 | 3 | 4; label: string; months: string; monthIndexes: number[] };
+
+export function planQuarters(fyEndMonth: number | null | undefined, yearEnding: number): PlanQuarter[] {
+  const short = planMonths(fyEndMonth);
+  return ([1, 2, 3, 4] as const).map((q) => {
+    const first = (q - 1) * 3;
+    const monthIndexes = [first, first + 1, first + 2];
+    return {
+      quarter: q,
+      label: `Q${q} FY${String(yearEnding).slice(-2)}`,
+      months: `${short[first]}–${short[first + 2]}`,
+      monthIndexes,
+    };
+  });
+}
+
+/**
+ * Which quarter of the plan's year a date falls in, or null if it falls outside it. Used for the
+ * dashboard's "this quarter" panel, which must ask the plan's calendar rather than the wall calendar.
+ */
+export function quarterOf(fyEndMonth: number | null | undefined, date: Date): 1 | 2 | 3 | 4 {
+  const slot = (date.getMonth() + 1 - fyStartMonth(fyEndMonth) + 12) % 12;
+  return (Math.floor(slot / 3) + 1) as 1 | 2 | 3 | 4;
+}
+
 /** "July 2025 → June 2026" — the sentence the plan year is described by. */
 export function planYearLabel(planYear: number, fyEndMonth: number | null | undefined) {
   const end = Math.min(12, Math.max(1, Math.trunc(Number(fyEndMonth)) || 6));
