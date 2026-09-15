@@ -11,7 +11,8 @@ import {
   LEVER_KEYS, planLevers, runWhatIf,
   type LeverKey, type Levers, type Measures, type WhatIfPlan,
 } from "@/engine/whatif/levers";
-import { realityChecks } from "@/engine/whatif/checks";
+import { realityChecks, type Check } from "@/engine/whatif/checks";
+import { revenueWorth } from "@/engine/whatif/worth";
 import type { Noun } from "@/engine/plan/vocabulary";
 
 /**
@@ -60,7 +61,15 @@ export function WhatIfModule({ planId, mode, plan, noun, taxLabel, monthNames }:
    * numbers on this screen can be trusted (§6.41).
    */
   const what = useMemo(() => runWhatIf(plan, lv), [plan, lv]);
-  const checks = useMemo(() => realityChecks(what, lv, monthNames, noun, num), [what, lv, monthNames, noun, num]);
+  const checks = useMemo(() => realityChecks(what, lv, monthNames, num), [what, lv, monthNames, num]);
+  /**
+   * What a pound of revenue is worth depending on which lever wins it (§6.41.2). It is a fact about the plan
+   * and not about the sliders, so it is computed once and stands there whether or not anything has moved.
+   */
+  const worth = useMemo(() => revenueWorth(plan), [plan]);
+  /** A check about one lever belongs under that lever; the rest belong together in the panel. */
+  const checkFor = (k: LeverKey): Check | undefined => checks.find((c) => c.lever === k);
+  const scenarioChecks = checks.filter((c) => !c.lever);
   const base = what.base.outcome, now = what.adjusted.outcome;
   /** Whether the scenario's tightest month is a different month from the plan's own. */
   const moves = base.lowestMonth !== now.lowestMonth;
@@ -166,9 +175,13 @@ export function WhatIfModule({ planId, mode, plan, noun, taxLabel, monthNames }:
             <div className="rounded border border-border bg-card">
               <div className="border-b border-border px-3 py-2"><span className="eyebrow">Worth knowing</span></div>
               <div className="space-y-2 px-3 py-2.5">
-                {checks.length === 0
-                  ? <p className="text-[12.5px] text-muted-foreground">{touched ? "Nothing to flag — these changes look workable." : "Move a lever to see what it would do."}</p>
-                  : checks.map((c) => (
+                {scenarioChecks.length === 0
+                  ? <p className="text-[12.5px] text-muted-foreground">
+                      {!touched ? "Move a lever to see what it would do."
+                        : checks.length ? "Nothing at the plan level — the notes are under the levers they belong to."
+                          : "Nothing to flag — these changes look workable."}
+                    </p>
+                  : scenarioChecks.map((c) => (
                     <p key={c.key} className={cn("text-[12.5px] leading-snug",
                       c.level === "bad" && "font-semibold text-bad", c.level === "good" && "text-good", c.level === "warn" && "text-warn")}>
                       {c.text}
@@ -179,8 +192,10 @@ export function WhatIfModule({ planId, mode, plan, noun, taxLabel, monthNames }:
           </div>
 
           <div className="grid gap-3 lg:grid-cols-2">
-            <LeverCard title="Profit levers" note="also move cash" keys={PROFIT_LEVERS} lv={lv} at={at} set={set} translate={translate} />
-            <LeverCard title="Cash levers" note="move cash, not profit" keys={CASH_LEVERS} lv={lv} at={at} set={set} translate={translate}
+            <LeverCard title="Profit levers" note="also move cash" keys={PROFIT_LEVERS} lv={lv} at={at} set={set}
+              translate={translate} checkFor={checkFor} foot={worthNote(worth)} />
+            <LeverCard title="Cash levers" note="move cash, not profit" keys={CASH_LEVERS} lv={lv} at={at} set={set}
+              translate={translate} checkFor={checkFor}
               foot="Days are how long money sits with someone else. Fewer debtor and stock days, and more creditor days, all put cash back in your account." />
           </div>
         </div>
@@ -284,6 +299,30 @@ export function WhatIfModule({ planId, mode, plan, noun, taxLabel, monthNames }:
  * Pieces                                                              *
  * ------------------------------------------------------------------ */
 
+/**
+ * The standing line under the profit levers (§6.41.2).
+ *
+ * Price and Volume sit next to each other and look interchangeable — both raise revenue. They are not, and
+ * which of the two a business reaches for is one of the larger decisions it makes. The figures are measured
+ * from this plan, so a business whose extra work loses money is told that instead.
+ */
+function worthNote(w: ReturnType<typeof revenueWorth>): React.ReactNode {
+  const price = w.price.margin, volume = w.volume.margin;
+  if (price == null) return undefined;                       // nothing selling in Year 1
+  const pct = (m: number) => `${Math.round(m * 100)}%`;
+  const all = Math.abs(price - 1) < 0.005 ? "all" : pct(price);
+  if (volume == null) return undefined;
+  if (volume <= 0) {
+    return <><b>Not all revenue is worth the same.</b> Raising prices costs nothing extra to deliver, so {all} of
+      it reaches operating profit — but <b className="text-warn">selling more loses money on this plan</b>: the
+      extra work costs more than it earns. Check the cost per unit before planning on volume.</>;
+  }
+  return <><b>Not all revenue is worth the same.</b> Raising prices costs nothing extra to deliver, so {all} of
+    it reaches operating profit; winning more work keeps <b>{pct(volume)}</b>, because the extra has to be
+    bought and made{w.multiple ? <> — so a price rise earns <b>{w.multiple.toFixed(1)}×</b> the profit of the same revenue
+    from volume</> : null}.</>;
+}
+
 function Tile({ eyebrow, now, value, parts, interaction, num, signed, foot }: {
   eyebrow: string; now: number; value: number;
   parts: { lever: LeverKey; moved: boolean; effect: number }[]; interaction: number;
@@ -326,9 +365,10 @@ function Tile({ eyebrow, now, value, parts, interaction, num, signed, foot }: {
   );
 }
 
-function LeverCard({ title, note, keys, lv, at, set, translate, foot }: {
+function LeverCard({ title, note, keys, lv, at, set, translate, checkFor, foot }: {
   title: string; note: string; keys: LeverKey[]; lv: Levers; at: Levers;
-  set: (k: LeverKey, v: number) => void; translate: (k: LeverKey) => string; foot?: string;
+  set: (k: LeverKey, v: number) => void; translate: (k: LeverKey) => string;
+  checkFor: (k: LeverKey) => Check | undefined; foot?: React.ReactNode;
 }) {
   return (
     <div className="rounded border border-border bg-card">
@@ -336,14 +376,14 @@ function LeverCard({ title, note, keys, lv, at, set, translate, foot }: {
         <h2 className="text-[13px] font-semibold">{title}</h2>
         <span className="eyebrow ml-auto">{note}</span>
       </div>
-      {keys.map((k) => <LeverRow key={k} k={k} lv={lv} at={at} set={set} note={translate(k)} />)}
-      {foot && <p className="border-t border-border px-3 py-2 text-[12px] text-muted-foreground">{foot}</p>}
+      {keys.map((k) => <LeverRow key={k} k={k} lv={lv} at={at} set={set} note={translate(k)} check={checkFor(k)} />)}
+      {foot && <div className="border-t border-border px-3 py-2 text-[12px] leading-snug text-muted-foreground">{foot}</div>}
     </div>
   );
 }
 
-function LeverRow({ k, lv, at, set, note }: {
-  k: LeverKey; lv: Levers; at: Levers; set: (k: LeverKey, v: number) => void; note: string;
+function LeverRow({ k, lv, at, set, note, check }: {
+  k: LeverKey; lv: Levers; at: Levers; set: (k: LeverKey, v: number) => void; note: string; check?: Check;
 }) {
   const r = RANGE[k];
   const value = Number(lv[k]);
@@ -371,6 +411,8 @@ function LeverRow({ k, lv, at, set, note }: {
         <span className="w-6 shrink-0 text-[11px] text-muted-foreground">{r.unit === "%" ? "%" : "days"}</span>
       </div>
       {note && <p className="col-[2/-1] text-[12px] leading-snug text-muted-foreground">{note}</p>}
+      {/* A warning about this lever, beside the hand that is moving it (§6.41.2). */}
+      {check && <p className="col-[2/-1] text-[12px] leading-snug text-warn">{check.text}</p>}
     </div>
   );
 }

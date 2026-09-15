@@ -14,11 +14,15 @@
  * Order is deliberate: what breaks, then what improves, then what to watch. A client who has just broken
  * their cash flow should read that before a compliment.
  */
-import type { Levers, WhatIf } from "./levers";
-import type { Noun } from "../plan/vocabulary";
+import type { LeverKey, Levers, WhatIf } from "./levers";
 
 export type CheckLevel = "bad" | "good" | "warn";
-export type Check = { key: string; level: CheckLevel; text: string };
+/**
+ * A check about ONE lever names it, and the screen puts the sentence under that slider, where the hand
+ * already is. A check about the scenario as a whole names none, and stays in the panel with the others.
+ * Without the distinction the same warning ends up in both places, said twice and agreeing with itself.
+ */
+export type Check = { key: string; level: CheckLevel; text: string; lever?: LeverKey };
 
 const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
@@ -37,17 +41,14 @@ export function listedMonths(months: number[], name: (m: number) => string): str
   return run ? `${name(months[0])} through to ${name(months[months.length - 1])}` : listed(months.map(name));
 }
 
-const plural = (count: number, noun: Noun) => (Math.abs(count) === 1 ? noun.one : noun.many.toLowerCase());
-
 /**
  * What to say about a scenario (§6.41).
  *
- * `monthNames` is the plan's own twelve months in its own financial year (§6.21), `noun` its own word for
- * what it sells (§6.31), and `money` its own formatter — so a physiotherapist is told about treatments in
- * pounds, in the months her year actually runs.
+ * `monthNames` is the plan's own twelve months in its own financial year (§6.21) and `money` its own
+ * formatter, so a Manchester plan is told about April and pounds rather than January and dollars.
  */
 export function realityChecks(
-  what: WhatIf, levers: Levers, monthNames: string[], noun: Noun, money: (v: number) => string,
+  what: WhatIf, levers: Levers, monthNames: string[], money: (v: number) => string,
 ): Check[] {
   const base = what.base.outcome, now = what.adjusted.outcome;
   const bad: Check[] = [], good: Check[] = [], warn: Check[] = [];
@@ -103,46 +104,49 @@ export function realityChecks(
 
   if (p > 5) {
     warn.push({
-      key: "price", level: "warn",
+      key: "price", level: "warn", lever: "price",
       text: `A rise of ${p}% is above the 5% where most businesses start losing work. Try it alongside a small cut to volume and see whether it still pays.`,
     });
   }
-  if (v > 8) {
-    const extra = Math.round(now.unitsYear1 - base.unitsYear1);
-    const monthly = Math.max(1, Math.round(Math.abs(extra) / 12));
+  /**
+   * Five per cent, not eight. Winning more work is the lever an owner reaches for first and the one the model
+   * flatters most: it adds no crew, no vehicle and no supervisor, because the plan has not been told it needs
+   * any — and it spends on materials and labour months before the invoices are paid. The count is what the
+   * app knows. Whether the business can take the work on is the owner's to answer, so it is asked.
+   */
+  if (v > 5) {
     warn.push({
-      key: "volume", level: "warn",
-      // What the app knows is the count. Whether the business can deliver them is the client's to answer.
-      text: `That is ${Math.abs(extra)} more ${plural(extra, noun)} in the year — about ${monthly} a month more than today. Can the business deliver them without adding cost?`,
+      key: "volume", level: "warn", lever: "volume",
+      text: "The materials and labour for that extra work go out before the invoices come in, and the plan adds no crew or equipment to deliver it. Can the business take it on as it stands?",
     });
   }
   if (c < -10) {
     warn.push({
-      key: "cogs", level: "warn",
+      key: "cogs", level: "warn", lever: "cogs",
       text: `Taking ${Math.abs(c)}% out of unit cost usually needs a different supplier or a different method, not better buying. What changes?`,
     });
   }
   if (o < -10) {
     warn.push({
-      key: "overheads", level: "warn",
+      key: "overheads", level: "warn", lever: "overheads",
       text: `Cutting overheads by ${Math.abs(o)}% — ${money(Math.abs(base.overheads - now.overheads))} a year — usually means something stops. Which line?`,
     });
   }
   if (levers.debtorDays != null && levers.debtorDays < 30 && levers.debtorDays < n(basis.debtorDays)) {
     warn.push({
-      key: "debtor-days", level: "warn",
+      key: "debtor-days", level: "warn", lever: "debtorDays",
       text: `Being paid in ${levers.debtorDays} days is quick for most trades. Check the terms will hold before the plan relies on the cash.`,
     });
   }
   if (levers.creditorDays != null && levers.creditorDays > 60 && levers.creditorDays > n(basis.creditorDays)) {
     warn.push({
-      key: "creditor-days", level: "warn",
+      key: "creditor-days", level: "warn", lever: "creditorDays",
       text: `Paying suppliers at ${levers.creditorDays} days strains the relationship before it fixes the cash. Agree it with them first.`,
     });
   }
   if (levers.stockDays != null && levers.stockDays === 0 && n(basis.stockDays) > 0) {
     warn.push({
-      key: "stock-days", level: "warn",
+      key: "stock-days", level: "warn", lever: "stockDays",
       text: "Holding no stock at all means buying for every job as it is won, and waiting for it. Only true where suppliers deliver same-day.",
     });
   }

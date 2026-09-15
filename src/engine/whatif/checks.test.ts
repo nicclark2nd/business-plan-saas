@@ -3,10 +3,8 @@ import { listed, listedMonths, realityChecks } from "./checks";
 import { NEUTRAL, runWhatIf, type Levers, type WhatIfPlan } from "./levers";
 import { assembleOpening, type PlanSources } from "../forecast/assemble";
 import { FORECAST_YEARS, type WorkingCapitalDays } from "../forecast/model";
-import { PRODUCT_NOUNS } from "../plan/vocabulary";
 
 const MONTHS = ["Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar", "Apr", "May", "Jun"];
-const JOBS = PRODUCT_NOUNS.find((x) => x.many === "Services")!;
 const money = (v: number) => `$${Math.round(v).toLocaleString("en-AU")}`;
 const levers = (over: Partial<Levers>): Levers => ({ ...NEUTRAL, ...over });
 const DAYS: WorkingCapitalDays = { debtorDays: 30, inventoryDays: 10, creditorDays: 30 };
@@ -36,7 +34,7 @@ function plan({ overheads = 60000, openingCash = 200000, days = DAYS }: {
 }
 
 const keysOf = (p: WhatIfPlan, l: Levers) =>
-  realityChecks(runWhatIf(p, l), l, MONTHS, JOBS, money).map((c) => c.key);
+  realityChecks(runWhatIf(p, l), l, MONTHS, money).map((c) => c.key);
 
 describe("a list a person would say out loud", () => {
   it("joins with 'and', never a trailing comma", () => {
@@ -66,7 +64,7 @@ describe("the checks say what the run actually found (§6.41)", () => {
     // A thin 14,000 of profit, and now customers paying at 120 days instead of 30.
     const p = plan({ overheads: 130000, openingCash: 20000 });
     const l = levers({ debtorDays: 120 });
-    const checks = realityChecks(runWhatIf(p, l), l, MONTHS, JOBS, money);
+    const checks = realityChecks(runWhatIf(p, l), l, MONTHS, money);
     const negative = checks.find((c) => c.key === "negative");
     expect(negative?.level).toBe("bad");
     expect(negative?.text).toContain("did not before these changes");
@@ -78,16 +76,27 @@ describe("the checks say what the run actually found (§6.41)", () => {
     // Loss-making, one month already below zero: a price rise fixes the profit and 120 days breaks the cash.
     const p = plan({ overheads: 150000, openingCash: 20000 });
     const l = levers({ price: 9, debtorDays: 120 });
-    const checks = realityChecks(runWhatIf(p, l), l, MONTHS, JOBS, money);
+    const checks = realityChecks(runWhatIf(p, l), l, MONTHS, money);
     expect(checks.map((c) => c.level)).toEqual(["bad", "good", "warn"]);
   });
 
-  it("counts the extra work in the plan's own word for it, and asks rather than asserts", () => {
-    const l = levers({ volume: 20 });
-    const c = realityChecks(runWhatIf(plan(), l), l, MONTHS, JOBS, money).find((x) => x.key === "volume");
-    expect(c?.text).toContain("48 more services");
-    expect(c?.text).toContain("about 4 a month");
+  it("warns about more work from 5% up, names the cost that comes first, and asks rather than asserts", () => {
+    expect(keysOf(plan(), levers({ volume: 5 }))).not.toContain("volume");
+    const l = levers({ volume: 5.5 });
+    const c = realityChecks(runWhatIf(plan(), l), l, MONTHS, money).find((x) => x.key === "volume");
+    expect(c?.text).toContain("before the invoices come in");
     expect(c?.text).toMatch(/\?$/);
+  });
+
+  it("names the lever a lever-level check belongs to, and leaves the scenario-level ones unattached", () => {
+    const p = plan({ overheads: 150000, openingCash: 20000 });
+    const l = levers({ price: 9, debtorDays: 20 });
+    const by = Object.fromEntries(realityChecks(runWhatIf(p, l), l, MONTHS, money).map((c) => [c.key, c.lever]));
+    expect(by.price).toBe("price");
+    expect(by["debtor-days"]).toBe("debtorDays");
+    // A month that closes below zero is not any one lever's doing.
+    expect(by.negative).toBeUndefined();
+    expect(by["into-profit"]).toBeUndefined();
   });
 
   it("warns about a price rise only once it is above the threshold it names", () => {
