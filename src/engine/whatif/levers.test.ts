@@ -384,3 +384,71 @@ describe("the days levers reach Year 1, or all five (§6.43)", () => {
     for (const y of FORECAST_YEARS) expect(Math.abs(run.forecast.balanceSheet[y].balanceCheck)).toBeLessThan(0.5);
   });
 });
+
+/* ------------------------------------------------------------------ *
+ * When the change starts                                              *
+ * ------------------------------------------------------------------ */
+
+describe("a change can start in a later year (§6.46)", () => {
+  const p = planFor(simplePlan());
+  const up = levers({ price: 10 });
+  const revenue = (l: Levers, from: 1 | 2 | 3) =>
+    FORECAST_YEARS.map((y) => runPlan(p, l, "year1", from).forecast.pnl[y].revenue);
+
+  it("from Year 1, every year is higher — the base moved", () => {
+    const base = revenue(NEUTRAL, 1), now = revenue(up, 1);
+    for (const i of [0, 1, 2, 3, 4]) expect(r2(now[i]), `year ${i + 1}`).toBe(r2(base[i] * 1.1));
+  });
+
+  it("from Year 2, Year 1 is untouched and the rest are higher", () => {
+    const base = revenue(NEUTRAL, 1), later = revenue(up, 2);
+    expect(r2(later[0])).toBe(r2(base[0]));
+    for (const i of [1, 2, 3, 4]) expect(r2(later[i]), `year ${i + 1}`).toBe(r2(base[i] * 1.1));
+  });
+
+  it("from Year 3, the first two years are untouched", () => {
+    const base = revenue(NEUTRAL, 1), later = revenue(up, 3);
+    expect(r2(later[0])).toBe(r2(base[0]));
+    expect(r2(later[1])).toBe(r2(base[1]));
+    expect(r2(later[2])).toBe(r2(base[2] * 1.1));
+  });
+
+  it("compounds with a growth rate the client already typed", () => {
+    const growing = simplePlan({
+      products: [{
+        id: "p1", name: "Job", sold_as: "one_off", average_price: 1000, units_sold: 120, start_selling_year: 1,
+        yearly_growth: { "2": { price: 5 } }, monthly_distribution: null, cost_per_unit: 400, yearly_cost_increase: {},
+      }],
+    });
+    (growing as unknown as { costProducts: unknown }).costProducts = growing.products;
+    const q = planFor(growing);
+    // 5 % already, then a further 10 %: 1.05 × 1.10, so Year 2 is 1,155 a job, not 1,150.
+    expect(r2(runPlan(q, up, "year1", 2).forecast.pnl[2].revenue)).toBe(r2(1155 * 120));
+  });
+
+  /**
+   * A line that starts selling in Year 3 has no year before it to grow from, so a change meant for Year 2
+   * lands on its base — the same rule the growth dialog states to the client.
+   */
+  it("lands on the base for a line whose own first year is later than the change", () => {
+    const late = simplePlan({
+      products: [{
+        id: "p1", name: "New service", sold_as: "one_off", average_price: 1000, units_sold: 100,
+        start_selling_year: 3, yearly_growth: {}, monthly_distribution: null, cost_per_unit: 400, yearly_cost_increase: {},
+      }],
+    });
+    (late as unknown as { costProducts: unknown }).costProducts = late.products;
+    const q = planFor(late);
+    for (const from of [1, 2, 3] as const) {
+      expect(r2(runPlan(q, up, "year1", from).forecast.pnl[3].revenue), `from ${from}`).toBe(r2(1100 * 100));
+    }
+  });
+
+  it("still reconciles, whichever year it starts in", () => {
+    for (const from of [1, 2, 3, 4, 5] as const) {
+      const run = runPlan(p, levers({ price: 6, volume: 8, cogs: -4, overheads: -5 }), "year1", from);
+      expect(run.invariants.filter((i) => !i.passed), `from ${from}`).toEqual([]);
+      for (const y of FORECAST_YEARS) expect(Math.abs(run.forecast.balanceSheet[y].balanceCheck)).toBeLessThan(0.5);
+    }
+  });
+});

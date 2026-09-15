@@ -225,3 +225,70 @@ describe("the plan as those rows would leave it (§6.45)", () => {
     expect(failures.slice(0, 10)).toEqual([]);
   });
 });
+
+/* ------------------------------------------------------------------ *
+ * Starting later                                                      *
+ * ------------------------------------------------------------------ */
+
+describe("a change that starts in a later year is recorded as a change (§6.46)", () => {
+  const laterPlanned = (l: Levers, from: 2 | 3, s = sources()) => plannedChanges(s, l, AT, from);
+  const findFrom = (l: Levers, from: 2 | 3, row: string, field: string, s = sources()) =>
+    laterPlanned(l, from, s).changes.find((c) => c.row === row && c.field === field);
+
+  it("leaves the base alone and writes that year's % box instead", () => {
+    const clean = sources({
+      products: [{ id: "p1", name: "Slab", sold_as: "one_off", average_price: 1000, units_sold: 10, start_selling_year: 1, yearly_growth: {}, monthly_distribution: null, cost_per_unit: 400, yearly_cost_increase: {} }],
+    });
+    const c = findFrom(levers({ price: 10 }), 2, "Slab", "yearly_growth.2.price", clean)!;
+    expect(c.unit).toBe("percent");
+    expect(c.to).toBe(10);
+    expect(findFrom(levers({ price: 10 }), 2, "Slab", "average_price", clean)).toBeUndefined();
+  });
+
+  /**
+   * A year the client typed a figure into outright wins over a rate (§6.26), so the change moves the figure
+   * rather than adding a percentage the engine would ignore.
+   */
+  it("moves a typed figure rather than writing a rate the engine would ignore", () => {
+    const c = findFrom(levers({ price: 10 }), 2, "Driveways", "yearly_growth.2.priceValue")!;
+    expect(c.unit).toBe("money");
+    expect(c.to).toBe(1155);
+    expect(findFrom(levers({ price: 10 }), 2, "Driveways", "yearly_growth.2.price")).toBeUndefined();
+  });
+
+  it("compounds with a rate the client already typed there", () => {
+    const growing = sources({
+      products: [{ id: "p1", name: "Slab", sold_as: "one_off", average_price: 1000, units_sold: 10, start_selling_year: 1, yearly_growth: { "2": { price: 5 } }, monthly_distribution: null, cost_per_unit: 400, yearly_cost_increase: {} }],
+    });
+    expect(findFrom(levers({ price: 10 }), 2, "Slab", "yearly_growth.2.price", growing)!.from).toBe(5);
+    expect(findFrom(levers({ price: 10 }), 2, "Slab", "yearly_growth.2.price", growing)!.to).toBe(15.5);
+  });
+
+  it("records cost and overheads the same way", () => {
+    expect(findFrom(levers({ cogs: -8 }), 2, "Driveways", "yearly_cost_increase.2")!.to).toBe(-8);
+    expect(findFrom(levers({ overheads: -5 }), 3, "Rent", "yearly_change.3")!.to).toBe(-5);
+  });
+
+  it("leaves Year 1's monthly client counts alone, because the change is not in Year 1", () => {
+    expect(laterPlanned(levers({ volume: 50 }), 2).changes.some((c) => c.field.startsWith("monthly_new_clients"))).toBe(false);
+    expect(planned(levers({ volume: 50 })).changes.some((c) => c.field.startsWith("monthly_new_clients"))).toBe(true);
+  });
+
+  it("leaves a year typed outright alone when it is before the change starts", () => {
+    // Driveways has a typed Year 2. A change from Year 3 must not touch it.
+    expect(findFrom(levers({ price: 10 }), 3, "Driveways", "yearly_growth.2.priceValue")).toBeUndefined();
+    expect(find(levers({ price: 10 }), "Driveways", "yearly_growth.2.priceValue")).toBeDefined();
+  });
+
+  it("what is written gives the same years as the preview, whichever year it starts in", () => {
+    const s = sources({ salaries: [0, 0, 0, 0, 0], marketing: [0, 0, 0, 0, 0], overheads: [{ id: "o1", name: "Rent", source: "entered", current_value: 60000, yearly_change: {}, start_year: 1, monthly_distribution: null }] });
+    const l = levers({ price: 6, cogs: -4, overheads: -5 });
+    for (const from of [1, 2, 3] as const) {
+      const previewed = runPlan(planOf(s), l, "year1", from).forecast;
+      const written = runPlan(planOf(applyChanges(s, plannedChanges(s, l, AT, from).changes)), NEUTRAL).forecast;
+      for (const y of FORECAST_YEARS) {
+        expect(r2(written.pnl[y].operatingProfit), `from ${from}, year ${y}`).toBe(r2(previewed.pnl[y].operatingProfit));
+      }
+    }
+  });
+});

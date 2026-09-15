@@ -11,7 +11,7 @@ import { useMoney } from "@/components/MoneyProvider";
 import { cn } from "@/lib/utils";
 import {
   LEVER_KEYS, planLevers, runPlan, runWhatIf,
-  type DayScope, type LeverKey, type Levers, type Measures, type WhatIfPlan,
+  type DayScope, type LeverKey, type Levers, type Measures, type StartYear, type WhatIfPlan,
 } from "@/engine/whatif/levers";
 import { realityChecks, type Check } from "@/engine/whatif/checks";
 import { AREA_LABEL, proposedGoals, type ProposedGoal } from "@/engine/whatif/goals";
@@ -77,6 +77,11 @@ export function WhatIfModule({
   const router = useRouter();
   const [area, setArea] = useState<AreaKey>("levers");
   const [saving, startSave] = useTransition();
+  /**
+   * The year the scenario takes effect (§6.46). Part of the scenario, not of the save — the tiles have to
+   * preview the year the client picked, or the screen would show one thing and write another.
+   */
+  const [from, setFrom] = useState<StartYear>(1);
   const [saveOpen, setSaveOpen] = useState(false);
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [savedError, setSavedError] = useState<string>();
@@ -88,7 +93,7 @@ export function WhatIfModule({
    * sub-millisecond because the engine is plain arithmetic over five years, and it is the whole reason the
    * numbers on this screen can be trusted (§6.41).
    */
-  const what = useMemo(() => runWhatIf(plan, lv), [plan, lv]);
+  const what = useMemo(() => runWhatIf(plan, lv, from), [plan, lv, from]);
   const checks = useMemo(() => realityChecks(what, lv, monthNames, num, history), [what, lv, monthNames, num, history]);
   /** What the business actually achieved, for the three levers that have a record to be held against. */
   const historyOf = (k: LeverKey) => {
@@ -104,6 +109,16 @@ export function WhatIfModule({
   const checkFor = (k: LeverKey): Check | undefined => checks.find((c) => c.lever === k);
   const scenarioChecks = checks.filter((c) => !c.lever);
   const base = what.base.outcome, now = what.adjusted.outcome;
+  /**
+   * The two tiles answer about Year 1, which is the year a business lives or dies in — but a scenario that
+   * starts in Year 2 does nothing to Year 1 by construction, and a tile reading "no change" would say the
+   * client had wasted their time. So the tiles follow the scenario to its own year.
+   *
+   * Cash follows differently: the month-by-month run exists for Year 1 only (§6.36), so a later year has no
+   * "tightest month" to report and the tile shows where that year closes instead, and says so.
+   */
+  const yearProfit = (r: typeof what.base) => r.forecast.pnl[from].operatingProfit;
+  const yearCash = (r: typeof what.base) => r.forecast.cashFlow[from].closingCash;
   /** Whether the scenario's tightest month is a different month from the plan's own. */
   const moves = base.lowestMonth !== now.lowestMonth;
   const touched = LEVER_KEYS.some((k) => Number(lv[k]) !== Number(at[k]));
@@ -159,7 +174,7 @@ export function WhatIfModule({
       subtitle="Move a lever and watch profit and cash change — nothing in your plan moves" mode={mode}
       areas={[{ key: "levers", label: "Levers" }, { key: "detail", label: "Baseline vs adjusted" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)}
-      scope={{ label: "Year 1" }}
+      scope={{ label: from === 1 ? "Year 1" : `From year ${from}` }}
       primaryAction={<>
         {lastApplied && !touched && (
           <Button variant="outline" size="sm" disabled={saving}
@@ -195,8 +210,12 @@ export function WhatIfModule({
         <div className="space-y-3 p-4">
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(300px,0.9fr)]">
             <Tile
-              eyebrow="Year 1 operating profit" now={base.operatingProfit} value={now.operatingProfit}
-              parts={profitParts} interaction={profitResidual} num={num} signed={signed}
+              eyebrow={`Year ${from} operating profit`}
+              now={from === 1 ? base.operatingProfit : yearProfit(what.base)}
+              value={from === 1 ? now.operatingProfit : yearProfit(what.adjusted)}
+              parts={from === 1 ? profitParts : []} interaction={from === 1 ? profitResidual : 0}
+              num={num} signed={signed}
+              foot={from === 1 ? undefined : <>The breakdown by lever is measured in Year 1, so it is not shown for a scenario that starts in Year {from}.</>}
             />
             {/*
               * The lowest of twelve balances is a minimum, and a minimum cannot be split between the levers
@@ -205,16 +224,25 @@ export function WhatIfModule({
               * shown; once it moves, the tile says so and the lever-by-lever figures live on the other tab,
               * under the month they are actually measured in.
               */}
-            <Tile
-              eyebrow={`Lowest cash in Year 1 · ${monthNames[now.lowestMonth - 1]}`}
-              now={base.lowestCash} value={now.lowestCash}
-              parts={moves ? [] : what.tightest.contributions}
-              interaction={moves ? 0 : cashResidual}
-              num={num} signed={signed}
-              foot={moves
-                ? <>The tightest month moves from <b>{monthNames[base.lowestMonth - 1]}</b> to <b>{monthNames[now.lowestMonth - 1]}</b>, so the two figures are not the same month. What each lever is worth in {monthNames[now.lowestMonth - 1]} is on <b>Baseline vs adjusted</b>.</>
-                : undefined}
-            />
+            {from === 1 ? (
+              <Tile
+                eyebrow={`Lowest cash in Year 1 · ${monthNames[now.lowestMonth - 1]}`}
+                now={base.lowestCash} value={now.lowestCash}
+                parts={moves ? [] : what.tightest.contributions}
+                interaction={moves ? 0 : cashResidual}
+                num={num} signed={signed}
+                foot={moves
+                  ? <>The tightest month moves from <b>{monthNames[base.lowestMonth - 1]}</b> to <b>{monthNames[now.lowestMonth - 1]}</b>, so the two figures are not the same month. What each lever is worth in {monthNames[now.lowestMonth - 1]} is on <b>Baseline vs adjusted</b>.</>
+                  : undefined}
+              />
+            ) : (
+              <Tile
+                eyebrow={`Cash at the end of Year ${from}`}
+                now={yearCash(what.base)} value={yearCash(what.adjusted)}
+                parts={[]} interaction={0} num={num} signed={signed}
+                foot={<>Month by month is worked out for Year 1 only, so a scenario starting in Year {from} has no tightest month to report — this is where the year closes.</>}
+              />
+            )}
             <div className="rounded border border-border bg-card">
               <div className="border-b border-border px-3 py-2"><span className="eyebrow">Worth knowing</span></div>
               <div className="space-y-2 px-3 py-2.5">
@@ -234,6 +262,27 @@ export function WhatIfModule({
             </div>
           </div>
 
+          {/* When the change starts. A price rise planned for next year is a different plan (§6.46). */}
+          <div className="flex flex-wrap items-center gap-2 rounded border border-border bg-card px-3 py-2">
+            <span className="text-[13px] font-semibold">These changes start in</span>
+            <div className="inline-flex overflow-hidden rounded border border-input">
+              {([1, 2, 3] as const).map((y) => (
+                <button key={y} type="button" onClick={() => setFrom(y)} aria-pressed={from === y}
+                  className={cn("px-2.5 py-1 text-[12px] leading-none",
+                    from === y ? "bg-primary font-semibold text-primary-foreground" : "bg-background text-muted-foreground hover:bg-secondary")}>
+                  {y === 1 ? "Year 1 — now" : `Year ${y}`}
+                </button>
+              ))}
+            </div>
+            <span className="text-[12px] text-muted-foreground">
+              {from === 1
+                ? "Prices, volumes and costs move from the year you are in."
+                : from === 2
+                  ? "Year 1 stays exactly as it is; the change is recorded against Year 2 and carries forward."
+                  : `Years 1 to ${from - 1} stay exactly as they are; the change is recorded against Year ${from} and carries forward.`}
+            </span>
+          </div>
+
           <div className="grid gap-3 lg:grid-cols-2">
             <LeverCard title="Profit levers" note="also move cash" keys={PROFIT_LEVERS} lv={lv} at={at} set={set}
               translate={translate} checkFor={checkFor} historyOf={historyOf} foot={worthNote(worth)} />
@@ -248,6 +297,7 @@ export function WhatIfModule({
         <>
           <Toolbar>
             <span className="text-[13px] font-semibold">Year 1, as planned and as adjusted</span>
+            {from > 1 && <span className="ml-2 rounded-full bg-warn-soft px-2 py-[2px] text-[11px] font-semibold text-warn">This scenario starts in Year {from}, so Year 1 is unchanged</span>}
             <Meta>{plan.components?.length ? `${taxLabel} registered — every figure below is tax-exclusive` : "Not registered for sales tax"}</Meta>
           </Toolbar>
           <Grid>
@@ -353,10 +403,10 @@ export function WhatIfModule({
 
       {saveOpen && (
         <ApplyDialog
-          plan={plan} lv={lv} at={at} num={num} signed={signed} saving={saving} error={savedError}
+          plan={plan} lv={lv} at={at} from={from} num={num} signed={signed} saving={saving} error={savedError}
           onClose={() => setSaveOpen(false)}
           onApply={(scope) => startSave(async () => {
-            const r = await applyScenario(planId, lv, scope);
+            const r = await applyScenario(planId, lv, scope, from);
             if (!r.ok) { setSavedError(r.error); return; }
             setSaveOpen(false);
             // The plan has moved, so the whole screen reloads against it: the sliders come back sitting on
@@ -467,25 +517,25 @@ function TurnIntoGoalsDialog({ goals, people, quarters, thisQuarter, saving, err
  * unreachable overheads and all. Where that differs from the tile behind it, it says so. A screen that
  * promises a number the client will not have tomorrow is worse than one that never promised.
  */
-function ApplyDialog({ plan, lv, at, num, signed, saving, error, onClose, onApply }: {
-  plan: WhatIfPlan; lv: Levers; at: Levers;
+function ApplyDialog({ plan, lv, at, from, num, signed, saving, error, onClose, onApply }: {
+  plan: WhatIfPlan; lv: Levers; at: Levers; from: StartYear;
   num: (v: number) => string; signed: (v: number) => string; saving: boolean; error?: string;
   onClose: () => void; onApply: (scope: DayScope) => void;
 }) {
   const [scope, setScope] = useState<DayScope>("year1");
   const [showAll, setShowAll] = useState(false);
 
-  const planned = useMemo(() => plannedChanges(plan.sources, lv, at), [plan, lv, at]);
+  const planned = useMemo(() => plannedChanges(plan.sources, lv, at, from), [plan, lv, at, from]);
   /**
    * Two runs: what the sliders drew, and what the plan will actually hold. They differ by rounding and by
    * whatever the overheads lever could not reach, and the client sees the second.
    */
   const { preview, real } = useMemo(() => ({
-    preview: runPlan(plan, lv, scope).outcome,
+    preview: runPlan(plan, lv, scope, from).outcome,
     real: runPlan({ ...plan, sources: applyChanges(plan.sources, planned.changes) },
       { ...planLevers(plan.workingCapital[1]), debtorDays: lv.debtorDays, stockDays: lv.stockDays, creditorDays: lv.creditorDays },
       scope).outcome,
-  }), [plan, lv, scope, planned]);
+  }), [plan, lv, scope, from, planned]);
 
   const base = useMemo(() => runPlan(plan, planLevers(plan.workingCapital[1])).outcome, [plan]);
   const gap = Math.round(real.operatingProfit - preview.operatingProfit);
@@ -505,8 +555,9 @@ function ApplyDialog({ plan, lv, at, num, signed, saving, error, onClose, onAppl
         <DialogHeader>
           <DialogTitle>Make this the plan</DialogTitle>
           <DialogDescription>
-            Your current figures are saved first, so this can be undone. Every record below is changed in the
-            module that owns it — the same as editing it there by hand.
+            {from === 1
+              ? "Your current figures are saved first, so this can be undone. Every record below is changed in the module that owns it — the same as editing it there by hand."
+              : `Starting in Year ${from}, so the earlier years are untouched and the change is recorded against Year ${from}. Your current figures are saved first, so this can be undone.`}
           </DialogDescription>
         </DialogHeader>
 

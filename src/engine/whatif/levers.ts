@@ -111,23 +111,37 @@ const factor = (pct: unknown) => 1 + n(pct) / 100;
  * exactly as it reads the real one. A lever that has not moved returns the caller's own objects untouched,
  * which is both faster and one less chance to alter something by copying it.
  */
-export function applyLevers(sources: PlanSources, levers: Levers): PlanSources {
+export function applyLevers(sources: PlanSources, levers: Levers, from: StartYear = 1): PlanSources {
   const price = factor(levers.price), volume = factor(levers.volume);
   const cogs = factor(levers.cogs), overheads = factor(levers.overheads);
   if (price === 1 && volume === 1 && cogs === 1 && overheads === 1) return sources;
+
+  const lands = (start: unknown) => landsIn(start, from);
+  const compound = compoundPct;
 
   /**
    * A later year whose figure was typed outright (§6.26) is a number, not a growth rate, so a percentage
    * lever has to move it too. Leave it alone and a plan that typed "Year 2: 140 units" would answer the
    * volume lever in Year 1 and ignore it for the other four.
    */
-  const grown = (g: Growth | null | undefined): Growth | null => {
-    if (!g || (price === 1 && volume === 1)) return g ?? null;
-    return Object.fromEntries(Object.entries(g).map(([year, y]) => [year, {
+  const grown = (g: Growth | null | undefined, at: { year: number; isBase: boolean }): Growth | null => {
+    if (price === 1 && volume === 1) return g ?? null;
+    const out: Growth = Object.fromEntries(Object.entries(g ?? {}).map(([year, y]) => [year, {
       ...y,
-      priceValue: y?.priceValue == null ? y?.priceValue : n(y.priceValue) * price,
-      unitsValue: y?.unitsValue == null ? y?.unitsValue : n(y.unitsValue) * volume,
+      // A figure typed outright is a number, not a rate, so it moves with the lever too (§6.26) — but only
+      // from the year the change takes effect.
+      priceValue: y?.priceValue == null || Number(year) < at.year ? y?.priceValue : n(y.priceValue) * price,
+      unitsValue: y?.unitsValue == null || Number(year) < at.year ? y?.unitsValue : n(y.unitsValue) * volume,
     }]));
+    if (!at.isBase) {
+      const y = out[String(at.year)] ?? {};
+      out[String(at.year)] = {
+        ...y,
+        price: y.priceValue != null ? y.price : compound(y.price, price),
+        units: y.unitsValue != null ? y.units : compound(y.units, volume),
+      };
+    }
+    return out;
   };
 
   /** Clients won each month — counts the client typed, scaled with the year so the twelve still add to it. */
@@ -135,17 +149,24 @@ export function applyLevers(sources: PlanSources, levers: Levers): PlanSources {
     !m || volume === 1 ? m ?? null
       : Object.fromEntries(Object.entries(m).map(([k, v]) => [k, n(v) * volume]));
 
-  const adjust = <T extends AnyProduct & { cost_per_unit?: number | null }>(p: T): T => {
+  const adjust = <T extends AnyProduct & { cost_per_unit?: number | null; yearly_cost_increase?: Record<string, number> | null }>(p: T): T => {
+    const at = lands(p.start_selling_year);
     const out: T = {
       ...p,
-      average_price: n(p.average_price) * price,
-      units_sold: n(p.units_sold) * volume,
-      monthly_new_clients: won(p.monthly_new_clients),
-      yearly_growth: grown(p.yearly_growth),
+      average_price: at.isBase ? n(p.average_price) * price : n(p.average_price),
+      units_sold: at.isBase ? n(p.units_sold) * volume : n(p.units_sold),
+      // The twelve monthly counts belong to Year 1, so they follow only a Year 1 change (§6.21.1).
+      monthly_new_clients: at.isBase && at.year === 1 ? won(p.monthly_new_clients) : p.monthly_new_clients ?? null,
+      yearly_growth: grown(p.yearly_growth, at),
     };
     // Fixed cost of sales is a yard and a production wage: it does not move with the price of a widget,
     // which is the same split the mockup makes — vc × (1 + v) × (1 + c), fc untouched.
-    if (out.cost_per_unit != null) out.cost_per_unit = n(out.cost_per_unit) * cogs;
+    if (out.cost_per_unit != null && cogs !== 1) {
+      if (at.isBase) out.cost_per_unit = n(out.cost_per_unit) * cogs;
+      else {
+        out.yearly_cost_increase = { ...(out.yearly_cost_increase ?? {}), [String(at.year)]: compound(out.yearly_cost_increase?.[String(at.year)], cogs) };
+      }
+    }
     return out;
   };
 
@@ -170,8 +191,17 @@ export function applyLevers(sources: PlanSources, levers: Levers): PlanSources {
     ...sources,
     products,
     costProducts,
-    overheads: overheads === 1 ? sources.overheads
-      : sources.overheads.map((o) => ({ ...o, current_value: n(o.current_value) * overheads })),
+    /**
+     * An overhead's `current_value` is the column headed "This year", and Year 1 has its own change box that
+     * the engine honours — so for a line running from Year 1 the change lands in a box, and only a line that
+     * starts later (whose first year IS its amount) moves the amount itself.
+     */
+    overheads: overheads === 1 ? sources.overheads : sources.overheads.map((o) => {
+      const first = Math.min(5, Math.max(1, Math.trunc(n(o.start_year)) || 1));
+      const year = Math.max(from, first);
+      if (year === first && first > 1) return { ...o, current_value: n(o.current_value) * overheads };
+      return { ...o, yearly_change: { ...(o.yearly_change ?? {}), [String(year)]: compound(o.yearly_change?.[String(year)], overheads) } };
+    }),
     salaries: scale(sources.salaries),
     marketing: scale(sources.marketing),
   };
@@ -183,6 +213,38 @@ export function applyLevers(sources: PlanSources, levers: Levers): PlanSources {
  * a change in terms is usually permanent, and they should see the five-year consequence before choosing it.
  */
 export type DayScope = "year1" | "all";
+
+/**
+ * The year a scenario takes effect (§6.46).
+ *
+ * Every lever used to mean "from Year 1, day one". A business planning to raise prices NEXT financial year
+ * means something different, and the plan can hold both: a change that starts in Year 1 moves the figure a
+ * line opens with, and one that starts later compounds into that year's own % change box — which is where
+ * the modules already keep changes, and which the client can then see and edit.
+ *
+ * One rule covers both, and every line whatever year it starts selling in: a change takes effect in
+ * `max(from, the line's own first year)`. Where that IS the line's first year it moves the base, because a
+ * first year has nothing before it to grow from; otherwise it compounds into that year's change.
+ */
+export type StartYear = 1 | 2 | 3 | 4 | 5;
+
+/**
+ * Where a change lands for a line that begins in `start`, given a scenario starting in `from`.
+ *
+ * `isBase` means the year it lands in is the line's own first year, which has nothing before it to grow
+ * from — so the change moves the figure the line opens with. Otherwise it belongs in that year's own %
+ * change box. Exported because `plannedChanges` has to make exactly the same decision about exactly the same
+ * row, and two copies of this rule would be two answers.
+ */
+export function landsIn(start: unknown, from: StartYear): { year: number; isBase: boolean } {
+  const first = Math.min(5, Math.max(1, Math.trunc(n(start)) || 1));
+  const year = Math.max(from, first);
+  return { year, isBase: year === first };
+}
+
+/** A further change on top of one already typed. Compounded: 2 % then 4 % is 6.08 %, not 6 %. */
+export const compoundPct = (existing: unknown, factorOf: number) =>
+  ((1 + n(existing) / 100) * factorOf - 1) * 100;
 
 /** The working-capital schedule with the levers' days written into Year 1, or into every year. */
 export function applyDays(
@@ -287,8 +349,8 @@ const addInto = (a: Measures, b: Measures): Measures =>
  * functions. Nothing is short-circuited for speed: a What-If that took a cheaper path would be a second
  * computation of the plan's own figures, which is the fault that has cost this project more than any other.
  */
-export function runPlan(plan: WhatIfPlan, levers: Levers, dayScope: DayScope = "year1"): Run {
-  const sources = applyLevers(plan.sources, levers);
+export function runPlan(plan: WhatIfPlan, levers: Levers, dayScope: DayScope = "year1", from: StartYear = 1): Run {
+  const sources = applyLevers(plan.sources, levers, from);
   const workingCapital = applyDays(plan.workingCapital, levers, dayScope);
   const components = plan.components?.length ? plan.components : [NOT_REGISTERED];
   const openingGstPayable = n(plan.openingGstPayable);
@@ -405,19 +467,20 @@ export type WhatIf = {
  * whole forecast, which is the point: the contribution of "creditor days 15 → 45" is the difference two real
  * forecasts make, interactions and rounding and the December remainder included, not a formula for it.
  */
-export function runWhatIf(plan: WhatIfPlan, levers: Levers): WhatIf {
+export function runWhatIf(plan: WhatIfPlan, levers: Levers, from: StartYear = 1): WhatIf {
   const baseline = planLevers(plan.workingCapital[1]);
   const set = settleLevers(levers, plan.workingCapital[1]);
   const changed = moved(set, baseline);
 
+  // The plan as it stands is the plan as it stands, whichever year a change would have started in.
   const base = runPlan(plan, baseline);
   const runs = new Map<LeverKey, Run>();
-  for (const key of changed) runs.set(key, runPlan(plan, { ...baseline, [key]: set[key] }));
+  for (const key of changed) runs.set(key, runPlan(plan, { ...baseline, [key]: set[key] }, "year1", from));
 
   // One lever moved and the single-lever run IS the scenario; no reason to compute it twice.
   const adjusted = changed.length === 0 ? base
     : changed.length === 1 ? runs.get(changed[0])!
-      : runPlan(plan, set);
+      : runPlan(plan, set, "year1", from);
 
   const total = subtract(adjusted.outcome, base.outcome);
   const contributions: Contribution[] = LEVER_KEYS.map((lever) => {

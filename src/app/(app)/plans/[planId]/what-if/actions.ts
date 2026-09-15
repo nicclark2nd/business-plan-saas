@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { loadPlan } from "@/lib/planLoad";
 import { GOAL_AREAS, type GoalArea } from "@/engine/whatif/goals";
 import { applyChanges, plannedChanges } from "@/engine/whatif/apply";
-import { planLevers, type DayScope, type Levers } from "@/engine/whatif/levers";
+import { planLevers, type DayScope, type Levers, type StartYear } from "@/engine/whatif/levers";
 import { FORECAST_YEARS, type WorkingCapitalDays } from "@/engine/forecast/model";
 import { saveAssumptions } from "../forecast/actions";
 
@@ -134,11 +134,11 @@ export async function createGoalsFromScenario(planId: string, goals: GoalToCreat
  * reason `whatif_apply`, so applying is reversible rather than a leap.
  */
 export async function applyScenario(
-  planId: string, levers: Levers, dayScope: DayScope,
+  planId: string, levers: Levers, dayScope: DayScope, from: StartYear = 1,
 ): Promise<Result<{ changed: number }>> {
   const { plan } = await loadPlan(planId);
   const at = planLevers(plan.workingCapital[1]);
-  const planned = plannedChanges(plan.sources, levers, at);
+  const planned = plannedChanges(plan.sources, levers, at, from);
   if (!planned.changes.length && !planned.daysMoved) {
     return { ok: false, error: "Nothing to apply — move a lever first." };
   }
@@ -159,7 +159,7 @@ export async function applyScenario(
   const { error: versionErr } = await supabase.from("plan_versions").insert({
     plan_id: planId, reason: "whatif_apply",
     label: `What-If: ${planned.changes.length} record${planned.changes.length === 1 ? "" : "s"}`,
-    snapshot: { levers, dayScope, changes: planned.changes, before },
+    snapshot: { levers, dayScope, from, changes: planned.changes, before },
   });
   if (versionErr) return { ok: false, error: `Couldn't save a version first: ${versionErr.message}` };
 
@@ -173,6 +173,7 @@ export async function applyScenario(
       units_sold: row.units_sold,
       cost_per_unit: row.cost_per_unit,
       yearly_growth: row.yearly_growth ?? {},
+      yearly_cost_increase: row.yearly_cost_increase ?? {},
       monthly_new_clients: row.monthly_new_clients ?? null,
     }).eq("id", id).eq("plan_id", planId);
     if (error) return { ok: false, error: `Couldn't update ${String(row.name ?? "a product")}: ${error.message}` };
@@ -182,7 +183,7 @@ export async function applyScenario(
     const id = String(o.id ?? "");
     if (!touched.has(`plan_overheads:${id}`)) continue;
     const { error } = await supabase.from("plan_overheads")
-      .update({ current_value: o.current_value }).eq("id", id).eq("plan_id", planId);
+      .update({ current_value: o.current_value, yearly_change: o.yearly_change ?? {} }).eq("id", id).eq("plan_id", planId);
     if (error) return { ok: false, error: `Couldn't update ${o.name}: ${error.message}` };
   }
 
@@ -227,13 +228,14 @@ export async function undoLastApply(planId: string): Promise<Result<{ label: str
   for (const p of before.products ?? []) {
     const { error: e } = await supabase.from("plan_products").update({
       average_price: p.average_price, units_sold: p.units_sold, cost_per_unit: p.cost_per_unit,
-      yearly_growth: p.yearly_growth ?? {}, monthly_new_clients: p.monthly_new_clients ?? null,
+      yearly_growth: p.yearly_growth ?? {}, yearly_cost_increase: p.yearly_cost_increase ?? {},
+      monthly_new_clients: p.monthly_new_clients ?? null,
     }).eq("id", String(p.id)).eq("plan_id", planId);
     if (e) return { ok: false, error: `Couldn't restore ${String(p.name ?? "a product")}: ${e.message}` };
   }
   for (const o of before.overheads ?? []) {
     const { error: e } = await supabase.from("plan_overheads")
-      .update({ current_value: o.current_value }).eq("id", String(o.id)).eq("plan_id", planId);
+      .update({ current_value: o.current_value, yearly_change: o.yearly_change ?? {} }).eq("id", String(o.id)).eq("plan_id", planId);
     if (e) return { ok: false, error: `Couldn't restore ${String(o.name ?? "an overhead")}: ${e.message}` };
   }
   if (before.workingCapital) {
