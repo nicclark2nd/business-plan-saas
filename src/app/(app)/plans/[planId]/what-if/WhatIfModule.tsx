@@ -13,6 +13,7 @@ import {
 } from "@/engine/whatif/levers";
 import { realityChecks, type Check } from "@/engine/whatif/checks";
 import { revenueWorth } from "@/engine/whatif/worth";
+import type { WorkingCapitalDays } from "@/engine/forecast/model";
 import type { Noun } from "@/engine/plan/vocabulary";
 
 /**
@@ -47,8 +48,16 @@ const RANGE: Record<LeverKey, { min: number; max: number; step: number; unit: "%
 const PROFIT_LEVERS: LeverKey[] = ["price", "volume", "cogs", "overheads"];
 const CASH_LEVERS: LeverKey[] = ["debtorDays", "stockDays", "creditorDays"];
 
-export function WhatIfModule({ planId, mode, plan, noun, taxLabel, monthNames }: {
-  planId: string; mode: "guided" | "advanced"; plan: WhatIfPlan; noun: Noun; taxLabel: string; monthNames: string[];
+/** Which of the business's own implied days belongs beside each lever. The profit levers have no equivalent. */
+const HISTORY_OF: Partial<Record<LeverKey, keyof WorkingCapitalDays>> = {
+  debtorDays: "debtorDays", stockDays: "inventoryDays", creditorDays: "creditorDays",
+};
+
+export function WhatIfModule({ planId, mode, plan, noun, taxLabel, monthNames, history }: {
+  planId: string; mode: "guided" | "advanced"; plan: WhatIfPlan; noun: Noun; taxLabel: string;
+  monthNames: string[];
+  /** Days implied by the last set of accounts, or null for a business with no history yet (§6.41.3). */
+  history: WorkingCapitalDays | null;
 }) {
   const num = useMoney();
   const [area, setArea] = useState<AreaKey>("levers");
@@ -61,7 +70,12 @@ export function WhatIfModule({ planId, mode, plan, noun, taxLabel, monthNames }:
    * numbers on this screen can be trusted (§6.41).
    */
   const what = useMemo(() => runWhatIf(plan, lv), [plan, lv]);
-  const checks = useMemo(() => realityChecks(what, lv, monthNames, num), [what, lv, monthNames, num]);
+  const checks = useMemo(() => realityChecks(what, lv, monthNames, num, history), [what, lv, monthNames, num, history]);
+  /** What the business actually achieved, for the three levers that have a record to be held against. */
+  const historyOf = (k: LeverKey) => {
+    const field = HISTORY_OF[k];
+    return field && history ? Math.round(Number(history[field]) || 0) : null;
+  };
   /**
    * What a pound of revenue is worth depending on which lever wins it (§6.41.2). It is a fact about the plan
    * and not about the sliders, so it is computed once and stands there whether or not anything has moved.
@@ -193,10 +207,12 @@ export function WhatIfModule({ planId, mode, plan, noun, taxLabel, monthNames }:
 
           <div className="grid gap-3 lg:grid-cols-2">
             <LeverCard title="Profit levers" note="also move cash" keys={PROFIT_LEVERS} lv={lv} at={at} set={set}
-              translate={translate} checkFor={checkFor} foot={worthNote(worth)} />
+              translate={translate} checkFor={checkFor} historyOf={historyOf} foot={worthNote(worth)} />
             <LeverCard title="Cash levers" note="move cash, not profit" keys={CASH_LEVERS} lv={lv} at={at} set={set}
-              translate={translate} checkFor={checkFor}
-              foot="Days are how long money sits with someone else. Fewer debtor and stock days, and more creditor days, all put cash back in your account." />
+              translate={translate} checkFor={checkFor} historyOf={historyOf}
+              foot={<>Days are how long money sits with someone else. Fewer debtor and stock days, and more creditor days, all put cash back in your account.
+                {history && <> The figures marked <b>history</b> are implied by your last set of accounts — a reading taken on one balance-sheet date, so a quiet month flatters them.</>}
+              </>} />
           </div>
         </div>
       ) : (
@@ -365,10 +381,11 @@ function Tile({ eyebrow, now, value, parts, interaction, num, signed, foot }: {
   );
 }
 
-function LeverCard({ title, note, keys, lv, at, set, translate, checkFor, foot }: {
+function LeverCard({ title, note, keys, lv, at, set, translate, checkFor, historyOf, foot }: {
   title: string; note: string; keys: LeverKey[]; lv: Levers; at: Levers;
   set: (k: LeverKey, v: number) => void; translate: (k: LeverKey) => string;
-  checkFor: (k: LeverKey) => Check | undefined; foot?: React.ReactNode;
+  checkFor: (k: LeverKey) => Check | undefined; historyOf: (k: LeverKey) => number | null;
+  foot?: React.ReactNode;
 }) {
   return (
     <div className="rounded border border-border bg-card">
@@ -376,29 +393,41 @@ function LeverCard({ title, note, keys, lv, at, set, translate, checkFor, foot }
         <h2 className="text-[13px] font-semibold">{title}</h2>
         <span className="eyebrow ml-auto">{note}</span>
       </div>
-      {keys.map((k) => <LeverRow key={k} k={k} lv={lv} at={at} set={set} note={translate(k)} check={checkFor(k)} />)}
+      {keys.map((k) => <LeverRow key={k} k={k} lv={lv} at={at} set={set} note={translate(k)} check={checkFor(k)} history={historyOf(k)} />)}
       {foot && <div className="border-t border-border px-3 py-2 text-[12px] leading-snug text-muted-foreground">{foot}</div>}
     </div>
   );
 }
 
-function LeverRow({ k, lv, at, set, note, check }: {
-  k: LeverKey; lv: Levers; at: Levers; set: (k: LeverKey, v: number) => void; note: string; check?: Check;
+function LeverRow({ k, lv, at, set, note, check, history }: {
+  k: LeverKey; lv: Levers; at: Levers; set: (k: LeverKey, v: number) => void; note: string;
+  check?: Check; history: number | null;
 }) {
   const r = RANGE[k];
   const value = Number(lv[k]);
   const moved = value !== Number(at[k]);
   const clamp = (v: number) => Math.min(r.max, Math.max(r.min, v));
+  // Where the business's own record sits on this track, as a share of it.
+  const mark = history == null ? null : Math.min(100, Math.max(0, ((history - r.min) / (r.max - r.min)) * 100));
   return (
     <div className="grid grid-cols-[112px_minmax(0,1fr)_88px] items-center gap-x-3 gap-y-1 border-b border-border px-3 py-2 last:border-b-0">
       <label className={cn("text-[13px]", moved ? "font-semibold text-foreground" : "text-muted-foreground")} htmlFor={`lv-${k}`}>
         {LABEL[k]}
+        {history != null && <span className="block text-[10.5px] font-normal tabular-nums text-faint">{history} in history</span>}
       </label>
-      <input
-        id={`lv-${k}`} type="range" min={r.min} max={r.max} step={r.step} value={value}
-        onChange={(e) => set(k, clamp(Number(e.target.value)))}
-        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-border accent-primary"
-      />
+      <div className="relative flex items-center">
+        <input
+          id={`lv-${k}`} type="range" min={r.min} max={r.max} step={r.step} value={value}
+          onChange={(e) => set(k, clamp(Number(e.target.value)))}
+          className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-border accent-primary"
+        />
+        {/* The business's own record, as a mark on the track — a reference, never the starting point. */}
+        {mark != null && (
+          <i aria-hidden title={`Your accounts imply ${history}`}
+            className="pointer-events-none absolute top-1/2 h-3 w-px -translate-y-1/2 bg-foreground/40"
+            style={{ left: `calc(${mark}% - 0.5px)` }} />
+        )}
+      </div>
       <div className="flex items-center gap-1">
         <Input
           className="h-7 px-1.5 text-right text-[13px] tabular-nums" inputMode="decimal"

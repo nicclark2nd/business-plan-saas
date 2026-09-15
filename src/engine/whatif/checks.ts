@@ -15,6 +15,7 @@
  * their cash flow should read that before a compliment.
  */
 import type { LeverKey, Levers, WhatIf } from "./levers";
+import type { WorkingCapitalDays } from "../forecast/model";
 
 export type CheckLevel = "bad" | "good" | "warn";
 /**
@@ -46,9 +47,16 @@ export function listedMonths(months: number[], name: (m: number) => string): str
  *
  * `monthNames` is the plan's own twelve months in its own financial year (§6.21) and `money` its own
  * formatter, so a Manchester plan is told about April and pounds rather than January and dollars.
+ *
+ * `history` is what the business's own last accounts imply (§6.41.3). Where it exists it replaces the rules
+ * of thumb for the three days levers, because "your accounts imply 46 days" is a stronger and more honest
+ * challenge than "under 30 is quick for most trades" — it is the client's own record rather than my opinion.
+ * A plan with no history keeps the rules of thumb, which is all anyone can offer a business with no track
+ * record yet.
  */
 export function realityChecks(
   what: WhatIf, levers: Levers, monthNames: string[], money: (v: number) => string,
+  history?: WorkingCapitalDays | null,
 ): Check[] {
   const base = what.base.outcome, now = what.adjusted.outcome;
   const bad: Check[] = [], good: Check[] = [], warn: Check[] = [];
@@ -132,19 +140,60 @@ export function realityChecks(
       text: `Cutting overheads by ${Math.abs(o)}% — ${money(Math.abs(base.overheads - now.overheads))} a year — usually means something stops. Which line?`,
     });
   }
-  if (levers.debtorDays != null && levers.debtorDays < 30 && levers.debtorDays < n(basis.debtorDays)) {
+  /**
+   * The three days levers, measured against the business's own record (§6.41.3).
+   *
+   * These fire on where the slider IS, not on whether the client moved it — which matters, because a plan
+   * can arrive already assuming terms it has never achieved. Measuring realism against the plan's own
+   * assumption instead of against the business is backwards: a plan that assumes 25 days against a history
+   * of 46 would sit there silently, and only a drag to 24 would say anything.
+   *
+   * A tenth is the line. It scales with the business, it is one number rather than a table of them, and it
+   * is loose enough that trimming a day or two off a long collection cycle passes without comment.
+   */
+  const days = (
+    key: "debtorDays" | "stockDays" | "creditorDays",
+    set: number | null, hist: number, better: "lower" | "higher", say: (h: number, s: number) => string,
+  ) => {
+    if (set == null || !(hist > 0)) return false;   // the caller resolves "untouched" to the plan's own
+    const stretch = better === "lower" ? set <= hist * 0.9 : set >= hist * 1.1;
+    if (!stretch) return false;
+    warn.push({ key: `${key}-history`, level: "warn", lever: key, text: say(hist, Math.round(set)) });
+    return true;
+  };
+
+  /**
+   * An untouched lever is `null`, meaning "whatever the plan says" — so it is resolved against the plan's
+   * own days before being judged. Without that, a plan that ARRIVES assuming terms it has never achieved
+   * says nothing until somebody drags the slider, which is the whole failure this replaces.
+   */
+  const told = history
+    ? [
+      days("debtorDays", levers.debtorDays ?? n(basis.debtorDays), n(history.debtorDays), "lower", (h, s) =>
+        `Your accounts imply ${h} debtor days. This plan collects in ${s} — ${h - s} days faster than the business has managed. What changes to make that happen?`),
+      days("stockDays", levers.stockDays ?? n(basis.stockDays), n(history.inventoryDays), "lower", (h, s) =>
+        `Your accounts imply ${h} stock days. Holding ${s} is ${h - s} days less than the business has carried. What changes?`),
+      days("creditorDays", levers.creditorDays ?? n(basis.creditorDays), n(history.creditorDays), "higher", (h, s) =>
+        s > 60
+          ? `Paying suppliers at ${s} days strains the relationship before it fixes the cash, and it is ${s - h} days longer than your accounts imply. Agree it with them first.`
+          : `Your accounts imply ${h} creditor days. Paying at ${s} holds money ${s - h} days longer than you do now — agreed with your suppliers, or assumed?`),
+    ]
+    : [false, false, false];
+
+  // No history, or a figure history cannot speak to: fall back to what is true of most businesses.
+  if (!told[0] && levers.debtorDays != null && levers.debtorDays < 30 && levers.debtorDays < n(basis.debtorDays)) {
     warn.push({
       key: "debtor-days", level: "warn", lever: "debtorDays",
       text: `Being paid in ${levers.debtorDays} days is quick for most trades. Check the terms will hold before the plan relies on the cash.`,
     });
   }
-  if (levers.creditorDays != null && levers.creditorDays > 60 && levers.creditorDays > n(basis.creditorDays)) {
+  if (!told[2] && levers.creditorDays != null && levers.creditorDays > 60 && levers.creditorDays > n(basis.creditorDays)) {
     warn.push({
       key: "creditor-days", level: "warn", lever: "creditorDays",
       text: `Paying suppliers at ${levers.creditorDays} days strains the relationship before it fixes the cash. Agree it with them first.`,
     });
   }
-  if (levers.stockDays != null && levers.stockDays === 0 && n(basis.stockDays) > 0) {
+  if (!told[1] && levers.stockDays != null && levers.stockDays === 0 && n(basis.stockDays) > 0) {
     warn.push({
       key: "stock-days", level: "warn", lever: "stockDays",
       text: "Holding no stock at all means buying for every job as it is won, and waiting for it. Only true where suppliers deliver same-day.",
