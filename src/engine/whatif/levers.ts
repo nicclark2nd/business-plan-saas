@@ -177,18 +177,29 @@ export function applyLevers(sources: PlanSources, levers: Levers): PlanSources {
   };
 }
 
-/** The working-capital schedule with Year 1's days replaced by the levers'. Later years are the plan's. */
+/**
+ * How far the days levers reach (§6.43). The sliders model Year 1, which is what the screen shows and what
+ * "apply" writes by default. `all` is for answering the other question the client is asked when they save:
+ * a change in terms is usually permanent, and they should see the five-year consequence before choosing it.
+ */
+export type DayScope = "year1" | "all";
+
+/** The working-capital schedule with the levers' days written into Year 1, or into every year. */
 export function applyDays(
-  schedule: Record<number, WorkingCapitalDays>, levers: Levers,
+  schedule: Record<number, WorkingCapitalDays>, levers: Levers, scope: DayScope = "year1",
 ): Record<number, WorkingCapitalDays> {
   const y1 = schedule[1] ?? NO_DAYS;
   const debtorDays = levers.debtorDays == null ? n(y1.debtorDays) : Math.max(0, n(levers.debtorDays));
   const inventoryDays = levers.stockDays == null ? n(y1.inventoryDays) : Math.max(0, n(levers.stockDays));
   const creditorDays = levers.creditorDays == null ? n(y1.creditorDays) : Math.max(0, n(levers.creditorDays));
+  const days = { debtorDays, inventoryDays, creditorDays };
+  if (scope === "all") {
+    return Object.fromEntries(FORECAST_YEARS.map((y) => [y, days]));
+  }
   if (debtorDays === n(y1.debtorDays) && inventoryDays === n(y1.inventoryDays) && creditorDays === n(y1.creditorDays)) {
     return schedule;
   }
-  return { ...schedule, 1: { debtorDays, inventoryDays, creditorDays } };
+  return { ...schedule, 1: days };
 }
 
 /* ------------------------------------------------------------------ *
@@ -276,9 +287,9 @@ const addInto = (a: Measures, b: Measures): Measures =>
  * functions. Nothing is short-circuited for speed: a What-If that took a cheaper path would be a second
  * computation of the plan's own figures, which is the fault that has cost this project more than any other.
  */
-export function runPlan(plan: WhatIfPlan, levers: Levers): Run {
+export function runPlan(plan: WhatIfPlan, levers: Levers, dayScope: DayScope = "year1"): Run {
   const sources = applyLevers(plan.sources, levers);
-  const workingCapital = applyDays(plan.workingCapital, levers);
+  const workingCapital = applyDays(plan.workingCapital, levers, dayScope);
   const components = plan.components?.length ? plan.components : [NOT_REGISTERED];
   const openingGstPayable = n(plan.openingGstPayable);
 

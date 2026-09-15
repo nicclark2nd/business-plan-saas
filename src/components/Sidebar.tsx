@@ -1,15 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { NAV, GUIDED_STEPS } from "@/lib/nav";
+import { usePathname, useSearchParams } from "next/navigation";
+import { NAV, GUIDED_STEPS, type NavItem } from "@/lib/nav";
 import { useMode } from "@/components/ModeProvider";
 import { cn } from "@/lib/utils";
 
 export function Sidebar({ planId, doneSteps }: { planId: string; doneSteps: number[] }) {
   const { mode } = useMode();
   const path = usePathname();
+  const area = useSearchParams().get("area");
   const base = `/plans/${planId}`;
+
+  /** Where an item actually lands: its own route, or the module and tab it deep-links to (§6.43). */
+  const target = (it: NavItem) => {
+    const [id, query] = (it.href ?? it.id).split("?");
+    return { id, area: query ? new URLSearchParams(query).get("area") : null };
+  };
+  /**
+   * Tabs claimed by a deep link, per module. The module's own item stays lit on every tab EXCEPT those —
+   * otherwise Profit & Loss and Cash Flow would both light up while the cash flow is on screen, and the
+   * menu would be telling the client they are in two places at once.
+   */
+  const claimed = new Map<string, Set<string>>();
+  for (const it of NAV.flatMap((g) => g.items)) {
+    const t = target(it);
+    if (!it.href || !t.area) continue;
+    if (!claimed.has(t.id)) claimed.set(t.id, new Set());
+    claimed.get(t.id)!.add(t.area);
+  }
   const groups = NAV.map((g) => ({ ...g, items: g.items.filter((i) => mode === "advanced" || i.step || i.tool) })).filter((g) => g.items.length);
 
   return (
@@ -18,9 +37,13 @@ export function Sidebar({ planId, doneSteps }: { planId: string; doneSteps: numb
         <div key={g.group || "top"} className="mt-2.5">
           {g.group && <div className="px-4 pb-1 pt-1.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-sidebar-muted">{g.group}</div>}
           {g.items.map((it) => {
+            const t = target(it);
             const href = `${base}/${it.href ?? it.id}`;
-            const own = `${base}/${it.id}`;
-            const active = !it.href && (path === own || path.startsWith(own + "/"));
+            const own = `${base}/${t.id}`;
+            const here = path === own || path.startsWith(own + "/");
+            const active = here && (t.area
+              ? area === t.area
+              : !(area && claimed.get(t.id)?.has(area)));
             const label = mode === "advanced" && it.advancedLabel ? it.advancedLabel : it.label;
             const done = it.step ? doneSteps.includes(it.step) : false;
             return (

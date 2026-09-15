@@ -19,10 +19,24 @@ export const NAV: NavGroup[] = [
     { id: "extraordinary", label: "One-off income & costs", step: 12 },
     { id: "what-if", label: "What-If Planner", tool: true },
   ] },
+  /**
+   * Four of these are one module (§6.43). Review forecast holds the profit and loss, the cash flow, the
+   * balance sheet and the assumptions on one module bar, because three statements that must agree belong on
+   * one screen. But the left menu listed Balance Sheet and Cash Flow as items of their own pointing at
+   * routes that do not exist, so a client clicking either was told the module was "next in the build queue"
+   * while the real thing sat behind an item labelled Profit & Loss. Assumptions was not listed at all —
+   * the one place debtor, stock and creditor days can be edited for all five years, reachable only by
+   * opening Profit & Loss and finding a fourth tab.
+   *
+   * `href` deep-links each name to the tab it actually opens. The menu now says what is there, and every
+   * item lands on the thing it is named after.
+   */
   { group: "Forecasts", items: [
     { id: "forecast", label: "Review forecast", step: 13, advancedLabel: "Profit & Loss" },
-    { id: "break-even", label: "Break-Even" }, { id: "balance-sheet", label: "Balance Sheet" },
-    { id: "cash-flow", label: "Cash Flow" }, { id: "unit-economics", label: "Unit Economics" },
+    { id: "cash-flow", label: "Cash Flow", href: "forecast?area=cash" },
+    { id: "balance-sheet", label: "Balance Sheet", href: "forecast?area=balance" },
+    { id: "assumptions", label: "Assumptions", href: "forecast?area=assumptions" },
+    { id: "break-even", label: "Break-Even" }, { id: "unit-economics", label: "Unit Economics" },
   ] },
   { group: "Strategy (AI)", items: [{ id: "strategy", label: "Recommendations", tag: "soon" }] },
   { group: "Reports", items: [{ id: "reports", label: "Business plan", step: 15, tool: true }] },

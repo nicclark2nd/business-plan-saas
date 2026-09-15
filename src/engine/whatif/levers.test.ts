@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  NEUTRAL, applyLevers, planLevers, runPlan, runWhatIf,
+  NEUTRAL, applyDays, applyLevers, planLevers, runPlan, runWhatIf,
   type Levers, type WhatIfPlan,
 } from "./levers";
 import { assembleBase, assembleMonths, assembleOpening, type PlanSources } from "../forecast/assemble";
@@ -333,5 +333,54 @@ describe("the cash parts are all measured in the same month (§6.41)", () => {
   it("credits nothing to a lever that has not moved", () => {
     const w = runWhatIf(p, levers({ overheads: -5 }));
     expect(w.tightest.contributions.filter((c) => c.effect !== 0).map((c) => c.lever)).toEqual(["overheads"]);
+  });
+});
+
+
+/* ------------------------------------------------------------------ *
+ * How far the days reach                                              *
+ * ------------------------------------------------------------------ */
+
+describe("the days levers reach Year 1, or all five (§6.43)", () => {
+  const p = planFor(simplePlan());
+  const faster = levers({ debtorDays: 10, creditorDays: 60 });
+
+  it("touches only Year 1 by default, and leaves the other four exactly as the plan has them", () => {
+    const out = applyDays(p.workingCapital, faster);
+    expect(out[1]).toEqual({ debtorDays: 10, inventoryDays: 10, creditorDays: 60 });
+    for (const y of [2, 3, 4, 5]) expect(out[y], `year ${y}`).toEqual(DAYS);
+  });
+
+  it("writes every year when asked to", () => {
+    const out = applyDays(p.workingCapital, faster, "all");
+    for (const y of FORECAST_YEARS) {
+      expect(out[y], `year ${y}`).toEqual({ debtorDays: 10, inventoryDays: 10, creditorDays: 60 });
+    }
+  });
+
+  it("changes nothing at all when the levers sit where the plan does", () => {
+    expect(applyDays(p.workingCapital, NEUTRAL)).toBe(p.workingCapital);
+  });
+
+  /**
+   * The reason the save dialog shows five years rather than one. Collecting faster releases cash once; if the
+   * terms revert the following year it is absorbed again, and the plan ends exactly where it started. A
+   * client choosing "Year 1 only" is choosing a one-year effect, and should see that before choosing it.
+   */
+  it("a Year-1-only change unwinds; carried forward, it holds", () => {
+    const planned = runPlan(p, planLevers(p.workingCapital[1]));
+    const once = runPlan(p, faster, "year1");
+    const kept = runPlan(p, faster, "all");
+    const closing = (r: typeof planned, y: number) => r.forecast.cashFlow[y].closingCash;
+
+    expect(closing(once, 1)).toBeGreaterThan(closing(planned, 1));
+    expect(r2(closing(once, 5))).toBe(r2(closing(planned, 5)));       // gone by Year 5
+    expect(closing(kept, 5)).toBeGreaterThan(closing(planned, 5));    // still there
+  });
+
+  it("every year still reconciles when the days are written across all five", () => {
+    const run = runPlan(p, faster, "all");
+    expect(run.invariants.filter((i) => !i.passed)).toEqual([]);
+    for (const y of FORECAST_YEARS) expect(Math.abs(run.forecast.balanceSheet[y].balanceCheck)).toBeLessThan(0.5);
   });
 });

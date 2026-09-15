@@ -1,19 +1,22 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ModuleFrame, ModuleStatusFooter } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row, Toolbar, Meta, TOTAL_ROW } from "@/components/module/DataGrid";
 import { useMoney } from "@/components/MoneyProvider";
 import { cn } from "@/lib/utils";
 import {
-  LEVER_KEYS, planLevers, runWhatIf,
-  type LeverKey, type Levers, type Measures, type WhatIfPlan,
+  LEVER_KEYS, planLevers, runPlan, runWhatIf,
+  type DayScope, type LeverKey, type Levers, type Measures, type WhatIfPlan,
 } from "@/engine/whatif/levers";
 import { realityChecks, type Check } from "@/engine/whatif/checks";
 import { revenueWorth } from "@/engine/whatif/worth";
-import type { WorkingCapitalDays } from "@/engine/forecast/model";
+import { FORECAST_YEARS, type WorkingCapitalDays } from "@/engine/forecast/model";
+import { saveDays } from "./actions";
 import type { Noun } from "@/engine/plan/vocabulary";
 
 /**
@@ -60,7 +63,11 @@ export function WhatIfModule({ planId, mode, plan, noun, taxLabel, monthNames, h
   history: WorkingCapitalDays | null;
 }) {
   const num = useMoney();
+  const router = useRouter();
   const [area, setArea] = useState<AreaKey>("levers");
+  const [saving, startSave] = useTransition();
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [savedError, setSavedError] = useState<string>();
   const at = useMemo(() => planLevers(plan.workingCapital[1]), [plan]);
   const [lv, setLv] = useState<Levers>(at);
 
@@ -81,6 +88,14 @@ export function WhatIfModule({ planId, mode, plan, noun, taxLabel, monthNames, h
    * and not about the sliders, so it is computed once and stands there whether or not anything has moved.
    */
   const worth = useMemo(() => revenueWorth(plan), [plan]);
+  /** The three day settings as the plan would store them, and whether any of them differ from it. */
+  const daysNow: WorkingCapitalDays = {
+    debtorDays: Math.round(Number(lv.debtorDays ?? at.debtorDays)),
+    inventoryDays: Math.round(Number(lv.stockDays ?? at.stockDays)),
+    creditorDays: Math.round(Number(lv.creditorDays ?? at.creditorDays)),
+  };
+  const daysMoved = CASH_LEVERS.some((k) => Number(lv[k]) !== Number(at[k]));
+
   /** A check about one lever belongs under that lever; the rest belong together in the panel. */
   const checkFor = (k: LeverKey): Check | undefined => checks.find((c) => c.lever === k);
   const scenarioChecks = checks.filter((c) => !c.lever);
@@ -210,6 +225,11 @@ export function WhatIfModule({ planId, mode, plan, noun, taxLabel, monthNames, h
               translate={translate} checkFor={checkFor} historyOf={historyOf} foot={worthNote(worth)} />
             <LeverCard title="Cash levers" note="move cash, not profit" keys={CASH_LEVERS} lv={lv} at={at} set={set}
               translate={translate} checkFor={checkFor} historyOf={historyOf}
+              action={
+                <Button size="sm" variant="outline" disabled={!daysMoved} onClick={() => { setSavedError(undefined); setSaveOpen(true); }}>
+                  Save these days to the plan
+                </Button>
+              }
               foot={<>Days are how long money sits with someone else. Fewer debtor and stock days, and more creditor days, all put cash back in your account.
                 {history && <> The figures marked <b>history</b> are implied by your last set of accounts — a reading taken on one balance-sheet date, so a quiet month flatters them.</>}
               </>} />
@@ -307,7 +327,134 @@ export function WhatIfModule({ planId, mode, plan, noun, taxLabel, monthNames, h
           </Grid>
         </>
       )}
+
+      {saveOpen && (
+        <SaveDaysDialog
+          plan={plan} lv={lv} at={at} days={daysNow} num={num} saving={saving} error={savedError}
+          onClose={() => setSaveOpen(false)}
+          onSave={(scope) => startSave(async () => {
+            const r = await saveDays(planId, daysNow, scope);
+            if (!r.ok) { setSavedError(r.error); return; }
+            setSaveOpen(false);
+            // The plan has moved, so the whole screen reloads against it: the sliders come back sitting on
+            // the new assumption, which is now the baseline everything else is measured from.
+            router.refresh();
+          })}
+        />
+      )}
     </ModuleFrame>
+  );
+}
+
+/**
+ * Saving the days into the plan (§6.43).
+ *
+ * The one question worth asking is how far forward the change reaches. Year 1 alone matches what the sliders
+ * modelled exactly, and can leave a discontinuity a client would rather see than discover — collect in 30
+ * next year and 46 for the four after. Carrying it forward treats a change in terms as permanent, which is
+ * usually what an owner means, but it writes four years whose effect the screen has not shown. So both are
+ * run and both are shown, year by year, before either is chosen.
+ */
+function SaveDaysDialog({ plan, lv, at, days, num, saving, error, onClose, onSave }: {
+  plan: WhatIfPlan; lv: Levers; at: Levers; days: WorkingCapitalDays;
+  num: (v: number) => string; saving: boolean; error?: string;
+  onClose: () => void; onSave: (scope: DayScope) => void;
+}) {
+  const [scope, setScope] = useState<DayScope>("year1");
+  const cash = useMemo(() => {
+    const closing = (r: ReturnType<typeof runPlan>) => FORECAST_YEARS.map((y) => r.forecast.cashFlow[y].closingCash);
+    return {
+      planned: closing(runPlan(plan, at)),
+      year1: closing(runPlan(plan, lv, "year1")),
+      all: closing(runPlan(plan, lv, "all")),
+    };
+  }, [plan, lv, at]);
+
+  const changed = ([
+    ["Debtor days", "debtorDays", at.debtorDays, days.debtorDays],
+    ["Stock days", "stockDays", at.stockDays, days.inventoryDays],
+    ["Creditor days", "creditorDays", at.creditorDays, days.creditorDays],
+  ] as [string, LeverKey, number | null, number][]).filter(([, , from, to]) => Math.round(Number(from)) !== to);
+
+  const rows: [string, number[]][] = [
+    ["As planned", cash.planned],
+    ["Year 1 only", cash.year1],
+    ["All five years", cash.all],
+  ];
+  const chosen = scope === "year1" ? "Year 1 only" : "All five years";
+  /**
+   * Whether a Year-1-only change leaves anything behind. Usually it does not, and the table shows why:
+   * collecting faster releases cash once, and letting the terms revert in Year 2 absorbs it again, so Year 5
+   * closes exactly where it always did. That is worth saying out loud rather than leaving to be noticed —
+   * but it is read off the two runs rather than asserted, because a plan with growth or a loss can differ.
+   */
+  const unwinds = Math.abs(cash.year1[4] - cash.planned[4]) < 1;
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-[620px]">
+        <DialogHeader>
+          <DialogTitle>Save these days to the plan</DialogTitle>
+          <DialogDescription>
+            This writes your working-capital assumptions, the same ones the Assumptions tab holds. Nothing
+            else on this screen is saved.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="rounded border border-border">
+          {changed.map(([label, key, from, to]) => (
+            <div key={key} className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-[13px] last:border-b-0">
+              <span className="w-28">{label}</span>
+              <span className="tabular-nums text-muted-foreground">{Math.round(Number(from))}</span>
+              <span className="text-muted-foreground">→</span>
+              <span className="font-semibold tabular-nums">{to}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-[13px]">Apply to</span>
+          <div className="inline-flex overflow-hidden rounded border border-input">
+            {(["year1", "all"] as const).map((k) => (
+              <button key={k} type="button" onClick={() => setScope(k)} aria-pressed={scope === k}
+                className={cn("px-2.5 py-1 text-[12px] leading-none",
+                  scope === k ? "bg-primary font-semibold text-primary-foreground" : "bg-background text-muted-foreground hover:bg-secondary")}>
+                {k === "year1" ? "Year 1 only" : "All five years"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* The consequence of the choice, which is entirely in the years the sliders did not show. */}
+        <Grid>
+          <thead>
+            <tr>
+              <Th style={{ width: "34%" }}>Cash at year end</Th>
+              {FORECAST_YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([label, values]) => (
+              <Row key={label} className={cn(label === chosen && TOTAL_ROW)}>
+                <Td>{label}</Td>
+                {values.map((v, i) => <Td key={i} right className="tabular-nums">{num(v)}</Td>)}
+              </Row>
+            ))}
+          </tbody>
+        </Grid>
+        <p className="text-[12px] text-muted-foreground">
+          {scope === "year1"
+            ? <>Years 2 to 5 keep the days the plan already assumes.{unwinds && <> The cash this releases in Year 1 is absorbed again as the terms revert, so Year 5 closes where it always did.</>} Change the later years on the Assumptions tab.</>
+            : "The same terms are assumed for all five years, which is what a renegotiated arrangement usually means."}
+        </p>
+        {error && <p className="text-[12.5px] font-semibold text-bad">{error}</p>}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button onClick={() => onSave(scope)} disabled={saving}>{saving ? "Saving…" : "Save to the plan"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -381,11 +528,11 @@ function Tile({ eyebrow, now, value, parts, interaction, num, signed, foot }: {
   );
 }
 
-function LeverCard({ title, note, keys, lv, at, set, translate, checkFor, historyOf, foot }: {
+function LeverCard({ title, note, keys, lv, at, set, translate, checkFor, historyOf, foot, action }: {
   title: string; note: string; keys: LeverKey[]; lv: Levers; at: Levers;
   set: (k: LeverKey, v: number) => void; translate: (k: LeverKey) => string;
   checkFor: (k: LeverKey) => Check | undefined; historyOf: (k: LeverKey) => number | null;
-  foot?: React.ReactNode;
+  foot?: React.ReactNode; action?: React.ReactNode;
 }) {
   return (
     <div className="rounded border border-border bg-card">
@@ -394,6 +541,7 @@ function LeverCard({ title, note, keys, lv, at, set, translate, checkFor, histor
         <span className="eyebrow ml-auto">{note}</span>
       </div>
       {keys.map((k) => <LeverRow key={k} k={k} lv={lv} at={at} set={set} note={translate(k)} check={checkFor(k)} history={historyOf(k)} />)}
+      {action && <div className="border-t border-border px-3 py-2">{action}</div>}
       {foot && <div className="border-t border-border px-3 py-2 text-[12px] leading-snug text-muted-foreground">{foot}</div>}
     </div>
   );
