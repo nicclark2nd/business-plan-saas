@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { ModuleFrame, ModuleStatusFooter, useModule } from "@/components/module/ModuleFrame";
 import { Section, FieldGrid, Field, FieldInput, FieldSelect } from "@/components/module/FieldGrid";
-import { Toolbar, Meta } from "@/components/module/DataGrid";
+import { Input } from "@/components/ui/input";
+import { Toolbar, Meta, Grid, Th, Td, Row as GridRow } from "@/components/module/DataGrid";
 import { currentFinancialYear, firstProjectedYear, planYearEnding, planYearLabel } from "@/engine/plan/calendar";
-import { suggestedRate, taxLabel } from "@/engine/plan/gst";
+import { taxComponents, taxHeading } from "@/engine/plan/gst";
+import { needsRegion, regimeFor, regionLabel, regionsFor, type TaxComponent } from "@/engine/plan/taxRegimes";
 import { formatMonth } from "../people/model";
 import { saveProfile, saveFinancial } from "./actions";
 import { legalStructuresFor, CUSTOMER_TYPES, PRODUCT_TYPES, COUNTRIES, CURRENCIES, MONTHS, profileMissing, type Settings, type Profile, type Financial } from "./model";
@@ -79,36 +81,8 @@ export function SettingsModule({ planId, initial, mode, initialArea }: { planId:
               <Field label="Type of product sold" span={2}><FieldSelect value={s.product_type} options={PRODUCT_TYPES} placeholder="Choose" onValueChange={(v) => edit({ product_type: v }, "profile", true)} /></Field>
             </FieldGrid>
           </Section>
-          {/* GST/VAT (§6.38). Off is the default and changes nothing; on moves cash, never profit. */}
-          <Section title={`${taxLabel(s.country)} / VAT`}>
-            <FieldGrid>
-              <Field label={`Registered for ${taxLabel(s.country)}`} hint="Off leaves the forecast exactly as it is. On, the tax rides on every sale and purchase and is remitted each period.">
-                <FieldSelect value={s.gst_registered ? "yes" : "no"}
-                  options={[{ value: "no", label: "Not registered" }, { value: "yes", label: `Registered for ${taxLabel(s.country)}` }]}
-                  onValueChange={(v) => edit(v === "yes"
-                    ? { gst_registered: true, gst_rate: s.gst_rate || suggestedRate(s.country) }
-                    : { gst_registered: false }, "financial", true)} />
-              </Field>
-              {s.gst_registered && <>
-                <Field label={`${taxLabel(s.country)} rate %`} hint={`${suggestedRate(s.country)}% is the ordinary rate where this business trades.`}>
-                  <FieldInput numeric value={String(s.gst_rate)} onChange={(e) => edit({ gst_rate: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 }, "financial")} />
-                </Field>
-                <Field label="Returns filed" hint="When the net is paid over. The period that closes with the year is still owed at year end.">
-                  <FieldSelect value={s.gst_frequency}
-                    options={[{ value: "monthly", label: "Monthly" }, { value: "quarterly", label: "Quarterly" }, { value: "annually", label: "Annually" }]}
-                    onValueChange={(v) => edit({ gst_frequency: v as "monthly" | "quarterly" | "annually" }, "financial", true)} />
-                </Field>
-              </>}
-            </FieldGrid>
-            {s.gst_registered && (
-              <p className="mt-2 text-[12.5px] text-muted-foreground">
-                Every price and cost in the plan stays {taxLabel(s.country)}-exclusive, so this does not change the profit.
-                It changes the cash, and puts what you have collected but not yet paid over onto the balance sheet.
-                Lines that carry no {taxLabel(s.country)} — an export, a bank fee, a government charge — are marked on their own row;
-                wages are never taxed and are excluded automatically.
-              </p>
-            )}
-          </Section>
+          {/* Tax (§6.39). Off is the default and changes nothing; on moves cash, never profit. */}
+          <TaxSection s={s} edit={edit} />
         </div>
       )}
 
@@ -157,4 +131,90 @@ function PendingBridge({ pending, dirty, error }: { pending: boolean; dirty: boo
   useEffect(() => setPending(pending), [pending, setPending]);
   useEffect(() => setNote(error ? error : pending ? "Saving…" : dirty ? "Unsaved — saves when you leave the field" : undefined), [pending, dirty, error, setNote]);
   return null;
+}
+
+/**
+ * The taxes this business charges (§6.39).
+ *
+ * Four markets, three different taxes, and one screen. The country is already on the Business profile, so
+ * all this asks for is the state or province where that decides the answer — and it decides a great deal:
+ * Ontario charges one reclaimable 13 % HST, British Columbia charges a 5 % GST it claims back plus a 7 %
+ * PST it never does, and a US rate is a state rate plus whatever counties and cities add on top.
+ *
+ * The regime fills itself in and every figure stays editable, because a default that cannot be overridden
+ * is a guess wearing a uniform. Nothing appears at all until registration is on.
+ */
+function TaxSection({ s, edit }: {
+  s: Settings; edit: (patch: Partial<Settings>, area: "profile" | "financial", now?: boolean) => void;
+}) {
+  const regime = regimeFor(s.country, s.tax_region);
+  const live = s.tax_components.length ? s.tax_components : regime.components;
+  const heading = taxHeading(taxComponents({ ...s, gst_registered: true }));
+  const wantsRegion = needsRegion(s.country);
+
+  const setComponent = (i: number, patch: Partial<TaxComponent>) =>
+    edit({ tax_components: live.map((c, j) => (j === i ? { ...c, ...patch } : c)) }, "financial");
+
+  return (
+    <Section title={`${heading} / sales tax`}>
+      <FieldGrid>
+        <Field label={`Registered for ${heading}`} hint="Off leaves the forecast exactly as it is. On, the tax rides on every sale and is remitted each period.">
+          <FieldSelect value={s.gst_registered ? "yes" : "no"}
+            options={[{ value: "no", label: "Not registered" }, { value: "yes", label: `Registered for ${heading}` }]}
+            onValueChange={(v) => edit({ gst_registered: v === "yes" }, "financial", true)} />
+        </Field>
+        {s.gst_registered && wantsRegion && (
+          <Field label={regionLabel(s.country)} hint={`The tax depends on it. Changing this replaces the rates below.`}>
+            <FieldSelect value={s.tax_region ?? ""} placeholder="Choose"
+              options={regionsFor(s.country).map((r) => ({ value: r, label: r }))}
+              onValueChange={(v) => edit({ tax_region: v, tax_components: regimeFor(s.country, v).components }, "financial", true)} />
+          </Field>
+        )}
+      </FieldGrid>
+
+      {s.gst_registered && (!wantsRegion || s.tax_region) && (
+        <>
+          <div className="mt-3 overflow-x-auto">
+            <Grid className="min-w-[620px]">
+              <thead><tr>
+                <Th style={{ width: "22%" }}>Tax</Th>
+                <Th right style={{ width: 110 }}>Rate %</Th>
+                <Th style={{ width: 150 }}>Filed</Th>
+                <Th style={{ width: 130 }}>Paid</Th>
+                <Th>Claimed back on purchases</Th>
+              </tr></thead>
+              <tbody>
+                {live.map((c, i) => (
+                  <GridRow key={`${c.label}-${i}`}>
+                    <Td><b>{c.label}</b></Td>
+                    <Td right>
+                      <Input inputMode="decimal" className="h-8 num text-right" value={String(c.rate)}
+                        onChange={(e) => setComponent(i, { rate: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} />
+                    </Td>
+                    <Td>
+                      <FieldSelect value={c.frequency}
+                        options={[{ value: "monthly", label: "Monthly" }, { value: "quarterly", label: "Quarterly" }, { value: "annually", label: "Annually" }]}
+                        onValueChange={(v) => setComponent(i, { frequency: v as TaxComponent["frequency"] })} />
+                    </Td>
+                    <Td className="text-muted-foreground">
+                      {c.lagMonths === 0 ? "same month" : c.lagMonths === 1 ? "a month after" : `${c.lagMonths} months after`}
+                    </Td>
+                    <Td className={c.reclaimable ? "text-muted-foreground" : "font-semibold text-warn"}>
+                      {c.reclaimable ? "Yes — claimed back" : "No — a cost to the business"}
+                    </Td>
+                  </GridRow>
+                ))}
+              </tbody>
+            </Grid>
+          </div>
+          {regime.note && <p className="mt-2 text-[12.5px] text-muted-foreground">{regime.note}</p>}
+          <p className="mt-2 text-[12.5px] text-muted-foreground">
+            Every price and cost in the plan stays tax-exclusive, so none of this changes the profit. It changes
+            the cash, and puts what you have collected but not yet paid over onto the balance sheet. Lines that
+            carry no tax are marked on their own row; wages are never taxed and are excluded automatically.
+          </p>
+        </>
+      )}
+    </Section>
+  );
 }

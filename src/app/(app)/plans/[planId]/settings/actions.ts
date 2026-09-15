@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseMonth } from "../people/model";
 import type { Profile, Financial } from "./model";
+import { serializeComponents } from "@/engine/plan/gst";
 
 type Result = { ok: true; data?: { date_established: string | null } } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
@@ -53,6 +54,9 @@ export async function saveFinancial(planId: string, f: Partial<Financial>): Prom
     gst_registered: !!f.gst_registered,
     gst_rate: Math.max(0, Math.min(100, Number(f.gst_rate) || 0)),
     gst_frequency: f.gst_frequency === "monthly" || f.gst_frequency === "annually" ? f.gst_frequency : "quarterly",
+    tax_region: (f.tax_region ?? "").trim() || null,
+    // Cleaned on the way out as well as in, so nothing unreadable can reach the engine (§6.39).
+    tax_components: serializeComponents(Array.isArray(f.tax_components) ? f.tax_components : []),
     currency: (f.currency || "AUD").toUpperCase().slice(0, 3),
   }, { onConflict: "plan_id" });
   if (error) { console.error("financial", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }

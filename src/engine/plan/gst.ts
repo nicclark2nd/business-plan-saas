@@ -31,7 +31,7 @@
 const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 const r2 = (v: number) => Math.round(v * 100) / 100 + 0;
 
-import type { TaxComponent, TaxFrequency } from "./taxRegimes";
+import { regimeFor, type TaxComponent, type TaxFrequency } from "./taxRegimes";
 
 export type GstFrequency = TaxFrequency;
 
@@ -81,6 +81,66 @@ export function gstSettings(stored: {
     lagMonths: 1,
     reclaimable: true,
   };
+}
+
+/**
+ * The plan's taxes, as the engine consumes them (§6.39).
+ *
+ * Order of resolution, and it matters:
+ *   1. Not registered → nothing, whatever else is stored. The switch is the switch.
+ *   2. A stored component list → exactly what the client chose. Their answer always wins.
+ *   3. Otherwise the ordinary regime for the country and region, with the single stored rate honoured if
+ *      the client has set one — so a plan written before any of this existed keeps its own rate rather than
+ *      being silently repriced to the country default.
+ */
+export function taxComponents(stored: {
+  gst_registered?: boolean | null; gst_rate?: number | string | null; gst_frequency?: string | null;
+  country?: string | null; tax_region?: string | null; tax_components?: unknown;
+} | null | undefined): GstSettings[] {
+  if (!stored?.gst_registered) return [];
+
+  const saved = Array.isArray(stored.tax_components) ? stored.tax_components : [];
+  if (saved.length) return saved.map((raw) => settingsFor(cleanComponent(raw)));
+
+  const regime = regimeFor(stored.country, stored.tax_region);
+  const single = Number(stored.gst_rate);
+  // One component and a rate the client has typed: keep their rate, take the regime's timing.
+  if (regime.components.length === 1 && Number.isFinite(single) && single > 0) {
+    const f = stored.gst_frequency;
+    return [settingsFor({
+      ...regime.components[0],
+      rate: single,
+      frequency: f === "monthly" || f === "annually" || f === "quarterly" ? f : regime.components[0].frequency,
+    })];
+  }
+  return regime.components.map((c) => settingsFor(c));
+}
+
+/** A stored component, cleaned. Anything unreadable falls back rather than throwing. */
+export function cleanComponent(raw: unknown): TaxComponent {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const f = o.frequency;
+  return {
+    label: typeof o.label === "string" && o.label.trim() ? o.label.trim().slice(0, 24) : "Tax",
+    rate: Math.min(100, Math.max(0, n(Number(o.rate)))),
+    reclaimable: o.reclaimable !== false,
+    frequency: f === "monthly" || f === "annually" ? f : "quarterly",
+    lagMonths: Math.min(6, Math.max(0, Math.trunc(n(Number(o.lagMonths))) || 0)),
+  };
+}
+
+/** Back to jsonb, cleaned on the way out as well as in. */
+export const serializeComponents = (cs: TaxComponent[]) => cs.map((c) => {
+  const x = cleanComponent(c);
+  return { label: x.label, rate: x.rate, reclaimable: x.reclaimable, frequency: x.frequency, lagMonths: x.lagMonths };
+});
+
+/** One heading for however many taxes a plan has: "GST", or "GST and PST". */
+export function taxHeading(cs: { label: string }[]): string {
+  const names = [...new Set(cs.map((c) => c.label).filter(Boolean))];
+  if (!names.length) return "GST";
+  if (names.length === 1) return names[0];
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
 /** The tax on a tax-exclusive amount. Nil when the business is not registered, or the line is not taxable. */

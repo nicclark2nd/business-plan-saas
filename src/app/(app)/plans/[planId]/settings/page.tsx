@@ -1,3 +1,4 @@
+import { cleanComponent } from "@/engine/plan/gst";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { SettingsModule } from "./SettingsModule";
@@ -23,6 +24,8 @@ export default async function SettingsPage({ params, searchParams }: { params: P
     opening_tax_losses: Number(s.opening_tax_losses ?? 0), opening_retained_earnings: Number(s.opening_retained_earnings ?? 0),
     gst_registered: !!s.gst_registered, gst_rate: Number(s.gst_rate ?? 10),
     gst_frequency: (s.gst_frequency ?? "quarterly") as "monthly" | "quarterly" | "annually",
+    tax_region: s.tax_region ?? null,
+    tax_components: (Array.isArray(s.tax_components) ? s.tax_components : []).map(cleanComponent),
     currency: s.currency ?? "AUD", logo_path: s.logo_path ?? null,
   };
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";

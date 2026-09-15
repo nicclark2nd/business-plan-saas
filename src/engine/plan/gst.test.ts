@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { gstPeriods, gstSchedule, gstSettings, inclusive, salesTaxCountry, suggestedRate, taxLabel, taxOn, type GstSettings } from "./gst";
+import { cleanComponent, gstPeriods, gstSchedule, gstSettings, inclusive, salesTaxCountry, serializeComponents, suggestedRate, taxComponents, taxHeading, taxLabel, taxOn, type GstSettings } from "./gst";
+import { regimeFor } from "./taxRegimes";
 
 const AU: GstSettings = { registered: true, label: "GST", rate: 10, frequency: "quarterly", lagMonths: 1, reclaimable: true };
 const flat = (v: number) => Array(12).fill(v) as number[];
@@ -143,5 +144,71 @@ describe("what it is called where the business trades", () => {
 
   it("calls the tax what it is called there", () => {
     expect(taxLabel("Malaysia")).toBe("SST");
+  });
+});
+
+describe("resolving a plan's taxes from what is stored (§6.39)", () => {
+  it("returns nothing at all when the switch is off, whatever else is stored", () => {
+    expect(taxComponents({ gst_registered: false, country: "Canada", tax_region: "Ontario" })).toEqual([]);
+    expect(taxComponents({ gst_registered: false, tax_components: [{ label: "VAT", rate: 20 }] })).toEqual([]);
+    expect(taxComponents(null)).toEqual([]);
+  });
+
+  it("uses what the client chose, ahead of any default", () => {
+    const cs = taxComponents({
+      gst_registered: true, country: "Canada", tax_region: "Ontario",
+      tax_components: [{ label: "HST", rate: 11, reclaimable: true, frequency: "monthly", lagMonths: 1 }],
+    });
+    expect(cs).toHaveLength(1);
+    expect(cs[0].rate).toBe(11);                 // not Ontario's 13
+    expect(cs[0].frequency).toBe("monthly");
+  });
+
+  it("falls back to the country and region when nothing is chosen", () => {
+    const bc = taxComponents({ gst_registered: true, country: "Canada", tax_region: "British Columbia" });
+    expect(bc.map((c) => c.label)).toEqual(["GST", "PST"]);
+    expect(bc[0].reclaimable).toBe(true);
+    expect(bc[1].reclaimable).toBe(false);
+
+    const uk = taxComponents({ gst_registered: true, country: "United Kingdom" });
+    expect(uk[0].rate).toBe(20);
+    expect(uk[0].lagMonths).toBe(2);
+  });
+
+  it("keeps a rate the client typed before any of this existed, rather than repricing them", () => {
+    const cs = taxComponents({ gst_registered: true, gst_rate: 12.5, gst_frequency: "monthly", country: "Australia" });
+    expect(cs[0].rate).toBe(12.5);               // their figure, not Australia's 10
+    expect(cs[0].frequency).toBe("monthly");
+    expect(cs[0].label).toBe("GST");
+  });
+
+  it("does not apply a single stored rate to a province that levies two taxes", () => {
+    const cs = taxComponents({ gst_registered: true, gst_rate: 9, country: "Canada", tax_region: "Quebec" });
+    expect(cs.map((c) => c.label)).toEqual(["GST", "QST"]);
+    expect(cs[0].rate).toBe(5);                  // the stored 9 would have been meaningless across two
+  });
+
+  it("cleans a component that is nonsense rather than throwing", () => {
+    const cs = taxComponents({
+      gst_registered: true,
+      tax_components: [{ label: "", rate: "abc", frequency: "fortnightly", lagMonths: 99 }],
+    });
+    expect(cs[0].label).toBe("Tax");
+    expect(cs[0].rate).toBe(0);
+    expect(cs[0].frequency).toBe("quarterly");
+    expect(cs[0].lagMonths).toBe(6);
+  });
+
+  it("survives a round trip through storage", () => {
+    const before = regimeFor("Canada", "British Columbia").components;
+    const after = serializeComponents(before).map(cleanComponent);
+    expect(after).toEqual(before);
+  });
+
+  it("names however many taxes there are, in one heading", () => {
+    expect(taxHeading([{ label: "GST" }])).toBe("GST");
+    expect(taxHeading([{ label: "GST" }, { label: "PST" }])).toBe("GST and PST");
+    expect(taxHeading([{ label: "A" }, { label: "B" }, { label: "C" }])).toBe("A, B and C");
+    expect(taxHeading([])).toBe("GST");
   });
 });

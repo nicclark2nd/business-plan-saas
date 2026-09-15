@@ -19,7 +19,7 @@ export default async function PlanLayout({ children, params }: { children: React
   const mode = (session.profile?.mode ?? "guided") as "guided" | "advanced";
   const completeness = await getCompleteness(planId);
   const supabase = await createClient();
-  const { data: settings } = await supabase.from("plan_settings").select("currency, product_type, customer_type, country, gst_registered, gst_rate, gst_frequency").eq("plan_id", planId).maybeSingle();
+  const { data: settings } = await supabase.from("plan_settings").select("currency, product_type, customer_type, country, gst_registered, gst_rate, gst_frequency, tax_region, tax_components").eq("plan_id", planId).maybeSingle();
   const STATUS: Record<string, string> = { draft: "Working draft", active: "Active", complete: "Complete", archived: "Archived" };
   const doneSteps = GUIDED_STEPS.filter((s) => {
     const sec = completeness.sections.find((x) => x.id === s.id);
@@ -31,7 +31,7 @@ export default async function PlanLayout({ children, params }: { children: React
     <ModeProvider initial={mode}>
     <MoneyProvider currency={settings?.currency ?? "AUD"}>
     <VocabularyProvider productType={settings?.product_type ?? null} customerType={settings?.customer_type ?? null}>
-    <GstProvider registered={settings?.gst_registered} rate={settings?.gst_rate} frequency={settings?.gst_frequency} country={settings?.country}>
+    <GstProvider settings={settings}>
     <div className="grid h-screen min-h-[640px] grid-cols-[240px_1fr] grid-rows-[48px_1fr]">
       <header className="col-span-2 flex items-center gap-4 border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground">
         <Link href="/setup" className="flex w-[224px] items-center gap-2.5 font-bold text-white">

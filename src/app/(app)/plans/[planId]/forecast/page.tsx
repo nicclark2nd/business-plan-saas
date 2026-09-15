@@ -7,7 +7,7 @@ import { assembleBase, assembleMonths, assembleOpening, type PlanSources } from 
 import { buildForecast } from "@/engine/forecast/model";
 import { buildMonthlyCashFlow, monthlyInvariants } from "@/engine/forecast/monthly";
 import { assembleGst, type GstPlanSources } from "@/engine/forecast/gst_assemble";
-import { gstSettings, taxLabel } from "@/engine/plan/gst";
+import { taxComponents, taxHeading } from "@/engine/plan/gst";
 import { cashTimingSchedule, daysFromHistory, workingCapitalSchedule } from "@/engine/forecast/assumptions";
 import { firstProjectedYear } from "@/engine/plan/calendar";
 import type { FundingSource } from "@/engine/funding/sources";
@@ -84,8 +84,8 @@ export default async function ForecastPage({ params, searchParams }: {
    * GST (§6.38). Assembled once and fed into the year and the months from the same place, so the liability
    * on the balance sheet and the BAS payment on the cash flow can never be two different readings.
    */
-  const gst = gstSettings(s);
-  const gstParts = assembleGst(sources as unknown as GstPlanSources, [gst]);
+  const components = taxComponents(s);
+  const gstParts = assembleGst(sources as unknown as GstPlanSources, components);
   const base = assembleBase(sources);
   for (const y of [1, 2, 3, 4, 5]) base[y].gst = gstParts.byYear[y];
 
@@ -118,7 +118,7 @@ export default async function ForecastPage({ params, searchParams }: {
     },
     taxPaid: forecast.cashFlow[1].taxPaid,
     dividends: forecast.cashFlow[1].dividendsPaid,
-    shapes: assembleMonths(sources, [gst]),
+    shapes: assembleMonths(sources, components),
   });
   const checked = {
     ...forecast,
@@ -135,7 +135,8 @@ export default async function ForecastPage({ params, searchParams }: {
       impliedFromHistory={impliedFromHistory}
       assumptionsSet={!!stored && Object.keys(stored).length > 0}
       fyEndMonth={fyEndMonth} firstYear={firstProjectedYear(s?.first_projected_year, fyEndMonth)}
-      gst={gst} gstLabel={taxLabel(s?.country)} gstSchedules={gstParts.schedules}
+      gst={{ registered: components.length > 0 }} gstLabel={taxHeading(components)}
+      gstSchedules={gstParts.schedules} gstComponents={components.map((c) => ({ label: c.label, rate: c.rate, frequency: c.frequency, reclaimable: c.reclaimable }))}
     />
   );
 }

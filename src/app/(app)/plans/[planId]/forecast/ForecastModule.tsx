@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { FORECAST_YEARS, type CashTiming, type Forecast, type WorkingCapitalDays } from "@/engine/forecast/model";
 import { creditorBalance, debtorBalance, inventoryBalance } from "@/engine/forecast/assumptions";
 import type { MonthCash, MonthlyCashFlow } from "@/engine/forecast/monthly";
-import type { GstSchedule, GstSettings } from "@/engine/plan/gst";
+import type { GstSchedule } from "@/engine/plan/gst";
 import { planMonths, planYearLabel } from "@/engine/plan/calendar";
 import { saveAssumptions } from "./actions";
 
@@ -29,12 +29,13 @@ const STEP = GUIDED_STEPS.find((s) => s.id === "forecast")?.step ?? 13;
 const box = "h-8";
 
 export function ForecastModule({
-  planId, mode, forecast, monthly, initialArea, workingCapital, cashTiming, impliedFromHistory, assumptionsSet, fyEndMonth, firstYear, gst, gstLabel, gstSchedules,
+  planId, mode, forecast, monthly, initialArea, workingCapital, cashTiming, impliedFromHistory, assumptionsSet, fyEndMonth, firstYear, gst, gstLabel, gstSchedules, gstComponents,
 }: {
   planId: string; mode: "guided" | "advanced"; forecast: Forecast; monthly: MonthlyCashFlow; initialArea: AreaKey;
   workingCapital: Record<number, WorkingCapitalDays>; cashTiming: Record<number, CashTiming>;
   impliedFromHistory: WorkingCapitalDays | null; assumptionsSet: boolean; fyEndMonth: number; firstYear: number;
-  gst: GstSettings; gstLabel: string; gstSchedules: Record<number, GstSchedule>;
+  gst: { registered: boolean }; gstLabel: string; gstSchedules: Record<number, GstSchedule>;
+  gstComponents: { label: string; rate: number; frequency: string; reclaimable: boolean }[];
 }) {
   const num = useMoney();
   const router = useRouter();
@@ -153,7 +154,7 @@ export function ForecastModule({
               ["Closing cash", (y) => cf[y].closingCash, "total"],
             ]} num={num} />
           ) : (
-            <MonthlyStatement monthly={monthly} months={MONTHS} num={num} gst={gst} gstLabel={gstLabel} />
+            <MonthlyStatement monthly={monthly} months={MONTHS} num={num} registered={gst.registered} gstLabel={gstLabel} />
           )}
           <Note>
             {span === "years"
@@ -165,7 +166,7 @@ export function ForecastModule({
                   a dividend is taken in the last month, once the year&rsquo;s profit is known.
                 </>}
           </Note>
-          {gst.registered && <GstNote gst={gst} label={gstLabel} schedule={gstSchedules[1]} months={MONTHS} num={num} />}
+          {gst.registered && <GstNote components={gstComponents} label={gstLabel} schedule={gstSchedules[1]} months={MONTHS} num={num} />}
           {span === "months" && monthly.negative.length > 0 && (
             <div className="mt-2 rounded border border-bad/40 bg-bad-soft px-3 py-2 text-[12.5px]">
               <b className="text-bad">The bank account goes below zero</b>
@@ -383,9 +384,9 @@ function SpanToggle({ span, onSpan }: { span: "years" | "months"; onSpan: (s: "y
  * the same figure the five-year view shows in its Year 1 column, so the client can see the two agree instead
  * of being told they do.
  */
-function MonthlyStatement({ monthly, months, num, gst, gstLabel }: {
+function MonthlyStatement({ monthly, months, num, registered, gstLabel }: {
   monthly: MonthlyCashFlow; months: string[]; num: (v: number) => string;
-  gst: GstSettings; gstLabel: string;
+  registered: boolean; gstLabel: string;
 }) {
   const money = (v: number) => (v < 0 ? `(${num(Math.abs(v))})` : v === 0 ? "—" : num(v));
   const rows: [string, (m: MonthCash) => number, (t: MonthlyCashFlow["total"]) => number, ("head" | "sub" | "total")?][] = [
@@ -395,7 +396,7 @@ function MonthlyStatement({ monthly, months, num, gst, gstLabel }: {
     ["Paid to suppliers and staff", (m) => -m.paidToSuppliersAndEmployees, (t) => -t.paidToSuppliersAndEmployees],
     ["One-off payments", (m) => -m.extraordinaryPayments, (t) => -t.extraordinaryPayments],
     ["Tax paid", (m) => -m.taxPaid, (t) => -t.taxPaid],
-    ...(gst.registered
+    ...(registered
       ? [[`${gstLabel} paid over`, (m: MonthCash) => -m.gstRemitted, (t: MonthlyCashFlow["total"]) => -t.gstRemitted] as typeof rows[number]]
       : []),
     ["Operating cash flow", (m) => m.netOperating, (t) => t.netOperating, "sub"],
@@ -504,16 +505,18 @@ function TaxNotes({ pnl, num }: { pnl: Forecast["pnl"]; num: (v: number) => stri
  * What the tax is doing to the cash, in a sentence. The figure that surprises a client is never the rate —
  * it is how much of the bank balance was never theirs, and which month it leaves in (§6.38).
  */
-function GstNote({ gst, label, schedule, months, num }: {
-  gst: GstSettings; label: string; schedule: GstSchedule | undefined; months: string[]; num: (v: number) => string;
+function GstNote({ components, label, schedule, months, num }: {
+  components: { label: string; rate: number; frequency: string; reclaimable: boolean }[];
+  label: string; schedule: GstSchedule | undefined; months: string[]; num: (v: number) => string;
 }) {
-  if (!schedule) return null;
+  if (!schedule || !components.length) return null;
   const due = schedule.months.filter((m) => m.remitted !== 0);
   const refunds = due.filter((m) => m.remitted < 0);
   const owed = schedule.closingPayable;
+  const notReclaimed = components.filter((c) => !c.reclaimable);
   return (
     <Note>
-      Registered at {gst.rate}%, filing {gst.frequency}.{" "}
+      {components.map((c) => `${c.label} at ${c.rate}%, filed ${c.frequency}`).join(" · ")}.{" "}
       {due.length > 0 && <>
         {label} settles in {due.map((m) => months[m.month - 1]).join(", ")}
         {refunds.length > 0 && <> — {refunds.length === 1 ? "one of those is a refund coming back" : `${refunds.length} of those are refunds coming back`}</>}.{" "}
@@ -521,9 +524,14 @@ function GstNote({ gst, label, schedule, months, num }: {
       {owed > 0
         ? <><b>{num(owed)}</b> is still owed at the end of Year 1 and is sitting in the bank. It is on the balance sheet as {label} owing, not as cash.</>
         : owed < 0
-          ? <><b>{num(-owed)}</b> is owed back to the business at the end of Year 1, shown as a {label} refund due.</>
+          ? <><b>{num(-owed)}</b> is owed back to the business at the end of Year 1, shown as a refund due.</>
           : <>Nothing is outstanding at the end of Year 1.</>}
-      {" "}Sales and costs everywhere else in the plan are {label}-exclusive, so registering has not changed the profit by a cent.
+      {notReclaimed.length > 0 && (
+        <> {notReclaimed.map((c) => c.label).join(" and ")} {notReclaimed.length === 1 ? "is" : "are"} charged
+          on sales but never claimed back on purchases, so what the business pays on its own buying is part
+          of the cost rather than a credit.</>
+      )}
+      {" "}Sales and costs everywhere else in the plan are tax-exclusive, so this has not changed the profit by a cent.
     </Note>
   );
 }

@@ -1,4 +1,5 @@
 import { CUSTOMER_NOUNS, PRODUCT_NOUNS } from "@/engine/plan/vocabulary";
+import type { TaxComponent } from "@/engine/plan/taxRegimes";
 /** Plan settings — three small areas (SaaS §6.12): Business profile · Financial year & tax · Branding. */
 /**
  * Legal structures, grouped the way a lender thinks about liability. Country-specific names are real options,
@@ -83,6 +84,10 @@ export type Financial = {
   gst_registered: boolean;
   gst_rate: number;
   gst_frequency: "monthly" | "quarterly" | "annually";
+  /** The state or province, where the tax depends on it — the United States and Canada (§6.39). */
+  tax_region: string | null;
+  /** The taxes themselves. Empty means "whatever this country and region ordinarily charge". */
+  tax_components: TaxComponent[];
   currency: string;
 };
 export type Settings = Profile & Financial & { logo_path: string | null };
