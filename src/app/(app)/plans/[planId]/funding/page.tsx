@@ -7,9 +7,9 @@ import { planCogsMonths, type CostProduct } from "@/engine/cogs/direct";
 import { overheadsMonths, planOverheadLines, type Overhead } from "@/engine/overheads/expenses";
 import { assetsMonths, capexMonths, type FixedAsset } from "@/engine/assets/depreciation";
 import { FundingModule } from "./FundingModule";
-import type { FundingRow } from "./model";
 import { firstProjectedYear } from "@/engine/plan/calendar";
 import { openingCashFor } from "@/engine/forecast/assemble";
+import { loadFundingRows } from "@/lib/planSources";
 
 /**
  * Funding comes after Sales, COGS and Overheads precisely so it can answer the question APeX never asks:
@@ -18,13 +18,15 @@ import { openingCashFor } from "@/engine/forecast/assemble";
 export default async function FundingPage({ params }: { params: Promise<{ planId: string }> }) {
   const { planId } = await params;
   const supabase = await createClient();
-  const [session, owner, debt, equity, grants, rbf, products, fixedCogs, overheads, people, spend, assets, settings, historic] = await Promise.all([
+  const [session, rows, products, fixedCogs, overheads, people, spend, assets, settings, historic] = await Promise.all([
     getSession(),
-    supabase.from("plan_funding_owner").select("*").eq("plan_id", planId).order("created_at"),
-    supabase.from("plan_funding_debt").select("*").eq("plan_id", planId).order("created_at"),
-    supabase.from("plan_funding_equity").select("*").eq("plan_id", planId).order("created_at"),
-    supabase.from("plan_funding_grants").select("*").eq("plan_id", planId).order("created_at"),
-    supabase.from("plan_funding_revenue_linked").select("*").eq("plan_id", planId).order("created_at"),
+    /**
+     * The five funding tables, read by the ONE loader (§6.32.3). This page carried its own copy of that
+     * mapping, and the copy drifted the moment a column was added: `deposit` reached the forecast and never
+     * reached the screen the client types it on, so money down was in the plan and invisible beside the loan
+     * that took it. Two readings of one plan, again — the fault this app keeps having to learn.
+     */
+    loadFundingRows(planId),
     supabase.from("plan_products").select("*").eq("plan_id", planId).order("sort_order"),
     supabase.from("plan_fixed_cogs").select("*").eq("plan_id", planId),
     supabase.from("plan_overheads").select("*").eq("plan_id", planId),
@@ -35,41 +37,6 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
     supabase.from("plan_historic_periods").select("cash").eq("plan_id", planId).order("period_number").limit(1).maybeSingle(),
   ]);
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
-  const n = (v: unknown) => Number(v ?? 0) || 0;
-
-  const rows: FundingRow[] = [
-    ...(owner.data ?? []).map((o) => ({
-      _key: o.id, id: o.id, kind: "owner" as const, name: o.name ?? "Owner", amount: n(o.amount),
-      start_year: n(o.start_year) || 1, start_month: n(o.start_month) || 1,
-      owner_type: (o.funding_type ?? "owner_capital") as "owner_capital" | "owner_loan",
-      interest_rate: n(o.interest_rate), term_months: n(o.repayment_term_months) || 60,
-      repayment_type: "amortised" as const, payment_frequency: "monthly" as const,
-    })),
-    ...(debt.data ?? []).map((d) => ({
-      _key: d.id, id: d.id, kind: "debt" as const, name: d.lender_name ?? "Lender", amount: n(d.amount_drawn),
-      start_year: n(d.start_year) || 1, start_month: n(d.start_month) || 1,
-      loan_type: d.loan_type, total_facility_amount: n(d.total_facility_amount), interest_rate: n(d.interest_rate),
-      term_months: n(d.term_months), repayment_type: d.repayment_type, payment_frequency: d.payment_frequency,
-      residual_value: n(d.residual_value), min_repayment_pct: n(d.min_repayment_pct), annual_fee: n(d.annual_fee),
-    })),
-    ...(equity.data ?? []).map((e) => ({
-      _key: e.id, id: e.id, kind: "equity" as const, name: e.investor_name ?? "Investor", amount: n(e.amount_invested),
-      start_year: n(e.start_year) || 1, start_month: n(e.start_month) || 1,
-      equity_percent: n(e.equity_percent), pre_money_valuation: e.pre_money_valuation === null ? null : n(e.pre_money_valuation),
-      dividend_policy: !!e.dividend_policy,
-    })),
-    ...(grants.data ?? []).map((g) => ({
-      _key: g.id, id: g.id, kind: "grant" as const, name: g.grant_name ?? "Grant", amount: n(g.amount_approved),
-      start_year: n(g.start_year) || 1, start_month: n(g.start_month) || 1,
-      has_conditions: !!g.has_conditions, conditions: g.conditions, recognition_type: g.recognition_type,
-      recognition_period_months: g.recognition_period_months === null ? null : n(g.recognition_period_months),
-    })),
-    ...(rbf.data ?? []).map((v) => ({
-      _key: v.id, id: v.id, kind: "revenue_linked" as const, name: v.provider ?? "Provider", amount: n(v.amount_received),
-      start_year: n(v.start_year) || 1, start_month: n(v.start_month) || 1,
-      repayment_percent: n(v.repayment_percent), cap_multiple: n(v.cap_multiple) || 1.5, min_monthly_payment: n(v.min_monthly_payment),
-    })),
-  ] as FundingRow[];
 
   /* ---- what the business does with the money, month by month ---- */
   const prods = (products.data ?? []) as AnyProduct[];
@@ -107,8 +74,9 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
     useful_life_months: Number(a.useful_life_months ?? 60) || 60,
     start_year: Number(a.start_year ?? 1) || 1, start_month: Number(a.start_month ?? 1) || 1,
   })) as FixedAsset[];
-  // Buying an asset for cash is money out in the month it arrives; a financed one costs nothing here.
-  // The loop that used to sit here now lives with the year it has to agree with (§6.36).
+  // Every asset is money out in the month it arrives, financed or not (§6.40) — a financed one is paid to
+  // its supplier out of what the lender advanced the same day. The loop that used to sit here now lives
+  // with the year it has to agree with (§6.36).
   const capex = capexMonths(assetRows);
 
   return (

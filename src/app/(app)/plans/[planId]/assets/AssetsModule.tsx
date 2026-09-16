@@ -49,6 +49,14 @@ export function AssetsModule({ planId, initial, mode, lenders, fyEndMonth }: {
   const MONTHS = planMonths(fyEndMonth);
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(initial.map((a) => ({ ...a, _key: a.id })));
+  /**
+   * The plan can move underneath an open screen (§6.43.2). It does so on this one by design now: saying
+   * "paid with finance" writes a loan, and the loan writes the asset on the server — so without this the
+   * list sat there unchanged until the client navigated away and back, and the thing they had just created
+   * appeared to have gone nowhere.
+   */
+  const [cameFrom, setCameFrom] = useState(initial);
+  if (initial !== cameFrom) { setCameFrom(initial); setRows(initial.map((a) => ({ ...a, _key: a.id }))); }
   const [area, setArea] = useState<AreaKey>("assets");
   const [dlg, setDlg] = useState<{ key: string } | null>(null);
   const [confirmKey, setConfirm] = useState<string | null>(null);
