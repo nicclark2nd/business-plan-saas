@@ -19,6 +19,7 @@ import { YEARS } from "@/engine/sales/projection";
 import { depreciationByYear, depreciationMonths, bookValueByYear, assetsByYear, type FixedAsset } from "@/engine/assets/depreciation";
 import { useMoney } from "@/components/MoneyProvider";
 import { upsertAsset, deleteAsset, saveFinancedShape, continueFromAssets } from "./actions";
+import { upsertFunding } from "../funding/actions";
 import { METHODS, CATEGORIES, LIVES, lifeLabel, type AssetRow } from "./model";
 
 /**
@@ -85,6 +86,35 @@ export function AssetsModule({ planId, initial, mode, lenders, fyEndMonth }: {
         setDraft(null);
       }
       setDlg(null);
+      router.refresh();
+    }));
+  };
+
+  /**
+   * "Paid with: finance" on this screen writes a LOAN, and the loan makes the asset (§6.52). It goes through
+   * the same action the Funding step uses rather than a second writer of its own, so there is one way a
+   * financed asset can come into being however the client got here — which is what makes it impossible to
+   * describe one purchase twice.
+   */
+  const buyOnFinance = (a: Row, f: Finance) => {
+    setErr(undefined);
+    start(once(async () => {
+      const res = await upsertFunding(planId, {
+        kind: "debt",
+        name: f.lender.trim() || a.name.trim(),
+        loan_type: a.category === "Vehicle" ? "vehicle_finance" : "equipment_finance",
+        amount: Math.max(0, a.purchase_price - f.deposit),
+        deposit: f.deposit,
+        interest_rate: f.rate,
+        term_months: f.term,
+        repayment_type: "amortised",
+        payment_frequency: "monthly",
+        residual_value: a.residual_value,
+        start_year: a.start_year,
+        start_month: a.start_month,
+      }, { assetName: a.name.trim() });
+      if (!res.ok) { setErr(res.error); return; }
+      setDraft(null); setDlg(null);
       router.refresh();
     }));
   };
@@ -202,9 +232,10 @@ export function AssetsModule({ planId, initial, mode, lenders, fyEndMonth }: {
 
         {lines.length > 0 && (
           <Note>
-            Cash out to buy them: {totals.map((t) => num(t.capex)).join(" · ")} across the five years —
-            nil for anything bought with finance, whose cash is the loan repayment on the Funding step.
-            Depreciation never moves cash; it only lowers the profit and what the assets are worth.
+            Paid to suppliers for them: {totals.map((t) => num(t.capex)).join(" · ")} across the five years —
+            the whole price of each, financed or not (§6.40). What a financed one borrows comes straight back
+            in on the Funding step the same year, so the business is only out the deposit and then the
+            repayments. Depreciation never moves cash; it only lowers the profit and what the assets are worth.
           </Note>
         )}
         </div>
@@ -250,7 +281,7 @@ export function AssetsModule({ planId, initial, mode, lenders, fyEndMonth }: {
           lender={lenders[current.funding_debt_id ?? ""] ?? "finance"}
           fyEndMonth={fyEndMonth}
           onCancel={() => { setDlg(null); if (draft && draft._key === current._key) setDraft(null); }}
-          onSave={save} pending={pending}
+          onSave={save} onFinance={buyOnFinance} pending={pending}
         />
       )}
 
@@ -286,15 +317,28 @@ function PendingBridge({ pending, error }: { pending: boolean; error?: string })
 }
 
 /** One asset. A financed line shows what it cost as read-only and lets the write-off be chosen. */
-function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave }: {
+export type Finance = { lender: string; deposit: number; rate: number; term: number };
+
+function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFinance }: {
   row: Row & { _key: string }; lender: string; fyEndMonth: number; pending: boolean;
-  onCancel: () => void; onSave: (r: Row) => void;
+  onCancel: () => void; onSave: (r: Row) => void; onFinance: (r: Row, f: Finance) => void;
 }) {
   const gst = useGst();
   const num = useMoney();
   const MONTH_OPTIONS = monthOptions(fyEndMonth);
   const [d, setD] = useState<Row>(row);
   const locked = d.source === "finance";
+  /**
+   * The question this screen never asked (§6.52). An asset bought in a projected year was paid for somehow,
+   * and the only way to say "on finance" used to be to not type it here at all and enter a loan on Funding
+   * instead — which nobody would guess, and which let the same purchase be described twice: once as a cash
+   * asset, once as a loan that makes its own asset. Two vans, double the capex, one van's worth of borrowing.
+   */
+  const isNew = row.id.startsWith("tmp-");
+  const [paidWith, setPaidWith] = useState<"cash" | "finance">("cash");
+  const [fin, setFin] = useState<Finance>({ lender: "", deposit: 0, rate: 0, term: 60 });
+  const financing = isNew && paidWith === "finance";
+  const borrowed = Math.max(0, d.purchase_price - fin.deposit);
   const set = (patch: Partial<Row>) => setD((x) => ({ ...x, ...patch }));
   const dep = depreciationByYear(d as FixedAsset);
   const book = bookValueByYear(d as FixedAsset);
@@ -326,6 +370,24 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave }: {
             </div>
           </div>
 
+          {isNew && (
+            <div className="grid grid-cols-[220px_1fr] items-end gap-3">
+              <div>
+                <span className={label}>Paid with</span>
+                <FieldSelect value={paidWith} onValueChange={(v) => setPaidWith(v as "cash" | "finance")}
+                  options={[
+                    { value: "cash", label: "Money the business has" },
+                    { value: "finance", label: "Equipment or vehicle finance" },
+                  ]} />
+              </div>
+              <div className="pb-1 text-[12px] text-muted-foreground">
+                {financing
+                  ? <>A loan is set up on <b>Funding</b> for you — do not add it there as well.</>
+                  : <>Cash the business already has, including money it borrowed as a term loan or an owner put in.</>}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-4 gap-3">
             <div>
               <span className={label}>What it cost</span>
@@ -346,6 +408,35 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave }: {
               <FieldSelect value={String(d.start_month)} onValueChange={(v) => set({ start_month: Number(v) })} options={MONTH_OPTIONS} />
             </div>
           </div>
+
+          {financing && (
+            <div className="grid grid-cols-4 gap-3 rounded border border-input bg-muted/40 p-3">
+              <div>
+                <span className={label}>Lender</span>
+                <Input value={fin.lender} onChange={(e) => setFin((f) => ({ ...f, lender: e.target.value }))}
+                  placeholder="Westpac" className={box} />
+              </div>
+              <div>
+                <span className={label}>Paid up front</span>
+                <Input inputMode="decimal" defaultValue={fin.deposit ? String(fin.deposit) : ""}
+                  onBlur={(e) => setFin((f) => ({ ...f, deposit: parseNum(e.target.value) }))} placeholder="0" className={cn(box, "num text-right")} />
+              </div>
+              <div>
+                <span className={label}>Interest rate %</span>
+                <Input inputMode="decimal" defaultValue={fin.rate ? String(fin.rate) : ""}
+                  onBlur={(e) => setFin((f) => ({ ...f, rate: parseNum(e.target.value) }))} placeholder="7" className={cn(box, "num text-right")} />
+              </div>
+              <div>
+                <span className={label}>Term (months)</span>
+                <Input inputMode="numeric" defaultValue={String(fin.term)}
+                  onBlur={(e) => setFin((f) => ({ ...f, term: parseNum(e.target.value) || 60 }))} placeholder="60" className={cn(box, "num text-right")} />
+              </div>
+              <div className="col-span-4 text-[12px] text-muted-foreground">
+                Borrowing <b>{num(borrowed)}</b> of the {num(d.purchase_price)} it costs
+                {fin.deposit ? <>, with {num(fin.deposit)} of your own money down</> : null}. Monthly, principal and interest.
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -370,7 +461,9 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave }: {
             <div className="mt-2 text-[12px] text-muted-foreground">
               {d.purchase_price > 0
                 ? <>{num(perYear)} a year off the profit{d.method === "diminishing" && " to begin with, less as it goes"} — and not a cent out of the bank.{" "}
-                    {d.source === "finance" ? "The cash is the loan repayment." : `The ${num(d.purchase_price)} leaves in Year ${d.start_year}.`}</>
+                    {locked || financing
+                      ? <>The {num(d.purchase_price)} is paid to the supplier in Year {d.start_year} and the lender puts most of it back the same day, so what the business is really out is the deposit, then the repayments.</>
+                      : <>The {num(d.purchase_price)} leaves in Year {d.start_year}.</>}</>
                 : "Put in what it cost and this fills in."}
             </div>
           </div>
@@ -380,7 +473,8 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave }: {
           checked={d.gst_applies !== false} onChange={(v) => setD((x) => ({ ...x, gst_applies: v }))} />
         <DialogFooter>
           <Button variant="outline" size="sm" type="button" onClick={onCancel}>Cancel</Button>
-          <Button size="sm" type="button" onClick={() => onSave(d)} disabled={pending || !d.name.trim()}>{pending ? "Saving…" : "Save"}</Button>
+          <Button size="sm" type="button" onClick={() => (financing ? onFinance(d, fin) : onSave(d))}
+            disabled={pending || !d.name.trim() || (financing && d.purchase_price <= 0)}>{pending ? "Saving…" : "Save"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -330,7 +330,7 @@ function SourceRow({ r, onEdit, onRemove, planId, fyEndMonth }: { r: Row; onEdit
     : loan ? `${r.interest_rate ?? 0}% over ${Math.round((r.term_months ?? 60) / 12)} yr` : "Nothing";
 
   const effect = summary && y1
-    ? `${num(summary.payment)}/${summary.frequency === "monthly" ? "mo" : summary.frequency === "weekly" ? "wk" : summary.frequency === "fortnightly" ? "fn" : "qtr"} · ${num(y1.interest)} interest · ${num(y1.closing)} owing`
+    ? `${num(summary.payment)}/${summary.frequency === "monthly" ? "mo" : summary.frequency === "weekly" ? "wk" : summary.frequency === "fortnightly" ? "fn" : "qtr"} · ${num(y1.interest)} interest · ${num(y1.closing)} owing${r.deposit ? ` · ${num(r.deposit)} down` : ""}`
     : r.kind === "revenue_linked" ? `Repays ${num(rbfCap(r as never))} in all — ${num(rbfCost(r as never))} of cost`
     : r.kind === "equity" ? (r.dividend_policy ? "Dividends payable" : "No repayment")
     : r.kind === "grant" && r.recognition_type === "deferred" ? `Recognised over ${r.recognition_period_months ?? 12} months`
@@ -580,12 +580,25 @@ function SourceDialog({ row, fyEndMonth, pending, onCancel, onSave }: {
                   onBlur={(e) => set({ annual_fee: parseNum(e.target.value) })} placeholder="0" className={cn(box, "num text-right")} />
               </div>
             </div>
-            {isAssetBacked(d.loan_type) && (
-              <div className="rounded border border-input bg-muted/40 px-3 py-2 text-[12px] text-muted-foreground">
-                This buys something the business then owns, so it appears in <b>Fixed assets</b> at {num(d.amount)} and depreciates there.
-                What it cost stays tied to this loan; how long it is written off over is set on that step.
+            {isAssetBacked(d.loan_type) && (<>
+              <div className="grid grid-cols-4 gap-3">
+                <div>
+                  <span className={label}>Paid up front</span>
+                  <Input inputMode="decimal" defaultValue={d.deposit ? String(d.deposit) : ""}
+                    onBlur={(e) => set({ deposit: parseNum(e.target.value) })} placeholder="0" className={cn(box, "num text-right")} />
+                </div>
+                <div className="col-span-3 self-end pb-1 text-[12px] text-muted-foreground">
+                  A deposit out of the business&apos;s own money. The lender advances the rest.
+                </div>
               </div>
-            )}
+              <div className="rounded border border-input bg-muted/40 px-3 py-2 text-[12px] text-muted-foreground">
+                This buys something the business then owns, so it appears in <b>Fixed assets</b> at{" "}
+                <b>{num((d.amount ?? 0) + (d.deposit ?? 0))}</b> and depreciates there
+                {d.deposit ? <> — {num(d.amount)} borrowed and {num(d.deposit)} of your own</> : null}.
+                What it cost stays tied to this loan; how long it is written off over is set on that step.
+                Do not also add it on Fixed assets: it is already there, once.
+              </div>
+            </>)}
           </>}
 
           {d.kind === "equity" && (

@@ -26,6 +26,8 @@ export type FundingRow = {
   repayment_type?: RepaymentType;
   payment_frequency?: PaymentFrequency;
   residual_value?: number;
+  /** Paid up front on finance that buys an asset: the thing is worth `amount + deposit` (§6.52). */
+  deposit?: number;
   min_repayment_pct?: number;
   annual_fee?: number;
   // equity

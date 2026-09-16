@@ -21,7 +21,12 @@ const mo = (v: unknown) => Math.min(12, Math.max(1, Math.trunc(Number(v)) || 1))
 const ASSET_BACKED = ["equipment_finance", "vehicle_finance"];
 
 /** One row of funding, whichever of the five tables it belongs to. */
-export async function upsertFunding(planId: string, r: Partial<FundingRow> & { kind: FundingKind }): Promise<Result<{ id: string }>> {
+export async function upsertFunding(
+  planId: string,
+  r: Partial<FundingRow> & { kind: FundingKind },
+  /** What to call the asset this loan buys. Fixed Assets sets it, because there the client named the thing. */
+  opts?: { assetName?: string },
+): Promise<Result<{ id: string }>> {
   const supabase = await createClient();
   const name = (r.name ?? "").trim();
   if (!name) return { ok: false, error: "Give the source a name." };
@@ -42,7 +47,10 @@ export async function upsertFunding(planId: string, r: Partial<FundingRow> & { k
         interest_rate: pct(r.interest_rate, 100), term_months: Math.max(0, Math.trunc(Number(r.term_months) || 0)),
         repayment_type: r.repayment_type ?? "amortised", payment_frequency: r.payment_frequency ?? "monthly",
         residual_value: money(r.residual_value), min_repayment_pct: pct(r.min_repayment_pct, 100),
-        annual_fee: money(r.annual_fee), ...when };
+        annual_fee: money(r.annual_fee),
+        // Only finance that buys something can carry a deposit; a term loan buys nothing in particular.
+        deposit: ASSET_BACKED.includes((r.loan_type ?? "term_loan") as string) ? money(r.deposit) : 0,
+        ...when };
       break;
     }
     case "equity":
@@ -71,14 +79,14 @@ export async function upsertFunding(planId: string, r: Partial<FundingRow> & { k
 
   // Equipment and vehicle finance buy something the business then owns. The asset belongs to this loan and is
   // never editable in Fixed Assets — the same rule as a synced Overheads line (§6.19).
-  if (r.kind === "debt") await syncFinancedAsset(planId, data.id, name, r);
+  if (r.kind === "debt") await syncFinancedAsset(planId, data.id, name, r, opts?.assetName);
 
   touch(planId);
   return { ok: true, data: { id: data.id } };
 }
 
 /** Create, update or clear the asset a finance row carries. */
-async function syncFinancedAsset(planId: string, debtId: string, name: string, r: Partial<FundingRow>) {
+async function syncFinancedAsset(planId: string, debtId: string, name: string, r: Partial<FundingRow>, assetName?: string) {
   const supabase = await createClient();
   const backed = ASSET_BACKED.includes((r.loan_type ?? "term_loan") as LoanType);
   const { data: existing } = await supabase.from("plan_fixed_assets").select("id").eq("funding_debt_id", debtId).maybeSingle();
@@ -92,14 +100,17 @@ async function syncFinancedAsset(planId: string, debtId: string, name: string, r
   // plan a lender opens, and what the thing actually is only the client knows. It is set once, as a
   // starting point, and anything typed over it in Fixed Assets is left alone from then on.
   const figures = {
-    purchase_price: money(r.amount),               // what the lender advanced is what the asset cost
+    // What the thing COST is what the lender advanced plus whatever was put down for it (§6.52). The
+    // forecast then charges the whole price to capex and only the advance to borrowings, so the deposit
+    // leaves the bank in the month of purchase without anywhere having to name it as a payment.
+    purchase_price: money(r.amount) + money(r.deposit),
     residual_value: money(r.residual_value),       // the balloon is what it is expected to be worth
     start_year: yr(r.start_year), start_month: mo(r.start_month),
   };
   if (existing) await supabase.from("plan_fixed_assets").update(figures).eq("id", existing.id).eq("plan_id", planId);
   else await supabase.from("plan_fixed_assets").insert({
     plan_id: planId, source: "finance" as const, funding_debt_id: debtId, category,
-    name: `${category} — ${name}`,
+    name: (assetName ?? "").trim() || `${category} — ${name}`,
     useful_life_months: Math.max(12, Math.trunc(Number(r.term_months) || 60)),
     ...figures,
   });

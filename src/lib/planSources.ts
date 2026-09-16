@@ -40,6 +40,7 @@ export async function loadFundingRows(planId: string): Promise<FundingRow[]> {
       loan_type: d.loan_type, total_facility_amount: n(d.total_facility_amount), interest_rate: n(d.interest_rate),
       term_months: n(d.term_months), repayment_type: d.repayment_type, payment_frequency: d.payment_frequency,
       residual_value: n(d.residual_value), min_repayment_pct: n(d.min_repayment_pct), annual_fee: n(d.annual_fee),
+      deposit: n(d.deposit),
     })),
     ...(equity.data ?? []).map((e) => ({
       _key: e.id, id: e.id, kind: "equity" as const, name: e.investor_name ?? "Investor", amount: n(e.amount_invested),
