@@ -49,7 +49,23 @@
   --sidebar-ring: #1F6FCB;
   --sidebar-muted: #7F8FA3;
 
-  --chart-1: #1F6FCB; --chart-2: #5FA8E8; --chart-3: #2A8C8C; --chart-4: #7A5AC9; --chart-5: #C77800;
+  /*
+     Chart series (§6.49.2). Five slots, assigned in this fixed order and never cycled; a sixth series
+     folds into "Other" rather than inventing a hue nobody can tell from the five.
+
+     The first set declared here failed on two counts and was never used by anything: --chart-3 was a teal
+     of chroma 0.088, under the floor at which a colour stops reading as a colour and starts reading as
+     grey; and --chart-5 WAS --warn, so the moment a chart used it for a cost category, amber stopped
+     meaning "warning" anywhere on the screen. Status colours are reserved, and a series is not a status.
+
+     This set is validated against the white chart surface: every slot inside the lightness band, every
+     chroma above the floor, worst adjacent pair ΔE 9.2 under deuteranopia (target 8) and 27.6 in normal
+     vision (floor 15). Aqua and magenta sit under 3:1 contrast, which is allowed here and only here
+     because every chart in this app is drawn directly above the table of its own figures.
+  */
+  --chart-1: #1F6FCB; --chart-2: #EB6834; --chart-3: #1BAF7A; --chart-4: #4A3AA7; --chart-5: #E87BA4;
+  --chart-grid: #E7EBF0;            /* recessive gridlines: present, never competing with the data */
+  --chart-track: #E6F0FB;           /* a meter's unfilled track — a lighter step of the accent's own ramp */
 }
 
 @theme inline {
@@ -87,6 +103,7 @@
   --color-sidebar-muted: var(--sidebar-muted);
   --color-chart-1: var(--chart-1); --color-chart-2: var(--chart-2); --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4); --color-chart-5: var(--chart-5);
+  --color-chart-grid: var(--chart-grid); --color-chart-track: var(--chart-track);
   --font-sans: var(--font-open-sans), "Open Sans", "Segoe UI", Helvetica, Arial, sans-serif;
   --font-heading: var(--font-sans);
   --radius-sm: calc(var(--radius) * 0.6);
