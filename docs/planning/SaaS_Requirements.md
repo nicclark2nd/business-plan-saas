@@ -935,3 +935,531 @@ The three now divide cleanly, and each says so:
 **Left alone:** Vision's *Field of play* against Marketing's *Target market* — both examples say "within 90 minutes of Wollongong", but one is what work you take and the other is who buys. Different questions that happen to share an answer's shape. And Mission still overlaps the products & services statement moved in §6.34; moving it found it a sensible home, it did not resolve the overlap.
 
 **The rule: when two fields could take the same answer, the fix is not to delete one — it is to make each say what the other is for.**
+
+## 6.36 Year 1, month by month — the question that sinks businesses (14 Sep 2026)
+
+The annual cash flow answers whether the year works. This answers the one that actually sinks businesses: **whether every month in it works.** A year that closes on 28,249 can still be underwater in February, and the annual column cannot say so. APeX has no monthly cash flow at all, so there was no screen to copy.
+
+`engine/forecast/monthly.ts` **recomputes nothing.** Every line across is the month series its owning module already publishes — `planYear1Months`, `planCogsMonths`, `overheadsMonths`, `capexMonths`, `assetsMonths`, `loanMonths`, `fundingInMonths`, `extraordinaryCashMonths` — each of which already sums to the year the annual forecast reads.
+
+The one thing it decides is **when** a balance-sheet movement happens inside the year, because no module owns that. Debtors, stock and creditors move from their opening balance to their closing balance on their own driver's cumulative share, so a seasonal business builds receivables through its busy months. Every ramp reaches exactly 1 in month twelve, so **the December balance IS the annual balance** and the twelve add to the year by construction. That is an apportionment of one fact, deliberately **not** an independent lag model — a lag model would produce its own December debtors and the plan would hold two answers to what the business is owed.
+
+The fifth invariant, *"Year 1's twelve months add to Year 1"*, is checked **line by line, not on the total**, because two lines wrong in opposite directions add to a total that looks right. It went on screen and immediately failed on the live plan by **1,207**. Both causes were one fact with two computations:
+
+- `unitsByMonth` divided a monthly split by 100 while `monthlySales` — which the same product's revenue goes through — divides by the shares' **actual total**. A split is weights, not percentages that must add to 100 (§6.17), so on any line whose split did not happen to total exactly 100, revenue by month added to its year and units by month did not. Cost of sales quietly disagreed with itself.
+- `assembleBase` passed `() => null` as the COGS source resolver, silently unlinking every ongoing line whose clients come from another line: **28,800 against the COGS screen's 42,247** on the same figures — cost of sales a third light — with the P&L, cash flow and balance sheet all still agreeing perfectly with each other.
+
+**Reconciliation proves the statements agree; it never proves they are right.** That is what the module-against-module invariants are for.
+
+**Two layout faults were found in passing, both older than the screen that exposed them.**
+
+`FootRow` emitted a `<tfoot>`. Written inside a `<tbody>` — which is what a mapped list of rows produces — a `<tfoot>` is not part of that table at all: the browser lays it out as its own anonymous table, takes its own column widths, and **the totals stop lining up with the figures above them**. On the forecast's three statements the total row sat 84 px out of its columns, in a product whose entire claim is that the numbers agree. It is a plain `<tr>` now, which belongs to the table wherever it is written.
+
+`ModuleFrame`'s outer grid had no explicit column, so the implicit one sized to `max-content`: a grid wider than the screen stretched the module bar and the header sideways instead of scrolling inside its own frame. One `minmax(0,1fr)` and the frame contains its contents.
+
+## 6.37 Revenue-linked finance is debt, and a loss does not evaporate (14 Sep 2026)
+
+Two separate faults, both of the kind a CFO tests in the first minute.
+
+**Revenue-linked finance arrived in the bank, was never repaid, and never appeared as a liability.** Every function feeding the forecast asked for `s.loan`, and a revenue-linked source carries `s.rbf` — so the balance sheet came out over by the full amount in all five years.
+
+Each payment splits on the **cap ratio**: a 1.4× cap means 1/1.4 of every dollar retires the principal and the rest is the cost of the money. That is not the easy answer, it is the only honest one — the repayments follow future sales, so unlike a loan there is no term and no rate to amortise against, and **nothing is knowable on day one except the cap**. Splitting on it lands the liability on exactly nil at exactly the moment the cap is reached; the last payment takes the rounding on its cost rather than leaving ten cents of debt on the balance sheet forever.
+
+`interestByYear` and `debtByYear` now **require** the revenue series rather than defaulting it. A default would have let a caller quietly reproduce the original fault; the type checker found all four call sites in one pass. That needed sixty months of revenue where only twelve existed, so `planRevenueMonths` joins `planYear1Months` — each year's twelve settled against that year's own total from `productYears`, so the sixty months and the five years can never disagree.
+
+**A loss year carried no tax charge and the loss then evaporated**, so the first profitable year was taxed in full. On the businesses this app exists to write plans for — the ones that lose money in Year 1 and turn the corner in Year 3 — that overstates the tax bill and understates the cash **in precisely the years a lender is deciding on**. On the live plan it was 21,966 of Year 3 tax where the real figure is 2,921, because 76,179 of Year 1 and Year 2 losses had been thrown away. Relief is given against the earliest profit available. Time limits, continuity-of-ownership tests and group relief are deliberately **not** modelled: those are advice, not arithmetic.
+
+**A dividend was taken off any profitable year regardless of whether the company was still carrying losses.** That is not a modelling choice, it is unlawful everywhere this plan gets written, and it was putting cash out of a business that had none to distribute. It is capped at what is actually distributable, and what the policy asked for but could not be paid is **reported on the statement** rather than quietly dropped.
+
+Both needed a fact the app had nowhere to keep, so **migration 0021** adds `opening_tax_losses` and `opening_retained_earnings` to plan settings. Zero is right for a startup and a stated assumption for anyone else — and without them a going concern with real reserves would be wrongly told it cannot pay a dividend.
+
+The P&L gains **Losses brought forward** and **Taxable profit**, so the tax charge can be followed rather than taken on trust, and a note says in words what was relieved, what is still unrelieved, and what dividend could not be paid.
+
+*Also:* Funding read `plan_settings.opening_cash` while the forecast read the historic balance sheet, so a plan with 21,315 in the bank ran its entire funding check from nil. `openingCashFor` is now the one rule and both screens use it. And `r2` normalises negative zero — a balance sheet reporting its own check as `-0` reads as a fault to anyone who looks twice.
+
+## 6.38 GST — the money in the bank that is not yours (14 Sep 2026)
+
+A registered business collects tax on every invoice, pays it on every bill, and remits the difference each BAS period. Between collecting and remitting **it sits in the bank looking exactly like cash**, and then leaves in one lump four times a year. A forecast that does not know this is not slightly optimistic — it is wrong about the balance in every single month, and **most wrong in the month the return falls due**, which on a June year end is the month straight after the year the plan is being judged on.
+
+Three rules hold it together, and all three are what an accountant checks first. Each one is a test:
+
+1. **It never touches the profit.** Revenue, cost of sales and overheads are tax-exclusive and stay that way. Registering does not change a business's profit by a cent — if turning the flag on moved the profit line, *that* would be the bug.
+2. **Debtors and creditors are tax-INCLUSIVE**, because a customer owes the whole invoice. Stock is the exception, carried exclusive. This is the detail most spreadsheets get wrong.
+3. **What is collected and not yet paid over is a liability.** With quarterly returns and a June year end, the entire June quarter is still owed at 30 June, and it is not cash.
+
+**Not everything is taxable, and getting that wrong is worse than ignoring tax altogether.** Wages are the largest line in most plans and carry none, so claiming credits on a payroll would invent tens of thousands a year. Every line that can be exempt carries its own flag — a product, a fixed cost, an overhead, an asset — defaulting to the ordinary case. The synced People line is excluded whatever it says, because a wage is never taxed and that line has no row of its own to carry a flag on.
+
+**A refund is money coming IN.** A business that buys a 120,000 excavator in a quarter has claimed more than it collected, and the tax office pays the difference.
+
+**On the screens.** Plan settings gains a GST section under *Tax and distributions*: registered or not, the rate, and how often returns are filed. It **names the tax the way the business does** — GST in Brisbane, VAT in Bristol, Sales tax in Boston — off the country already in the plan, and offers that country's ordinary rate as a starting point rather than imposing one. Every other field stays hidden until registration is on, because a business that is not registered should not be asked about filing frequency.
+
+The forecast grows three conditional lines that appear only when registered: the remittance on the cash flow in both spans, and both sides of the position on the balance sheet — owing, or a refund due. A note under the cash flow says which months the BAS settles in, which of them are refunds coming back, what is still sitting in the bank at year end that is not the business's, and **that none of it has moved the profit**.
+
+The monthly cash flow carries GST on the four lines it belongs to and the remittance as a fifth. That matters more than it sounds: the twelve-months check (§6.21.1) now has five more ways to disagree with the year, and it is asserted **at every filing frequency**, because frequency is the thing that moves which months the money leaves in.
+
+## 6.38.1 Mark the lines that carry no GST, on the lines themselves (15 Sep 2026)
+
+The flags existed in the database and the engine honoured them, but **nothing could set them**: every line defaulted to taxable and a client had no way to say that an export is GST-free or that a bank fee has no credit to claim. Half a feature.
+
+One control — `GstToggle` — in the product, fixed cost, overhead and asset dialogs, because the question is the same in all four places and **nobody should have to learn it four times**. It renders **nothing** when the business is not registered: a sole trader under the threshold should never be asked whether their rent is taxable, and a dialog that asks anyway has been made harder to use for no one's benefit. On a wage line the question disappears too. A list row shows a *no GST* chip so an exempt line can be seen without opening it.
+
+Registration reaches those four modules through `GstProvider` on the plan layout rather than four more props on four signatures — the same reasoning that put currency (§6.30) and the plan's own nouns (§6.31.1) there.
+
+**Two faults found by building the UI, which is the point of building it.**
+
+**A GST-free sale is zero-rated, not exempt.** Filtering the COST side by the SALES flag stripped an exporter's input credits — it charges nothing on the sale and still claims every cent on what the job cost. **What a business charges and what it claims are different acts and now read different flags.** Input-taxed supplies, where the sale is untaxed *and* the credits denied, are deliberately not modelled and said so in the code.
+
+**The yearly figures were a second computation of the schedule's own.** Tax-per-month-then-add versus add-then-tax differ by a cent or two, and that residue left the balance sheet three cents out in Year 2, because the liability came from one and the cash lines from the other. Both now round per month and add.
+
+## 6.38.2 A rate is a fact with a date on it (15 Sep 2026)
+
+**Finland's standard rate was 24 here and has been 25.5 since September 2024.** The whole table was verified against published rates and the missing countries added. Every rate is a **default the client overwrites**, never an input the plan depends on — which is the only safe way to ship a table that goes stale.
+
+**Malaysia was listed as a GST country.** It replaced GST with SST in 2018, which is a single-stage sales tax, not a value-added one, and that distinction is not cosmetic. A VAT is charged at every stage and every business claims back what it paid, so only the final consumer bears it. **A sales tax is charged once, at retail**: a business buying for resale pays nothing, and there is no credit to claim because there was never any tax to claim back. Modelling one as the other invents input credits that do not exist.
+
+`salesTaxCountry` names the regimes this engine gets wrong on the claim side — the United States and Malaysia — **so the screens can say so rather than quietly producing a confident wrong number.** The charge side is still right for them; a sales-tax mode is a separate decision.
+
+## 6.39 One engine, four markets — tax components (15 Sep 2026)
+
+Australia, the UK, Canada and the US are three genuinely different taxes, and Canada is two of them at once. Rather than a mode switch, **a plan carries a LIST of tax components**, each saying whether the business claims back what it pays on purchases.
+
+**That one flag does all the work.** A non-reclaimable component produces no purchase-side credits, and `collected − credits` then reduces to `collected` — which is exactly right for a sales tax, where the business remits the lot. One formula, four countries, and British Columbia's two taxes at two different treatments fall out of it for free.
+
+| Market | What it needed |
+|---|---|
+| **Australia** | GST 10 %, reclaimable, BAS a month after the quarter. Unchanged. |
+| **UK** | VAT 20 % — due one month **and seven days** after the quarter, so a quarter to 30 June is paid in August. The payment lands two months on, not one. Being a month out on a quarterly payment is a real hole in a cash flow, and this was wrong. |
+| **Canada** | Entirely provincial. Ontario 13 % HST, all reclaimable. Alberta and the territories, federal GST alone. BC, Saskatchewan and Manitoba charge GST plus a PST that is **never** reclaimable — the business wears it. Quebec charges GST plus QST and reclaims both. All thirteen provinces and territories. |
+| **US** | Not a value-added tax. Charged once at retail, nothing to claim, and the rate is state plus whatever counties and cities add. All fifty states and DC at the **combined state-plus-average-local** rate, because a Louisiana business charges a shade over 10 %, not the 5 % the state levies. The five states that levy nothing come out at nil. |
+
+## 6.39.1 Pick the state or province, get the right taxes (15 Sep 2026)
+
+**Migration 0023** adds `tax_region` and `tax_components`, and the Settings tab becomes one screen that covers all four markets.
+
+The country is already on the Business profile, so **the only new question is the state or province — and only where that decides the answer.** It decides a great deal: an Ontario plan charges one reclaimable 13 % HST, a British Columbia plan charges 5 % GST it claims back plus 7 % PST it never does. Choose the region and the taxes fill in, shown as a small table with the rate and filing frequency editable, when the money actually leaves, and — in plain words — whether each one is claimed back or is simply a cost. **A default that cannot be overridden is a guess wearing a uniform.**
+
+The resolver has a strict order, and each step earns its place:
+
+1. **Not registered means nothing at all**, whatever else is stored. The switch is the switch.
+2. **A stored component list is exactly what the client chose.** Their answer always wins over any default.
+3. Otherwise the ordinary regime for the country and region — **but honouring a single rate the client has already typed**, so a plan written before any of this existed keeps its own 12.5 % rather than being silently repriced to the country's 10 %. That fallback deliberately does **not** apply where the region levies two taxes: one stored rate spread across a GST and a QST would be meaningless.
+
+**Nothing is migrated and nothing is dropped.** `gst_registered` stays the on/off switch and the old single-rate columns stay readable, so every existing plan keeps working and none of them change until someone chooses.
+
+**Six faults the walkthrough found, none of which a test would have caught**, because every one is about what the client reads:
+
+- **The tax section was on the wrong tab** — it rendered at the bottom of *Business profile* instead of *Financial year & tax*, because the edit that placed it matched the first closing block in the file, which belonged to the other area. Nothing about it was reachable from where it belongs.
+- **Moving country took the old country's taxes with it.** A plan switched from British Columbia to Australia kept charging a 7 % PST that Australia has never heard of. Enforced in `saveProfile` rather than on the screen, so it holds whichever screen changes the country.
+- **"Sales tax / sales tax"** — what a fixed suffix on a section title gives you in the United States.
+- **"GST and PST settles"** — a plural subject with a singular verb, on the one screen where two taxes are the whole point.
+- **A monthly filer listed eleven months by name.** Past a handful it now says the shape: *every month but the first*.
+- **The state and province picker had no visible placeholder**, so it read as an empty box with an arrow rather than a question.
+
+## 6.40 Two thousand plans nobody would have typed (15 Sep 2026)
+
+**Every hand-written test asserts something someone already suspected.** This one generates plans at random — seasonal and flat, recurring and one-off, linked lines, lines starting in Year 4, financed assets, balloon and interest-only loans, revenue-linked finance, disposals, exempt lines, nine tax regimes, opening losses and opening reserves — and holds every one to the same rules the app claims are always true: the balance sheet balances, profit explains the cash, each year opens where the last closed, Year 1 equals its own twelve months in six modules, the forecast reads the same figures the screens show, tax is never charged on a loss, and the tax parts add to the whole. **The seed is the case number**, so a failure names a plan that can be rebuilt exactly.
+
+It found a real one on the first run, and it is a big one.
+
+**A financed asset was free.** `capexByYear` returned nil for it, reasoning that the lender paid so no cash moved — but the loan's proceeds were already counted as money IN by both Funding and the forecast. So the money arrived and never left, and the plan gained an asset for nothing: **86,949 of asset against 86,949 of debt AND 86,949 of cash still sitting in the bank.** On the Funding cash check it showed a business flush with money it had already spent on an excavator.
+
+**Both flows are real and both are now shown** — borrowed in, paid to the supplier straight back out, net nil. It is also what a lender expects to read: a plan that hides the borrowing and the spending because they cancel is a plan that never mentions its own capital investment.
+
+**A test was asserting the fault outright** — *"a financed asset costs no cash the year it is bought"* — which is how it survived this long.
+
+And on the way: the balance sheet was adding assets at their **cash** cost, so before the above was fixed a financed asset was depreciated without ever being capitalised, and fixed assets marched downwards into negative numbers.
+
+## 6.40.1 A totals row in the wrong half of the table (15 Sep 2026)
+
+My own regression, from the §6.36 fix a day earlier.
+
+`FootRow` emitted a `<tfoot>`. Inside a `<tbody>` — which is what the forecast's mapped statements produce — that is not part of the table at all, and the totals sat 84 px out of the columns they totalled. So I made it a plain `<tr>`.
+
+**Which fixed the forecast and broke the other eight modules.** All sixteen of their totals rows are written correctly, as a direct child of `<table>` after the `</tbody>` — and a bare `<tr>` there is the **mirror fault**: the parser inserts a `<tbody>` around it, the server's HTML and the browser's DOM disagree, and React refuses to hydrate. Two red issues in the corner of the app, on Sales and on Funding, and a page quietly not interactive.
+
+**The thing I had missed is that the forecast's "total" rows are not table footers at all.** Net profit has Dividends and Retained profit underneath it; a `<tfoot>` would have rendered it at the bottom of the statement, which is simply the wrong place for it. It was never a footer — it is an ordinary row that happens to be bold. So `FootRow` goes back to being a real `<tfoot>`, where all sixteen callers already put it, and the forecast styles its mid-statement subtotals with `TOTAL_ROW` instead.
+
+**This bit in both directions a day apart, and neither direction showed up in any other test, because both are about HTML the browser rewrites underneath you.** `grid-structure.test.ts` scans the source for a `<FootRow>` written inside a `<tbody>` — the fault is in **where the tag is written** and nothing at runtime will tell you — plus a guard that the scan is still finding real call sites rather than passing by finding nothing.
+
+## 6.41 The What-If planner — seven levers over the real forecast (15 Sep 2026)
+
+The mockup's headline number was a fudge: `low = B.low + dWC + dE * 0.75 / 6`, the profit change spread over six months to approximate "lowest cash in Year 1". **APeX's scenario engine cannot do better — it is annual only, so it has no February to be lowest in.**
+
+This one approximates nothing. It applies the levers to the plan's own rows and **re-runs the same pipeline the Forecast screen runs**, so *"lowest cash 18,422, in June"* is the arithmetic the cash flow already shows rather than a curve fitted through it.
+
+**It computes no business figure of its own.** The levers rewrite plan rows; everything after that is the engine that was already there, invariants included — **a scenario that stops reconciling says so.** Volume scales the clients won, annual figure and twelve monthly counts together, or the months would stop adding to their year (§6.21.1); a later year typed outright moves with its lever too, or a plan that typed *"Year 2: 140 units"* would answer in Year 1 and ignore it for the other four.
+
+**Two things the live plan taught, which no hand-written test would have:**
+
+- **A minimum cannot be split between the levers that produced it.** Move one and the tightest month itself moves, so each part was answering about a different month — and on Nic's plan the parts missed their own total by **four hundred thousand**. `tightest` fixes the month first, every lever read in the one month the scenario is tightest in, and the leftover interaction fell to six dollars.
+- **Ten months named one by one is a sentence nobody finishes.** A run of consecutive months is one fact.
+
+The fuzz generator moved out of `fuzz.test.ts` into `plans.fixture.ts`, because two suites now hold generated plans to their invariants and **two generators would drift**.
+
+## 6.41.2 Not all revenue is worth the same money (15 Sep 2026)
+
+Price and Volume sit next to each other and look interchangeable — both raise revenue. On Nic's plan **the same +218,224 of revenue is worth 218,224 of operating profit from price and 90,597 from volume**, and 132,254 of cash against 57,076. Which of the two a business reaches for is one of the larger decisions it makes, and until now the screen let it look like a coin toss.
+
+So the profit levers carry a standing line, measured from the plan when it loads and true whether or not anything has moved: **prices cost nothing extra to deliver, so all of a price rise reaches operating profit; winning more work keeps 42 %, because the extra has to be bought and made.**
+
+**It is measured, not read off the statement, and the obvious shortcut is wrong twice.** Fixed cost of sales does not scale with volume, so the incremental margin is not the gross margin the P&L reports — 42 % against 39.43 % on this plan, and the test asserts the two genuinely differ. And on a plan with an ongoing book, a volume lever wins new clients without touching the clients already on the books, so the same percentage does not even produce the same revenue. **Both are run for real and each measured against what it actually earned.** A plan whose extra work loses money is told that instead of being given a multiple.
+
+Held across 200 generated plans: price always keeps exactly 100 %, volume never keeps more, the multiple is never below 1.
+
+**A check about ONE lever renders under that lever's slider, where the hand already is**; only checks about the whole scenario stay in the panel. Without that split the same warning was heading for two places at once.
+
+## 6.41.3 Show what the accounts imply, and name the gap out loud (15 Sep 2026)
+
+Review forecast already says it, in these words: *"Your own accounts imply 46 debtor days, 2 stock days and 6 creditor days. A forecast that assumes better terms than the business has ever achieved is the first thing a lender questions."* **Then the one screen where those days are actually dragged about did not mention it.**
+
+On Nic's plan that looked harmless, because his assumptions are unset and the schedule falls back to the implied figures — the slider starts at 46 because history is 46, and **they coincide by accident**. The moment anyone sets Year 1 debtor days the coincidence breaks and history leaves the screen entirely.
+
+Worse, **the warnings were anchored to the plan's own assumption rather than the business.** A plan assuming 25 debtor days against a history of 46 sat there silently; dragging to 24 then said *"being paid in 24 days is quick for most trades"*. **The screen measured realism against the plan's own optimism, which is backwards.**
+
+The three days levers carry the implied figure under the label and a mark on the track, and their checks are re-anchored: they fire on **where the slider is**, not on whether anybody moved it, so a plan that *arrives* optimistic says so on open. A tenth is the line — it scales with the business, it is one number rather than a table of them, and trimming a day or two off a long collection cycle passes without comment. *"Your accounts imply 46 debtor days. This plan collects in 35 — 11 days faster than the business has managed"* is the client's own record rather than a rule of thumb, and the rules of thumb stay for a business that has no record yet.
+
+**Two things deliberately not done.** History is a reference mark, **never the slider's starting point**: the baseline stays the plan's Year 1 assumption, or the screen would open disagreeing with the forecast, and agreeing to the cent is the whole value of it. And the figure is named as **implied**, not achieved — `daysFromHistory` divides a closing balance-sheet figure by the year's revenue, so it is a reading taken on one date, and the footer says a quiet month flatters it. Six creditor days for a concreter may be true, or may be a balance date that fell after everyone had been paid.
+
+**The rule this section is cited for: show what the accounts imply, let the client refine it, and name the unrefined gap out loud.**
+
+## 6.42 A goal is owned by a person in the plan, not by a login (15 Sep 2026)
+
+`plan_goals.owner_user_id` has pointed at `auth.users` since migration 0002, and it is the wrong shape for the question the screen asks. **The people who own quarterly goals are the Leadership Team** — the office manager, the slab supervisor, the owner's brother who does the quoting — and most of them will never have a login. Asking *"who owns this?"* and offering only the one person in the room with an account is not a choice.
+
+**Migration 0024** adds `owner_person_id`, pointing at `plan_people`. `owner_user_id` is untouched: when the advisor workspace exists (§7.1) there is a real second question — which **login** is accountable — and it can be answered without moving this one.
+
+The foreign key is **composite**, matching the rule `parent_id` already follows, so a goal's owner must be a person in the **same** plan. A plain reference to `plan_people(id)` would let one plan's goal name another plan's employee, **which under multi-tenancy is a leak rather than a mistake.**
+
+Landed ahead of the Goals module that uses it: one nullable column and an index, so applying it early changes nothing.
+
+## 6.43 The left menu was hiding three screens (15 Sep 2026)
+
+**The menu was lying.** Review forecast holds the profit and loss, the cash flow, the balance sheet and the assumptions on one module bar — three statements that must agree belong on one screen. But the left menu listed **Balance Sheet** and **Cash Flow** as items of their own, pointing at routes that do not exist, so a client clicking either was told the module was *"next in the build queue"* while the real thing sat behind an item labelled *Profit & Loss*. **Assumptions was not listed at all** — the only place debtor, stock and creditor days can be set for all five years, findable only by opening Profit & Loss and noticing a fourth tab.
+
+The `href` deep-link field has been in `NavItem` since the beginning and nothing had ever used it. Now Cash Flow, Balance Sheet and Assumptions each point at the tab they name, and the sidebar lights the one item the client is actually on rather than two at once.
+
+**And the sliders write back.** What-If explains those three numbers better than any grid can — it shows what each is worth in cash, holds it against what the business actually achieved (§6.41.3), and re-runs the real forecast as they move. So it is where they should be edited. *"Save these days to the plan"* is **the first thing that screen is allowed to change**, and it is allowed because it is the one lever whose effect the screen has already shown honestly and completely, and because nothing lands in another module's records.
+
+It writes through `saveAssumptions`, the same server action the Assumptions tab uses, so **that grid has one writer rather than two that drift**. It takes the current schedule from `loadPlan` rather than reading `plan_settings` itself — an unset grid falls back to the days the business's own history implies, and rebuilding that fallback here would have written 30/0/30 over a plan quietly forecasting on 46/2/6.
+
+## 6.43.1 An input filed with the inputs (15 Sep 2026)
+
+The Forecasts group had six items and **one of them was the wrong kind of thing.** Profit & Loss, Cash Flow, Balance Sheet, Break-Even and Unit Economics are all things the plan **produces**; Assumptions is a thing the client **types**. It was the only input in a group of outputs, which is exactly why it read as not belonging.
+
+It moves to **Financials**, after One-off income & costs and before What-If Planner — which also reads as a sequence: enter the figures, set the assumptions behind the cash flow, then test them. A **tool** rather than a step, because the guided path already walks through these at step 13 and this is the door for somebody wanting to change them afterwards. Cash Flow and Balance Sheet stay where they are: they are outputs, and a CFO looks for them by name under Forecasts. The module bar stays too — it switches with no round trip, which is what somebody comparing two statements does all afternoon, and the left menu cannot do that.
+
+**Which surfaced a real fault in the deep links: they only worked on a cold load.** Clicking *Cash Flow* in the menu is a navigation within the **same** route, so React kept the module mounted and `useState` kept whatever tab was already showing — the menu item appeared to do nothing.
+
+The URL now follows the bar and the bar follows the URL, and **the first direction has to go through the router** rather than `history.replaceState`: a shallow URL change leaves Next still believing it is on the old address, so the next menu click there is treated as a no-op and the server component never re-renders. Local state still moves first, so the switch is as instant as it was; the router catches up behind it.
+
+## 6.43.2 A way back to the days the accounts imply (15 Sep 2026)
+
+`working_capital_schedule` starts empty, and while it is empty the forecast reads the days implied by the last historic period — **so the plan tracks the business.** The moment anything on that grid is saved the column is populated and **the link is cut**: the figures stay right, but they stop following the accounts, and there was no way back. A client who corrected their Historic balance sheet after touching the screen would have gone on forecasting from the old reading with nothing to tell them.
+
+*"Use the days my history implies"* sits beside the sentence that already names them, appears only when there is something to revert, and **empties the column rather than writing today's implied figures into it.** That is the difference between reverting and copying: a later correction to Historic moves the forecast again. Only the working-capital column — tax timing, prepayments and accruals are the client's own judgement.
+
+**Which exposed a fault of the same family as the tabs.** The assumption grids are edited locally and saved on blur, so they are state — but **the plan can move underneath them**, from this revert or from the days saved in What-If, and `useState` held the old figures on screen while the statements above showed the new ones.
+
+**The rule: adjust state during render off the prop, rather than reaching for an effect.** The corrected grid then paints first time, with no remount and no flash of the old figures. This is the pattern every screen that can be written to from elsewhere now follows.
+
+## 6.44 Quarters belong to the plan's year, and a lever can become a goal (15 Sep 2026)
+
+**Q1 is the first three months of the FINANCIAL year, not the calendar.** A June year-end means Q1 is July to September. Goals carry a quarter, and a client who sets one for Q1 and finds it on the dashboard against January to March **has been told something false about their own business** — the same fault the months had before §6.21, one level up. `planQuarters` and `quarterOf` sit beside the month helpers so there is one definition, and the suite holds five different year ends to it.
+
+**A lever is a decision; a decision with a number, an owner and a quarter is a goal** — and that is the whole reason the exit exists. The scenario a client liked on Tuesday is forgotten by Friday unless somebody owns it. This is the **gentler** of the two What-If exits and went in first: it changes no figure anywhere, so a goal can be wrong without the forecast being wrong.
+
+**Every figure traces to the lever's own measured contribution, never to a formula written here.** *"Raise prices 5 %"* carries the profit the tile showed, which is what a full re-run of the plan produced; **a goal quoting a different figure from the screen it came from would be this project's oldest fault arriving in the client's goal list**, so a test asserts the two agree to the cent. Titles are in the owner's units — *"Win 24 more services this year — about 2 a month"*, not *"+10 % volume"* — and a cash-only lever claims no profit.
+
+The area mapping is a judgement, so it is made once and in the open: **selling is Sales, buying and making are Operational, terms and overheads are Financial.**
+
+On Nic's plan, price +4 % and cogs −6 % became Sales and Operational goals quoting 87,290 and 76,576 of operating profit, and the two days levers became Financial goals claiming cash only and no profit, **which is the truth about them.**
+
+**Two things the live run caught.** Completeness counted annual goal **rows**, so the empty ones this exit creates made a client with one written sentence look three-sixths done; it now counts goals that have actually been written. And the *What-If* badge sat inside the truncating title cell, so **where a goal came from was the first thing truncation ate** — it is outside it now.
+
+## 6.45 Make this the plan — the levers finally write something (15 Sep 2026)
+
+Nic moved price and cost of goods, created goals from the scenario, came back to the levers and found everything as it was. **"It feels like I did nothing."** He was right, and the fault was a recommendation of mine two turns earlier to apply the days only, which left the four levers that matter most as a read-only demo. **The only way to make a price rise real was to open Sales and retype ten prices by hand.**
+
+It writes the **base** figures, not five years of them. A product's price and units are what the yearly growth compounds from, so **one number per product carries the change through all five years** exactly as the preview showed it — which is also the answer to *"how can it flow through five years if we did not change each product?"* The preview always did change each product; on a copy in memory, thrown away when you left.
+
+**Three things the confirmation does before anything is overwritten:**
+
+- **It lists every record.** On Nic's plan: Retaining Walls 19,000 → 19,760, Mining Works 25,000 → 26,000, Driveways 2,328 → 2,421, and so on for twenty-two figures. *"10 products changed"* is a number to be trusted; **a list is a thing to be checked.**
+- **It sizes what it cannot reach.** His overheads lever moves 82 % of his overheads — the lines he typed. The other 171,661 a year is Leadership Team salaries and Marketing spend, which live in their own modules, **because cutting overheads by a tenth cannot mean cutting every salary by a tenth. A salary is a decision, not a slider.**
+- **It quotes the forecast recomputed from the records that will really be written**, rounding and unreachable lines included — not the preview's own figure.
+
+## 6.45.1 An overheads cut is a plan, not a claim about this year's rent (15 Sep 2026)
+
+Nic's assumption: every cost and overhead already carries a per-year % change field, and a slider ought to write **there**, combining with whatever is typed, rather than restating the figure. Checked against the four modules, he is right about one of them — and it was the one just got wrong.
+
+**Overheads** have six columns — *This year*, then Year 1 to 5 — and `current_value` is the first of those: what the business spends **now**. Year 1 has its own % change box. So the previous day's apply, which scaled `current_value`, **was restating what the client spends today in order to record a plan about next year.** It writes Year 1's change box instead, **compounded** with what is there: on Nic's plan Fuel already carried +5 %, so a 5 % cut records **−0.25 %**, not −5 %, because 1.05 × 0.95 is what actually happens to the money.
+
+**Products are the other shape, and deliberately**: a line's price and units **are** its Year 1 figures. The growth dialog gives Year 1 no box and says why — *"there is nothing before them to grow from; the first change you can make is Year 2."*
+
+> **Superseded the next day by §6.47**, which made an overhead's amount its own first plan year and put the two modules on one shape. The distinction drawn here is the reason §6.47 exists; the conclusion it reached is no longer the app's.
+
+## 6.46 A change can start next year (15 Sep 2026)
+
+Nic's assumption pointed at something neither of us had said out loud: **every lever meant "from Year 1, day one"**, and a business planning to raise prices *next* financial year means something different. The plan could already hold both — the modules keep a % change box for each year — it just had no way to say which.
+
+*"These changes start in — Year 1 / Year 2 / Year 3"* sits **above the levers, not in the save dialog**, because it is part of the scenario rather than part of committing it: the tiles have to preview the year the client picked, or the screen would show one thing and write another.
+
+**One rule covers every line whatever year it starts selling in:** a change takes effect in `max(from, the line's own first year)`, and where that **is** the line's first year it moves the base — a first year has nothing before it to grow from — otherwise it compounds into that year's own change box. `landsIn` is exported so **the preview and the write make the same decision about the same row** rather than two copies disagreeing.
+
+**Compounded, never added.** On Nic's plan a 10 % rise from Year 2 reads *"Shed and Tank Concrete Slabs · Year 2 price change +2 % → +12.2 %"*, because 1.02 × 1.10 is what happens to the money. A year the client typed a figure into outright moves the figure instead, because a rate there would be ignored (§6.26).
+
+The two tiles follow the scenario to its own year. A Year 2 scenario does nothing to Year 1 by construction, and **a tile reading "no change" would tell the client they had wasted their time** — so the profit tile becomes Year 2 operating profit and the cash tile shows where Year 2 closes.
+
+## 6.47 Year 1 is the first projected year, in Overheads too (15 Sep 2026)
+
+Nic pulled back to the thing everything else rests on: **Year 1 is the first PROJECTED year** — the year the business is in, and a forecast rather than a record.
+
+Sales already said so: its Year 1 column is headed *Sales this year* and the growth dialog tells the client *"the price and units above are its Year 1 figures"*, giving Year 1 no change box because there is nothing before it to grow from. **Overheads did not.** It carried a sixth column, *This year*, with `current_value` in it, and derived Year 1 by applying `yearly_change->>'1'` on top — almost certainly the phantom year 0 that §6.33 removed everywhere else.
+
+**The same field meant two different things in two modules**, which is why a What-If slider moving "Year 1 overheads" had to write somewhere different from one moving "Year 1 price", and neither screen could tell you which. So **§6.45.1 is largely undone, and rightly**: an overhead's amount **is** its first plan year, and a Year 1 cut moves the amount, exactly as it does for a product.
+
+**Migration 0025 folds rather than drops** — `current_value × (1 + c1)`, then the key goes — so every year of every plan keeps the figure it had. Verified on scratch Postgres across the cases that matter: a line with +5 % (10,000 → 10,500), one with an awkward 7.5 % (997 → 1,071.78, the same figure the old rule computed), one with a zero key, one with no key, and one starting in Year 3 whose dead `"1"` key the engine never read and which is left untouched. Idempotent across three runs.
+
+## 6.48 Year 1 is the figure, in fixed COGS and salaries too (15 Sep 2026)
+
+§6.47 made an overhead's amount its Year 1 figure. **Two tables were left behind**, and they were the last places in the app where *"the figure you typed"* and *"the figure in Year 1"* were different numbers:
+
+```
+plan_fixed_cogs   annual_cost   × (1 + yearly_growth_rates->>'1')
+plan_people       annual_salary × (1 + salary_adjustments->>start)
+```
+
+A yard entered at 60,000 with 5 % in the Year 1 box appeared in the plan as **63,000**; a salary of 120,000 with 3 % appeared as **123,600**. Neither screen said so, so a business owner had to hold two models at once.
+
+**Migration 0026** folds the first-year rate into the base and removes the key, the way 0025 did. A person's first plan year is **derived** from their Started date (§6.11), so the migration derives it the same way rather than assuming Year 1: someone joining in Year 3 carries their Year 3 salary and it is the Year 3 key that folds.
+
+Both engines keep reading the first year's key while the migration is pending — the §6.29 deploy bridge.
+
+*A note on how this was nearly got wrong:* the effect was described **backwards** in conversation — as lowering the stored figures rather than raising them — and Nic stopped the migration because the live data contradicted the claim. The fold **preserves the forecast and raises the stored base** (15,000 → 15,150; 140,000 → 141,400). **A migration is checked against the data, not against the sentence describing it.**
+
+## 6.48.1 The bridges come down (15 Sep 2026)
+
+0025 and 0026 have run on every plan, so the three readers that carried both the old shape and the new one have nothing left to carry:
+
+```
+enteredByYear      else if (start === 1) v *= 1 + yearly_change["1"] / 100
+fixedCostByYear    else v *= 1 + yearly_growth_rates["1"] / 100
+salaryForYear      the loop opening ON the start year rather than after it
+```
+
+Each was multiplying by 1 and would go on doing so forever. **§6.29 says the reader bridges the deploy; it does not say it stays afterwards, and a branch that can no longer fire is a second answer waiting for someone to ask the question (§6.35).**
+
+With them gone the rule is stated once, in one line per module: **the figure belongs to the line's first year, and the percentages compound from the year after it.**
+
+`scheduleChangeFromBase` became `scheduleChangeFromFirstYear`. Its old name came from APeX's *"Total Increase From Base"*, where the base was a salary sitting in front of the plan — the year §6.48 removed. The People screen already says *"Y5 vs first year"*; the function now says it too.
+
+## 6.49 Break-Even, and the first charts in the app (16 Sep 2026)
+
+**Break-even is a lens on the forecast, not a model of its own.** Every annual figure comes off `PnlYear` and every monthly one off the cash flow the same pipeline already built, from the same loader Review forecast and What-If use. **It cannot disagree with the profit and loss one menu item away.**
+
+**Two break-evens, because clients ask two questions with the same words.** The year is **accrual** — fixed costs are overheads, fixed cost of sales, depreciation and interest, so breaking even means covering everything, the bank included. The months are **cash** — cumulative operating cash after interest, where depreciation drops out because it never moved money, and an owner's injection is excluded because **a cheque from the owner is not the business breaking even.** They differ; the screen names the gap as working capital rather than hiding it.
+
+**Margin of safety** is the one number that turns break-even into advice: comfortable at 25 % or better, tight at 10, exposed below that.
+
+## 6.49.1 No blended unit — each line in what it is actually sold in (16 Sep 2026)
+
+APeX divided total revenue by total units across every line to get **one average selling price**, then divided the fixed base by the contribution on that average. Across a book holding a house slab at 16,800 and a foot path at 15,000, **that average describes nothing anyone can go and sell** — and with an ongoing line it adds jobs to client-months, which is not a unit at all.
+
+So there is **no blended unit anywhere in this module.** Break-even **revenue** leads, because it needs no unit; each line is then measured in what it is really sold in — **jobs** for a one-off line, **client-years** for an ongoing one. *"On this alone"* says how many of one line would carry the whole fixed base by itself: **a deliberate counterfactual, because fixed costs cannot be split between lines without inventing a share nobody agreed to.**
+
+**A real defect the property tests caught:** `serviceBreakEven` rounded the planned volume **before** dividing by it, which priced a ten-client line at 24,004 instead of 24,000. **Divide by the unrounded figure; round only what is displayed.**
+
+## 6.49.2 Charts, and colours that are not statuses (16 Sep 2026)
+
+**No charting library.** `chart/core.tsx` and `chart/plots.tsx` carry a measured width, a nice scale, a frame, a tooltip, a meter, stat tiles, columns, a trend line and bar rows — everything this app needs and nothing it does not.
+
+Three rules that came out of building them:
+
+- **Column width is capped at 56 px.** A two-column chart in a wide frame otherwise draws two enormous slabs, which reads as a fault rather than as data.
+- **A meter, not a dial.** A dial spends a great deal of space saying one number.
+- **One series means no legend** — the title already said it.
+
+**Five series slots, assigned in a fixed order and never cycled**; a sixth series folds into *Other* rather than inventing a hue nobody can tell from the five.
+
+**The first set declared failed on two counts and was never used by anything.** `--chart-3` was a teal of chroma 0.088, **under the floor at which a colour stops reading as a colour and starts reading as grey**. And `--chart-5` **was** `--warn`: the moment a chart used it for a cost category, **amber stopped meaning "warning" anywhere on the screen.**
+
+**Status colours are reserved, and a series is not a status.** The replacement set is validated against the chart surface by a runnable script — every slot inside the lightness band, every chroma above the floor, worst adjacent pair ΔE 9.2 under deuteranopia against a target of 8.
+
+## 6.50 A grant is income, not share capital (16 Sep 2026)
+
+`plan_funding_grants` has collected `recognition_type` and `recognition_period_months` since **migration 0003. Nothing has ever read either.** A grant was filed into the equity bucket by `raisedByYear`, so it arrived as financing cash, became contributed equity on the balance sheet, and **never touched the profit and loss at all.**
+
+Wrong three ways, and quietly:
+
+- A grant is not money an owner subscribed for shares with.
+- **An immediate grant is income.** A grant-funded business was showing a loss it did not have, and being taxed on the wrong figure.
+- **A deferred grant is a liability until it is earned.** There was none.
+
+**Nothing failed.** Cash went up, equity went up by the same amount, and the balance sheet balanced perfectly around the mistake — which is why it survived this long. A field nobody reads is the §6.35 fault; **a field nobody reads that also moves the tax bill is a worse one**, because the client typed a recognition period and watched it change nothing.
+
+Immediate grants are earned the month they arrive; deferred grants are earned evenly across the period entered, and what is not yet earned sits as deferred income, split by whether the next twelve months will earn it. The engine runs a **seventy-two month horizon** so that at the end of Year 5 *"earned within a year?"* still has an answer instead of the whole balance defaulting to non-current.
+
+Grant income sits **below** operating profit; grant cash is **operating**, not financing, because it is income the business earned rather than money it raised.
+
+## 6.51 A save that cannot be started twice (16 Sep 2026)
+
+Nic entered one equipment loan and Fixed Assets showed two excavators. **Fixed Assets was right. There were two loans.**
+
+A dialog's Save button calls a server action and closes the dialog when it returns. **Between those two moments the button is still there, still enabled**, and the draft it holds still carries its temporary id — so the second click does not update the row the first one created, **it inserts another.** Two Citibanks, 60,000 of debt, 6,699 of interest, and two assets faithfully depreciating against them.
+
+**Nothing downstream was at fault:** the unique index on `funding_debt_id` held, `syncFinancedAsset` made exactly one asset per loan, and the plan added up perfectly. It was just a plan the client had not typed.
+
+**The guard is a ref, not the transition's `pending`**, because `pending` only becomes true after a render and **two clicks fit inside one frame**. A ref is set in the same tick as the first click, so the second has something to hit.
+
+It lives in one hook rather than four copies, because **this is a shape, not an incident**: Funding · Fixed assets · One-off income & costs · Goals all opened a dialog holding a draft with a `tmp-` id and saved it on a bare `onClick`. Each now runs its save through `useSaveOnce`, and each Save button reads *"Saving…"* while the first is in flight — **the guard makes the duplicate impossible, the disabled button makes it visible why nothing happened.**
+
+## 6.52 An asset says how it was paid for (16 Sep 2026)
+
+Nic: *"Why are we allowed to add a fixed asset that has clear funding implications — 'Bought in' a projected year, 'What it cost' — with no connection to a loan or cash?"*
+
+**The arithmetic was never the problem.** A 90,000 van bought in Year 2 already gave capex of 0 · 90,000 · 0 · 0 · 0, the asset on the balance sheet, and 18,000 a year off profit. The money left the bank, in the right year, in full.
+
+**The problem is that the same purchase could be entered twice.** The only way to say *"this van is financed"* was to **not** type it on Fixed Assets at all and add a loan on Funding instead, which makes its own asset. Nobody would guess that. Type the van here and add the loan there and the plan holds two vans: 180,000 of assets, 180,000 of capex, 90,000 borrowed, two lots of depreciation, **and no warning anywhere.** The link was made by which screen the client happened to use, and that is invisible.
+
+So **the asset asks**: *"Paid with: money the business has / equipment or vehicle finance."* Choosing finance collects the lender, rate and term and writes a **loan** — through the same action the Funding step uses, never a second writer — and the loan makes the asset, as it always did. **One way in, whichever screen you start from, so describing one purchase twice stops being possible rather than being warned about.**
+
+**And finance can have money down.** DesignOne's own accounts show a 2,500 deposit on a 425,000 machine and the plan had nowhere to put it. **Migration 0027** adds `deposit`. The forecast needed no change at all: capex is the **asset's** price, debt proceeds are the **loan's** advance, and the gap between them is the deposit, already leaving as cash.
+
+## 6.52.1 The Funding page had its own copy of the loader (16 Sep 2026)
+
+Verifying §6.52 live found two faults, and one of them is **the fault this app keeps having to learn.**
+
+**The deposit reached the forecast and not the screen.** `funding/page.tsx` carried its own hand-written mapping of the five funding tables — a second copy of `loadFundingRows`, **whose own docstring says it exists "rather than a second copy that drifts".** It drifted the moment a column was added: the engine read `deposit` through `planLoad` and the list read it through the copy, which had never heard of it. 10,000 of money down was in the plan, changing the asset and the cash, and invisible beside the loan that took it.
+
+**The fix is not to add the column to the copy. The copy is gone**, and the page calls the loader, like every other reader of this plan.
+
+**The list did not move.** Saying *paid with finance* writes a loan and the **loan** writes the asset, on the server — so the client saved a van and the list sat there unchanged until they navigated away and back. This screen had never needed the §6.43.2 resync before, because nothing but its own dialog had ever changed its rows. Now something does.
+
+And the third §6.40 sentence, the one in the engine: `capexMonths` still said *"nil if it is financed"* while returning the full price for every asset.
+
+## 6.52.2 The lender has a name and so does the thing (16 Sep 2026)
+
+Nic bought *"TEST 1"* on a Westpac loan and Funding called it **Westpac**.
+
+A loan is named after its **lender**, which is right — and it is useless on its own the moment a business finances two vehicles from the same bank. Three Westpac rows, no way to tell which is the tipper. Worse, **the two screens had ended up with two naming schemes for one purchase**: start on Fixed assets and the thing keeps the name you typed; start on Funding and it becomes *"Equipment — Citibank"*, because that was the only name the loan had to give it.
+
+**No new field is needed.** The name already exists — it is the asset's — and the fault was that the loan never showed it and the loan's own dialog never asked for it. So both screens ask, and both show: Funding gives the lender in the link and, under it quietly, **what the money bought**; Fixed assets gives the thing, with its loan one click away.
+
+`What it buys` writes straight through to the asset whichever screen it is typed on, and **an empty box never erases a name** — it means this caller had nothing to say about it. *Equipment — Westpac* survives only as the fallback for a loan whose thing was never named.
+
+## 6.53 Can the business afford it? (16 Sep 2026)
+
+An asset bought in a projected year takes its price out of the bank in that year. **The forecast has always said so; this screen never did.** A client could put a 425,000 excavator here against 21,315 of cash and see nothing at all, because the only place it showed was Review forecast — **three steps further on, after they had stopped thinking about assets.**
+
+Fixed assets now carries the year's own cash, **read from the forecast and never recomputed**: what the assets took out, what the bank closes on, and a sentence that says plainly whether it holds. Funding already owns *"is the money enough"* for Year 1 by month and this defers to it; **a second answer to that question is a fault this app has paid for more than once.**
+
+On a real plan it immediately said something worth hearing — **and caught a false sentence being written.** BNE Concreting buys 47,000 of assets in Year 1, closes Year 1 on 12,994 and Year 2 at (20,431). The first draft read *"Not these purchases — nothing is bought that year"*, which is true and useless: **the Year 1 spend is most of the reason Year 2 is short.** It now says what can be **proved** — 47,000 went out in Year 1, and that is money not in the bank now — rather than passing a verdict on cause, because the year has other things in it too.
+
+## 6.53.1 A row of fields is a row of boxes, not a row of cells (16 Sep 2026)
+
+*"Valuation before the money"* wraps to two lines and the two labels either side of it do not, so the box under it sat a line lower than theirs and the investor dialog read as crooked. **Aligning the cells' tops aligns the labels; the eye reads the boxes as the row.** `items-end` on **every** field row in that dialog, not just the one that showed it, because the next long label will land somewhere else.
+
+## 6.54 Two screens, two answers to who owns the business (16 Sep 2026)
+
+Nic asked whether an investor buying 5 % should be put into the Leadership Team. **The answer is no — and the question found something worse.**
+
+**No**, because that list is *"owners, directors and the key people a lender asks about"*. A passive shareholder is none of those. Putting them there would file them in the salary schedule and present them to a lender as management, and **it would be the Fixed Assets trap again: one fact typed on two screens, counted twice.** If an investor does take a seat, the client adds them as a person, and their share is typed once, where they belong.
+
+**But the two screens had already stopped agreeing about the thing itself.** The Leadership Team totals `pct_shareholding` against 100 % and shows amber until it gets there; Funding totals `equity_percent` and reported *"Investors hold 5 % of the business; you keep 95 %"*. On Nic's plan — two directors on 35 and 25, one investor on 5 — **People said 60 % and Funding said 95 %.** Neither was wrong on its own terms. **Both were counting their own half and calling it the whole.**
+
+**Neither number is the cap table.** The cap table is both halves plus what nobody has been given, and it is computed once, in the engine, loaded once, and shown the same way in both places. On Nic's plan it says out loud that **35 % of the business is allocated to nobody.**
+
+## 6.54.1 A column total is a sum, not a verdict (16 Sep 2026)
+
+§6.54 gave the header the whole cap table and **left the footer judging its own column**, so the same screen contradicted itself out loud: John 75 and Mary 25 showed **100 % in green** at the foot of the Share % column, directly under a header showing **105 % in red** because an investor holds 5 % as well. Drop John to 70 and it inverts — the footer goes amber at 95 % while the header goes green at 100 %.
+
+**Both figures were right.** The column really does add to 95 %, and the business really is fully allocated. **What was wrong is that both were passing judgement, on different questions, six inches apart.**
+
+**The whole business is judged once, in the header, where the whole business is in view. The footer adds up the column above it and says nothing about whether that is good news — because on its own it cannot know.**
+
+## 6.55 The business already owned things (16 Sep 2026)
+
+Nic tried to sell an old lathe on One-off income & costs. The screen asked *"is this from selling something the business owns?"*, which was true, and **he had to answer no** — because the list only held things bought inside the plan, and the lathe had been there for years.
+
+**Answering no is not a harmless fallback.** It books the whole proceeds as one-off **income**: operating cash, taxed in full. A disposal puts the proceeds in **investing** and only the gain over book value touches profit. On a lathe standing at 8,000, selling it for 50,000 the wrong way **overstates profit by 42,000.**
+
+**But the dropdown was the small half.** Everything a trading business already owned was a single figure lifted from Historic with no items behind it — **and a lump is not something that can wear out.** Run BNE Concreting's opening position through the engine:
+
+```
+fixed assets by year:  129,294 · 129,294 · 129,294 · 129,294 · 129,294
+depreciation by year:        0 ·       0 ·       0 ·       0 ·       0
+```
+
+**Five years of concreting plant that never depreciates.** Profit and tax overstated every year, and a balance sheet no lender would believe.
+
+So an asset can say it was **already owned** (migration 0028). It carries what it is **worth now** rather than what it once cost, and what is **left** of its life rather than the whole of it. It depreciates from the plan's first month, it can be named in a disposal like anything else, and **no cash moves and nothing is added to the balance sheet** — the opening figure from Historic is already carrying it.
+
+**Itemise what you need, name the rest.** Nobody is asked to list every extension lead. The reconciliation Note says what the last balance sheet put the plant at, how much of it has been itemised, and — out loud — that *"the remaining 109,294 is not broken down, so it carries no depreciation and cannot be sold."* The §6.41.3 bargain: show what the accounts imply, let the client refine it, name the unrefined gap.
+
+## 6.56 A sold asset stops wearing out (16 Sep 2026)
+
+**The assets engine knew nothing about disposals, so it went on depreciating a machine the plan had already sold.** A lathe sold in Year 1 cost the profit 5,000 a year through Years 2, 3 and 4 — depreciation on something that was not in the shed — and the balance sheet wrote it down to match.
+
+**The three statements still reconciled**, because the same false charge came off both sides: internally consistent and factually wrong, **which is the hardest kind of fault to see.** On Nic's own plan it left the plant line 20,000 light by Year 5, under a green tick reading *"The statements agree."*
+
+The disposal fact is owned by the one-off that names the asset, so `soldMonthByAsset` publishes it and `withDisposals` attaches it. From there **one series answers everything**: depreciation stops at the **start of the month of the sale**, `bookValueByYear` is nil from the year the asset leaves, and `bookValueAtDisposal` — the same series, summed to the sale month — is what the gain is measured against.
+
+That book value **used to be read at the close of the prior year**, which was only right *because* the asset went on depreciating. Now that it stops, **the two have to be the same series or the balance sheet carries the difference forever.**
+
+Every reader attaches it: the forecast, the Assets screen, the Funding cash check. The Assets list says *"Sold Oct · Yr 2"* under the purchase, **so the depreciation stopping has a reason on the screen it stops on.**
+
+**And the screens stopped calling the whole cheque profit.** Selling a machine for 50,000 that is on the books at 13,750 puts **36,250** into profit, not 50,000 — so that is what the dialog says, what the *Effect on the year* column shows, what the header totals, and what the year grid nets after a new *"Less what the sold assets were worth"* line. The already-owned remove-confirm no longer claims a machine bought before the plan *"stops leaving the bank"*.
+
+## 6.57 A step nobody can finish (16 Sep 2026)
+
+**Step 11 had no entry in the completeness map at all.** The sidebar looks up each step's section to decide green or grey, found nothing for Fixed Assets, and fell through to grey — permanently. A client could enter fifty assets and the step would still look unfinished, **with every step around it green.** Nic asked what he was still missing on a screen holding three assets and 47,000 of plant; the answer was nothing.
+
+Same reason Fixed Assets had never appeared on the dashboard's Plan completeness panel, which was showing twelve of thirteen sections **and nobody had noticed the one that was missing.**
+
+**The rule: a guided step that cannot be completed is worse than a step that does not exist**, because the client goes looking for the work they have not done.
+
+Steps 13 and 15 were uncounted too, so the guided path counted itself out of fifteen while only twelve could ever be reached.
+
+## 6.57.1 "None" is an answer (16 Sep 2026)
+
+**Three guided steps can be legitimately empty**, and all three of their empty states say so in plain words: a business that runs on its own cash raises no funding, a service business with a laptop owns no fixed assets, plenty of plans have no one-offs at all.
+
+**Completeness counted rows, so the only way to answer was to enter something untrue.** The screen told the client empty was right and the menu marked them unfinished for believing it.
+
+Now they can say it. One line under the empty table, one writer (`sayNone`) with the column chosen from a fixed map, one click to take it back. **It only appears while the list is empty, because a row answers the question by itself** — so the flag is never cleared and adding a row later just works. Migration 0031 adds `no_funding`, `no_fixed_assets`, `no_one_offs`; false means *nothing has been said*, which is what an empty table meant before there was anything to say it with.
+
+**Step 13 is counted too.** Review forecast shows three statements the plan **produces**; the only thing on it a client can finish is the one thing they **type** — debtor days, creditor days and tax timing. A forecast left at zero days assumes every client pays on the day of the job, so **setting them is the act the step is asking for.**
+
+**Step 15 stays at zero, and that is honest**: the Business plan module is still a placeholder, so the guided path reaches 14 of 15 and **15 of 15 will mean the client actually has a business plan.**
+
+## 6.58 A plan can be put away, and it can be destroyed (16 Sep 2026)
+
+**Neither was possible anywhere in the app.** A coach who mistyped a client's name was stuck with that plan on the Welcome screen forever — a throwaway had to be cleared out of Supabase by hand — and a client finished last year sat beside this year's work with nothing to tell them apart.
+
+**Archiving is its own fact, not a status.** `plan_status` already had an `'archived'` value and using it would have meant a **complete** plan stopping being complete the moment it was put away: **one field asked to answer two questions, which is the shape of every expensive fault in this project.** So migration 0030 adds a timestamp. Status is untouched, restoring is setting it back to null, and the header inside an archived plan reads *"Working draft · Archived"* rather than replacing one fact with the other.
+
+**Archive lives on the Welcome card.** That card was one large link, which is why there had never been anywhere to put a control — **a button inside an anchor is a button that sometimes navigates instead** — so the anchor now wraps the name and the action sits beside it. Archived plans collapse behind their own heading, which says plainly that nothing has been deleted.
+
+**Deleting lives only inside the plan**, in a Plan settings area, far enough from the list that nobody reaches it while tidying. **It names the work before it asks anything** — *"10 products · 13 overheads · 2 people · 2 fixed assets · 1 one-off · 4 years of history · 13 goals"* — because *"are you sure?"* is not a question anybody reads and a count of the work is. Then it asks for the business name typed out, **the one confirmation that cannot be given by recognition: the gap being closed is a name somebody got wrong.**
+
+**The typed name is checked on the server against the plan's own row as well. A guard that lives only in the browser is not a guard.**
+
+**And a delete refused by RLS returns success with no rows, not an error** — so the action re-reads the plan afterwards and says the client lacks permission, rather than sending them to a Welcome screen with the plan still sitting on it.
+
+## 6.59 A SWOT that does something about it (16 Sep 2026)
+
+**§6.14 closed this the other way** — *"no priority columns, no implication fields, no quadrant commentary; a SWOT is a list"* — **and that was right about commentary. A response is not commentary.** Four honest lists with nothing attached is a page in a report; the same four lists with *"the owner prices every tender personally"* answered by *"hire and train a second estimator"* is a plan. **The decision is reversed deliberately, not drifted past.** APeX had nothing here to copy: four quadrants and an *Add* button.
+
+Every written line gets a second, fainter one beneath it, prompted by **its own quadrant's verb** — build on it, fix it, take it, guard against it. Generating those from the labels gives *"How you'll respond to Opportunities"*, which is a sentence nobody would write on purpose. **It is always visible and always empty until filled, because the whole point is that a blank one shows.**
+
+The toolbar counts both sides and **names the gap** the way the Fixed Assets note names un-itemised plant (§6.41.3): *"3 lines · 1 with a plan · 1 now a goal"*, and beside it in amber, *"1 weakness and 1 threat with nothing planned."* **It never blocks. It does the count a lender does.**
+
+## 6.59.1 A response is intent; a goal is a commitment (16 Sep 2026)
+
+Without a link between them **the same sentence would be typed in two places and drift**, so `plan_goals.swot_item_id` joins them and Goals gains a third tab listing every response nobody is accountable for. Turning one into a goal opens the ordinary quarterly dialog with the response as its title and a banner naming the line it answers; the SWOT screen then tags that line **GOAL**.
+
+**The direction is deliberate.** The response is written at step 5; the commitment is made at step 14, where Goals already sits so that *"targets are set with the numbers in hand"*. **Asking for a quarter and an owner eight steps before the forecast exists would have been the easier build and the wrong one.**
+
+**The dialog does not guess the area.** Nothing about a weakness says whether answering it is a marketing job or an operational one, so it asks, and *Add goal* stays disabled until an area is picked — **a wrong default files the goal under the wrong heading in the report, which is worse than one more click.**
+
+*Found on the way:* `CellSelect` rendered an empty box instead of its placeholder whenever its value was `""` rather than `null`, because `??` does not treat `""` as absent. **Any select with nothing picked looked broken rather than waiting.** Fixed generally; a matching option still wins.
