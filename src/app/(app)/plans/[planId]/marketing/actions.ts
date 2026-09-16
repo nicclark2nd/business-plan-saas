@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseMonth } from "../people/model";
-import { MARKET_FIELDS, POSITION_FIELDS, SPEND_KINDS, type Market, type Position } from "./model";
+import { MARKET_FIELDS, NARRATIVE_FIELDS, POSITION_FIELDS, SPEND_KINDS, type Market, type Position } from "./model";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const fail = (e: { message: string }, what: string): Result<never> => { console.error(what, e); return { ok: false, error: `Couldn't save ${what}: ${e.message}` }; };
@@ -13,7 +13,7 @@ const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
 export async function saveMarket(planId: string, m: Partial<Market & Position>): Promise<Result> {
   const supabase = await createClient();
   const row: Record<string, string | null> = { plan_id: planId };
-  for (const f of [...MARKET_FIELDS, ...POSITION_FIELDS]) if (f.key in m) row[f.key] = (m[f.key as keyof typeof m] ?? "").trim() || null;
+  for (const f of [...MARKET_FIELDS, ...NARRATIVE_FIELDS, ...POSITION_FIELDS]) if (f.key in m) row[f.key] = (m[f.key as keyof typeof m] ?? "").trim() || null;
   const { error } = await supabase.from("plan_marketing").upsert(row, { onConflict: "plan_id" });
   if (error) return fail(error, "market");
   touch(planId); return { ok: true };
@@ -23,7 +23,7 @@ export async function saveMarket(planId: string, m: Partial<Market & Position>):
 const TABLES = {
   competitors: { table: "plan_competitors", cols: ["name", "kind", "reach", "pricing", "threat", "strengths", "weaknesses", "how_we_win"], required: "name" },
   spend: { table: "plan_marketing_spend", cols: ["kind", "approach", "annual_budget"], required: "approach" },
-  evidence: { table: "plan_marketing_evidence", cols: ["source", "finding", "occurred_on"], required: "source" },
+  evidence: { table: "plan_marketing_evidence", cols: ["source", "method", "finding", "decision", "occurred_on"], required: "source" },
 } as const;
 export type RowKind = keyof typeof TABLES;
 
