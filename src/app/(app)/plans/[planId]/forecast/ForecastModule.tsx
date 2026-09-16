@@ -143,6 +143,7 @@ export function ForecastModule({
             ["Overheads", (y) => -pnl[y].overheads],
             ["Depreciation", (y) => -pnl[y].depreciation],
             ["Operating profit", (y) => pnl[y].operatingProfit, "sub"],
+            ["Grant income", (y) => pnl[y].grantIncome],
             ["One-off income", (y) => pnl[y].extraordinaryIncome],
             ["One-off costs", (y) => -pnl[y].extraordinaryExpense],
             ["Gain on asset sales", (y) => pnl[y].disposalGainLoss],
@@ -173,6 +174,7 @@ export function ForecastModule({
             <Statement rows={[
               ["Opening cash", (y) => cf[y].openingCash, "head"],
               ["Received from customers", (y) => cf[y].receiptsFromCustomers],
+              ["Grants received", (y) => cf[y].grantsReceived],
               ["One-off receipts", (y) => cf[y].extraordinaryReceipts],
               ["Paid to suppliers and staff", (y) => -cf[y].paidToSuppliersAndEmployees],
               ["One-off payments", (y) => -cf[y].extraordinaryPayments],
@@ -195,7 +197,7 @@ export function ForecastModule({
           )}
           <Note>
             {span === "years"
-              ? <>Interest is financing, not operating. Money from selling an asset is investing, never revenue.</>
+              ? <>Interest is financing, not operating. Money from selling an asset is investing, never revenue. A grant is operating: it is income the business earned, not money it raised.</>
               : <>
                   The twelve add to Year 1 exactly — the column on the right is the same figure the five-year view shows.
                   Debtors, stock and creditors move across the year on their own driver&rsquo;s shape, so a busy quarter
@@ -239,9 +241,11 @@ export function ForecastModule({
             ["Tax owing", (y) => bs[y].taxPayable],
             ...(gst.registered ? [[`${gstLabel} owing`, (y: number) => bs[y].gstPayable] as StatementRow] : []),
             ["Loans due within a year", (y) => bs[y].debtCurrent],
+            ["Grant income not yet earned", (y) => bs[y].deferredIncomeCurrent],
             ["Other current liabilities", (y) => bs[y].otherCurrentLiabilities],
             ["Current liabilities", (y) => bs[y].currentLiabilities, "sub"],
             ["Loans due later", (y) => bs[y].debtNonCurrent],
+            ["Grant income earned after next year", (y) => bs[y].deferredIncomeNonCurrent],
             ["Other non-current liabilities", (y) => bs[y].otherNonCurrentLiabilities],
             ["Total liabilities", (y) => bs[y].totalLiabilities, "sub"],
             ["Equity", (y) => bs[y].equity],
@@ -493,6 +497,7 @@ function MonthlyStatement({ monthly, months, num, registered, gstLabel }: {
   const rows: [string, (m: MonthCash) => number, (t: MonthlyCashFlow["total"]) => number, ("head" | "sub" | "total")?][] = [
     ["Opening cash", (m) => m.openingCash, (t) => t.openingCash, "head"],
     ["Received from customers", (m) => m.receiptsFromCustomers, (t) => t.receiptsFromCustomers],
+    ["Grants received", (m) => m.grantsReceived, (t) => t.grantsReceived],
     ["One-off receipts", (m) => m.extraordinaryReceipts, (t) => t.extraordinaryReceipts],
     ["Paid to suppliers and staff", (m) => -m.paidToSuppliersAndEmployees, (t) => -t.paidToSuppliersAndEmployees],
     ["One-off payments", (m) => -m.extraordinaryPayments, (t) => -t.extraordinaryPayments],

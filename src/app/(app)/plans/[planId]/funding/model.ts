@@ -1,4 +1,5 @@
 import type { FundingKind, Loan, RevenueLinked, RepaymentType, PaymentFrequency } from "@/engine/funding/sources";
+import type { Grant } from "@/engine/funding/grants";
 
 /** Funding — one list, every kind of source in it (SaaS §6.20). */
 
@@ -92,6 +93,17 @@ export function loanOf(r: FundingRow): Loan | null {
     };
   }
   return null;
+}
+
+/** A grant's own terms: what it is, and when it is EARNED as opposed to when it lands (§6.50). */
+export function grantOf(r: FundingRow): Grant | null {
+  if (r.kind !== "grant") return null;
+  return {
+    id: r.id, name: r.name, amount: r.amount,
+    start_year: r.start_year, start_month: r.start_month,
+    recognition_type: r.recognition_type ?? "immediate",
+    recognition_period_months: r.recognition_period_months ?? null,
+  };
 }
 
 export function rbfOf(r: FundingRow): RevenueLinked | null {

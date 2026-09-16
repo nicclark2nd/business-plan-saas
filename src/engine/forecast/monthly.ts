@@ -50,6 +50,9 @@ export type MonthlyShapes = {
   equityRaised: number[];
   debtRepaid: number[];
   interest: number[];
+  /** Grants (§6.50): cash in, and the slice EARNED that month. The gap is deferred income. */
+  grantsReceived: number[];
+  grantIncome: number[];
   extraordinaryReceipts: number[];
   extraordinaryPayments: number[];
   disposalProceeds: number[];
@@ -83,7 +86,7 @@ export type MonthlyInput = {
 export type MonthCash = {
   month: number;
   openingCash: number;
-  receiptsFromCustomers: number; extraordinaryReceipts: number;
+  receiptsFromCustomers: number; grantsReceived: number; extraordinaryReceipts: number;
   paidToSuppliersAndEmployees: number; extraordinaryPayments: number; taxPaid: number;
   netOperating: number;
   capex: number; disposalProceeds: number; netInvesting: number;
@@ -97,7 +100,7 @@ export type MonthCash = {
 };
 
 export type MonthlyTotal = Pick<MonthCash,
-  "openingCash" | "receiptsFromCustomers" | "extraordinaryReceipts" | "paidToSuppliersAndEmployees"
+  "openingCash" | "receiptsFromCustomers" | "grantsReceived" | "extraordinaryReceipts" | "paidToSuppliersAndEmployees"
   | "extraordinaryPayments" | "taxPaid" | "gstRemitted" | "netOperating" | "capex" | "disposalProceeds" | "netInvesting"
   | "debtProceeds" | "equityRaised" | "debtRepaid" | "interestPaid" | "dividendsPaid" | "netFinancing"
   | "netMovement" | "closingCash">;
@@ -195,10 +198,11 @@ export function buildMonthlyCashFlow(input: MonthlyInput): MonthlyCashFlow {
     const receipts = receiptsMonths[i];
     const suppliers = suppliersMonths[i];
     const extraIn = at(s.extraordinaryReceipts, i);
+    const grantIn = at(s.grantsReceived, i);          // operating cash, on the month it lands (§6.50)
     const extraOut = at(s.extraordinaryPayments, i);
     const tax = taxMonths[i];
     const gstRemitted = at(s.gstRemitted, i);
-    const netOperating = receipts + extraIn - suppliers - extraOut - tax - gstRemitted;
+    const netOperating = receipts + grantIn + extraIn - suppliers - extraOut - tax - gstRemitted;
 
     const capex = at(s.capex, i) + at(s.gstOnCapex, i);
     const disposal = at(s.disposalProceeds, i);
@@ -218,7 +222,7 @@ export function buildMonthlyCashFlow(input: MonthlyInput): MonthlyCashFlow {
     months.push({
       month: i + 1,
       openingCash: r2(openingCash),
-      receiptsFromCustomers: r2(receipts), extraordinaryReceipts: r2(extraIn),
+      receiptsFromCustomers: r2(receipts), grantsReceived: r2(grantIn), extraordinaryReceipts: r2(extraIn),
       paidToSuppliersAndEmployees: r2(suppliers), extraordinaryPayments: r2(extraOut), taxPaid: r2(tax),
       gstRemitted: r2(gstRemitted), netOperating: r2(netOperating),
       capex: r2(capex), disposalProceeds: r2(disposal), netInvesting: r2(netInvesting),
@@ -240,7 +244,8 @@ export function buildMonthlyCashFlow(input: MonthlyInput): MonthlyCashFlow {
     negative: months.filter((m) => m.closingCash < 0).map((m) => m.month),
     total: {
       openingCash: months[0].openingCash,
-      receiptsFromCustomers: add("receiptsFromCustomers"), extraordinaryReceipts: add("extraordinaryReceipts"),
+      receiptsFromCustomers: add("receiptsFromCustomers"), grantsReceived: add("grantsReceived"),
+      extraordinaryReceipts: add("extraordinaryReceipts"),
       paidToSuppliersAndEmployees: add("paidToSuppliersAndEmployees"),
       extraordinaryPayments: add("extraordinaryPayments"), taxPaid: add("taxPaid"),
       gstRemitted: add("gstRemitted"),

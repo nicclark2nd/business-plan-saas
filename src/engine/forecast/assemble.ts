@@ -31,6 +31,7 @@ import { planCogsByYear, planCogsMonths, type CostProduct, type FixedCost } from
 import { overheadsByYear, overheadsMonths, planOverheadLines, type Overhead } from "../overheads/expenses";
 import { debtByYear, interestByYear, loanByYear, loanMonths, rbfByYear, rbfSplitMonths, type FundingSource } from "../funding/sources";
 import { assetsByYear, assetsMonths, bookValueByYear, capexMonths, type FixedAsset } from "../assets/depreciation";
+import { grantsByYear, grantsMonths, type Grant } from "../funding/grants";
 import { extraordinaryByYear, extraordinaryCashMonths, isDisposal, type ExtraordinaryItem } from "../extraordinary/items";
 
 const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
@@ -90,8 +91,10 @@ export function raisedByYear(funding: FundingSource[]): { debt: number[]; equity
      */
     const year = Math.min(5, Math.max(1, Math.trunc(n(s.loan?.start_year ?? s.rbf?.start_year ?? s.start_year)) || 1));
     const amount = n(s.amount);
+    // A grant is neither borrowed nor subscribed: it is income, and it has its own path (§6.50).
+    if (s.kind === "grant") continue;
     const borrowed = s.kind === "debt" || s.kind === "revenue_linked" || (s.kind === "owner" && !!s.loan);
-    const bucket = borrowed ? debt : equity;          // grants and owner capital are not repayable
+    const bucket = borrowed ? debt : equity;          // owner capital and investor money are not repayable
     bucket[year - 1] = r2(bucket[year - 1] + amount);
   }
   return { debt, equity };
@@ -115,6 +118,7 @@ export function assembleBase(p: PlanSources): Record<number, YearBase> {
   const { current, nonCurrent } = debtSplitByYear(p.funding, revenueMonths);
   const principal = principalByYear(p.funding, revenueMonths);
   const raised = raisedByYear(p.funding);
+  const grants = grantsByYear(p.funding.map((f) => f.grant).filter((g): g is Grant => !!g));
 
   /**
    * A disposal is an extraordinary line pointed at an asset (§6.23): the proceeds are investing cash, and
@@ -153,6 +157,10 @@ export function assembleBase(p: PlanSources): Record<number, YearBase> {
       debtCurrent: r2(n(current[i])),
       debtNonCurrent: r2(n(nonCurrent[i])),
       equityRaised: r2(n(raised.equity[i])),
+      grantsReceived: r2(n(grants[i]?.received)),
+      grantIncome: r2(n(grants[i]?.income)),
+      deferredIncomeCurrent: r2(n(grants[i]?.deferredCurrent)),
+      deferredIncomeNonCurrent: r2(n(grants[i]?.deferredNonCurrent)),
       // The disposal's own proceeds are investing cash, so they must not be counted as income as well.
       extraordinaryIncome: r2(Math.max(0, n(extra[i]?.income) - d.proceeds)),
       extraordinaryExpense: r2(n(extra[i]?.expense)),
@@ -186,9 +194,12 @@ export function assembleMonths(
     const drawYear = Math.trunc(n(s.loan?.start_year ?? s.rbf?.start_year ?? s.start_year)) || 1;
     if (drawYear === 1) {
       const m = Math.min(12, Math.max(1, Math.trunc(n(s.loan?.start_month ?? s.rbf?.start_month ?? s.start_month)) || 1));
-      const borrowed = s.kind === "debt" || s.kind === "revenue_linked" || (s.kind === "owner" && !!s.loan);
-      const bucket = borrowed ? debtProceeds : equityRaised;
-      bucket[m - 1] = r2(bucket[m - 1] + n(s.amount));
+      // A grant is placed by its own schedule below, not here: it is operating cash, never money raised.
+      if (s.kind !== "grant") {
+        const borrowed = s.kind === "debt" || s.kind === "revenue_linked" || (s.kind === "owner" && !!s.loan);
+        const bucket = borrowed ? debtProceeds : equityRaised;
+        bucket[m - 1] = r2(bucket[m - 1] + n(s.amount));
+      }
     }
     if (s.loan) {
       const months = loanMonths(s.loan);
@@ -206,6 +217,7 @@ export function assembleMonths(
   }
 
   const cash = extraordinaryCashMonths(p.extraordinary, 1);
+  const grants = grantsMonths(p.funding.map((f) => f.grant).filter((g): g is Grant => !!g));
   return {
     revenue: planYear1Months(p.products),
     cogs: planCogsMonths(p.costProducts, p.fixedCogs, (c) => sourceOf(c, p.products)),
@@ -213,6 +225,8 @@ export function assembleMonths(
     capex: capexMonths(p.assets),
     depreciation: assetsMonths(p.assets),
     debtProceeds, equityRaised, debtRepaid, interest,
+    grantsReceived: grants.received,
+    grantIncome: grants.earned,
     extraordinaryReceipts: cash.receipts,
     extraordinaryPayments: cash.payments,
     disposalProceeds: cash.disposals,

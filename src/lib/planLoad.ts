@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { loadFundingRows, loadMarketingByYear, loadSalariesByYear } from "@/lib/planSources";
-import { loanOf, rbfOf } from "@/app/(app)/plans/[planId]/funding/model";
+import { grantOf, loanOf, rbfOf } from "@/app/(app)/plans/[planId]/funding/model";
 import { assembleOpening, type PlanSources } from "@/engine/forecast/assemble";
 import { cashTimingSchedule, daysFromHistory, workingCapitalSchedule } from "@/engine/forecast/assumptions";
 import { firstProjectedYear } from "@/engine/plan/calendar";
@@ -72,7 +72,7 @@ export async function loadPlan(planId: string): Promise<LoadedPlan> {
   const funding: FundingSource[] = fundingRows.map((r) => ({
     id: r.id, kind: r.kind, name: r.name, amount: r.amount,
     start_year: r.start_year, start_month: r.start_month,
-    loan: loanOf(r), rbf: rbfOf(r), equity_percent: r.equity_percent,
+    loan: loanOf(r), rbf: rbfOf(r), grant: grantOf(r), equity_percent: r.equity_percent,
   }));
 
   const sources = {

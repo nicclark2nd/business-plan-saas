@@ -10,6 +10,7 @@
  * is the only one with a schedule: repayments out, interest to the P&L, closing balance to the balance sheet.
  */
 import { YEARS } from "../sales/projection";
+import type { Grant } from "./grants";
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -268,6 +269,7 @@ export type FundingSource = {
   start_year?: number | null; start_month?: number | null;
   loan?: Loan | null;                   // debt only
   rbf?: RevenueLinked | null;           // revenue-linked only
+  grant?: Grant | null;                 // grant only — carries when it is EARNED, not just when it lands
   equity_percent?: number | null;
 };
 

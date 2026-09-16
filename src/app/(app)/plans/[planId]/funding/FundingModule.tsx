@@ -631,6 +631,14 @@ function SourceDialog({ row, fyEndMonth, onCancel, onSave }: { row: Row; fyEndMo
                   placeholder="Two full-time hires by June, quarterly reporting" className={box} />
               </div>
             )}
+            <div className="rounded border border-input bg-muted/40 px-3 py-2 text-[12px] text-muted-foreground">
+              The money lands in the bank {d.start_year && d.start_year > 1 ? `in Year ${d.start_year}` : "when it arrives"} either way — what this
+              changes is when it becomes <b>profit</b>.{" "}
+              {d.recognition_type === "deferred"
+                ? <>Spread over {d.recognition_period_months || 12} months, it appears as grant income a slice at a time, and the part not yet
+                    earned sits on the balance sheet as money you owe the future. You are taxed on each slice as you earn it.</>
+                : <>Counted all at once, the whole {num(d.amount)} is income the month it arrives — and taxed that year.</>}
+            </div>
           </>}
 
           {d.kind === "revenue_linked" && (

@@ -47,6 +47,15 @@ export type YearBase = {
   debtCurrent: number;
   debtNonCurrent: number;
   equityRaised: number;
+  /**
+   * Grants (§6.50). `grantsReceived` is cash in; `grantIncome` is what was EARNED this year, which is the
+   * same figure for an immediate grant and a slice of it for a deferred one. The gap between them is the
+   * deferred income liability, split by when it will be earned.
+   */
+  grantsReceived: number;
+  grantIncome: number;
+  deferredIncomeCurrent: number;
+  deferredIncomeNonCurrent: number;
   extraordinaryIncome: number;
   extraordinaryExpense: number;
   disposalProceeds: number;
@@ -112,6 +121,8 @@ export type ForecastInput = {
 export type PnlYear = {
   revenue: number; variableCogs: number; fixedCogs: number; cogs: number; grossProfit: number;
   grossMargin: number | null; overheads: number; depreciation: number; operatingProfit: number;
+  /** Grant money earned this year. Below operating profit, so trading performance is read without it. */
+  grantIncome: number;
   extraordinaryIncome: number; extraordinaryExpense: number; disposalGainLoss: number;
   interest: number; profitBeforeTax: number;
   /** Losses from earlier years set against this year's profit, and what is still unrelieved at year end. */
@@ -129,7 +140,7 @@ export type WorkingCapitalYear = {
 
 export type CashFlowYear = {
   openingCash: number;
-  receiptsFromCustomers: number; extraordinaryReceipts: number;
+  receiptsFromCustomers: number; grantsReceived: number; extraordinaryReceipts: number;
   paidToSuppliersAndEmployees: number; extraordinaryPayments: number; taxPaid: number;
   netOperating: number;
   /** The BAS payment. Operating cash, and never an expense — it was never the business's money. */
@@ -145,6 +156,8 @@ export type BridgeYear = {
   netProfit: number; depreciation: number; disposalGainLoss: number; interestReclassified: number;
   receivablesMovement: number; inventoryMovement: number; payablesMovement: number;
   prepaidMovement: number; accruedMovement: number; taxTimingMovement: number;
+  /** Grant cash received but not yet earned — in the bank, not yet in the profit (§6.50). */
+  deferredIncomeMovement: number;
   /** The change in tax collected and not yet paid over — cash the business holds but does not own. */
   gstMovement: number;
   operatingCashFlow: number;
@@ -157,8 +170,10 @@ export type BalanceSheetYear = {
   otherCurrentAssets: number;
   currentAssets: number; fixedAssets: number; otherNonCurrentAssets: number; nonCurrentAssets: number;
   totalAssets: number;
-  accountsPayable: number; accrued: number; taxPayable: number; gstPayable: number; debtCurrent: number; otherCurrentLiabilities: number;
-  currentLiabilities: number; debtNonCurrent: number; otherNonCurrentLiabilities: number; nonCurrentLiabilities: number;
+  accountsPayable: number; accrued: number; taxPayable: number; gstPayable: number; debtCurrent: number;
+  deferredIncomeCurrent: number; otherCurrentLiabilities: number;
+  currentLiabilities: number; debtNonCurrent: number; deferredIncomeNonCurrent: number;
+  otherNonCurrentLiabilities: number; nonCurrentLiabilities: number;
   totalLiabilities: number; equity: number; totalLiabilitiesAndEquity: number;
   /** Assets less liabilities and equity. Zero, or the plan does not hold together. */
   balanceCheck: number;
@@ -179,6 +194,7 @@ export type Forecast = {
 const emptyBase = (): YearBase => ({
   revenue: 0, variableCogs: 0, fixedCogs: 0, overheads: 0, depreciation: 0, capex: 0, assetAdditions: 0, interest: 0,
   debtProceeds: 0, debtRepaid: 0, debtCurrent: 0, debtNonCurrent: 0, equityRaised: 0,
+  grantsReceived: 0, grantIncome: 0, deferredIncomeCurrent: 0, deferredIncomeNonCurrent: 0,
   extraordinaryIncome: 0, extraordinaryExpense: 0, disposalProceeds: 0, disposedBookValue: 0,
   gst: NO_GST,
 });
@@ -195,7 +211,7 @@ export function buildForecast(input: ForecastInput): Forecast {
   const bs: Record<number, BalanceSheetYear> = {};
 
   let priorAR = n(o.accountsReceivable), priorInv = n(o.inventory), priorAP = n(o.accountsPayable);
-  let priorPrepaid = 0, priorAccrued = 0, priorTaxPayable = n(o.taxPayable);
+  let priorPrepaid = 0, priorAccrued = 0, priorTaxPayable = n(o.taxPayable), priorDeferredIncome = 0;
   let cash = n(o.cash), fixedAssets = n(o.fixedAssets), equity = n(o.equity);
   let priorGstPayable = Math.max(0, n(input.openingGstPayable));
   let lossPool = Math.max(0, n(input.openingTaxLosses));
@@ -213,7 +229,7 @@ export function buildForecast(input: ForecastInput): Forecast {
     const operatingProfit = grossProfit - n(b.overheads) - n(b.depreciation);
     // Only the gain or loss against book value is profit; the proceeds themselves are investing cash.
     const disposalGainLoss = n(b.disposalProceeds) - n(b.disposedBookValue);
-    const profitBeforeTax = operatingProfit + n(b.extraordinaryIncome) - n(b.extraordinaryExpense)
+    const profitBeforeTax = operatingProfit + n(b.grantIncome) + n(b.extraordinaryIncome) - n(b.extraordinaryExpense)
       + disposalGainLoss - n(b.interest);
 
     /**
@@ -250,7 +266,7 @@ export function buildForecast(input: ForecastInput): Forecast {
       cogs: r2(cogs), grossProfit: r2(grossProfit),
       grossMargin: n(b.revenue) ? r2((grossProfit / n(b.revenue)) * 100) : null,
       overheads: r2(n(b.overheads)), depreciation: r2(n(b.depreciation)), operatingProfit: r2(operatingProfit),
-      extraordinaryIncome: r2(n(b.extraordinaryIncome)), extraordinaryExpense: r2(n(b.extraordinaryExpense)),
+      grantIncome: r2(n(b.grantIncome)), extraordinaryIncome: r2(n(b.extraordinaryIncome)), extraordinaryExpense: r2(n(b.extraordinaryExpense)),
       disposalGainLoss: r2(disposalGainLoss), interest: r2(n(b.interest)),
       profitBeforeTax: r2(profitBeforeTax),
       lossRelief: r2(lossRelief), taxableProfit: r2(taxableProfit), lossesCarriedForward: r2(lossPool),
@@ -282,7 +298,15 @@ export function buildForecast(input: ForecastInput): Forecast {
 
     const receipts = n(b.revenue) + n(g.onSales) - dAR;
     const suppliers = n(b.overheads) + cogs + n(g.onCogs) + n(g.onOverheads) + dInv - dAP + dPrepaid - dAccrued;
-    const netOperating = receipts + n(b.extraordinaryIncome) - suppliers - n(b.extraordinaryExpense)
+    const deferredIncome = n(b.deferredIncomeCurrent) + n(b.deferredIncomeNonCurrent);
+    const dDeferred = deferredIncome - priorDeferredIncome;
+    /**
+     * A grant's cash is OPERATING (§6.50). It is income in nature, so it belongs with the money the
+     * business earns rather than beside the money it raises from an owner or a lender — and putting it
+     * there is what lets the deferred portion reconcile through the bridge the way prepaid and accrued
+     * already do, instead of needing profit unpicked on the financing line.
+     */
+    const netOperating = receipts + n(b.grantsReceived) + n(b.extraordinaryIncome) - suppliers - n(b.extraordinaryExpense)
       - taxPaid - n(g.remitted);
     // The tax on an asset is paid with the asset, and claimed back through the return like any other credit.
     const netInvesting = n(b.disposalProceeds) - n(b.capex) - n(g.onCapex);
@@ -293,7 +317,8 @@ export function buildForecast(input: ForecastInput): Forecast {
 
     cf[year] = {
       openingCash: r2(openingCash),
-      receiptsFromCustomers: r2(receipts), extraordinaryReceipts: r2(n(b.extraordinaryIncome)),
+      receiptsFromCustomers: r2(receipts), grantsReceived: r2(n(b.grantsReceived)),
+      extraordinaryReceipts: r2(n(b.extraordinaryIncome)),
       paidToSuppliersAndEmployees: r2(suppliers), extraordinaryPayments: r2(n(b.extraordinaryExpense)),
       taxPaid: r2(taxPaid), gstRemitted: r2(n(g.remitted)), netOperating: r2(netOperating),
       capex: r2(n(b.capex) + n(g.onCapex)), disposalProceeds: r2(n(b.disposalProceeds)), netInvesting: r2(netInvesting),
@@ -308,18 +333,23 @@ export function buildForecast(input: ForecastInput): Forecast {
       interestReclassified: r2(n(b.interest)),
       receivablesMovement: r2(-dAR), inventoryMovement: r2(-dInv), payablesMovement: r2(dAP),
       prepaidMovement: r2(-dPrepaid), accruedMovement: r2(dAccrued), taxTimingMovement: r2(tax - taxPaid),
+      // Profit carries what was EARNED; the bank carries what ARRIVED. The movement in deferred income is
+      // exactly the difference, which is why the two routes to operating cash still meet (§6.50).
+      deferredIncomeMovement: r2(dDeferred),
       // GST never reaches the profit, so the bridge from profit to cash has to add back the whole movement
       // in what is collected and not yet paid over — otherwise the two ways of reaching operating cash stop
       // agreeing, which is precisely what the check below exists to catch.
       gstMovement: r2(n(g.payableClosing) - priorGstPayable),
       operatingCashFlow: r2(netProfit + n(b.depreciation) - disposalGainLoss + n(b.interest)
-        - dAR - dInv + dAP - dPrepaid + dAccrued + (tax - taxPaid)
+        - dAR - dInv + dAP - dPrepaid + dAccrued + (tax - taxPaid) + dDeferred
         + (n(g.payableClosing) - priorGstPayable) + n(g.onCapex)),
     };
 
     // ---- balance sheet ---------------------------------------------------
     // What the business OWNS, not what it paid cash for: a financed asset is on the books too (§6.40).
     fixedAssets = fixedAssets + n(b.assetAdditions) - n(b.depreciation) - n(b.disposedBookValue);
+    // A grant is NOT contributed equity (§6.50): it reaches equity through profit as it is earned, like any
+    // other income, and sits as deferred income until then.
     equity = equity + (netProfit - dividends) + n(b.equityRaised);
 
     // One signed figure, presented the way a balance sheet reads it: owed by the business, or owed to it.
@@ -332,8 +362,9 @@ export function buildForecast(input: ForecastInput): Forecast {
     // balance sheet comes out short by exactly what the business owes its bank (§6.32.4).
     const debtCurrent = n(b.debtCurrent) + n(o.bankLoansCurrent);
     const debtNonCurrent = n(b.debtNonCurrent) + n(o.bankLoansNonCurrent);
-    const currentLiabilities = ap + accrued + taxPayable + gstPayable + debtCurrent + n(o.otherCurrentLiabilities);
-    const nonCurrentLiabilities = debtNonCurrent + n(o.otherNonCurrentLiabilities);
+    const currentLiabilities = ap + accrued + taxPayable + gstPayable + debtCurrent
+      + n(b.deferredIncomeCurrent) + n(o.otherCurrentLiabilities);
+    const nonCurrentLiabilities = debtNonCurrent + n(b.deferredIncomeNonCurrent) + n(o.otherNonCurrentLiabilities);
     const totalLiabilities = currentLiabilities + nonCurrentLiabilities;
 
     bs[year] = {
@@ -343,8 +374,10 @@ export function buildForecast(input: ForecastInput): Forecast {
       fixedAssets: r2(fixedAssets), otherNonCurrentAssets: r2(n(o.otherNonCurrentAssets)),
       nonCurrentAssets: r2(nonCurrentAssets), totalAssets: r2(totalAssets),
       accountsPayable: r2(ap), accrued: r2(accrued), taxPayable: r2(taxPayable), gstPayable: r2(gstPayable),
-      debtCurrent: r2(debtCurrent), otherCurrentLiabilities: r2(n(o.otherCurrentLiabilities)),
+      debtCurrent: r2(debtCurrent), deferredIncomeCurrent: r2(n(b.deferredIncomeCurrent)),
+      otherCurrentLiabilities: r2(n(o.otherCurrentLiabilities)),
       currentLiabilities: r2(currentLiabilities), debtNonCurrent: r2(debtNonCurrent),
+      deferredIncomeNonCurrent: r2(n(b.deferredIncomeNonCurrent)),
       otherNonCurrentLiabilities: r2(n(o.otherNonCurrentLiabilities)),
       nonCurrentLiabilities: r2(nonCurrentLiabilities), totalLiabilities: r2(totalLiabilities),
       equity: r2(equity), totalLiabilitiesAndEquity: r2(totalLiabilities + equity),
@@ -354,6 +387,7 @@ export function buildForecast(input: ForecastInput): Forecast {
     priorGstPayable = n(g.payableClosing);
     priorAR = ar; priorInv = inventory; priorAP = ap;
     priorPrepaid = prepaid; priorAccrued = accrued; priorTaxPayable = taxPayable;
+    priorDeferredIncome = deferredIncome;
     cash = closingCash;
   }
 
