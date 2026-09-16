@@ -17,6 +17,7 @@
  *   cash the business appears to generate from trading.
  */
 import { YEARS } from "../sales/projection";
+import { bookValueAtDisposal, withDisposals, type FixedAsset } from "../assets/depreciation";
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -100,4 +101,45 @@ export function extraordinaryTotals(items: ExtraordinaryItem[]) {
     net: r2(years.reduce((a, y) => a + y.net, 0)),
     disposalProceeds: r2(years.reduce((a, y) => a + y.disposalProceeds, 0)),
   };
+}
+
+/**
+ * The month each asset leaves the business, 0-based across the five plan years (§6.56).
+ *
+ * The disposal fact is owned here — it is an extraordinary item that names an asset — and it is published
+ * as a plain map so the assets engine can stop depreciating a machine that has been sold without this
+ * module and that one each keeping their own idea of when it went. Where an asset is sold more than once
+ * (a client can enter that; nothing stops them) the earliest sale is the one that counts: it can only
+ * leave the business once.
+ */
+export function soldMonthByAsset(items: ExtraordinaryItem[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const i of items) {
+    if (!isDisposal(i) || !i.source_asset_id) continue;
+    const m = (yearOf(i) - 1) * 12 + (monthOf(i) - 1);
+    const seen = out[i.source_asset_id];
+    out[i.source_asset_id] = seen === undefined ? m : Math.min(seen, m);
+  }
+  return out;
+}
+
+/**
+ * What the sold assets were worth on the books, year by year (§6.56).
+ *
+ * Selling a machine for 50,000 does not put 50,000 into profit. The machine was carrying a book value, and
+ * only the part of the proceeds ABOVE it is a gain — the rest is the business converting an asset it
+ * already owned into cash. This is the figure that turns proceeds into that gain, and it is computed from
+ * the asset's own depreciation series so the P&L, the balance sheet and this screen cannot disagree.
+ */
+export function disposalBookValueByYear(items: ExtraordinaryItem[], assets: FixedAsset[]): number[] {
+  const withSale = withDisposals(assets, soldMonthByAsset(items));
+  return YEARS.map((year) => {
+    let total = 0;
+    for (const i of items) {
+      if (!isDisposal(i) || yearOf(i) !== year) continue;
+      const asset = withSale.find((a) => a.id && a.id === i.source_asset_id);
+      if (asset) total += bookValueAtDisposal(asset);
+    }
+    return r2(total);
+  });
 }

@@ -14,11 +14,27 @@ import { useSaveOnce } from "@/lib/saveOnce";
 import { YEARS } from "@/engine/sales/projection";
 import { useMoney } from "@/components/MoneyProvider";
 import {
-  extraordinaryByYear, extraordinaryMonths, extraordinaryTotals, isDisposal,
+  disposalBookValueByYear, extraordinaryByYear, extraordinaryMonths, extraordinaryTotals, isDisposal,
   type ExtraordinaryItem,
 } from "@/engine/extraordinary/items";
+import { bookValueAtDisposal } from "@/engine/assets/depreciation";
 import { upsertExtraordinary, deleteExtraordinary, continueFromExtraordinary } from "./actions";
-import { CATEGORIES, EXAMPLES, type ExtraordinaryRow } from "./model";
+import { CATEGORIES, EXAMPLES, type ExtraordinaryRow, type SoldAsset } from "./model";
+
+/**
+ * What a sale actually puts into profit (§6.56).
+ *
+ * A one-off that names an asset is not 50,000 of income. The machine was on the books at something, and
+ * only the proceeds above that book value are a gain — below it, a loss. This is the same computation the
+ * forecast runs (`disposalBookValueByYear`), reading the same asset, so the number on this screen and the
+ * "Gain on asset sales" line on Review forecast are one figure, not two.
+ */
+function bookValueOf(item: { source_asset_id?: string | null; year: number; month: number }, assets: SoldAsset[]) {
+  const asset = assets.find((a) => a.id === item.source_asset_id);
+  if (!asset) return 0;
+  const sold = (Math.max(1, item.year) - 1) * 12 + (Math.max(1, item.month) - 1);
+  return bookValueAtDisposal({ ...asset, sold_in_month: sold });
+}
 
 /**
  * One-off income & costs (§6.23) — the P&L's extraordinary items, in plain words.
@@ -40,7 +56,7 @@ const YEAR_OPTIONS = YEARS.map((y) => ({ value: String(y), label: `Year ${y}` })
 
 export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth }: {
   planId: string; initial: ExtraordinaryRow[]; mode: "guided" | "advanced";
-  assets: { id: string; name: string }[]; fyEndMonth: number;
+  assets: SoldAsset[]; fyEndMonth: number;
 }) {
   const num = useMoney();
   const signedText = signedWith(num);
@@ -58,6 +74,11 @@ export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth 
   const lines = useMemo(() => (draft ? [...rows, draft] : rows), [rows, draft]);
   const named = lines.filter((r) => r.description.trim() || r === draft);
   const years = extraordinaryByYear(named as ExtraordinaryItem[]);
+  /** What the sold assets were carrying, so the net line below is what reaches profit and not the cheque. */
+  const bookValues = disposalBookValueByYear(named as ExtraordinaryItem[], assets);
+  const profitNet = years.map((y, i) => Math.round((y.net - bookValues[i]) * 100) / 100);
+  const soldBookValue = bookValues.reduce((a, b) => a + b, 0);
+  const profitTotal = Math.round(profitNet.reduce((a, b) => a + b, 0) * 100) / 100;
   const totals = extraordinaryTotals(named as ExtraordinaryItem[]);
   const assetName = (id: string | null) => assets.find((a) => a.id === id)?.name ?? null;
 
@@ -118,8 +139,9 @@ export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth 
         <Toolbar>
           <Meta className="ml-0">
             {named.length === 0 ? "Nothing here yet" : <>
-              {num(totals.income)} in · {num(totals.expense)} out · <b className={cn(totals.net < 0 && "text-destructive")}>{totals.net < 0 ? `${num(-totals.net)} net cost` : `${num(totals.net)} net gain`}</b>
-              {totals.disposalProceeds > 0 && <> · {num(totals.disposalProceeds)} of it from selling assets</>}
+              {/* The headline is what reaches PROFIT, not what passes through the bank: a sale counts at its gain (§6.56). */}
+              {num(totals.income)} in · {num(totals.expense)} out · <b className={cn(profitTotal < 0 && "text-destructive")}>{profitTotal < 0 ? `${num(-profitTotal)} net cost` : `${num(profitTotal)} net gain`}</b> to profit
+              {totals.disposalProceeds > 0 && <> · {num(totals.disposalProceeds)} of it from selling assets, worth {num(soldBookValue)} on the books</>}
             </>}
           </Meta>
         </Toolbar>
@@ -156,9 +178,16 @@ export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth 
                     <Td className={cn(r.category === "expense" ? "text-muted-foreground" : "")}>{r.category === "income" ? "Money in" : "Money out"}</Td>
                     <Td>{MONTHS[r.month - 1]} · Yr {r.year}</Td>
                     <Td right className="num">{num(r.amount)}</Td>
-                    <Td right className={cn("num", r.category === "expense" && "text-destructive")}>
-                      {r.category === "income" ? num(r.amount) : `(${num(r.amount)})`}
-                    </Td>
+                    {(() => {
+                      // A sale's effect on profit is the gain over book value, never the whole cheque (§6.56).
+                      const effect = disposal ? r.amount - bookValueOf(r, assets) : (r.category === "income" ? r.amount : -r.amount);
+                      return (
+                        <Td right className={cn("num", effect < 0 && "text-destructive")}
+                            title={disposal ? `${num(r.amount)} in, less the ${num(bookValueOf(r, assets))} it was worth on the books` : undefined}>
+                          {signedText(effect)}
+                        </Td>
+                      );
+                    })()}
                     <Td right>
                       <IconButton title="Edit" onClick={() => setDlg({ key: r._key })}>✎</IconButton>
                       <RemoveButton onClick={() => setConfirm(r._key)} title="Remove one-off" />
@@ -179,15 +208,21 @@ export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth 
                 <tbody>
                   <GridRow><Td className="text-muted-foreground">Money in</Td>{years.map((y) => <Td key={y.year} right className="num">{y.income ? num(y.income) : "—"}</Td>)}</GridRow>
                   <GridRow><Td className="text-muted-foreground">Money out</Td>{years.map((y) => <Td key={y.year} right className="num">{y.expense ? `(${num(y.expense)})` : "—"}</Td>)}</GridRow>
+                  {soldBookValue > 0 && (
+                    <GridRow>
+                      <Td className="text-muted-foreground">Less what the sold assets were worth</Td>
+                      {bookValues.map((b, i) => <Td key={i} right className="num">{b ? `(${num(b)})` : "—"}</Td>)}
+                    </GridRow>
+                  )}
                 </tbody>
                 <FootRow>
                   <Td>Net, below operating profit</Td>
-                  {years.map((y) => <Td key={y.year} right className={cn("num", y.net < 0 && "text-destructive")}>{signedText(y.net)}</Td>)}
+                  {profitNet.map((v, i) => <Td key={i} right className={cn("num", v < 0 && "text-destructive")}>{signedText(v)}</Td>)}
                 </FootRow>
               </Grid>
               {totals.disposalProceeds > 0 && (
                 <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
-                  {num(totals.disposalProceeds)} of the money in is proceeds from selling assets, so the cash flow shows it as an investing activity rather than as cash earned from trading.
+                  {num(totals.disposalProceeds)} of the money in is proceeds from selling assets. In the cash flow that is an investing activity, not cash earned from trading; and in the profit and loss only the {signedText(totals.disposalProceeds - soldBookValue)} above what those assets were worth on the books appears at all. Each one also stops depreciating the month it goes.
                 </div>
               )}
             </div>
@@ -236,7 +271,14 @@ export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth 
             <DialogHeader>
               <DialogTitle>Remove {toRemove.description || "this one-off"}?</DialogTitle>
               <DialogDescription>
-                {num(toRemove.amount)} {toRemove.category === "income" ? "comes out of" : "goes back into"} Year {toRemove.year}&apos;s profit, and out of the cash flow for {MONTHS[toRemove.month - 1]}.
+                {isDisposal(toRemove as ExtraordinaryItem) ? (
+                  <>
+                    {num(toRemove.amount)} comes out of the cash flow for {MONTHS[toRemove.month - 1]}, and the {num(toRemove.amount - bookValueOf(toRemove, assets))} of gain comes out of Year {toRemove.year}&apos;s profit.
+                    {" "}{assetName(toRemove.source_asset_id) ?? "The asset"} goes back on the books and starts depreciating again.
+                  </>
+                ) : (
+                  <>{num(toRemove.amount)} {toRemove.category === "income" ? "comes out of" : "goes back into"} Year {toRemove.year}&apos;s profit, and out of the cash flow for {MONTHS[toRemove.month - 1]}.</>
+                )}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -262,7 +304,7 @@ function PendingBridge({ pending, error }: { pending: boolean; error?: string })
 }
 
 function ItemDialog({ row, assets, monthOptions, pending, onCancel, onSave }: {
-  row: Row; assets: { id: string; name: string }[];
+  row: Row; assets: SoldAsset[];
   monthOptions: { value: string; label: string }[];
   pending: boolean; onCancel: () => void; onSave: (r: Row) => void;
 }) {
@@ -270,6 +312,11 @@ function ItemDialog({ row, assets, monthOptions, pending, onCancel, onSave }: {
   const [d, setD] = useState<Row>(row);
   const set = (patch: Partial<Row>) => setD((x) => ({ ...x, ...patch }));
   const income = d.category === "income";
+  // Naming an asset changes what this line IS: proceeds, not income — and only the gain over book is profit.
+  const sale = income && !!d.source_asset_id;
+  const book = sale ? bookValueOf(d, assets) : 0;
+  const gain = Math.round((d.amount - book) * 100) / 100;
+  const soldName = assets.find((a) => a.id === d.source_asset_id)?.name ?? "It";
 
   return (
     <Dialog open onOpenChange={onCancel}>
@@ -330,14 +377,21 @@ function ItemDialog({ row, assets, monthOptions, pending, onCancel, onSave }: {
           <div className="rounded border border-input bg-muted/40 px-3 py-2 text-[12.5px]">
             <div className="text-[11.5px] font-semibold text-muted-foreground">What that means</div>
             <div className="mt-1">
-              {d.amount > 0 ? (
+              {d.amount > 0 ? (sale ? (
+                <>
+                  <b>{num(d.amount)}</b> arrives in <b>{monthOptions[d.month - 1]?.label}</b>, as an investing activity rather than trading income.
+                  {" "}{soldName} is on the books at <b>{num(book)}</b> the month it goes, so Year {d.year} profit
+                  {gain >= 0 ? <> goes up by the <b>{num(gain)}</b> gain</> : <> comes down by the <b>{num(-gain)}</b> loss</>}
+                  {" "}— not by the whole {num(d.amount)}. It stops depreciating from that month.
+                  {" "}The gain is taxed with the rest of the year&apos;s profit.
+                </>
+              ) : (
                 <>
                   Year {d.year} profit {income ? <>goes up by <b>{num(d.amount)}</b></> : <>comes down by <b>{num(d.amount)}</b></>}, and the cash
                   {income ? " arrives " : " leaves "} in <b>{monthOptions[d.month - 1]?.label}</b>.
-                  {d.source_asset_id ? " It is shown as an investing activity, not as trading income." : ""}
                   {" "}It is taxed with the rest of the year&apos;s profit.
                 </>
-              ) : "Put in an amount and this will show what it does."}
+              )) : "Put in an amount and this will show what it does."}
             </div>
           </div>
         </div>

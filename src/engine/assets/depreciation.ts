@@ -35,6 +35,12 @@ export type FixedAsset = {
   start_month?: number | null;         // 1–12 within that year; depreciation runs from the month it arrives
   /** Owned before the plan began (§6.55): no cash, no addition, but it wears out from Year 1 like anything else. */
   already_owned?: boolean | null;
+  /**
+   * The month it was SOLD, 0-based across the five plan years, or null while the business still has it
+   * (§6.56). Not a stored column: the disposal lives on the one-off that names this asset, and the loader
+   * attaches it here with `withDisposals` so there is one answer to "when did it go" rather than two.
+   */
+  sold_in_month?: number | null;
   /** False where no tax is charged on the purchase — a private sale, an exempt import (§6.38). */
   gst_applies?: boolean | null;
 };
@@ -55,6 +61,29 @@ export const owned = (a: FixedAsset) => a.already_owned === true;
 export const firstMonth = (a: FixedAsset) => (owned(a) ? 0 : (startYear(a) - 1) * 12 + (startMonth(a) - 1));
 
 /**
+ * The month the asset leaves, or 60 if it never does (§6.56).
+ *
+ * A sold machine stops wearing out. The engine used to depreciate every asset for its whole life whatever
+ * else the plan said, so a lathe sold in Year 1 went on costing the profit 5,000 a year through Years 2, 3
+ * and 4 — depreciation on a machine that was not in the shed. Worse, the three statements still agreed with
+ * each other, because the same false charge came off the balance sheet as came off the profit: internally
+ * consistent and factually wrong, which is the hardest kind of fault to see.
+ *
+ * Depreciation runs up to the START of the month of the sale and no further, so what the disposal takes off
+ * the books is what was still on them the day it went.
+ */
+export const soldMonth = (a: FixedAsset) => {
+  const m = a.sold_in_month;
+  if (typeof m !== "number" || !Number.isFinite(m)) return 60;
+  return Math.min(60, Math.max(0, Math.trunc(m)));
+};
+
+/** Attach each asset's disposal month, from the map the one-offs publish (`soldMonthByAsset`). */
+export function withDisposals<A extends FixedAsset>(assets: A[], sold: Record<string, number>): A[] {
+  return assets.map((a) => (a.id && sold[a.id] !== undefined ? { ...a, sold_in_month: sold[a.id] } : a));
+}
+
+/**
  * Depreciation month by month across the five plan years (60 months).
  *
  * Straight line writes the same amount off every month until the asset reaches its residual — the method
@@ -72,13 +101,14 @@ export function depreciationMonths(a: FixedAsset): number[] {
 
   const L = life(a);
   const from = firstMonth(a);
-  if (from >= 60) return out;
+  const until = soldMonth(a);                       // it stops wearing out the month it is sold (§6.56)
+  if (from >= 60 || from >= until) return out;
 
   if ((a.method ?? "straight_line") === "diminishing") {
     const years = L / 12;
     const monthlyRate = 2 / years / 12;               // 200 % declining balance, spread monthly
     let book = price;
-    for (let m = from; m < 60; m++) {
+    for (let m = from; m < until; m++) {
       const charge = Math.min(r2(book * monthlyRate), r2(book - residual));
       if (charge <= 0) break;
       out[m] = charge; book = book - charge;
@@ -90,7 +120,7 @@ export function depreciationMonths(a: FixedAsset): number[] {
   // Each month charges the difference between two running totals, so the write-off lands on the cent exactly.
   const perMonth = depreciable / L;
   let charged = 0;
-  for (let m = from, k = 1; m < 60 && k <= L; m++, k++) {
+  for (let m = from, k = 1; m < until && k <= L; m++, k++) {
     const target = r2(Math.min(depreciable, perMonth * k));
     const charge = r2(target - charged);
     if (charge <= 0) break;
@@ -109,11 +139,26 @@ export function depreciationByYear(a: FixedAsset): number[] {
 export function bookValueByYear(a: FixedAsset): number[] {
   const price = num(a.purchase_price);
   const yearly = depreciationByYear(a);
+  const goneAfter = Math.floor(soldMonth(a) / 12);   // the plan year the sale happens in, 0-based
   let written = 0;
   return YEARS.map((year, i) => {
     written = r2(written + yearly[i]);
+    if (i >= goneAfter) return 0;                    // sold: it is not on the books at the end of this year
     return year < startYear(a) ? 0 : r2(price - written);
   });
+}
+
+/**
+ * What the asset is worth on the books the day it leaves — cost less everything written off up to the month
+ * of the sale (§6.56). This is the figure the disposal is measured against: proceeds above it are a gain,
+ * proceeds below it a loss. It is computed here, from the same monthly series the P&L charges, so the gain
+ * and the depreciation can never be two readings of one asset.
+ */
+export function bookValueAtDisposal(a: FixedAsset): number {
+  const m = soldMonth(a);
+  if (m >= 60) return 0;
+  const charged = depreciationMonths(a).slice(0, m).reduce((x, y) => x + y, 0);
+  return r2(num(a.purchase_price) - charged);
 }
 
 /**

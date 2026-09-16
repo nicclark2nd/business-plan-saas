@@ -11,6 +11,8 @@ export type AssetRow = {
   start_year: number; start_month: number;
   /** Owned before the plan began (§6.55): worth, not cost; life left, not life; and no cash moves. */
   already_owned: boolean;
+  /** The month it was sold, 0-based across the five plan years, from the one-off that names it (§6.56). */
+  sold_in_month?: number | null;
   notes: string | null; gst_applies: boolean; sort_order: number;
 };
 

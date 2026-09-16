@@ -6,6 +6,7 @@ import { buildForecast, FORECAST_YEARS } from "@/engine/forecast/model";
 import { buildMonthlyCashFlow } from "@/engine/forecast/monthly";
 import { assembleGst, type GstPlanSources } from "@/engine/forecast/gst_assemble";
 import { AssetsModule } from "./AssetsModule";
+import { soldMonthByAsset, type ExtraordinaryItem } from "@/engine/extraordinary/items";
 import type { AssetRow } from "./model";
 
 export default async function AssetsPage({ params }: { params: Promise<{ planId: string }> }) {
@@ -26,6 +27,13 @@ export default async function AssetsPage({ params }: { params: Promise<{ planId:
   ]);
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
 
+  /**
+   * An asset that has been sold stops wearing out (§6.56). The disposal lives on the one-off that names it,
+   * so the month it went is attached here — from the plan the forecast itself is reading — and every
+   * depreciation figure on this screen is then the same one the P&L charges.
+   */
+  const sold = soldMonthByAsset(loaded.plan.sources.extraordinary as ExtraordinaryItem[]);
+
   const rows = (assets.data ?? []).map((a) => ({
     ...a,
     purchase_price: Number(a.purchase_price ?? 0),
@@ -34,6 +42,7 @@ export default async function AssetsPage({ params }: { params: Promise<{ planId:
     start_year: Number(a.start_year ?? 1) || 1,
     start_month: Number(a.start_month ?? 1) || 1,
     already_owned: a.already_owned === true,
+    sold_in_month: sold[a.id as string] ?? null,
   })) as AssetRow[];
 
   // A financed asset carries the name of the loan that bought it, so the chain can say where to look.

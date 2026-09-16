@@ -5,7 +5,8 @@ import { YEARS } from "@/engine/sales/projection";
 import { planRevenueMonths, type AnyProduct } from "@/engine/sales/product";
 import { planCogsMonths, type CostProduct } from "@/engine/cogs/direct";
 import { overheadsMonths, planOverheadLines, type Overhead } from "@/engine/overheads/expenses";
-import { assetsMonths, capexMonths, type FixedAsset } from "@/engine/assets/depreciation";
+import { assetsMonths, capexMonths, withDisposals, type FixedAsset } from "@/engine/assets/depreciation";
+import { soldMonthByAsset, type ExtraordinaryItem } from "@/engine/extraordinary/items";
 import { FundingModule } from "./FundingModule";
 import { firstProjectedYear } from "@/engine/plan/calendar";
 import { openingCashFor } from "@/engine/forecast/assemble";
@@ -18,7 +19,7 @@ import { loadCapTable, loadFundingRows } from "@/lib/planSources";
 export default async function FundingPage({ params }: { params: Promise<{ planId: string }> }) {
   const { planId } = await params;
   const supabase = await createClient();
-  const [session, rows, cap, products, fixedCogs, overheads, people, spend, assets, settings, historic] = await Promise.all([
+  const [session, rows, cap, products, fixedCogs, overheads, people, spend, assets, oneOffs, settings, historic] = await Promise.all([
     getSession(),
     /**
      * The five funding tables, read by the ONE loader (§6.32.3). This page carried its own copy of that
@@ -35,6 +36,8 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
     supabase.from("plan_people").select("annual_salary, salary_adjustments, started_on, role").eq("plan_id", planId),
     supabase.from("plan_marketing_spend").select("annual_budget").eq("plan_id", planId),
     supabase.from("plan_fixed_assets").select("*").eq("plan_id", planId),
+    // A sold asset stops wearing out (§6.56), so the Year 1 depreciation this page quotes has to know.
+    supabase.from("plan_extraordinary_items").select("*").eq("plan_id", planId),
     supabase.from("plan_settings").select("opening_cash, on_cost_pct, financial_year_end_month, first_projected_year").eq("plan_id", planId).maybeSingle(),
     supabase.from("plan_historic_periods").select("cash").eq("plan_id", planId).order("period_number").limit(1).maybeSingle(),
   ]);
@@ -76,6 +79,9 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
     useful_life_months: Number(a.useful_life_months ?? 60) || 60,
     start_year: Number(a.start_year ?? 1) || 1, start_month: Number(a.start_month ?? 1) || 1,
   })) as FixedAsset[];
+  const sold = soldMonthByAsset((oneOffs.data ?? []).map((x) => ({
+    ...x, amount: Number(x.amount ?? 0), year: Number(x.year ?? 1) || 1, month: Number(x.month ?? 1) || 1,
+  })) as ExtraordinaryItem[]);
   // Every asset is money out in the month it arrives, financed or not (§6.40) — a financed one is paid to
   // its supplier out of what the lender advanced the same day. The loop that used to sit here now lives
   // with the year it has to agree with (§6.36).
@@ -97,7 +103,7 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
       fyEndMonth={settings.data?.financial_year_end_month ?? 6}
       bought={bought} cap={cap}
       cash={{ revenueMonths, cogsMonths, overheadsMonths: ohMonths, capexMonths: capex }}
-      year1={{ revenue: revenueYear1, cogs: cogsYear1, overheads: ohYear1, depreciation: assetsMonths(assetRows).reduce((a, b) => a + b, 0) }}
+      year1={{ revenue: revenueYear1, cogs: cogsYear1, overheads: ohYear1, depreciation: assetsMonths(withDisposals(assetRows, sold)).reduce((a, b) => a + b, 0) }}
     />
   );
 }

@@ -8,7 +8,8 @@ import { regimeFor } from "../plan/taxRegimes";
 import { planRevenueByYear, planYear1Months } from "../sales/product";
 import { planCogsByYear, planCogsMonths } from "../cogs/direct";
 import { overheadsByYear, overheadsMonths, planOverheadLines } from "../overheads/expenses";
-import { assetsByYear, capexMonths, capexByYear } from "../assets/depreciation";
+import { assetsByYear, capexMonths, capexByYear, withDisposals } from "../assets/depreciation";
+import { soldMonthByAsset } from "../extraordinary/items";
 import { makePlan } from "./plans.fixture";
 
 function runPlan(p: ReturnType<typeof makePlan>) {
@@ -85,7 +86,9 @@ describe("a thousand plans nobody would have typed (§6.40)", () => {
     // The forecast must read the same figures the screens display (§6.32.1).
     for (const y of FORECAST_YEARS) {
       note(`forecast revenue Y${y} vs Sales`, r.f.pnl[y].revenue - planRevenueByYear(p.sources.products)[y - 1].value);
-      note(`forecast depreciation Y${y} vs Assets`, r.f.pnl[y].depreciation - assetsByYear(p.sources.assets)[y - 1].depreciation);
+      // The Assets screen reads its assets with their disposals attached, so this must too (§6.56).
+      const shown = assetsByYear(withDisposals(p.sources.assets, soldMonthByAsset(p.sources.extraordinary)));
+      note(`forecast depreciation Y${y} vs Assets`, r.f.pnl[y].depreciation - shown[y - 1].depreciation);
     }
 
     // Tax can never be charged on a loss, nor a dividend paid out of one.

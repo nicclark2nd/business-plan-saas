@@ -1,3 +1,4 @@
+import type { FixedAsset } from "@/engine/assets/depreciation";
 import type { ExtraordinaryCategory } from "@/engine/extraordinary/items";
 
 /** One-off income & costs — two areas (SaaS §6.23): One-offs · Monthly projections. */
@@ -32,3 +33,9 @@ export const EXAMPLES = [
   "Redundancy payout",
   "Grant clawback",
 ];
+
+/**
+ * A fixed asset as this screen needs it (§6.56): enough of it to work out what it is worth on the books the
+ * day it is sold, because that — not the cheque — is what decides how much of a sale is profit.
+ */
+export type SoldAsset = FixedAsset & { id: string; name: string };

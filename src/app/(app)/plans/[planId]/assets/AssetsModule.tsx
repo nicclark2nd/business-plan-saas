@@ -232,6 +232,11 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth 
                   </Td>
                   <Td className={cn(r.already_owned && "text-muted-foreground")}>
                     {r.already_owned ? "Already owned" : <>{MONTHS[r.start_month - 1]} · Yr {r.start_year}</>}
+                    {typeof r.sold_in_month === "number" && (
+                      <div className="text-[11px] text-muted-foreground">
+                        Sold {MONTHS[r.sold_in_month % 12]} · Yr {Math.floor(r.sold_in_month / 12) + 1}
+                      </div>
+                    )}
                   </Td>
                   <Td right className="num">{num(r.purchase_price)}</Td>
                   <Td right className="whitespace-nowrap">{lifeLabel(r.useful_life_months)}{r.method === "diminishing" && <span className="ml-1 text-[11px] text-muted-foreground">DV</span>}</Td>
@@ -339,7 +344,11 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth 
             <DialogHeader>
               <DialogTitle>Remove {toRemove.name || "this asset"}?</DialogTitle>
               <DialogDescription>
-                Its {num(depreciationByYear(toRemove as FixedAsset).reduce((a, b) => a + b, 0))} of depreciation comes out of the forecast, and the {num(toRemove.purchase_price)} it cost stops leaving the bank.
+                Its {num(depreciationByYear(toRemove as FixedAsset).reduce((a, b) => a + b, 0))} of depreciation comes out of the forecast
+                {toRemove.already_owned
+                  ? ", and the opening balance sheet goes back to carrying it as part of the lump."
+                  : <>, and the {num(toRemove.purchase_price)} it cost stops leaving the bank.</>}
+                {typeof toRemove.sold_in_month === "number" && " The one-off that sold it will no longer be a sale, so its money moves back to ordinary income."}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>

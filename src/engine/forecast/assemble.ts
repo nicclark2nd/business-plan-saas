@@ -30,9 +30,9 @@ import { planRevenueByYear, planRevenueMonths, planYear1Months, sourceOf, type A
 import { planCogsByYear, planCogsMonths, type CostProduct, type FixedCost } from "../cogs/direct";
 import { overheadsByYear, overheadsMonths, planOverheadLines, type Overhead } from "../overheads/expenses";
 import { debtByYear, interestByYear, loanByYear, loanMonths, rbfByYear, rbfSplitMonths, type FundingSource } from "../funding/sources";
-import { assetsByYear, assetsMonths, bookValueByYear, capexMonths, type FixedAsset } from "../assets/depreciation";
+import { assetsByYear, assetsMonths, capexMonths, withDisposals, type FixedAsset } from "../assets/depreciation";
 import { grantsByYear, grantsMonths, type Grant } from "../funding/grants";
-import { extraordinaryByYear, extraordinaryCashMonths, isDisposal, type ExtraordinaryItem } from "../extraordinary/items";
+import { disposalBookValueByYear, extraordinaryByYear, extraordinaryCashMonths, isDisposal, soldMonthByAsset, type ExtraordinaryItem } from "../extraordinary/items";
 
 const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -113,7 +113,13 @@ export function assembleBase(p: PlanSources): Record<number, YearBase> {
   const cogs = planCogsByYear(p.costProducts, p.fixedCogs, (c) => sourceOf(c, p.products));
   const overheads = overheadsByYear(planOverheadLines(p.overheads, p.salaries, p.marketing), p.onCostPct);
   const interest = interestByYear(p.funding, revenueMonths);
-  const assets = assetsByYear(p.assets);
+  /**
+   * Every asset carrying the month it was sold, if it was (§6.56). Attached once, here, so the depreciation
+   * in the P&L, the book value the gain is measured against and the balance sheet's own roll-forward are
+   * all reading the same asset.
+   */
+  const assets0 = withDisposals(p.assets, soldMonthByAsset(p.extraordinary));
+  const assets = assetsByYear(assets0);
   const extra = extraordinaryByYear(p.extraordinary);
   const { current, nonCurrent } = debtSplitByYear(p.funding, revenueMonths);
   const principal = principalByYear(p.funding, revenueMonths);
@@ -123,21 +129,19 @@ export function assembleBase(p: PlanSources): Record<number, YearBase> {
   /**
    * A disposal is an extraordinary line pointed at an asset (§6.23): the proceeds are investing cash, and
    * what turns them into a gain or a loss is the asset's own book value at the point it leaves. That book
-   * value is NOT stored on the item — it is read from `bookValueByYear` on the asset the item names, at the
-   * close of the year before the sale. Storing it would be a second copy of a number the assets module
-   * already owns, and it would go stale the moment the asset's life or price changed.
+   * value is NOT stored on the item — it is read from `bookValueAtDisposal` on the asset the item names,
+   * which is the purchase price less the depreciation actually charged up to the month of the sale. Storing
+   * it would be a second copy of a number the assets module already owns, and it would go stale the moment
+   * the asset's life or price changed.
+   *
+   * It was read at the close of the year BEFORE the sale until §6.56, which was right only because the
+   * asset went on depreciating after it had been sold. Now that it stops, the two have to be the same
+   * series or the balance sheet would carry the difference forever.
    */
+  const bookValues = disposalBookValueByYear(p.extraordinary, p.assets);
   const disposals = FORECAST_YEARS.map((year) => {
     const rows = p.extraordinary.filter((i) => isDisposal(i) && (Math.trunc(n(i.year)) || 1) === year);
-    let bookValue = 0;
-    for (const row of rows) {
-      const asset = p.assets.find((a) => a.id && a.id === row.source_asset_id);
-      if (!asset) continue;
-      const book = bookValueByYear(asset);
-      // Sold during year N, so what leaves the books is what was still there at the end of year N-1.
-      bookValue += year === 1 ? n(asset.purchase_price) : n(book[year - 2]);
-    }
-    return { proceeds: r2(rows.reduce((a, i) => a + n(i.amount), 0)), bookValue: r2(bookValue) };
+    return { proceeds: r2(rows.reduce((a, i) => a + n(i.amount), 0)), bookValue: bookValues[year - 1] };
   });
 
   return Object.fromEntries(FORECAST_YEARS.map((year) => {
@@ -223,7 +227,7 @@ export function assembleMonths(
     cogs: planCogsMonths(p.costProducts, p.fixedCogs, (c) => sourceOf(c, p.products)),
     overheads: overheadsMonths(planOverheadLines(p.overheads, p.salaries, p.marketing), p.onCostPct),
     capex: capexMonths(p.assets),
-    depreciation: assetsMonths(p.assets),
+    depreciation: assetsMonths(withDisposals(p.assets, soldMonthByAsset(p.extraordinary))),
     debtProceeds, equityRaised, debtRepaid, interest,
     grantsReceived: grants.received,
     grantIncome: grants.earned,

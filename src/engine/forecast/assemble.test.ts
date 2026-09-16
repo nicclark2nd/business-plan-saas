@@ -4,7 +4,8 @@ import { buildForecast, FORECAST_YEARS } from "./model";
 import { planRevenueByYear } from "../sales/product";
 import { planCogsByYear } from "../cogs/direct";
 import { overheadsByYear, planOverheadLines } from "../overheads/expenses";
-import { assetsByYear } from "../assets/depreciation";
+import { assetsByYear, withDisposals } from "../assets/depreciation";
+import { soldMonthByAsset } from "../extraordinary/items";
 
 /** Nic's plan, shrunk to the shapes each module owns. */
 const products = [
@@ -44,7 +45,8 @@ describe("assemble", () => {
     const revenue = planRevenueByYear(products);
     const cogs = planCogsByYear(costProducts, [], () => null);
     const oh = overheadsByYear(planOverheadLines(overheadRows, sources.salaries, sources.marketing), 11.5);
-    const as = assetsByYear(assets);
+    // The screen attaches the disposal too (§6.56): a sold asset stops wearing out on both sides.
+    const as = assetsByYear(withDisposals(assets, soldMonthByAsset(extraordinary)));
     for (const y of FORECAST_YEARS) {
       const i = y - 1;
       expect(base[y].revenue, `revenue Y${y}`).toBe(revenue[i].value);
@@ -93,8 +95,13 @@ describe("assemble", () => {
   it("values a disposal from the asset it names", () => {
     const base = assembleBase(sources);
     expect(base[3].disposalProceeds).toBe(40000);
-    // 90,000 over 60 months, sold in Year 3: two years written off, so 54,000 left on the books.
-    expect(base[3].disposedBookValue).toBeCloseTo(54000, 0);
+    // 90,000 over 60 months = 1,500 a month. Sold in month 6 of Year 3, so 29 months are charged before it
+    // goes (§6.56) and 46,500 is what leaves the books — not the 54,000 that stood at the end of Year 2.
+    expect(base[3].disposedBookValue).toBeCloseTo(46500, 0);
+    // And it stops wearing out: Years 3, 4 and 5 charge only what it earned before the sale.
+    expect(base[3].depreciation).toBeCloseTo(7500, 0);      // months 24-28 of its life, then nothing
+    expect(base[4].depreciation).toBe(0);
+    expect(base[5].depreciation).toBe(0);
     // And the proceeds must not also appear as extraordinary income, or the gain is counted twice.
     expect(base[3].extraordinaryIncome).toBe(0);
     expect(base[2].extraordinaryIncome).toBe(35000);
