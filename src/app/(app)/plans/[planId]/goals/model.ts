@@ -23,7 +23,17 @@ export type Goal = {
   milestone_date: string | null;
   source: "manual" | "ai" | "whatif";
   sort_order: number;
+  /** The SWOT line this goal answers, if any (§6.59.1). */
+  swot_item_id: string | null;
 };
+
+/**
+ * A SWOT line the client said they would do something about, offered here as a goal (§6.59.1).
+ *
+ * The response is written at step 5 and the commitment is made here, at step 14, which is deliberate: a
+ * quarter and an owner are set with the forecast in front of you, not eight steps before it exists.
+ */
+export type SwotResponse = { id: string; quadrant: string; text: string; response: string };
 
 export type Person = { id: string; name: string; role: string | null };
 

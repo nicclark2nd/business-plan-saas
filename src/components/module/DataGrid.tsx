@@ -177,10 +177,20 @@ export function CellSelect({ value, onValueChange, options, className, placehold
   value: string | null | undefined; onValueChange: (v: string) => void; options: { value: string; label: string }[];
   className?: string; placeholder?: string; disabled?: boolean;
 }) {
+  /**
+   * An unchosen value is "" as often as it is null, and `?? ` does not treat "" as absent — so a select
+   * with nothing picked rendered an empty box instead of its placeholder, which reads as a field that is
+   * broken rather than one that is waiting (§6.59.1). A matching option still wins, so nothing that
+   * already worked changes.
+   */
+  const chosen = options.find((o) => o.value === value)?.label;
+  const shown = chosen ?? (value ? String(value) : undefined) ?? placeholder;
   return (
     <Select value={value ?? null} onValueChange={(v) => v !== null && onValueChange(String(v))} disabled={disabled}>
       <SelectTrigger size="sm" className={cn("w-full", cell, className)}>
-        <SelectValue placeholder={placeholder}>{options.find((o) => o.value === value)?.label ?? value ?? placeholder}</SelectValue>
+        <SelectValue placeholder={placeholder}>
+          <span className={cn(chosen === undefined && "text-muted-foreground")}>{shown}</span>
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>{options.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
     </Select>

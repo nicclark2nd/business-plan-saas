@@ -8,12 +8,14 @@ import { QUADRANTS, type Quadrant } from "./model";
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
 
-export async function upsertSwot(planId: string, item: { id?: string; quadrant: Quadrant; text: string; source?: string | null }): Promise<Result<{ id: string }>> {
+export async function upsertSwot(planId: string, item: { id?: string; quadrant: Quadrant; text: string; source?: string | null; response?: string | null }): Promise<Result<{ id: string }>> {
   const supabase = await createClient();
   const text = item.text.trim();
   if (!text) return { ok: false, error: "Write the line first." };
   if (!(QUADRANTS as readonly string[]).includes(item.quadrant)) return { ok: false, error: "Unknown quadrant." };
-  const row = { plan_id: planId, quadrant: item.quadrant, text, source: item.source ?? null };
+  // An empty response is stored as null, not "": the screen asks "is anything planned", and "" is not an answer.
+  const response = (item.response ?? "").trim() || null;
+  const row = { plan_id: planId, quadrant: item.quadrant, text, source: item.source ?? null, response };
   const q = item.id
     ? supabase.from("plan_swot_items").update(row).eq("id", item.id).eq("plan_id", planId).select("id").single()
     : supabase.from("plan_swot_items").insert({ ...row, sort_order: -Math.floor(Date.now() / 1000) }).select("id").single();

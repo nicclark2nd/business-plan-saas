@@ -47,6 +47,8 @@ export type QuarterlyInput = {
   id?: string;
   area: string;
   title: string;
+  /** The SWOT line this goal answers (§6.59.1), so the two can never drift into saying the same thing twice. */
+  swotItemId?: string | null;
   year: number;
   quarter: number;
   ownerPersonId: string | null;
@@ -86,6 +88,7 @@ export async function saveQuarterlyGoal(planId: string, input: QuarterlyInput): 
     owner_person_id: input.ownerPersonId || null,
     status: input.status,
     milestone_date: input.milestoneDate || null,
+    swot_item_id: input.swotItemId || null,
   };
   const q = input.id
     ? supabase.from("plan_goals").update(row).eq("id", input.id).eq("plan_id", planId).select("id").single()
