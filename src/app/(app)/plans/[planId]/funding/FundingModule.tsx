@@ -11,6 +11,7 @@ import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { planMonths } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
+import type { CapTable } from "@/engine/funding/ownership";
 import { useSaveOnce } from "@/lib/saveOnce";
 import { YEARS } from "@/engine/sales/projection";
 import { useMoney } from "@/components/MoneyProvider";
@@ -47,11 +48,13 @@ const monthOptions = (fyEndMonth: number) => planMonths(fyEndMonth).map((m, i) =
 
 export type CashInput = { revenueMonths: number[]; cogsMonths: number[]; overheadsMonths: number[]; capexMonths: number[] };
 
-export function FundingModule({ planId, initial, mode, openingCash, openingFromHistory, bought, cash, year1, fyEndMonth }: {
+export function FundingModule({ planId, initial, mode, openingCash, openingFromHistory, bought, cap, cash, year1, fyEndMonth }: {
   planId: string; initial: FundingRow[]; mode: "guided" | "advanced";
   openingCash: number; openingFromHistory: boolean;
   /** What each asset-backed loan bought, by loan id — the thing's own name (§6.52.2). */
   bought: Record<string, string>;
+  /** Who owns the business, both halves, composed once (§6.54). */
+  cap: CapTable;
   cash: CashInput;
   year1: { revenue: number; cogs: number; overheads: number; depreciation: number };
   fyEndMonth: number;
@@ -218,9 +221,18 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
           )}
         </Grid>
 
-        {equityGiven > 0 && (
+        {(cap.allocated > 0 || equityGiven > 0) && (
           <Note>
-            Investors hold {Math.round(equityGiven * 100) / 100}% of the business; you keep {Math.round((100 - equityGiven) * 100) / 100}%.
+            {/*
+              * "You keep 95 %" was never true: "you" is the leadership team, and on this plan they hold 60 %
+              * with 35 % spoken for by nobody at all. The cap table is both halves and the remainder (§6.54).
+              */}
+            Investors hold <b>{num(cap.investors)}%</b> of the business, the leadership team{" "}
+            <b>{num(cap.leadership)}%</b>
+            {cap.over ? <span className="text-bad"> — which is more than all of it, so one of the two is wrong</span>
+              : cap.unallocated > 0 ? <> and <b>{num(cap.unallocated)}%</b> is not allocated to anyone yet</>
+              : <> — the whole business is accounted for</>}.
+            {" "}Shares held by the leadership team are set on that step.
             {" "}Debt still owed at the end of each year: {owing.map(num).join(" · ")}.
           </Note>
         )}

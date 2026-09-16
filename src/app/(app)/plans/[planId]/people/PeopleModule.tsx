@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row, FootRow, GroupRow, Toolbar, Meta, Note, NameLink, LinkButton, RemoveButton, CellInput, CellSelect, CellTextarea, focusRow } from "@/components/module/DataGrid";
 import { cn } from "@/lib/utils";
+import type { CapTable } from "@/engine/funding/ownership";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { SALARY_YEARS, planYearStart, startYearFromDate, tenureLabel, salarySchedule, scheduleChangeFromFirstYear, totalSalariesByYear } from "@/engine/people/salary";
@@ -16,8 +17,11 @@ type Row = Person & { _key: string; started_text: string; _dirty?: boolean; _sta
 type Cap = Capability & { _key: string; _dirty?: boolean };
 type AreaKey = "people" | "salary" | "cap" | "risk";
 
-export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndMonth }: {
-  planId: string; initial: PeopleData; mode: "guided" | "advanced"; currency: string; planYear: number; fyEndMonth: number;
+export function PeopleModule({ planId, initial, mode, cap, currency, planYear, fyEndMonth }: {
+  planId: string; initial: PeopleData; mode: "guided" | "advanced";
+  /** The whole business's ownership, composed once (§6.54) — this screen holds only part of it. */
+  cap: CapTable;
+  currency: string; planYear: number; fyEndMonth: number;
 }) {
   const num = useMoney();
   void currency;
@@ -147,7 +151,19 @@ export function PeopleModule({ planId, initial, mode, currency, planYear, fyEndM
       {area === "people" && (
         <>
           <Toolbar>
-            <Meta className="ml-0">{people.filter((p) => p.id).length} {people.filter((p) => p.id).length === 1 ? "person" : "people"} · shareholding <b className={cn("num", Math.round(shareTotal(people)) === 100 ? "text-good" : "text-warn")}>{num(shareTotal(people))}%</b> · click a name to focus every area on that person</Meta>
+            {/*
+              * The whole cap table, not just this screen's half (§6.54). Totalling only the people against
+              * 100 % left a plan with investors permanently amber and quietly wrong: two directors on 60 %
+              * and one investor on 5 % is 65 % spoken for, and this said 60 and Funding said 95.
+              */}
+            <Meta className="ml-0">
+              {people.filter((p) => p.id).length} {people.filter((p) => p.id).length === 1 ? "person" : "people"} · shareholding{" "}
+              <b className={cn("num", cap.over ? "text-bad" : cap.complete ? "text-good" : "text-warn")}>{num(cap.allocated)}%</b>
+              {cap.investors > 0 && <> · leadership {num(cap.leadership)}%, investors {num(cap.investors)}%</>}
+              {cap.over ? <span className="text-bad"> · more than all of it is given away</span>
+                : cap.unallocated > 0 ? <> · {num(cap.unallocated)}% unallocated</> : null}
+              {" · "}click a name to focus every area on that person
+            </Meta>
           </Toolbar>
           <Grid>
             <thead><tr><Th style={{ width: 130 }}>First name</Th><Th style={{ width: 130 }}>Last name</Th><Th>Position</Th><Th style={{ width: 130 }}>Role</Th><Th right style={{ width: 90 }}>Share %</Th><Th style={{ width: 115 }}>Started</Th><Th right style={{ width: 95 }}>Tenure</Th><Th style={{ width: 36 }} /></tr></thead>

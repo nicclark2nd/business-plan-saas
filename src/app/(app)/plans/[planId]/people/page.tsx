@@ -1,13 +1,16 @@
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
+import { loadCapTable } from "@/lib/planSources";
 import { PeopleModule } from "./PeopleModule";
 import type { PeopleData } from "./model";
 
 export default async function PeoplePage({ params }: { params: Promise<{ planId: string }> }) {
   const { planId } = await params;
   const supabase = await createClient();
-  const [session, people, capabilities, settings, plan] = await Promise.all([
+  const [session, cap, people, capabilities, settings, plan] = await Promise.all([
     getSession(),
+    // Who owns the business, composed once and shown the same way on Funding (§6.54).
+    loadCapTable(planId),
     supabase.from("plan_people").select("*").eq("plan_id", planId).order("sort_order").order("created_at"),
     supabase.from("plan_people_capabilities").select("*").eq("plan_id", planId).order("sort_order").order("created_at"),
     supabase.from("plan_settings").select("currency, financial_year_end_month").eq("plan_id", planId).maybeSingle(),
@@ -18,7 +21,7 @@ export default async function PeoplePage({ params }: { params: Promise<{ planId:
 
   return (
     <PeopleModule
-      planId={planId} initial={data} mode={mode}
+      planId={planId} initial={data} mode={mode} cap={cap}
       currency={settings.data?.currency ?? "AUD"}
       planYear={plan.data?.plan_year ?? new Date().getFullYear()}
       fyEndMonth={settings.data?.financial_year_end_month ?? 6}

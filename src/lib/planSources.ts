@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { YEARS } from "@/engine/sales/projection";
 import { startYearFromDate, planYearStart, totalSalariesByYear } from "@/engine/people/salary";
 import type { FundingRow } from "@/app/(app)/plans/[planId]/funding/model";
+import { capTable, type CapTable } from "@/engine/funding/ownership";
 
 /**
  * Loading the plan, once (§6.32.3).
@@ -77,6 +78,25 @@ export async function loadSalariesByYear(planId: string, planYear: number, fyEnd
     salary_adjustments: p.salary_adjustments ?? null,
     startYear: startYearFromDate(p.started_on, fyStart), role: p.role,
   }))).map((y) => y.value);
+}
+
+/**
+ * Who owns the business, composed ONCE (§6.54). Both the Leadership Team and Funding show it, and both get
+ * it from here — the whole point being that they stopped agreeing the moment each counted only its own half.
+ */
+export async function loadCapTable(planId: string): Promise<CapTable> {
+  const supabase = await createClient();
+  const [people, investors] = await Promise.all([
+    supabase.from("plan_people").select("name, first_name, last_name, pct_shareholding").eq("plan_id", planId),
+    supabase.from("plan_funding_equity").select("investor_name, equity_percent").eq("plan_id", planId),
+  ]);
+  return capTable(
+    (people.data ?? []).map((p) => ({
+      name: (p.name as string) || [p.first_name, p.last_name].filter(Boolean).join(" "),
+      pct_shareholding: n(p.pct_shareholding),
+    })),
+    (investors.data ?? []).map((i) => ({ name: i.investor_name as string, equity_percent: n(i.equity_percent) })),
+  );
 }
 
 /** The marketing budget, repeated across the five years exactly as Overheads syncs it. */

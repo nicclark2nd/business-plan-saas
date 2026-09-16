@@ -9,7 +9,7 @@ import { assetsMonths, capexMonths, type FixedAsset } from "@/engine/assets/depr
 import { FundingModule } from "./FundingModule";
 import { firstProjectedYear } from "@/engine/plan/calendar";
 import { openingCashFor } from "@/engine/forecast/assemble";
-import { loadFundingRows } from "@/lib/planSources";
+import { loadCapTable, loadFundingRows } from "@/lib/planSources";
 
 /**
  * Funding comes after Sales, COGS and Overheads precisely so it can answer the question APeX never asks:
@@ -18,7 +18,7 @@ import { loadFundingRows } from "@/lib/planSources";
 export default async function FundingPage({ params }: { params: Promise<{ planId: string }> }) {
   const { planId } = await params;
   const supabase = await createClient();
-  const [session, rows, products, fixedCogs, overheads, people, spend, assets, settings, historic] = await Promise.all([
+  const [session, rows, cap, products, fixedCogs, overheads, people, spend, assets, settings, historic] = await Promise.all([
     getSession(),
     /**
      * The five funding tables, read by the ONE loader (§6.32.3). This page carried its own copy of that
@@ -27,6 +27,8 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
      * that took it. Two readings of one plan, again — the fault this app keeps having to learn.
      */
     loadFundingRows(planId),
+    // The same cap table the Leadership Team shows (§6.54): both halves, composed in one place.
+    loadCapTable(planId),
     supabase.from("plan_products").select("*").eq("plan_id", planId).order("sort_order"),
     supabase.from("plan_fixed_cogs").select("*").eq("plan_id", planId),
     supabase.from("plan_overheads").select("*").eq("plan_id", planId),
@@ -93,7 +95,7 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
       openingCash={openingCashFor(historic.data, Number(settings.data?.opening_cash ?? 0))}
       openingFromHistory={!!historic.data}
       fyEndMonth={settings.data?.financial_year_end_month ?? 6}
-      bought={bought}
+      bought={bought} cap={cap}
       cash={{ revenueMonths, cogsMonths, overheadsMonths: ohMonths, capexMonths: capex }}
       year1={{ revenue: revenueYear1, cogs: cogsYear1, overheads: ohYear1, depreciation: assetsMonths(assetRows).reduce((a, b) => a + b, 0) }}
     />
