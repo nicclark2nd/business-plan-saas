@@ -268,7 +268,8 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
         <>
           <Toolbar><Meta className="ml-0">Only the channels you will use. The total feeds Overheads as a locked Marketing line.</Meta></Toolbar>
           <Grid>
-            <thead><tr><Th style={{ width: 220 }}>Type</Th><Th>Approach</Th><Th right style={{ width: 140 }}>Annual budget</Th><Th style={{ width: 36 }} /></tr></thead>
+            {/* 220 clipped "Customer retention & loyalty" — the longest label decides this column, not the header (§6.62.1). */}
+            <thead><tr><Th style={{ width: 248 }}>Type</Th><Th>Approach</Th><Th right style={{ width: 140 }}>Annual budget</Th><Th style={{ width: 36 }} /></tr></thead>
             <tbody>
               {rows.spend.map((s) => (
                 <Row key={s.id} data-row={s.id} onBlur={(e) => left(e) && commit("spend", s.id)} className={cn(s._error && "[&>td]:bg-bad-soft")} title={s._error}>
