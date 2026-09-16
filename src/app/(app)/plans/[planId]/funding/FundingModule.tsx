@@ -11,6 +11,7 @@ import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { planMonths } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
+import { useSaveOnce } from "@/lib/saveOnce";
 import { YEARS } from "@/engine/sales/projection";
 import { useMoney } from "@/components/MoneyProvider";
 import {
@@ -64,6 +65,7 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
   const [confirmKey, setConfirm] = useState<string | null>(null);
   const [error, setErr] = useState<string | undefined>();
   const [pending, start] = useTransition();
+  const once = useSaveOnce();
 
   const lines = useMemo(() => (draft ? [...rows, draft] : rows), [rows, draft]);
   const sources: FundingSource[] = useMemo(() => lines.map((r) => ({
@@ -96,14 +98,14 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
 
   const save = (next: Row) => {
     setErr(undefined);
-    start(async () => {
+    start(once(async () => {
       const res = await upsertFunding(planId, next);
       if (!res.ok) { setErr(res.error); return; }
       const saved = { ...next, id: res.data!.id };
       setRows((rs) => (rs.some((r) => r._key === next._key) ? rs.map((r) => (r._key === next._key ? saved : r)) : [...rs, saved]));
       setDraft(null); setDlg(null);
       router.refresh();
-    });
+    }));
   };
 
   const remove = (key: string) => {
@@ -284,7 +286,7 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
           row={current}
           fyEndMonth={fyEndMonth}
           onCancel={() => { setDlg(null); if (draft && draft._key === current._key) setDraft(null); }}
-          onSave={save}
+          onSave={save} pending={pending}
         />
       )}
 
@@ -459,7 +461,9 @@ function PickerDialog({ onPick, onCancel }: { onPick: (k: FundingKind) => void; 
  * One dialog per kind of funding, each showing its own numbers back.  *
  * ------------------------------------------------------------------ */
 
-function SourceDialog({ row, fyEndMonth, onCancel, onSave }: { row: Row; fyEndMonth: number; onCancel: () => void; onSave: (r: Row) => void }) {
+function SourceDialog({ row, fyEndMonth, pending, onCancel, onSave }: {
+  row: Row; fyEndMonth: number; pending: boolean; onCancel: () => void; onSave: (r: Row) => void;
+}) {
   const num = useMoney();
   const MONTH_OPTIONS = monthOptions(fyEndMonth);
   const [d, setD] = useState<Row>(row);
@@ -666,7 +670,7 @@ function SourceDialog({ row, fyEndMonth, onCancel, onSave }: { row: Row; fyEndMo
 
         <DialogFooter>
           <Button variant="outline" size="sm" type="button" onClick={onCancel}>Cancel</Button>
-          <Button size="sm" type="button" onClick={() => onSave(d)} disabled={!d.name.trim()}>Save</Button>
+          <Button size="sm" type="button" onClick={() => onSave(d)} disabled={pending || !d.name.trim()}>{pending ? "Saving…" : "Save"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -8,6 +8,7 @@ import { ModuleFrame, ModuleFooter } from "@/components/module/ModuleFrame";
 import { CellSelect, CellTextarea, LinkButton, Note, RemoveButton } from "@/components/module/DataGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
+import { useSaveOnce } from "@/lib/saveOnce";
 import { AREA_LABEL, GOAL_AREAS, type GoalArea } from "@/engine/whatif/goals";
 import { AREA_HINT, AREA_PROMPT, STATUSES, STATUS_LABEL, type Goal, type GoalStatus, type Person } from "./model";
 import { continueFromGoals, deleteGoal, saveAnnualGoal, saveQuarterlyGoal, setGoalStatus } from "./actions";
@@ -42,6 +43,7 @@ export function GoalsModule({ planId, mode, initial, people, quarters, thisQuart
   const [area, setArea] = useState<AreaKey>("areas");
   const [goals, setGoals] = useState<Goal[]>(initial);
   const [pending, start] = useTransition();
+  const once = useSaveOnce();
   const [err, setErr] = useState<string>();
   const [editing, setEditing] = useState<{ area: GoalArea; goal?: Goal } | null>(null);
   const [toRemove, setToRemove] = useState<Goal | null>(null);
@@ -203,11 +205,11 @@ export function GoalsModule({ planId, mode, initial, people, quarters, thisQuart
         <QuarterlyDialog
           area={editing.area} goal={editing.goal} people={people} quarters={quarters} pending={pending}
           onClose={() => setEditing(null)}
-          onSave={(input) => start(async () => {
+          onSave={(input) => start(once(async () => {
             const r = await saveQuarterlyGoal(planId, { ...input, id: editing.goal?.id, area: editing.area });
             if (!r.ok) { setErr(r.error); return; }
             setErr(undefined); setEditing(null);
-          })}
+          }))}
         />
       )}
 

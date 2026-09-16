@@ -14,6 +14,7 @@ import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { planMonths } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
+import { useSaveOnce } from "@/lib/saveOnce";
 import { YEARS } from "@/engine/sales/projection";
 import { depreciationByYear, depreciationMonths, bookValueByYear, assetsByYear, type FixedAsset } from "@/engine/assets/depreciation";
 import { useMoney } from "@/components/MoneyProvider";
@@ -53,6 +54,7 @@ export function AssetsModule({ planId, initial, mode, lenders, fyEndMonth }: {
   const [draft, setDraft] = useState<Row | null>(null);
   const [error, setErr] = useState<string | undefined>();
   const [pending, start] = useTransition();
+  const once = useSaveOnce();
 
   const lines = draft ? [...rows, draft] : rows;
   const totals = assetsByYear(lines.map((r) => r as FixedAsset));
@@ -70,7 +72,7 @@ export function AssetsModule({ planId, initial, mode, lenders, fyEndMonth }: {
 
   const save = (next: Row) => {
     setErr(undefined);
-    start(async () => {
+    start(once(async () => {
       if (next.source === "finance") {
         const res = await saveFinancedShape(planId, next.id, { name: next.name, method: next.method, useful_life_months: next.useful_life_months });
         if (!res.ok) { setErr(res.error); return; }
@@ -84,7 +86,7 @@ export function AssetsModule({ planId, initial, mode, lenders, fyEndMonth }: {
       }
       setDlg(null);
       router.refresh();
-    });
+    }));
   };
 
   const remove = (key: string) => {
@@ -248,7 +250,7 @@ export function AssetsModule({ planId, initial, mode, lenders, fyEndMonth }: {
           lender={lenders[current.funding_debt_id ?? ""] ?? "finance"}
           fyEndMonth={fyEndMonth}
           onCancel={() => { setDlg(null); if (draft && draft._key === current._key) setDraft(null); }}
-          onSave={save}
+          onSave={save} pending={pending}
         />
       )}
 
@@ -284,7 +286,10 @@ function PendingBridge({ pending, error }: { pending: boolean; error?: string })
 }
 
 /** One asset. A financed line shows what it cost as read-only and lets the write-off be chosen. */
-function AssetDialog({ row, lender, fyEndMonth, onCancel, onSave }: { row: Row & { _key: string }; lender: string; fyEndMonth: number; onCancel: () => void; onSave: (r: Row) => void }) {
+function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave }: {
+  row: Row & { _key: string }; lender: string; fyEndMonth: number; pending: boolean;
+  onCancel: () => void; onSave: (r: Row) => void;
+}) {
   const gst = useGst();
   const num = useMoney();
   const MONTH_OPTIONS = monthOptions(fyEndMonth);
@@ -375,7 +380,7 @@ function AssetDialog({ row, lender, fyEndMonth, onCancel, onSave }: { row: Row &
           checked={d.gst_applies !== false} onChange={(v) => setD((x) => ({ ...x, gst_applies: v }))} />
         <DialogFooter>
           <Button variant="outline" size="sm" type="button" onClick={onCancel}>Cancel</Button>
-          <Button size="sm" type="button" onClick={() => onSave(d)} disabled={!d.name.trim()}>Save</Button>
+          <Button size="sm" type="button" onClick={() => onSave(d)} disabled={pending || !d.name.trim()}>{pending ? "Saving…" : "Save"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -10,6 +10,7 @@ import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { planMonths } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
+import { useSaveOnce } from "@/lib/saveOnce";
 import { YEARS } from "@/engine/sales/projection";
 import { useMoney } from "@/components/MoneyProvider";
 import {
@@ -52,6 +53,7 @@ export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth 
   const [confirmKey, setConfirm] = useState<string | null>(null);
   const [error, setErr] = useState<string | undefined>();
   const [pending, start] = useTransition();
+  const once = useSaveOnce();
 
   const lines = useMemo(() => (draft ? [...rows, draft] : rows), [rows, draft]);
   const named = lines.filter((r) => r.description.trim() || r === draft);
@@ -67,13 +69,13 @@ export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth 
 
   const save = (next: Row) => {
     setErr(undefined);
-    start(async () => {
+    start(once(async () => {
       const res = await upsertExtraordinary(planId, next);
       if (!res.ok) { setErr(res.error); return; }
       const saved = { ...next, id: res.data!.id };
       setRows((rs) => (rs.some((r) => r._key === next._key) ? rs.map((r) => (r._key === next._key ? saved : r)) : [...rs, saved]));
       setDraft(null); setDlg(null);
-    });
+    }));
   };
 
   const remove = (key: string) => {
@@ -224,7 +226,7 @@ export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth 
         <ItemDialog
           row={current} assets={assets} monthOptions={MONTH_OPTIONS}
           onCancel={() => { setDlg(null); if (draft && draft._key === current._key) setDraft(null); }}
-          onSave={save}
+          onSave={save} pending={pending}
         />
       )}
 
@@ -259,10 +261,10 @@ function PendingBridge({ pending, error }: { pending: boolean; error?: string })
   return null;
 }
 
-function ItemDialog({ row, assets, monthOptions, onCancel, onSave }: {
+function ItemDialog({ row, assets, monthOptions, pending, onCancel, onSave }: {
   row: Row; assets: { id: string; name: string }[];
   monthOptions: { value: string; label: string }[];
-  onCancel: () => void; onSave: (r: Row) => void;
+  pending: boolean; onCancel: () => void; onSave: (r: Row) => void;
 }) {
   const num = useMoney();
   const [d, setD] = useState<Row>(row);
@@ -342,7 +344,7 @@ function ItemDialog({ row, assets, monthOptions, onCancel, onSave }: {
 
         <DialogFooter>
           <Button variant="outline" size="sm" type="button" onClick={onCancel}>Cancel</Button>
-          <Button size="sm" type="button" onClick={() => onSave(d)} disabled={!d.description.trim()}>Save</Button>
+          <Button size="sm" type="button" onClick={() => onSave(d)} disabled={pending || !d.description.trim()}>{pending ? "Saving…" : "Save"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
