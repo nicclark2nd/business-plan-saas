@@ -47,9 +47,12 @@ const monthOptions = (fyEndMonth: number) => planMonths(fyEndMonth).map((m, i) =
 
 export type CashInput = { revenueMonths: number[]; cogsMonths: number[]; overheadsMonths: number[]; capexMonths: number[] };
 
-export function FundingModule({ planId, initial, mode, openingCash, openingFromHistory, cash, year1, fyEndMonth }: {
+export function FundingModule({ planId, initial, mode, openingCash, openingFromHistory, bought, cash, year1, fyEndMonth }: {
   planId: string; initial: FundingRow[]; mode: "guided" | "advanced";
-  openingCash: number; openingFromHistory: boolean; cash: CashInput;
+  openingCash: number; openingFromHistory: boolean;
+  /** What each asset-backed loan bought, by loan id — the thing's own name (§6.52.2). */
+  bought: Record<string, string>;
+  cash: CashInput;
   year1: { revenue: number; cogs: number; overheads: number; depreciation: number };
   fyEndMonth: number;
 }) {
@@ -96,10 +99,10 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
     setDlg({ kind: "edit", key });
   };
 
-  const save = (next: Row) => {
+  const save = (next: Row, buys = "") => {
     setErr(undefined);
     start(once(async () => {
-      const res = await upsertFunding(planId, next);
+      const res = await upsertFunding(planId, next, { assetName: buys });
       if (!res.ok) { setErr(res.error); return; }
       const saved = { ...next, id: res.data!.id };
       setRows((rs) => (rs.some((r) => r._key === next._key) ? rs.map((r) => (r._key === next._key ? saved : r)) : [...rs, saved]));
@@ -198,7 +201,7 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
                 </Td>
               </GridRow>
             )}
-            {lines.map((r) => <SourceRow key={r._key} r={r} onEdit={() => setDlg({ kind: "edit", key: r._key })} onRemove={() => setConfirm(r._key)} planId={planId} fyEndMonth={fyEndMonth} />)}
+            {lines.map((r) => <SourceRow key={r._key} r={r} bought={bought[r.id]} onEdit={() => setDlg({ kind: "edit", key: r._key })} onRemove={() => setConfirm(r._key)} planId={planId} fyEndMonth={fyEndMonth} />)}
           </tbody>
           {lines.length > 0 && (
             <FootRow>
@@ -286,7 +289,7 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
           row={current}
           fyEndMonth={fyEndMonth}
           onCancel={() => { setDlg(null); if (draft && draft._key === current._key) setDraft(null); }}
-          onSave={save} pending={pending}
+          onSave={save} buysName={bought[current.id]} pending={pending}
         />
       )}
 
@@ -315,7 +318,9 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
 
 /* ------------------------------------------------------------------ */
 
-function SourceRow({ r, onEdit, onRemove, planId, fyEndMonth }: { r: Row; onEdit: () => void; onRemove: () => void; planId: string; fyEndMonth: number }) {
+function SourceRow({ r, bought, onEdit, onRemove, planId, fyEndMonth }: {
+  r: Row; bought?: string; onEdit: () => void; onRemove: () => void; planId: string; fyEndMonth: number;
+}) {
   const num = useMoney();
   const router = useRouter();
   const MONTHS = planMonths(fyEndMonth);
@@ -346,6 +351,8 @@ function SourceRow({ r, onEdit, onRemove, planId, fyEndMonth }: { r: Row; onEdit
               onClick={() => router.push(`/plans/${planId}/assets`)} />
           )}
         </span>
+        {/* The lender is who lent it; this is what they lent it FOR. Both, because both are the answer. */}
+        {backed && bought && <div className="text-[11.5px] text-muted-foreground">{bought}</div>}
       </Td>
       <Td>
         {r.kind === "owner" ? (r.owner_type === "owner_loan" ? "Owner loan" : "Owner capital")
@@ -461,12 +468,14 @@ function PickerDialog({ onPick, onCancel }: { onPick: (k: FundingKind) => void; 
  * One dialog per kind of funding, each showing its own numbers back.  *
  * ------------------------------------------------------------------ */
 
-function SourceDialog({ row, fyEndMonth, pending, onCancel, onSave }: {
-  row: Row; fyEndMonth: number; pending: boolean; onCancel: () => void; onSave: (r: Row) => void;
+function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: {
+  row: Row; buysName?: string; fyEndMonth: number; pending: boolean;
+  onCancel: () => void; onSave: (r: Row, buys: string) => void;
 }) {
   const num = useMoney();
   const MONTH_OPTIONS = monthOptions(fyEndMonth);
   const [d, setD] = useState<Row>(row);
+  const [buys, setBuys] = useState(buysName ?? "");
   const set = (patch: Partial<Row>) => setD((x) => ({ ...x, ...patch }));
   const loan = loanOf(d);
   const summary = loan && d.amount > 0 ? loanSummary(loan) : null;
@@ -582,13 +591,19 @@ function SourceDialog({ row, fyEndMonth, pending, onCancel, onSave }: {
             </div>
             {isAssetBacked(d.loan_type) && (<>
               <div className="grid grid-cols-4 gap-3">
+                <div className="col-span-2">
+                  {/* The thing has a name and the lender has a name, and neither is the other (§6.52.2). */}
+                  <span className={label}>What it buys</span>
+                  <Input value={buys} onChange={(e) => setBuys(e.target.value)}
+                    placeholder="Concrete pump" className={box} />
+                </div>
                 <div>
                   <span className={label}>Paid up front</span>
                   <Input inputMode="decimal" defaultValue={d.deposit ? String(d.deposit) : ""}
                     onBlur={(e) => set({ deposit: parseNum(e.target.value) })} placeholder="0" className={cn(box, "num text-right")} />
                 </div>
-                <div className="col-span-3 self-end pb-1 text-[12px] text-muted-foreground">
-                  A deposit out of the business&apos;s own money. The lender advances the rest.
+                <div className="self-end pb-1 text-[12px] text-muted-foreground">
+                  Your own money down.
                 </div>
               </div>
               <div className="rounded border border-input bg-muted/40 px-3 py-2 text-[12px] text-muted-foreground">
@@ -683,7 +698,7 @@ function SourceDialog({ row, fyEndMonth, pending, onCancel, onSave }: {
 
         <DialogFooter>
           <Button variant="outline" size="sm" type="button" onClick={onCancel}>Cancel</Button>
-          <Button size="sm" type="button" onClick={() => onSave(d)} disabled={pending || !d.name.trim()}>{pending ? "Saving…" : "Save"}</Button>
+          <Button size="sm" type="button" onClick={() => onSave(d, buys)} disabled={pending || !d.name.trim()}>{pending ? "Saving…" : "Save"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

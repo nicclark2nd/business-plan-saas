@@ -96,9 +96,12 @@ async function syncFinancedAsset(planId: string, debtId: string, name: string, r
     return;
   }
   const category = r.loan_type === "vehicle_finance" ? "Vehicle" : "Equipment";
-  // The figures come from the loan. The NAME does not: an asset called "Citibank" reads as nonsense in a
-  // plan a lender opens, and what the thing actually is only the client knows. It is set once, as a
-  // starting point, and anything typed over it in Fixed Assets is left alone from then on.
+  /**
+   * The figures come from the loan. The NAME belongs to the thing (§6.52.2): a loan is named after its
+   * LENDER, and three vehicle loans from one bank all read "Westpac" unless the thing each one bought says
+   * what it is. Both screens now ask for it and both show it, so a name typed on either reaches the other,
+   * and `Equipment — Westpac` survives only as the fallback for a loan whose thing was never named.
+   */
   const figures = {
     // What the thing COST is what the lender advanced plus whatever was put down for it (§6.52). The
     // forecast then charges the whole price to capex and only the advance to borrowings, so the deposit
@@ -107,10 +110,16 @@ async function syncFinancedAsset(planId: string, debtId: string, name: string, r
     residual_value: money(r.residual_value),       // the balloon is what it is expected to be worth
     start_year: yr(r.start_year), start_month: mo(r.start_month),
   };
-  if (existing) await supabase.from("plan_fixed_assets").update(figures).eq("id", existing.id).eq("plan_id", planId);
+  const named = (assetName ?? "").trim();
+  if (existing) {
+    // An empty box does not erase a name: it means this caller had nothing to say about it.
+    await supabase.from("plan_fixed_assets")
+      .update(named ? { ...figures, name: named } : figures)
+      .eq("id", existing.id).eq("plan_id", planId);
+  }
   else await supabase.from("plan_fixed_assets").insert({
     plan_id: planId, source: "finance" as const, funding_debt_id: debtId, category,
-    name: (assetName ?? "").trim() || `${category} — ${name}`,
+    name: named || `${category} — ${name}`,
     useful_life_months: Math.max(12, Math.trunc(Number(r.term_months) || 60)),
     ...figures,
   });

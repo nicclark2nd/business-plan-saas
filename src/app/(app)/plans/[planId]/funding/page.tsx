@@ -78,6 +78,14 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
   // its supplier out of what the lender advanced the same day. The loop that used to sit here now lives
   // with the year it has to agree with (§6.36).
   const capex = capexMonths(assetRows);
+  /**
+   * What each asset-backed loan actually bought (§6.52.2). The loan is named after the LENDER and the thing
+   * is named by the client, and a plan with three Westpac vehicle loans on it reads "Westpac, Westpac,
+   * Westpac" unless the screen says which is which.
+   */
+  const bought = Object.fromEntries(
+    (assets.data ?? []).filter((a) => a.funding_debt_id).map((a) => [a.funding_debt_id as string, String(a.name ?? "")]),
+  );
 
   return (
     <FundingModule
@@ -85,6 +93,7 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
       openingCash={openingCashFor(historic.data, Number(settings.data?.opening_cash ?? 0))}
       openingFromHistory={!!historic.data}
       fyEndMonth={settings.data?.financial_year_end_month ?? 6}
+      bought={bought}
       cash={{ revenueMonths, cogsMonths, overheadsMonths: ohMonths, capexMonths: capex }}
       year1={{ revenue: revenueYear1, cogs: cogsYear1, overheads: ohYear1, depreciation: assetsMonths(assetRows).reduce((a, b) => a + b, 0) }}
     />
