@@ -523,7 +523,7 @@ function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: 
           </div>
 
           {d.kind === "owner" && (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 items-end gap-3">
               <div>
                 <span className={label}>Put in as</span>
                 <FieldSelect value={d.owner_type ?? "owner_capital"} onValueChange={(v) => set({ owner_type: v as Row["owner_type"] })}
@@ -545,7 +545,7 @@ function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: 
           )}
 
           {d.kind === "debt" && <>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-4 items-end gap-3">
               <div className="col-span-2">
                 <span className={label}>Kind of loan</span>
                 <FieldSelect value={d.loan_type ?? "term_loan"} onValueChange={(v) => set({ loan_type: v as LoanType })} options={LOAN_TYPES} />
@@ -561,7 +561,7 @@ function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: 
                   onBlur={(e) => set({ term_months: parseNum(e.target.value) })} placeholder="60" className={cn(box, "num text-right")} />
               </div>
             </div>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-4 items-end gap-3">
               <div>
                 <span className={label}>Repayments</span>
                 <FieldSelect value={d.repayment_type ?? "amortised"} onValueChange={(v) => set({ repayment_type: v as Row["repayment_type"] })} options={REPAYMENT_TYPES} />
@@ -590,7 +590,7 @@ function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: 
               </div>
             </div>
             {isAssetBacked(d.loan_type) && (<>
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-4 items-end gap-3">
                 <div className="col-span-2">
                   {/* The thing has a name and the lender has a name, and neither is the other (§6.52.2). */}
                   <span className={label}>What it buys</span>
@@ -617,7 +617,12 @@ function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: 
           </>}
 
           {d.kind === "equity" && (
-            <div className="grid grid-cols-3 gap-3">
+            /*
+             * `items-end`, because "Valuation before the money" wraps to two lines and the other two labels
+             * do not — so without it the middle box sits a line lower than its neighbours. Aligning the
+             * BOXES rather than the tops of the cells is what the eye reads as a row.
+             */
+            <div className="grid grid-cols-3 items-end gap-3">
               <div>
                 <span className={label}>Share of the business %</span>
                 <Input inputMode="decimal" defaultValue={d.equity_percent ? String(d.equity_percent) : ""}
@@ -637,7 +642,7 @@ function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: 
           )}
 
           {d.kind === "grant" && <>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 items-end gap-3">
               <div>
                 <span className={label}>Counted as income</span>
                 <FieldSelect value={d.recognition_type ?? "immediate"} onValueChange={(v) => set({ recognition_type: v as Row["recognition_type"] })}
@@ -674,7 +679,7 @@ function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: 
           </>}
 
           {d.kind === "revenue_linked" && (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 items-end gap-3">
               <div>
                 <span className={label}>Share of sales %</span>
                 <Input inputMode="decimal" defaultValue={d.repayment_percent ? String(d.repayment_percent) : ""}
