@@ -16,6 +16,8 @@ type AreaKey = "competitors" | "position";
 type Row_ = Competitor & { _dirty?: boolean; _error?: string };
 const STEP = GUIDED_STEPS.find((s) => s.id === "competitors")?.step ?? 4;
 
+const proseLabel = "mb-0.5 pl-1.5 text-[10.5px] font-semibold uppercase tracking-[.05em] text-muted-foreground";
+
 export function CompetitorsModule({ planId, initialPosition, initialCompetitors, mode, initialArea, customerWord }: {
   planId: string; initialPosition: Position; initialCompetitors: Competitor[]; mode: "guided" | "advanced"; initialArea: AreaKey; customerWord: string;
 }) {
@@ -115,10 +117,40 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
                   <Td><CellSelect value={c.threat} options={COMPETITOR_THREAT} className={cn("font-semibold", c.threat === "critical" || c.threat === "high" ? "text-bad" : c.threat === "medium" ? "text-warn" : "text-good")} onValueChange={(v) => edit(c.id, { threat: v as Competitor["threat"] }, !!c.name.trim())} /></Td>
                   <Td><RemoveButton onClick={() => askRemove(c.id)} /></Td>
                 </tr>,
-                <tr key={c.id + "b"} data-row={c.id} onBlur={(e) => left(e) && commit(c.id)} className={cn("[&>td]:align-top [&>td]:pb-3", c._error && "[&>td]:bg-bad-soft")}>
-                  <Td colSpan={2} wrap><div className="mb-0.5 pl-1.5 text-[10.5px] font-semibold uppercase tracking-[.05em] text-muted-foreground">What they do well</div><CellTextarea value={c.strengths ?? ""} placeholder="Reputation, market position, what clients say they like" onChange={(e) => edit(c.id, { strengths: e.target.value })} /></Td>
-                  <Td colSpan={2} wrap><div className="mb-0.5 pl-1.5 text-[10.5px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Where they&apos;re weak</div><CellTextarea value={c.weaknesses ?? ""} placeholder="What their reviews complain about; where they can't follow" onChange={(e) => edit(c.id, { weaknesses: e.target.value })} /></Td>
-                  <Td colSpan={2} wrap><div className="mb-0.5 pl-1.5 text-[10.5px] font-semibold uppercase tracking-[.05em] text-muted-foreground">How we win</div><CellTextarea value={c.how_we_win ?? ""} placeholder="The specific reason a client picks you over them" onChange={(e) => edit(c.id, { how_we_win: e.target.value })} /></Td>
+                /*
+                 * The three written columns are NOT part of the facts grid (\u00a76.62.2).
+                 *
+                 * They used to be three colSpan={2} cells across the six fact columns, which put them on
+                 * column boundaries by arithmetic and on the wrong headings by meaning: "Where they're weak"
+                 * sat directly under REACH and "How we win" under THREAT. Two unrelated things sharing a
+                 * vertical line reads as a mistake even when every cell is in the right place.
+                 *
+                 * Even thirds alone did not fix it: the blocks only moved 34px and 61px, which reads as a
+                 * near-miss and looks sloppier than a clean collision. So the band stops pretending to be
+                 * part of the grid at all - it is one tinted panel, indented, with its own rules between
+                 * the thirds. It spans the fact columns deliberately instead of accidentally, and it
+                 * stacks below 1180px rather than becoming three unreadable ribbons.
+                 */
+                <tr key={c.id + "b"} data-row={c.id} onBlur={(e) => left(e) && commit(c.id)} className={cn(c._error && "[&>td]:bg-bad-soft")}>
+                  <Td colSpan={6} wrap className="pb-2.5 pt-0">
+                    <div className="grid grid-cols-3 gap-x-0 gap-y-3 rounded-[3px] border-l-2 border-input bg-secondary/60 py-2 pl-3.5 pr-3 max-[1180px]:grid-cols-1">
+                      <div className="min-w-0 pr-5">
+                        <div className={proseLabel}>What they do well</div>
+                        <CellTextarea value={c.strengths ?? ""} placeholder="Reputation, market position, what clients say they like"
+                          onChange={(e) => edit(c.id, { strengths: e.target.value })} />
+                      </div>
+                      <div className="min-w-0 border-border pr-5 min-[1181px]:border-l min-[1181px]:pl-5">
+                        <div className={proseLabel}>Where they&apos;re weak</div>
+                        <CellTextarea value={c.weaknesses ?? ""} placeholder="What their reviews complain about; where they can&apos;t follow"
+                          onChange={(e) => edit(c.id, { weaknesses: e.target.value })} />
+                      </div>
+                      <div className="min-w-0 border-border min-[1181px]:border-l min-[1181px]:pl-5">
+                        <div className={proseLabel}>How we win</div>
+                        <CellTextarea value={c.how_we_win ?? ""} placeholder="The specific reason a client picks you over them"
+                          onChange={(e) => edit(c.id, { how_we_win: e.target.value })} />
+                      </div>
+                    </div>
+                  </Td>
                 </tr>,
               ])}
             </tbody>
