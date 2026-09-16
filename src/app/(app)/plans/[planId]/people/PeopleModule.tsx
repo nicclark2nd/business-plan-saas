@@ -188,7 +188,14 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
             </tbody>
             <FootRow>
               <Td colSpan={4}>Total <span className="ml-2 font-normal text-muted-foreground">{people.filter((p) => p.id).length} {people.filter((p) => p.id).length === 1 ? "person" : "people"}{people.filter((p) => startYear(p) > 1).length ? ` · ${people.filter((p) => startYear(p) > 1).length} planned hire${people.filter((p) => startYear(p) > 1).length === 1 ? "" : "s"}` : ""}</span></Td>
-              <Td right className={cn("num", Math.round(shareTotal(people)) === 100 ? "text-good" : "text-warn")}>{num(shareTotal(people))}%</Td>
+              {/*
+                * A column total is a SUM, not a verdict (§6.54.1). This one used to judge itself against
+                * 100 % and went green on a leadership team holding all of it — directly under a header,
+                * on the same screen, showing 105 % in red because an investor holds 5 % as well. Both were
+                * right about their own half and the screen contradicted itself out loud. The whole
+                * business is judged once, in the header; here the column just adds up.
+                */}
+              <Td right className="num">{num(shareTotal(people))}%</Td>
               <Td colSpan={3} />
             </FootRow>
           </Grid>
