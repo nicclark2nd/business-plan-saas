@@ -41,8 +41,20 @@ const YEAR_OPTIONS = YEARS.map((y) => ({ value: String(y), label: `Year ${y}` })
 const monthOptions = (fyEndMonth: number) => planMonths(fyEndMonth).map((m, i) => ({ value: String(i + 1), label: m }));
 const LIFE_OPTIONS = LIVES.map((l) => ({ value: String(l.months), label: l.label }));
 
-export function AssetsModule({ planId, initial, mode, lenders, fyEndMonth }: {
-  planId: string; initial: AssetRow[]; mode: "guided" | "advanced"; lenders: Record<string, string>; fyEndMonth: number;
+export type AssetCash = {
+  openingCash: number;
+  /** What the bank holds at the end of each plan year, with these purchases already in it. */
+  closing: number[];
+  /** Paid to suppliers for assets that year, and borrowed that year — a financed one is roughly a wash. */
+  spent: number[]; borrowed: number[];
+  lowMonth: { month: number; closingCash: number };
+  negativeMonths: number[];
+  reconciled: boolean;
+};
+
+export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth }: {
+  planId: string; initial: AssetRow[]; mode: "guided" | "advanced"; lenders: Record<string, string>;
+  cash: AssetCash; fyEndMonth: number;
 }) {
   const gst = useGst();
   const num = useMoney();
@@ -238,6 +250,8 @@ export function AssetsModule({ planId, initial, mode, lenders, fyEndMonth }: {
           )}
         </Grid>
 
+        {lines.length > 0 && <CanAfford cash={cash} fyEndMonth={fyEndMonth} />}
+
         {lines.length > 0 && (
           <Note>
             Paid to suppliers for them: {totals.map((t) => num(t.capex)).join(" · ")} across the five years —
@@ -326,6 +340,97 @@ function PendingBridge({ pending, error }: { pending: boolean; error?: string })
 
 /** One asset. A financed line shows what it cost as read-only and lets the write-off be chosen. */
 export type Finance = { lender: string; deposit: number; rate: number; term: number };
+
+/**
+ * Can the business actually afford these? (§6.53)
+ *
+ * An asset bought in a projected year takes its price out of the bank in that year — the forecast has always
+ * said so, and this screen never did. A client could put a 425,000 excavator here against 21,315 of cash and
+ * see nothing at all, because the only place it showed was Review forecast, three steps further on and after
+ * they had stopped thinking about assets.
+ *
+ * Every figure is READ from the forecast, never recomputed. A second answer to "does the money hold" is the
+ * fault this app has paid for more than once, and Funding already owns that question for Year 1 by month.
+ */
+function CanAfford({ cash, fyEndMonth }: { cash: AssetCash; fyEndMonth: number }) {
+  const num = useMoney();
+  const MONTHS = planMonths(fyEndMonth);
+  const signed = (v: number) => (v < 0 ? `(${num(Math.abs(v))})` : num(v));
+  const shortYear = cash.closing.findIndex((v) => v < 0);
+  const tightest = cash.closing.reduce((best, v, i) => (v < cash.closing[best] ? i : best), 0);
+  const holds = shortYear === -1 && cash.negativeMonths.length === 0;
+  const spentTotal = cash.spent.reduce((a, b) => a + b, 0);
+  // What the assets had already taken out by the time the bank runs short, and the last year they took it.
+  const spentBefore = shortYear === -1 ? 0 : cash.spent.slice(0, shortYear).reduce((a, b) => a + b, 0);
+  const lastSpend = shortYear === -1 ? -1 : cash.spent.slice(0, shortYear).reduce((b, v, i) => (v > 0 ? i : b), -1);
+
+  return (
+    <div className="mt-4 rounded border border-input">
+      <div className="flex items-center gap-2 border-b border-input bg-[#E9EDF2] px-3 py-1.5">
+        <span className="text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Cash at the end of each year, with these purchases in it
+        </span>
+        <span className="ml-auto text-[11.5px] text-muted-foreground">Opening {num(cash.openingCash)}</span>
+      </div>
+      <Grid>
+        <thead><tr><Th className="w-[160px]" />{YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}</tr></thead>
+        <tbody>
+          <GridRow>
+            <Td className="text-muted-foreground">Paid for assets</Td>
+            {cash.spent.map((v, i) => <Td key={i} right className="num">{v ? num(v) : "—"}</Td>)}
+          </GridRow>
+          <GridRow>
+            <Td className="text-muted-foreground">Closing cash</Td>
+            {cash.closing.map((v, i) => (
+              <Td key={i} right className={cn("num", v < 0 && "font-semibold text-destructive", i === tightest && v >= 0 && "font-semibold")}>
+                {signed(v)}{i === tightest && <span aria-hidden className="ml-0.5">▼</span>}
+              </Td>
+            ))}
+          </GridRow>
+        </tbody>
+      </Grid>
+      <div className={cn("border-t border-input px-3 py-2 text-[12.5px]", holds ? "text-muted-foreground" : "bg-bad-soft")}>
+        {!cash.reconciled ? (
+          <span className="text-warn">The forecast has a check that is not balancing, so these figures cannot be relied on yet — Review forecast shows which.</span>
+        ) : shortYear !== -1 ? (
+          <>
+            <span className="font-semibold text-destructive">
+              The bank goes below zero in Year {shortYear + 1}, at {signed(cash.closing[shortYear])}.
+            </span>
+            <span className="ml-1">
+              {cash.spent[shortYear] > 0
+                ? <>These purchases take {num(cash.spent[shortYear])} out that year. Buy later, put it on finance, or raise more on Funding.</>
+                /*
+                 * Money spent in an EARLIER year is money that is not in the bank in this one. Saying
+                 * "not these purchases, nothing is bought that year" was true and useless: on BNE Concreting
+                 * it cleared the assets of a Year 2 overdraft that the Year 1 spend is most of the reason for.
+                 * The claim made here is the one that can be proved — what left, and when — not a verdict on
+                 * cause, because the year has other things in it too.
+                 */
+                : spentBefore > 0
+                  ? <>{num(spentBefore)} went out for assets in Year {lastSpend + 1}, which is money that is not in the bank now. Buying later, or on finance, keeps it here longer.</>
+                  : <>No assets are bought by then, so the gap is elsewhere in the plan.</>}
+            </span>
+          </>
+        ) : cash.negativeMonths.length > 0 ? (
+          <>
+            <span className="font-semibold text-destructive">
+              Year 1 closes on {num(cash.closing[0])}, but the bank goes below zero in{" "}
+              {cash.negativeMonths.length === 1 ? MONTHS[cash.negativeMonths[0] - 1] : `${cash.negativeMonths.length} months`}.
+            </span>
+            <span className="ml-1">A year that closes well can still be short in the middle of it. Funding shows the twelve months.</span>
+          </>
+        ) : (
+          <>
+            The plan carries them. {spentTotal > 0 ? <>{num(spentTotal)} goes out for assets across the five years, and the</> : <>The</>}{" "}
+            tightest year closes on {num(cash.closing[tightest])}; the tightest month of Year 1 is {MONTHS[cash.lowMonth.month - 1]} at {num(cash.lowMonth.closingCash)}.
+            <span className="ml-1">Money borrowed to buy one comes back in the same year, so a financed asset barely moves this row — its repayments do.</span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFinance }: {
   row: Row & { _key: string }; lender: string; fyEndMonth: number; pending: boolean;
