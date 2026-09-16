@@ -9,6 +9,8 @@ export type AssetRow = {
   purchase_price: number; residual_value: number;
   useful_life_months: number; method: DepreciationMethod;
   start_year: number; start_month: number;
+  /** Owned before the plan began (§6.55): worth, not cost; life left, not life; and no cash moves. */
+  already_owned: boolean;
   notes: string | null; gst_applies: boolean; sort_order: number;
 };
 

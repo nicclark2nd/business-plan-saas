@@ -37,11 +37,15 @@ const STEP = GUIDED_STEPS.find((s) => s.id === "assets")?.step ?? 11;
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
 const box = "h-8";
 const YEAR_OPTIONS = YEARS.map((y) => ({ value: String(y), label: `Year ${y}` }));
+/** Not a plan year, which is exactly the point: it was here before Year 1 started (§6.55). */
+const OWNED = "owned";
 /** The dropdown offers the plan's months in the plan's order; the value is the slot, 1–12. */
 const monthOptions = (fyEndMonth: number) => planMonths(fyEndMonth).map((m, i) => ({ value: String(i + 1), label: m }));
 const LIFE_OPTIONS = LIVES.map((l) => ({ value: String(l.months), label: l.label }));
 
 export type AssetCash = {
+  /** What Historic said the plant was worth on the last balance sheet — the total these items sit inside. */
+  openingFixedAssets: number;
   openingCash: number;
   /** What the bank holds at the end of each plan year, with these purchases already in it. */
   closing: number[];
@@ -80,13 +84,15 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth 
   const lines = draft ? [...rows, draft] : rows;
   const totals = assetsByYear(lines.map((r) => r as FixedAsset));
   const financed = lines.filter((r) => r.source === "finance").length;
+  // What the client has itemised OUT of the opening lump, valued as they said it is worth today (§6.55).
+  const ownedListed = lines.filter((r) => r.already_owned).reduce((a, r) => a + (Number(r.purchase_price) || 0), 0);
 
   const add = () => {
     const key = `tmp-${Date.now()}`;
     setDraft({
       id: key, _key: key, source: "entered", funding_debt_id: null, name: "", category: null,
       purchase_price: 0, residual_value: 0, useful_life_months: 60, method: "straight_line",
-      start_year: 1, start_month: 1, notes: null, gst_applies: true, sort_order: 0,
+      start_year: 1, start_month: 1, already_owned: false, notes: null, gst_applies: true, sort_order: 0,
     });
     setDlg({ key });
   };
@@ -224,7 +230,9 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth 
                     </span>
                     {r.category && <span className="ml-2 text-[11px] text-muted-foreground">{r.category}</span>}
                   </Td>
-                  <Td>{MONTHS[r.start_month - 1]} · Yr {r.start_year}</Td>
+                  <Td className={cn(r.already_owned && "text-muted-foreground")}>
+                    {r.already_owned ? "Already owned" : <>{MONTHS[r.start_month - 1]} · Yr {r.start_year}</>}
+                  </Td>
                   <Td right className="num">{num(r.purchase_price)}</Td>
                   <Td right className="whitespace-nowrap">{lifeLabel(r.useful_life_months)}{r.method === "diminishing" && <span className="ml-1 text-[11px] text-muted-foreground">DV</span>}</Td>
                   {dep.map((d, i) => <Td key={i} right className="num">{d ? num(d) : <span className="text-muted-foreground">—</span>}</Td>)}
@@ -249,6 +257,24 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth 
             </FootRow>
           )}
         </Grid>
+
+        {cash.openingFixedAssets > 0 && (
+          /*
+           * The bargain §6.41.3 struck with working-capital days, struck again here: Historic's figure is the
+           * total and stays authoritative, the client itemises as much of it as they need, and whatever has
+           * not been itemised is named out loud rather than sitting there silently not depreciating.
+           */
+          <Note>
+            Your last balance sheet put the business&apos;s plant at <b>{num(cash.openingFixedAssets)}</b>.{" "}
+            {ownedListed > 0
+              ? <>You have listed <b>{num(ownedListed)}</b> of it above, which now wears out year by year.{" "}</>
+              : <>None of it is listed above, so <b>none of it wears out</b> in this plan.{" "}</>}
+            {cash.openingFixedAssets - ownedListed > 0.5 && (
+              <>The remaining <b>{num(cash.openingFixedAssets - ownedListed)}</b> is not broken down, so it carries no
+                depreciation and cannot be sold. List anything you mean to write off or sell — you do not have to list it all.</>
+            )}
+          </Note>
+        )}
 
         {lines.length > 0 && <CanAfford cash={cash} fyEndMonth={fyEndMonth} />}
 
@@ -448,9 +474,15 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
    * asset, once as a loan that makes its own asset. Two vans, double the capex, one van's worth of borrowing.
    */
   const isNew = row.id.startsWith("tmp-");
+  /**
+   * Something the business already owns (§6.55). It is not bought in a plan year, so it has no purchase
+   * month and no way of being paid for — what it is worth NOW and what is LEFT of its life are the only two
+   * numbers it has, and it depreciates from the first month of the plan like everything else.
+   */
+  const ownedNow = d.already_owned === true;
   const [paidWith, setPaidWith] = useState<"cash" | "finance">("cash");
   const [fin, setFin] = useState<Finance>({ lender: "", deposit: 0, rate: 0, term: 60 });
-  const financing = isNew && paidWith === "finance";
+  const financing = isNew && !ownedNow && paidWith === "finance";
   const borrowed = Math.max(0, d.purchase_price - fin.deposit);
   const set = (patch: Partial<Row>) => setD((x) => ({ ...x, ...patch }));
   const dep = depreciationByYear(d as FixedAsset);
@@ -483,7 +515,7 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
             </div>
           </div>
 
-          {isNew && (
+          {isNew && !ownedNow && (
             <div className="grid grid-cols-[220px_1fr] items-end gap-3">
               <div>
                 <span className={label}>Paid with</span>
@@ -503,7 +535,7 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
 
           <div className="grid grid-cols-4 gap-3">
             <div>
-              <span className={label}>What it cost</span>
+              <span className={label}>{ownedNow ? "What it is worth now" : "What it cost"}</span>
               <Input inputMode="decimal" disabled={locked} defaultValue={d.purchase_price ? String(d.purchase_price) : ""}
                 onBlur={(e) => set({ purchase_price: parseNum(e.target.value) })} placeholder="0" className={cn(box, "num text-right")} />
             </div>
@@ -514,11 +546,18 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
             </div>
             <div>
               <span className={label}>Bought in</span>
-              <FieldSelect value={String(d.start_year)} onValueChange={(v) => set({ start_year: Number(v) })} options={YEAR_OPTIONS} />
+              <FieldSelect
+                value={ownedNow ? OWNED : String(d.start_year)}
+                onValueChange={(v) => set(v === OWNED
+                  ? { already_owned: true, start_year: 1, start_month: 1 }
+                  : { already_owned: false, start_year: Number(v) })}
+                options={locked ? YEAR_OPTIONS : [{ value: OWNED, label: "Already owned" }, ...YEAR_OPTIONS]} />
             </div>
             <div>
               <span className={label}>Month</span>
-              <FieldSelect value={String(d.start_month)} onValueChange={(v) => set({ start_month: Number(v) })} options={MONTH_OPTIONS} />
+              {ownedNow
+                ? <div className={cn(box, "flex items-center pl-2 text-[11px] text-muted-foreground/70")}>before the plan</div>
+                : <FieldSelect value={String(d.start_month)} onValueChange={(v) => set({ start_month: Number(v) })} options={MONTH_OPTIONS} />}
             </div>
           </div>
 
@@ -553,7 +592,7 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <span className={label}>Written off over</span>
+              <span className={label}>{ownedNow ? "Years left in it" : "Written off over"}</span>
               <FieldSelect value={String(d.useful_life_months)} onValueChange={(v) => set({ useful_life_months: Number(v) })} options={LIFE_OPTIONS} />
             </div>
             <div>
@@ -574,9 +613,11 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
             <div className="mt-2 text-[12px] text-muted-foreground">
               {d.purchase_price > 0
                 ? <>{num(perYear)} a year off the profit{d.method === "diminishing" && " to begin with, less as it goes"} — and not a cent out of the bank.{" "}
-                    {locked || financing
-                      ? <>The {num(d.purchase_price)} is paid to the supplier in Year {d.start_year} and the lender puts most of it back the same day, so what the business is really out is the deposit, then the repayments.</>
-                      : <>The {num(d.purchase_price)} leaves in Year {d.start_year}.</>}</>
+                    {ownedNow
+                      ? <>No cash moves — it was paid for before the plan began, and the opening balance sheet is already carrying it. What changes is that it now wears out instead of sitting there forever.</>
+                      : locked || financing
+                        ? <>The {num(d.purchase_price)} is paid to the supplier in Year {d.start_year} and the lender puts most of it back the same day, so what the business is really out is the deposit, then the repayments.</>
+                        : <>The {num(d.purchase_price)} leaves in Year {d.start_year}.</>}</>
                 : "Put in what it cost and this fills in."}
             </div>
           </div>

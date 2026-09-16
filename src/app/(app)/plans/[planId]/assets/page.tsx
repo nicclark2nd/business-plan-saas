@@ -33,6 +33,7 @@ export default async function AssetsPage({ params }: { params: Promise<{ planId:
     useful_life_months: Number(a.useful_life_months ?? 60) || 60,
     start_year: Number(a.start_year ?? 1) || 1,
     start_month: Number(a.start_month ?? 1) || 1,
+    already_owned: a.already_owned === true,
   })) as AssetRow[];
 
   // A financed asset carries the name of the loan that bought it, so the chain can say where to look.
@@ -67,6 +68,8 @@ export default async function AssetsPage({ params }: { params: Promise<{ planId:
   });
 
   const cash = {
+    /** What the last balance sheet said the business's plant was worth — the total these items sit inside. */
+    openingFixedAssets: opening.fixedAssets,
     openingCash: forecast.cashFlow[1].openingCash,
     closing: FORECAST_YEARS.map((y) => forecast.cashFlow[y].closingCash),
     spent: FORECAST_YEARS.map((y) => forecast.cashFlow[y].capex),

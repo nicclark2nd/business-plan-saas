@@ -1,7 +1,11 @@
 /**
  * Fixed assets — what the business owns, and what it writes off each year (§6.20).
  *
- * Two kinds of asset, and only one of them is typed here:
+ * Three kinds of asset, and only one of them has its figures typed elsewhere:
+ *   already owned — the business had it before the plan began (§6.55). Its "price" is what it is WORTH now
+ *              and its "life" is what is LEFT of one. No cash moves for it and it adds nothing to the
+ *              balance sheet, because the opening figure from Historic already contains it — but it
+ *              depreciates from Year 1, which the single opening lump never did, and it can be sold.
  *   entered  — bought with cash the business already has, or out of an owner injection.
  *   finance  — bought with an equipment or vehicle loan. The purchase price, deposit, life and residual
  *              belong to that Funding row; this module shows the asset and depreciates it, but never
@@ -29,6 +33,8 @@ export type FixedAsset = {
   method?: DepreciationMethod | null;
   start_year?: number | null;          // 1–5; the plan year it is bought
   start_month?: number | null;         // 1–12 within that year; depreciation runs from the month it arrives
+  /** Owned before the plan began (§6.55): no cash, no addition, but it wears out from Year 1 like anything else. */
+  already_owned?: boolean | null;
   /** False where no tax is charged on the purchase — a private sale, an exempt import (§6.38). */
   gst_applies?: boolean | null;
 };
@@ -43,7 +49,10 @@ const startYear = (a: FixedAsset) => Math.min(5, Math.max(1, Math.trunc(num(a.st
 const startMonth = (a: FixedAsset) => Math.min(12, Math.max(1, Math.trunc(num(a.start_month)) || 1));
 
 /** The month index (0-based, across the five plan years) the asset arrives and starts depreciating. */
-export const firstMonth = (a: FixedAsset) => (startYear(a) - 1) * 12 + (startMonth(a) - 1);
+export const owned = (a: FixedAsset) => a.already_owned === true;
+
+/** Something already owned is already here: it starts wearing out in the plan's first month, not when bought. */
+export const firstMonth = (a: FixedAsset) => (owned(a) ? 0 : (startYear(a) - 1) * 12 + (startMonth(a) - 1));
 
 /**
  * Depreciation month by month across the five plan years (60 months).
@@ -122,6 +131,8 @@ export function bookValueByYear(a: FixedAsset): number[] {
  */
 export function capexByYear(a: FixedAsset): number[] {
   const out = YEARS.map(() => 0);
+  // Something already owned was paid for before the plan started. Charging it again would invent a purchase.
+  if (owned(a)) return out;
   out[startYear(a) - 1] = r2(num(a.purchase_price));
   return out;
 }
@@ -132,6 +143,7 @@ export function capexByYear(a: FixedAsset): number[] {
  * is asking a different question from the cash flow, and one of them may change again.
  */
 export const additionsByYear = (a: FixedAsset) => capexByYear(a);
+// — and an already-owned asset adds nothing either: the opening balance sheet is already carrying it.
 
 /**
  * What leaves the bank month by month in Year 1 — every asset in its own purchase month, financed or not
