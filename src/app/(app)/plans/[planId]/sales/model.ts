@@ -26,6 +26,8 @@ export const LIFE_MODE = [
 export type Product = {
   id: string; name: string; description: string | null; notes: string | null; lifecycle: string | null;
   average_price: number; units_sold: number; start_selling_year: number;
+  /** Why this price: what it costs to deliver, what the market pays, why it sits there (§6.62). */
+  pricing_rationale?: string | null;
   yearly_growth: Growth | null; monthly_distribution: MonthlyDistribution | null; sort_order: number;
   /** Ongoing lines (§6.17): revenue comes from active clients, not from clients won. */
   sold_as: "one_off" | "recurring"; opening_clients: number; client_life_months: number;

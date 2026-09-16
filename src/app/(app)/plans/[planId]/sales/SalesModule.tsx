@@ -432,6 +432,20 @@ function ProductDialog({ r, others, onSave, onClose }: { r: Row; others: Row[]; 
                 <div><label className={label}>Base annual sales</label><div className={cn(box, "num flex items-center justify-end rounded border border-border bg-secondary px-2.5 font-semibold")}>{num(d.average_price * d.units_sold)}</div></div>
               </div>
             )}
+            {/*
+              Why this price (§6.62). The plan has collected the NUMBER since day one and never the reasoning,
+              so a lender read a figure with nothing behind it — and the SBA asks for it in words. It lives
+              beside the price rather than on Marketing, because a rationale kept on another screen drifts
+              from the figure it is about.
+            */}
+            <div className="mt-3">
+              <label className={label}>Why this price</label>
+              <Textarea value={d.pricing_rationale ?? ""}
+                placeholder="e.g. 8% above the two-man crews. Covers the second pump and the after-hours loading, and builders pay it to keep their trades moving."
+                className="min-h-[52px]"
+                onChange={(e) => set({ pricing_rationale: e.target.value })} />
+              <p className="mt-1 text-[11.5px] text-muted-foreground">What it costs you to deliver, what the market pays, and why you sit where you do. A lender reads the price and then looks for this.</p>
+            </div>
           </div>
           <GstToggle registered={gst.registered} label={gst.label} kind="sale"
             checked={d.gst_applies !== false} onChange={(v) => set({ gst_applies: v })} />

@@ -9,10 +9,10 @@ import { GUIDED_STEPS } from "@/lib/nav";
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { cn } from "@/lib/utils";
 import { useMoney } from "@/components/MoneyProvider";
-import { customerNoun } from "@/engine/plan/vocabulary";
+import { customerNoun, productNoun } from "@/engine/plan/vocabulary";
 import { formatMonth } from "../people/model";
 import { saveMarket, upsertRow, deleteRow, continueFromMarketing, type RowKind } from "./actions";
-import { MARKET_FIELDS, CUSTOMER_FIELDS, POSITION_ONE_LINER, BRAND_FIELDS, SALES_FIELDS, SPEND_KINDS, SPEND_LABEL, type Market, type MarketingData, type Spend, type Evidence, type SpendKind } from "./model";
+import { MARKET_FIELDS, POSITION_ONE_LINER, BRAND_FIELDS, salesFields, SALES_KEYS, SPEND_KINDS, SPEND_LABEL, type Market, type MarketingData, type Spend, type Evidence, type SpendKind, type Segment } from "./model";
 import { acquisitionByYear } from "@/engine/marketing/acquisition";
 import type { AnyProduct } from "@/engine/sales/product";
 import { QuarterlyGoalDialog, type QuarterChoice } from "@/components/goals/QuarterlyGoalDialog";
@@ -31,8 +31,10 @@ const TONE: Record<GoalStatus, string> = {
 type AreaKey = "market" | "spend" | "research" | "brand" | "sales" | "actions";
 type WithMeta<T> = T & { _dirty?: boolean; _error?: string };
 
-export function MarketingModule({ planId, initial, mode, initialArea, customerWord, actions, people, quarters, thisQuarter, products }: {
+export function MarketingModule({ planId, initial, mode, initialArea, customerWord, productWord, actions, people, quarters, thisQuarter, products }: {
   planId: string; initial: MarketingData; mode: "guided" | "advanced"; initialArea: AreaKey; customerWord: string;
+  /** plan_settings.product_type, for the plan's own word for one sale (§6.31.1). */
+  productWord: string | null;
   /**
    * The plan's MARKETING goals (§6.60) — not a second list. A marketing action with an owner and a date is
    * a quarterly goal, so this screen and the Goals step are two windows onto the same rows.
@@ -60,9 +62,11 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
   // The starter row has a fixed id so server and client render the same HTML; rows added later get random ids.
   const blankSpend = (id = "tmp-new-spend"): WithMeta<Spend> => ({ id, kind: "advertising", approach: "", annual_budget: 0, sort_order: 0 });
   const blankEvidence = (id = "tmp-new-evidence"): WithMeta<Evidence & { when_text: string }> => ({ id, source: "", method: "", finding: "", decision: "", occurred_on: null, when_text: "", sort_order: 0 });
-  const [rows, setRows] = useState<{ spend: WithMeta<Spend>[]; evidence: WithMeta<Evidence & { when_text: string }>[] }>({
+  const blankSegment = (id = "tmp-new-segment"): WithMeta<Segment> => ({ id, name: "", profile: "", cares_about: "", revenue_share: null, sort_order: 0 });
+  const [rows, setRows] = useState<{ spend: WithMeta<Spend>[]; evidence: WithMeta<Evidence & { when_text: string }>[]; segments: WithMeta<Segment>[] }>({
     spend: initial.spend.length ? initial.spend : [blankSpend()],
     evidence: initial.evidence.length ? initial.evidence.map((e) => ({ ...e, when_text: formatMonth(e.occurred_on) })) : [blankEvidence()],
+    segments: initial.segments.length ? initial.segments : [blankSegment()],
   });
   const [error, setError] = useState<string | undefined>();
   const [pending, start] = useTransition();
@@ -118,14 +122,14 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
     setList(k, (xs) => { const rest = xs.filter((x) => x.id !== id); return rest.length ? rest : [k === "spend" ? blankSpend(`tmp-${crypto.randomUUID()}`) as unknown as AnyRow : blankEvidence(`tmp-${crypto.randomUUID()}`) as unknown as AnyRow]; });
     if (!id.startsWith("tmp-")) start(async () => { await deleteRow(planId, k, id); });
   };
-  const flush = () => { commitMarket(); (["spend", "evidence"] as GridKind[]).forEach((k) => list(k).forEach((r) => r._dirty && commit(k, r.id))); };
+  const flush = () => { commitMarket(); (["spend", "evidence", "segments"] as GridKind[]).forEach((k) => list(k).forEach((r) => r._dirty && commit(k, r.id))); };
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const intent = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value === "later" ? "later" : "next";
     flush(); start(async () => { await continueFromMarketing(planId, intent); });
   };
 
-  const written = [...MARKET_FIELDS, ...CUSTOMER_FIELDS, POSITION_ONE_LINER].filter((f) => (market[f.key] ?? "").trim()).length;
+  const written = [...MARKET_FIELDS, POSITION_ONE_LINER].filter((f) => (market[f.key as keyof Market] ?? "").trim()).length;
 
   /**
    * The six promotion categories APeX forced every business to consider (§6.61).
@@ -144,8 +148,12 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
   const spendTotal = rows.spend.reduce((a, s) => a + (Number(s.annual_budget) || 0), 0);
   const acquisition = acquisitionByYear(products, Array(5).fill(spendTotal));
   const anyDirty = marketDirty || (["spend", "evidence"] as GridKind[]).some((k) => (rows[k] as AnyRow[]).some((r) => r._dirty));
-  const rowError = (["spend", "evidence"] as GridKind[]).flatMap((k) => rows[k] as AnyRow[]).find((r) => r._error)?._error;
+  const rowError = (["spend", "evidence", "segments"] as GridKind[]).flatMap((k) => rows[k] as AnyRow[]).find((r) => r._error)?._error;
   const plural = customerNoun(customerWord).many.toLowerCase();
+  /** What this plan calls one sale (§6.31.1): a job, a treatment, a client. Nobody wins a "job" in software. */
+  const one = productNoun(productWord).one.toLowerCase();
+  /** Segment shares are a rough split and optional — but if they are given, they should add up. */
+  const shareTotal = Math.round(rows.segments.reduce((a, sg) => a + (Number(sg.revenue_share) || 0), 0));
 
   /** One field list, three tabs (§6.61) — every narrative box on this module saves the same way. */
   const narrative = (fields: readonly { key: string; label: string; hint: string; placeholder: string }[]) => (
@@ -167,14 +175,15 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
         { key: "spend", label: "Channels & spend", count: rows.spend.filter((r) => r.approach.trim()).length,
           ...(missingKinds.length ? { tag: `${missingKinds.length} not considered` } : {}) },
         { key: "research", label: "Research", count: rows.evidence.filter((r) => r.source.trim()).length },
-        { key: "brand", label: "Brand", count: BRAND_FIELDS.filter((f) => (market[f.key] ?? "").trim()).length },
-        { key: "sales", label: "Sales process", count: SALES_FIELDS.filter((f) => (market[f.key] ?? "").trim()).length },
+        { key: "brand", label: "Brand", count: BRAND_FIELDS.filter((f) => (market[f.key as keyof Market] ?? "").trim()).length },
+        { key: "sales", label: "Sales process", count: SALES_KEYS.filter((k) => (market[k] ?? "").trim()).length },
         { key: "actions", label: "Actions", count: acts.length },
       ]}
       area={area} onArea={(k) => { flush(); setArea(k as AreaKey); }}
       scope={{ label: "This plan" }}
       primaryAction={
-        area === "spend" ? <Button size="sm" type="button" onClick={() => add("spend", { kind: "advertising", approach: "", annual_budget: 0 })}>+ Channel</Button>
+        area === "market" ? <Button size="sm" type="button" onClick={() => add("segments", { name: "", profile: "", cares_about: "", revenue_share: null })}>+ Segment</Button>
+        : area === "spend" ? <Button size="sm" type="button" onClick={() => add("spend", { kind: "advertising", approach: "", annual_budget: 0 })}>+ Channel</Button>
         : area === "research" ? <Button size="sm" type="button" onClick={() => add("evidence", { source: "", method: "", finding: "", decision: "", occurred_on: null, when_text: "" })}>+ Research</Button>
         : area === "actions" ? <Button size="sm" type="button" onClick={() => setEditing({})}>+ Action</Button>
         : undefined}
@@ -195,18 +204,55 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
       <form id="marketing-form" onSubmit={onSubmit} className="hidden" />
 
       {area === "market" && (
-        <div onBlur={(e) => left(e) && commitMarket()}>
-          <Toolbar><Meta className="ml-0">{written} of {MARKET_FIELDS.length + CUSTOMER_FIELDS.length + 1} written. Rough is fine; you can polish later.</Meta></Toolbar>
-          <Section title="Market">{narrative(MARKET_FIELDS)}</Section>
-          {/* Who they are and what they care about, split out of the one box that used to hold both (§6.61). */}
-          <Section title="Your customers">{narrative(CUSTOMER_FIELDS)}</Section>
-          <Section title="Position">{narrative([POSITION_ONE_LINER])}</Section>
-        </div>
+        <>
+          {/*
+            Who you sell to is a GRID (§6.62). One row reads like the single box it replaces; a business with
+            a commercial arm and a residential one stops describing both in one paragraph.
+          */}
+          <Toolbar><Meta className="ml-0">
+            One row for each kind of buyer. Most businesses have one or two \u2014 if you catch yourself writing
+            &quot;and also&quot; in a row, that is a second segment.
+          </Meta></Toolbar>
+          <Grid>
+            <thead><tr>
+              <Th style={{ width: "22%" }}>Who you sell to</Th>
+              <Th>What they have in common</Th>
+              <Th>What they care about</Th>
+              <Th right style={{ width: 110 }}>Share of sales</Th>
+              <Th style={{ width: 36 }} />
+            </tr></thead>
+            <tbody>
+              {rows.segments.map((sg) => (
+                <Row key={sg.id} data-row={sg.id} onBlur={(e) => left(e) && commit("segments", sg.id)} className={cn(sg._error && "[&>td]:bg-bad-soft")} title={sg._error}>
+                  <Td wrap><CellTextarea value={sg.name} placeholder="e.g. Residential builders" onChange={(e) => edit("segments", sg.id, { name: e.target.value })} /></Td>
+                  <Td wrap><CellTextarea value={sg.profile ?? ""} placeholder="e.g. Licensed, 3\u201325 staff, $2\u201312M turnover, within 90 minutes" onChange={(e) => edit("segments", sg.id, { profile: e.target.value })} /></Td>
+                  <Td wrap><CellTextarea value={sg.cares_about ?? ""} placeholder="e.g. Never holding up their other trades. Pays more to avoid a callback." onChange={(e) => edit("segments", sg.id, { cares_about: e.target.value })} /></Td>
+                  <Td right><CellInput numeric suffix="%" value={sg.revenue_share === null ? "" : String(sg.revenue_share)} placeholder="\u2014"
+                    onChange={(e) => edit("segments", sg.id, { revenue_share: e.target.value.trim() === "" ? null : Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} /></Td>
+                  <Td><RemoveButton onClick={() => remove("segments", sg.id)} /></Td>
+                </Row>
+              ))}
+            </tbody>
+            {shareTotal > 0 && (
+              <FootRow>
+                <Td colSpan={3}>{shareTotal === 100 ? "All of your sales are accounted for" : `Shares add to ${shareTotal}%`}</Td>
+                <Td right className={cn("num", shareTotal !== 100 && "text-warn")}>{shareTotal}%</Td>
+                <Td />
+              </FootRow>
+            )}
+          </Grid>
+          <Note>Share of sales is optional \u2014 it is a rough split, not a forecast. The forecast comes from your Sales lines.</Note>
+
+          <div onBlur={(e) => left(e) && commitMarket()} className="mt-4">
+            <Section title="The market">{narrative(MARKET_FIELDS)}</Section>
+            <Section title="Position">{narrative([POSITION_ONE_LINER])}</Section>
+          </div>
+        </>
       )}
 
       {area === "brand" && (
         <div onBlur={(e) => left(e) && commitMarket()}>
-          <Toolbar><Meta className="ml-0">What the business stands for, how it sounds, how it looks. Your <b>purpose</b> and <b>brand promise</b> are step 1 — this is what a customer meets.</Meta></Toolbar>
+          <Toolbar><Meta className="ml-0">What the business stands for, how it sounds, how it looks. Your <b>purpose</b> and <b>brand promise</b> are step 1 — this is what a customer meets. <span className="text-faint">Optional: plenty of good plans skip it.</span></Meta></Toolbar>
           <Section title="Brand">{narrative(BRAND_FIELDS)}</Section>
         </div>
       )}
@@ -214,7 +260,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
       {area === "sales" && (
         <div onBlur={(e) => left(e) && commitMarket()}>
           <Toolbar><Meta className="ml-0">Marketing brings them to the door. This is what happens next — and it is the half most plans leave out.</Meta></Toolbar>
-          <Section title="Winning the work">{narrative(SALES_FIELDS)}</Section>
+          <Section title="Winning the work">{narrative(salesFields(one))}</Section>
         </div>
       )}
 
@@ -282,7 +328,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
             </div>
           )}
 
-          <Note>Annual figures for Year 1. Later years follow the Overheads growth assumption unless you change them there.</Note>
+          <Note>Annual figures for Year 1; later years follow the Overheads growth assumption unless you change them there. If your spend is lumpy — a campaign in March, a trade show in August — set its month-by-month shape on the <b>Marketing</b> line in Overheads, and the cash flow will follow it.</Note>
         </>
       )}
 
@@ -338,11 +384,11 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
         <>
           <Toolbar><Meta className="ml-0">The question, how you answered it, what it showed — and what you will do about it. That last column is the only one that changes anything.</Meta></Toolbar>
           <Grid>
-            <thead><tr><Th style={{ width: "22%" }}>Question or source</Th><Th style={{ width: "20%" }}>How you looked</Th><Th>What it showed</Th><Th style={{ width: "22%" }}>What you&apos;ll do</Th><Th style={{ width: 110 }}>When</Th><Th style={{ width: 36 }} /></tr></thead>
+            <thead><tr><Th style={{ width: "22%" }}>What you wanted to know</Th><Th style={{ width: "20%" }}>How you looked</Th><Th>What it showed</Th><Th style={{ width: "22%" }}>What you&apos;ll do</Th><Th style={{ width: 110 }}>When</Th><Th style={{ width: 36 }} /></tr></thead>
             <tbody>
               {rows.evidence.map((ev) => (
                 <Row key={ev.id} data-row={ev.id} onBlur={(e) => left(e) && commit("evidence", ev.id)} className={cn(ev._error && "[&>td]:bg-bad-soft")} title={ev._error}>
-                  <Td wrap><CellTextarea value={ev.source} placeholder="e.g. How long do builders wait for a slab?" onChange={(e) => edit("evidence", ev.id, { source: e.target.value })} /></Td>
+                  <Td wrap><CellTextarea value={ev.source} placeholder="e.g. How long do builders wait for a slab \u2014 and would they pay to wait less?" onChange={(e) => edit("evidence", ev.id, { source: e.target.value })} /></Td>
                   <Td wrap><CellTextarea value={ev.method ?? ""} placeholder="e.g. Phone survey of 40 builders, over two weeks" onChange={(e) => edit("evidence", ev.id, { method: e.target.value })} /></Td>
                   <Td wrap><CellTextarea value={ev.finding ?? ""} placeholder="e.g. 31 of 40 had waited >3 weeks in the last year; 26 would pay 5\u20138% more for a guaranteed date" onChange={(e) => edit("evidence", ev.id, { finding: e.target.value })} /></Td>
                   <Td wrap><CellTextarea value={ev.decision ?? ""} placeholder="e.g. Guarantee a 10-day pour and charge 6% for it" onChange={(e) => edit("evidence", ev.id, { decision: e.target.value })} /></Td>

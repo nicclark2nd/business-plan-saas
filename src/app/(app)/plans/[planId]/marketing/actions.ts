@@ -24,6 +24,7 @@ const TABLES = {
   competitors: { table: "plan_competitors", cols: ["name", "kind", "reach", "pricing", "threat", "strengths", "weaknesses", "how_we_win"], required: "name" },
   spend: { table: "plan_marketing_spend", cols: ["kind", "approach", "annual_budget"], required: "approach" },
   evidence: { table: "plan_marketing_evidence", cols: ["source", "method", "finding", "decision", "occurred_on"], required: "source" },
+  segments: { table: "plan_market_segments", cols: ["name", "profile", "cares_about", "revenue_share"], required: "name" },
 } as const;
 export type RowKind = keyof typeof TABLES;
 
@@ -35,6 +36,7 @@ export async function upsertRow(planId: string, kind: RowKind, row: Record<strin
     if (!(c in row)) continue;
     const v = row[c];
     if (c === "annual_budget") clean[c] = Math.max(0, Number(v) || 0);
+    else if (c === "revenue_share") clean[c] = v === null || v === "" ? null : Math.min(100, Math.max(0, Number(v) || 0));
     else if (c === "kind" && kind === "spend") clean[c] = (SPEND_KINDS as readonly string[]).includes(String(v)) ? v : "advertising";
     else if (c === "kind") clean[c] = v === "indirect" ? "indirect" : "direct";
     else if (c === "reach") clean[c] = ["local", "regional", "national", "online"].includes(String(v)) ? v : null;

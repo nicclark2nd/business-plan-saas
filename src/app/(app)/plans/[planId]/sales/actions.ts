@@ -14,6 +14,7 @@ export async function upsertProduct(planId: string, p: {
   average_price: number; units_sold: number; start_selling_year: number; yearly_growth?: Growth | null; monthly_distribution?: MonthlyDistribution | null;
   sold_as?: string | null; opening_clients?: number | null; client_life_months?: number | null; life_mode?: string | null;
   monthly_new_clients?: Record<string, number> | null; clients_from_product_id?: string | null; gst_applies?: boolean;
+  pricing_rationale?: string | null;
 }): Promise<Result<{ id: string }>> {
   const supabase = await createClient();
   const name = (p.name ?? "").trim();
@@ -48,6 +49,8 @@ export async function upsertProduct(planId: string, p: {
   }
   const row = {
     plan_id: planId, name, description: p.description?.trim() || null, notes: p.notes?.trim() || null,
+    // Why this price (§6.62) — the SBA asks for it in words and the plan only ever collected the number.
+    pricing_rationale: p.pricing_rationale?.trim() || null,
     lifecycle: LIFECYCLES.includes(p.lifecycle ?? "") ? p.lifecycle : null,
     average_price: Math.max(0, Number(p.average_price) || 0), units_sold: Math.max(0, Number(p.units_sold) || 0),
     start_selling_year: Math.min(5, Math.max(1, Math.trunc(Number(p.start_selling_year)) || 1)),   // a plan year, 1-5 (§6.33)

@@ -1,41 +1,45 @@
 /** Marketing — three data areas (SaaS §6.13): Market · Channels & spend · Evidence. Competitors is its own module (step 4). */
-export const MARKET_FIELDS = [
-  { key: "target_market", label: "Target market", hint: "Who buys, where, and what they have in common. Name the customer and the area.", placeholder: "e.g. Residential builders and owner-builders within 90 minutes of Wollongong pouring 20–200 m² slabs." },
-  { key: "market_size", label: "Market size", hint: "How many of them, and roughly what they spend a year. A sourced estimate beats a precise guess.", placeholder: "e.g. ~1,400 residential slab approvals a year in the Illawarra; ~$28M of concreting work." },
-  { key: "market_trends", label: "Market trends", hint: "Where demand is heading across the whole market, and why. What one competitor might do belongs in What could change, on the Competitors step.", placeholder: "e.g. Knock-down-rebuild growing 12% a year; new slab insulation rules from 2027 favour licensed contractors." },
-  { key: "customer_needs", label: "Customer needs", hint: "What they are actually buying: speed, certainty, price, finish. What they complain about now.", placeholder: "e.g. Turn up when booked; pour within 10 days of site-ready; a quote that is the final price." },
-] as const;
 /**
- * Who they are and what they care about (§6.61) — split out of the one target-market box that held both.
- * Deliberately NOT called demographics and psychographics on screen: a concreter does not have to learn
- * two marketing words to answer two plain questions.
+ * The market itself — the size and the direction of travel. Who buys is a SEGMENT now (§6.62), because one
+ * box could not hold a business with a commercial arm and a residential one, and three boxes asking the
+ * same question in different words held it worse.
  */
-export const CUSTOMER_FIELDS = [
-  { key: "demographics", label: "What they have in common", hint: "Age, income, trade, company size, where they are — whatever actually sorts a buyer from a non-buyer.", placeholder: "e.g. Licensed residential builders, 3–25 staff, turning over $2–12M, within 90 minutes of Wollongong." },
-  { key: "psychographics", label: "What they care about", hint: "What they value and how they decide. A lender reads this to see whether you know your buyer or are guessing.", placeholder: "e.g. Reputation with their own clients. They will pay more to avoid a callback and they buy on a recommendation, never an ad." },
+export const MARKET_FIELDS = [
+  { key: "market_size", label: "Market size", hint: "How many buyers there are, and roughly what they spend a year. A sourced estimate beats a precise guess.", placeholder: "e.g. ~1,400 residential slab approvals a year in the Illawarra; ~$28M of concreting work." },
+  { key: "market_trends", label: "Market trends", hint: "Where demand is heading across the whole market, and why. What one competitor might do belongs in What could change, on the Competitors step.", placeholder: "e.g. Knock-down-rebuild growing 12% a year; new slab insulation rules from 2027 favour licensed contractors." },
 ] as const;
 
 /** Where the business sits in its market (§6.61). Not the same question as Our advantage on Competitors. */
 export const POSITION_ONE_LINER = {
   key: "positioning", label: "How you want to be seen",
-  hint: "Premium, mid, no-frills, specialist. Where you sit against the whole market — why a customer picks you over one NAMED competitor is Our advantage, on the Competitors step.",
+  hint: "Premium, mid, no-frills, specialist. Where you sit against the whole market \u2014 why a customer picks you over one NAMED competitor is Our advantage, on the Competitors step.",
   placeholder: "e.g. The premium option: more expensive than the two-man crews, and the one builders use when the pour cannot go wrong.",
 } as const;
 
-/** The brand platform, less its purpose — that is Vision & Purpose at step 1 (§6.61). */
+/** The brand platform, less its purpose \u2014 that is Vision & Purpose at step 1 (\u00a76.61). */
 export const BRAND_FIELDS = [
   { key: "brand_values", label: "What the business stands for", hint: "Three or four things that are true even when they cost you money. A value nobody could disagree with is not a value.", placeholder: "e.g. We quote the final price. We turn up when we said. We fix our own mistakes before anyone asks." },
-  { key: "brand_personality", label: "How it sounds", hint: "How the business talks to a customer — in an ad, on the phone, in a quote.", placeholder: "e.g. Plain, direct, no sales talk. We answer the question that was asked and we do not oversell." },
-  { key: "visual_identity", label: "How it looks", hint: "Colours, logo, vehicles, signage, workwear — what a customer recognises before they read anything.", placeholder: "e.g. Charcoal and safety orange; logo on both truck doors and every crew shirt; photo of the finished pour on every invoice." },
+  { key: "brand_personality", label: "How it sounds", hint: "How the business talks to a customer \u2014 in an ad, on the phone, in a quote.", placeholder: "e.g. Plain, direct, no sales talk. We answer the question that was asked and we do not oversell." },
+  { key: "visual_identity", label: "How it looks", hint: "Colours, logo, vehicles, signage, workwear \u2014 what a customer recognises before they read anything.", placeholder: "e.g. Charcoal and safety orange; logo on both truck doors and every crew shirt; photo of the finished pour on every invoice." },
 ] as const;
 
-/** Marketing brings them to the door; this is what happens next (§6.61). */
-export const SALES_FIELDS = [
-  { key: "sales_process", label: "How a job is won", hint: "Step by step, from the first contact to a signed job. The steps, who does each, and how long each takes.", placeholder: "e.g. Call back within 2 hours → site visit inside 3 days → fixed-price quote within 24 hours of the visit → follow-up call on day 3 → deposit and booked date." },
-  { key: "sales_team", label: "Who sells, and what they need", hint: "Who handles enquiries and quotes, and what they need to do it — training, a quoting tool, a price book.", placeholder: "e.g. Nic quotes everything today. Mary takes first calls from Q2 and needs the estimating template and two days with Nic." },
+/**
+ * Marketing brings them to the door; this is what happens next (\u00a76.61). The first label carries the plan's
+ * own noun (\u00a76.31.1): a clinic does not win "jobs" and neither does a software business.
+ */
+export const salesFields = (one: string) => [
+  { key: "sales_process", label: `How ${/^[aeiou]/i.test(one) ? "an" : "a"} ${one} is won`, hint: `Step by step, from the first contact to a signed ${one}. The steps, who does each, and how long each takes.`, placeholder: "e.g. Call back within 2 hours \u2192 site visit inside 3 days \u2192 fixed-price quote within 24 hours of the visit \u2192 follow-up call on day 3 \u2192 deposit and booked date." },
+  { key: "sales_team", label: "Who sells, and what they need", hint: "Who handles enquiries and quotes, and what they need to do it \u2014 training, a quoting tool, a price book.", placeholder: "e.g. Nic quotes everything today. Mary takes first calls from Q2 and needs the estimating template and two days with Nic." },
 ] as const;
+export const SALES_KEYS = ["sales_process", "sales_team"] as const;
 
-export const NARRATIVE_FIELDS = [...CUSTOMER_FIELDS, POSITION_ONE_LINER, ...BRAND_FIELDS, ...SALES_FIELDS] as const;
+/**
+ * One row per kind of buyer (\u00a76.62). A sole trader writes one and it reads like the old single box; a
+ * business with two arms writes two and stops describing both in one paragraph.
+ */
+export type Segment = { id: string; name: string; profile: string | null; cares_about: string | null; revenue_share: number | null; sort_order: number };
+
+export const NARRATIVE_FIELDS = [POSITION_ONE_LINER, ...BRAND_FIELDS, ...salesFields("job")] as const;
 export type NarrativeKey = (typeof NARRATIVE_FIELDS)[number]["key"];
 
 export type MarketKey = (typeof MARKET_FIELDS)[number]["key"] | NarrativeKey;
@@ -74,4 +78,4 @@ export type Evidence = {
   /** How the question was answered, and what the business will DO about the answer (§6.61). */
   method: string | null; decision: string | null;
 };
-export type MarketingData = { market: Market; spend: Spend[]; evidence: Evidence[] };
+export type MarketingData = { market: Market; spend: Spend[]; evidence: Evidence[]; segments: Segment[] };
