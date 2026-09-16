@@ -15,6 +15,7 @@ import { GUIDED_STEPS } from "@/lib/nav";
 import { planMonths } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
 import { useSaveOnce } from "@/lib/saveOnce";
+import { NoneToList } from "@/components/module/NoneToList";
 import { YEARS } from "@/engine/sales/projection";
 import { depreciationByYear, depreciationMonths, bookValueByYear, assetsByYear, type FixedAsset } from "@/engine/assets/depreciation";
 import { useMoney } from "@/components/MoneyProvider";
@@ -56,9 +57,9 @@ export type AssetCash = {
   reconciled: boolean;
 };
 
-export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth }: {
+export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth, saidNone }: {
   planId: string; initial: AssetRow[]; mode: "guided" | "advanced"; lenders: Record<string, string>;
-  cash: AssetCash; fyEndMonth: number;
+  cash: AssetCash; fyEndMonth: number; saidNone: boolean;
 }) {
   const gst = useGst();
   const num = useMoney();
@@ -208,6 +209,10 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth 
                 <Td colSpan={11} className="py-8 text-center text-muted-foreground">
                   Nothing here yet — and for plenty of businesses that is the right answer.
                   <div className="mt-1 text-[12px]">A service business with a laptop and a phone owns no fixed assets worth forecasting.</div>
+                  {/* So say it, rather than leaving the step unfinished for being true (§6.57.1). */}
+                  <NoneToList planId={planId} step="assets" said={saidNone}
+                    say="The business owns no fixed assets"
+                    unsay="You have said the business owns no fixed assets, so this step is done." />
                 </Td>
               </GridRow>
             )}

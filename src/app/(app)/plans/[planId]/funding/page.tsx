@@ -38,7 +38,7 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
     supabase.from("plan_fixed_assets").select("*").eq("plan_id", planId),
     // A sold asset stops wearing out (§6.56), so the Year 1 depreciation this page quotes has to know.
     supabase.from("plan_extraordinary_items").select("*").eq("plan_id", planId),
-    supabase.from("plan_settings").select("opening_cash, on_cost_pct, financial_year_end_month, first_projected_year").eq("plan_id", planId).maybeSingle(),
+    supabase.from("plan_settings").select("opening_cash, on_cost_pct, financial_year_end_month, first_projected_year, no_funding").eq("plan_id", planId).maybeSingle(),
     supabase.from("plan_historic_periods").select("cash").eq("plan_id", planId).order("period_number").limit(1).maybeSingle(),
   ]);
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
@@ -101,7 +101,7 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
       openingCash={openingCashFor(historic.data, Number(settings.data?.opening_cash ?? 0))}
       openingFromHistory={!!historic.data}
       fyEndMonth={settings.data?.financial_year_end_month ?? 6}
-      bought={bought} cap={cap}
+      bought={bought} cap={cap} saidNone={settings.data?.no_funding === true}
       cash={{ revenueMonths, cogsMonths, overheadsMonths: ohMonths, capexMonths: capex }}
       year1={{ revenue: revenueYear1, cogs: cogsYear1, overheads: ohYear1, depreciation: assetsMonths(withDisposals(assetRows, sold)).reduce((a, b) => a + b, 0) }}
     />

@@ -15,6 +15,7 @@ import type { CapTable } from "@/engine/funding/ownership";
 import { useSaveOnce } from "@/lib/saveOnce";
 import { YEARS } from "@/engine/sales/projection";
 import { useMoney } from "@/components/MoneyProvider";
+import { NoneToList } from "@/components/module/NoneToList";
 import {
   loanSummary, loanByYear, loanMonths, rbfMonths, fundingInMonths, rbfCap, rbfCost, fundingTotals, adequacy, interestByYear, debtByYear,
   type FundingKind, type FundingSource,
@@ -48,7 +49,7 @@ const monthOptions = (fyEndMonth: number) => planMonths(fyEndMonth).map((m, i) =
 
 export type CashInput = { revenueMonths: number[]; cogsMonths: number[]; overheadsMonths: number[]; capexMonths: number[] };
 
-export function FundingModule({ planId, initial, mode, openingCash, openingFromHistory, bought, cap, cash, year1, fyEndMonth }: {
+export function FundingModule({ planId, initial, mode, openingCash, openingFromHistory, bought, cap, cash, year1, fyEndMonth, saidNone }: {
   planId: string; initial: FundingRow[]; mode: "guided" | "advanced";
   openingCash: number; openingFromHistory: boolean;
   /** What each asset-backed loan bought, by loan id — the thing's own name (§6.52.2). */
@@ -57,6 +58,8 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
   cap: CapTable;
   cash: CashInput;
   year1: { revenue: number; cogs: number; overheads: number; depreciation: number };
+  /** The client has said the business raises nothing (§6.57.1) — read only while the list is empty. */
+  saidNone: boolean;
   fyEndMonth: number;
 }) {
   const num = useMoney();
@@ -201,6 +204,10 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
                 <Td colSpan={7} className="py-8 text-center text-muted-foreground">
                   No funding in the plan yet.
                   <div className="mt-1 text-[12px]">If the business runs on its own cash from day one, that is a legitimate answer — the row below still checks it holds.</div>
+                  {/* So say it, rather than leaving the step unfinished for being true (§6.57.1). */}
+                  <NoneToList planId={planId} step="funding" said={saidNone}
+                    say="The business is not borrowing or raising anything"
+                    unsay="You have said the business runs on its own cash, so this step is done." />
                 </Td>
               </GridRow>
             )}

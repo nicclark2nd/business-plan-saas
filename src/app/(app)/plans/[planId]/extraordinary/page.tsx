@@ -10,7 +10,7 @@ export default async function ExtraordinaryPage({ params }: { params: Promise<{ 
     getSession(),
     supabase.from("plan_extraordinary_items").select("*").eq("plan_id", planId).order("year").order("month").order("sort_order"),
     supabase.from("plan_fixed_assets").select("*").eq("plan_id", planId).order("name"),
-    supabase.from("plan_settings").select("financial_year_end_month").eq("plan_id", planId).maybeSingle(),
+    supabase.from("plan_settings").select("financial_year_end_month, no_one_offs").eq("plan_id", planId).maybeSingle(),
   ]);
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
 
@@ -40,6 +40,7 @@ export default async function ExtraordinaryPage({ params }: { params: Promise<{ 
         already_owned: a.already_owned === true,
       }))}
       fyEndMonth={settings.data?.financial_year_end_month ?? 6}
+      saidNone={settings.data?.no_one_offs === true}
     />
   );
 }

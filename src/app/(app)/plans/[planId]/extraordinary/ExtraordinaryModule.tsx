@@ -11,6 +11,7 @@ import { GUIDED_STEPS } from "@/lib/nav";
 import { planMonths } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
 import { useSaveOnce } from "@/lib/saveOnce";
+import { NoneToList } from "@/components/module/NoneToList";
 import { YEARS } from "@/engine/sales/projection";
 import { useMoney } from "@/components/MoneyProvider";
 import {
@@ -54,9 +55,9 @@ const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground"
 const box = "h-8";
 const YEAR_OPTIONS = YEARS.map((y) => ({ value: String(y), label: `Year ${y}` }));
 
-export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth }: {
+export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth, saidNone }: {
   planId: string; initial: ExtraordinaryRow[]; mode: "guided" | "advanced";
-  assets: SoldAsset[]; fyEndMonth: number;
+  assets: SoldAsset[]; fyEndMonth: number; saidNone: boolean;
 }) {
   const num = useMoney();
   const signedText = signedWith(num);
@@ -164,6 +165,10 @@ export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth 
                   <Td colSpan={6} className="py-8 text-center text-muted-foreground">
                     Most plans have a few, and they are easy to forget.
                     <div className="mt-1 text-[12px]">{EXAMPLES.slice(0, 5).join(" · ")}</div>
+                    {/* So say it, rather than leaving the step unfinished for being true (§6.57.1). */}
+                    <NoneToList planId={planId} step="extraordinary" said={saidNone}
+                      say="Nothing one-off in the next five years"
+                      unsay="You have said there are no one-offs, so this step is done." />
                   </Td>
                 </GridRow>
               )}

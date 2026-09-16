@@ -23,7 +23,7 @@ export default async function AssetsPage({ params }: { params: Promise<{ planId:
     loadPlan(planId),
     supabase.from("plan_fixed_assets").select("*").eq("plan_id", planId).order("sort_order").order("created_at"),
     supabase.from("plan_funding_debt").select("id, lender_name, loan_type").eq("plan_id", planId),
-    supabase.from("plan_settings").select("financial_year_end_month").eq("plan_id", planId).maybeSingle(),
+    supabase.from("plan_settings").select("financial_year_end_month, no_fixed_assets").eq("plan_id", planId).maybeSingle(),
   ]);
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
 
@@ -89,5 +89,5 @@ export default async function AssetsPage({ params }: { params: Promise<{ planId:
   };
 
   return <AssetsModule planId={planId} initial={rows} mode={mode} lenders={lenders} cash={cash}
-    fyEndMonth={settings.data?.financial_year_end_month ?? 6} />;
+    fyEndMonth={settings.data?.financial_year_end_month ?? 6} saidNone={settings.data?.no_fixed_assets === true} />;
 }

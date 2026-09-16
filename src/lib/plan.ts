@@ -36,7 +36,7 @@ export const getCompleteness = cache(async (planId: string) => {
   };
   const [framework] = await Promise.all([supabase.from("plan_framework").select("vision,mission,purpose,brand_promise,ai_direction,field_of_play").eq("plan_id", planId).maybeSingle()]);
   const fw = framework.data ? Object.values(framework.data).filter(Boolean).length : 0;
-  const [people, marketing, competitors, swot, annualGoals, historic, products, cogs, overheads, extraordinary, funding, assets, hasHistory] = await Promise.all([
+  const [people, marketing, competitors, swot, annualGoals, historic, products, cogs, overheads, extraordinary, funding, assets, settings] = await Promise.all([
     count("plan_people"),
     supabase.from("plan_marketing").select("target_market,market_size,market_trends,customer_needs").eq("plan_id", planId).maybeSingle().then((r) => (r.data ? Object.values(r.data).filter(Boolean).length : 0)),
     Promise.all([count("plan_competitors"), supabase.from("plan_marketing").select("our_advantage").eq("plan_id", planId).maybeSingle().then((r) => (r.data?.our_advantage ? 1 : 0))]).then(([c, a]) => Math.min(c, 1) + a),
@@ -49,27 +49,49 @@ export const getCompleteness = cache(async (planId: string) => {
     count("plan_extraordinary_items"),
     Promise.all([count("plan_funding_owner"), count("plan_funding_debt"), count("plan_funding_equity"), count("plan_funding_grants"), count("plan_funding_revenue_linked")]).then((a) => a.reduce((x, y) => x + y, 0)),
     count("plan_fixed_assets"),
-    supabase.from("plan_settings").select("has_history").eq("plan_id", planId).maybeSingle().then((r) => r.data?.has_history ?? null),
+    /**
+     * The answers a client gives by saying "none" (§6.57.1), and the assumptions behind the cash flow.
+     * `has_history` is three-state — null is unanswered and false is a real answer that changes the plan.
+     * The three "no ..." flags are two-state: false means nothing has been said, which is what an empty
+     * table meant before there was anything to say it with.
+     */
+    supabase.from("plan_settings")
+      .select("has_history, no_funding, no_fixed_assets, no_one_offs, working_capital_schedule")
+      .eq("plan_id", planId).maybeSingle().then((r) => r.data ?? null),
   ]);
+  const said = {
+    funding: settings?.no_funding === true,
+    assets: settings?.no_fixed_assets === true,
+    oneOffs: settings?.no_one_offs === true,
+  };
+  const wc = settings?.working_capital_schedule as Record<string, unknown> | null | undefined;
+  const assumptionsSet = !!wc && Object.keys(wc).length > 0;
   const sections = [
     { id: "vision", label: "Vision & Purpose", done: fw, total: 6 },
     { id: "people", label: "Leadership Team", done: Math.min(people, 1), total: 1 },
     { id: "marketing", label: "Marketing", done: marketing, total: 4 },
     { id: "competitors", label: "Competitors", done: competitors, total: 2 },
     { id: "swot", label: "SWOT", done: Math.min(swot, 4), total: 4 },
-    { id: "historic", label: "Historic", done: hasHistory === false ? 1 : Math.min(historic, 1), total: 1 },
+    { id: "historic", label: "Historic", done: settings?.has_history === false ? 1 : Math.min(historic, 1), total: 1 },
     { id: "sales", label: "Sales", done: Math.min(products, 1), total: 1 },
     { id: "cogs", label: "COGS", done: Math.min(cogs + products, 1), total: 1 },
     { id: "overheads", label: "Overheads", done: Math.min(overheads, 1), total: 1 },
-    { id: "funding", label: "Funding", done: Math.min(funding, 1), total: 1 },
+    { id: "funding", label: "Funding", done: Math.min(funding + (said.funding ? 1 : 0), 1), total: 1 },
     /**
      * Step 11 had no section at all, so `doneSteps` found nothing for it and Fixed Assets sat grey in the
      * menu however much the client had entered — while every step around it turned green. The guided path
      * also counted itself out of fifteen while only twelve steps could ever be counted.
      */
-    { id: "assets", label: "Fixed Assets", done: Math.min(assets, 1), total: 1 },
-    // "none" is a legitimate answer here, so the step counts as done once the client has been past it.
-    { id: "extraordinary", label: "One-off income & costs", done: Math.min(extraordinary, 1), total: 1 },
+    { id: "assets", label: "Fixed Assets", done: Math.min(assets + (said.assets ? 1 : 0), 1), total: 1 },
+    // "none" is a legitimate answer here, and now there is a way to give it rather than only imply it.
+    { id: "extraordinary", label: "One-off income & costs", done: Math.min(extraordinary + (said.oneOffs ? 1 : 0), 1), total: 1 },
+    /**
+     * Step 13 shows three statements the plan PRODUCES, so the only thing on it a client can finish is the
+     * one thing they type: debtor days, creditor days and when the tax is paid. Left at zero the forecast
+     * assumes every client pays on the day of the job — the most optimistic cash flow that can be drawn —
+     * so setting them is exactly the act this step is asking for.
+     */
+    { id: "forecast", label: "Review forecast", done: assumptionsSet ? 1 : 0, total: 1 },
     { id: "goals", label: "Goals", done: annualGoals, total: 6 },
   ];
   const done = sections.reduce((a, s) => a + s.done / s.total, 0);
