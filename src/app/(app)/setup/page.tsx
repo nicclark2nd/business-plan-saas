@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/plan";
 import { SetupForm } from "./SetupForm";
-import { Badge } from "@/components/ui/badge";
+import { PlanCard } from "./PlanCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -16,6 +15,10 @@ export default async function SetupPage() {
   if (!session) redirect("/login");
 
   if (session.plans.length > 0) {
+    // A plan that has been put away is still a plan (§6.58) — it is just not in front of you.
+    const live = session.plans.filter((p) => !p.archived_at);
+    const archived = session.plans.filter((p) => p.archived_at);
+
     return (
       <main className="px-4 py-12">
         <div className="mx-auto max-w-2xl">
@@ -24,17 +27,29 @@ export default async function SetupPage() {
             <form action="/auth/signout" method="post"><Button variant="outline" size="sm" type="submit">Sign out</Button></form>
           </div>
           <div className="space-y-2">
-            {session.plans.map((p) => (
-              <Link key={p.id} href={`/plans/${p.id}/dashboard`} className="block">
-                <Card className="flex-row items-center justify-between py-4 transition-colors hover:border-input">
-                  <CardContent className="flex w-full items-center justify-between">
-                    <div><div className="font-semibold">{p.business_name}</div><div className="text-xs text-muted-foreground">FY{p.plan_year} · {orgName(p)}</div></div>
-                    <Badge variant="secondary" className="capitalize">{p.status}</Badge>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
+            {live.map((p) => <PlanCard key={p.id} plan={p} orgName={orgName(p)} archived={false} />)}
+            {live.length === 0 && (
+              <p className="py-6 text-center text-[13px] text-muted-foreground">
+                Every plan is archived. Restore one below, or set up another business.
+              </p>
+            )}
           </div>
+
+          {archived.length > 0 && (
+            <details className="mt-6">
+              <summary className="cursor-pointer text-[13px] font-semibold text-muted-foreground">
+                Archived ({archived.length})
+              </summary>
+              <div className="mt-3 space-y-2 opacity-75">
+                {archived.map((p) => <PlanCard key={p.id} plan={p} orgName={orgName(p)} archived />)}
+              </div>
+              <p className="mt-2 text-[12px] text-muted-foreground">
+                Nothing here has been deleted — an archived plan keeps every figure and opens as it always did.
+                To destroy one for good, open it and go to Plan settings.
+              </p>
+            </details>
+          )}
+
           <details className="mt-8">
             <summary className="cursor-pointer text-[13px] font-semibold text-primary">Set up another business</summary>
             <Card className="mt-3"><CardContent><SetupForm /></CardContent></Card>

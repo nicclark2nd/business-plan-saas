@@ -10,12 +10,19 @@ import { taxComponents, taxHeading } from "@/engine/plan/gst";
 import { needsRegion, regimeFor, regionLabel, regionsFor, type TaxComponent } from "@/engine/plan/taxRegimes";
 import { formatMonth } from "../people/model";
 import { saveProfile, saveFinancial } from "./actions";
+import { DangerArea, type PlanInventory } from "./DangerArea";
 import { legalStructuresFor, CUSTOMER_TYPES, PRODUCT_TYPES, COUNTRIES, CURRENCIES, MONTHS, profileMissing, type Settings, type Profile, type Financial } from "./model";
 
-type AreaKey = "profile" | "financial" | "branding";
+type AreaKey = "profile" | "financial" | "branding" | "lifecycle";
 const opts = (xs: string[]) => xs.map((x) => ({ value: x, label: x }));
 
-export function SettingsModule({ planId, initial, mode, initialArea }: { planId: string; initial: Settings; mode: "guided" | "advanced"; initialArea: AreaKey }) {
+export function SettingsModule({ planId, initial, mode, initialArea, archivedAt, inventory }: {
+  planId: string; initial: Settings; mode: "guided" | "advanced"; initialArea: AreaKey;
+  /** When the plan was put away, or null (§6.58). */
+  archivedAt: string | null;
+  /** What the plan holds, so deleting it can say so rather than asking "are you sure?". */
+  inventory: PlanInventory;
+}) {
   const [area, setArea] = useState<AreaKey>(initialArea);
   const [s, setS] = useState(initial);
   const [established, setEstablished] = useState(formatMonth(initial.date_established));
@@ -51,6 +58,7 @@ export function SettingsModule({ planId, initial, mode, initialArea }: { planId:
         { key: "profile", label: "Business profile", ...(missing.length ? { count: missing.length } : {}) },
         { key: "financial", label: "Financial year & tax" },
         { key: "branding", label: "Branding", tag: "Soon" },
+        { key: "lifecycle", label: "Archive & delete" },
       ]}
       area={area} onArea={(k) => { commit(dirty); setArea(k as AreaKey); }}
       scope={{ label: s.business_name || "This plan" }}
@@ -60,6 +68,8 @@ export function SettingsModule({ planId, initial, mode, initialArea }: { planId:
         <p>The profile opens the business overview in every report; a lender reads legal structure and years trading before a single number. Type of customer and product only change the words the app uses — &quot;clients&quot; instead of &quot;customers&quot; — so pick what your industry says.</p>
         <h3>Financial year &amp; tax</h3>
         <p>Year 1 of the plan is the financial year ending in the plan year. Tax rate is applied to profit in the forecast; dividend % is the share of after-tax profit paid to owners.</p>
+        <h3>Archive or delete</h3>
+        <p>Archiving takes a plan off your list and changes nothing in it — the right answer for a client you have finished with. Deleting destroys every figure, goal and forecast in the plan and cannot be undone, so it asks you to type the business name first.</p>
         <h3>Where working-capital and cash-flow assumptions went</h3>
         <p>Debtor, stock and creditor days, tax timing and CapEx are forecast assumptions, not settings. They live with the forecast, defaulted from your historic figures.</p>
       </>}
@@ -114,6 +124,13 @@ export function SettingsModule({ planId, initial, mode, initialArea }: { planId:
           {/* Tax (§6.39). Off is the default and changes nothing; on moves cash, never profit. */}
           <TaxSection s={s} edit={edit} />
         </div>
+      )}
+
+      {area === "lifecycle" && (
+        <>
+          <Toolbar><Meta className="ml-0">What happens to this plan when you are finished with it. Archiving is reversible; deleting is not.</Meta></Toolbar>
+          <DangerArea planId={planId} planName={s.business_name || "this plan"} archivedAt={archivedAt} inventory={inventory} />
+        </>
       )}
 
       {area === "branding" && (

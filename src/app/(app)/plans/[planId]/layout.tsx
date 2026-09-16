@@ -39,7 +39,9 @@ export default async function PlanLayout({ children, params }: { children: React
         </Link>
         <div className="text-[13px] text-sidebar-muted">Plan: <b className="font-semibold text-sidebar-foreground">{plan.business_name}</b> · FY{plan.plan_year}</div>
         <div className="flex-1" />
-        <div className="mr-2 flex items-center gap-3 text-xs text-sidebar-muted"><span className="flex items-center gap-1.5"><i className={`block size-1.5 rounded-full ${plan.status === "draft" ? "bg-warn" : "bg-good"}`} />{STATUS[plan.status] ?? plan.status}</span><span className="h-3 w-px bg-sidebar-border" /><span className="rounded border border-sidebar-border px-1.5 py-0.5 font-semibold">{settings?.currency ?? "AUD"}</span></div>
+        <div className="mr-2 flex items-center gap-3 text-xs text-sidebar-muted"><span className="flex items-center gap-1.5"><i className={`block size-1.5 rounded-full ${plan.status === "draft" ? "bg-warn" : "bg-good"}`} />{STATUS[plan.status] ?? plan.status}</span>
+          {/* Archived is not a status (§6.58): a complete plan that has been put away is still complete. */}
+          {plan.archived_at && <><span className="h-3 w-px bg-sidebar-border" /><span className="rounded border border-sidebar-border px-1.5 py-0.5">Archived</span></>}<span className="h-3 w-px bg-sidebar-border" /><span className="rounded border border-sidebar-border px-1.5 py-0.5 font-semibold">{settings?.currency ?? "AUD"}</span></div>
         <ModeToggle />
         <form action="/auth/signout" method="post">
           <button type="submit" title="Sign out" className="grid size-7 place-items-center rounded-full bg-sidebar-accent text-[11px] font-bold text-sidebar-accent-foreground ring-1 ring-sidebar-border hover:bg-sidebar-primary">{initials}</button>

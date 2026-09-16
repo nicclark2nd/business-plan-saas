@@ -16,7 +16,7 @@ export const getSession = cache(async () => {
   if (!user) return null;
   const [{ data: profile }, { data: plans }] = await Promise.all([
     supabase.from("profiles").select("id, full_name, mode, default_organisation_id").eq("id", user.id).single(),
-    supabase.from("plans").select("id, business_name, status, plan_year, organisation_id, organisations(name, kind)").order("created_at"),
+    supabase.from("plans").select("id, business_name, status, plan_year, archived_at, organisation_id, organisations(name, kind)").order("created_at"),
   ]);
   return { user, profile, plans: plans ?? [] };
 });

@@ -8,10 +8,25 @@ export default async function SettingsPage({ params, searchParams }: { params: P
   const { planId } = await params;
   const { area } = await searchParams;
   const supabase = await createClient();
-  const [session, plan, settings] = await Promise.all([
+  /**
+   * What the plan holds, so deleting it can name the work rather than ask "are you sure?" (§6.58). Counted
+   * here because it is the only screen that needs it, and only ever read — never used to decide anything.
+   */
+  const held = (table: string, label: string, plural = `${label}s`) =>
+    supabase.from(table).select("*", { count: "exact", head: true }).eq("plan_id", planId)
+      .then(({ count }) => ({ label: (count ?? 0) === 1 ? label : plural, count: count ?? 0 }));
+
+  const [session, plan, settings, ...inventory] = await Promise.all([
     getSession(),
-    supabase.from("plans").select("business_name, plan_year").eq("id", planId).single(),
+    supabase.from("plans").select("business_name, plan_year, archived_at").eq("id", planId).single(),
     supabase.from("plan_settings").select("*").eq("plan_id", planId).maybeSingle(),
+    held("plan_products", "product"),
+    held("plan_overheads", "overhead"),
+    held("plan_people", "person", "people"),
+    held("plan_fixed_assets", "fixed asset"),
+    held("plan_extraordinary_items", "one-off"),
+    held("plan_historic_periods", "year of history", "years of history"),
+    held("plan_goals", "goal"),
   ]);
   const s = settings.data ?? {};
   const initial: Settings = {
@@ -29,5 +44,7 @@ export default async function SettingsPage({ params, searchParams }: { params: P
     currency: s.currency ?? "AUD", logo_path: s.logo_path ?? null,
   };
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
-  return <SettingsModule planId={planId} initial={initial} mode={mode} initialArea={area === "financial" || area === "branding" ? area : "profile"} />;
+  const initialArea = area === "financial" || area === "branding" || area === "lifecycle" ? area : "profile";
+  return <SettingsModule planId={planId} initial={initial} mode={mode} initialArea={initialArea}
+    archivedAt={plan.data?.archived_at ?? null} inventory={inventory} />;
 }
