@@ -187,7 +187,15 @@ export function CellSelect({ value, onValueChange, options, className, placehold
   const shown = chosen ?? (value ? String(value) : undefined) ?? placeholder;
   return (
     <Select value={value ?? null} onValueChange={(v) => v !== null && onValueChange(String(v))} disabled={disabled}>
-      <SelectTrigger size="sm" className={cn("w-full", cell, className)}>
+      {/*
+       * The trigger hugs its value (§6.62.3). It used to be w-full, which stretched it across the whole
+       * column and parked the chevron up to 125px away from the word it belongs to - so the value read as
+       * loose text and the chevron as something belonging to the next column. Worse, only the hovered or
+       * focused trigger drew its border, so one control looked like a box and its neighbours looked like
+       * plain text. SelectTrigger is w-fit on its own; max-w-full keeps a long label inside its cell.
+       * A call site that genuinely wants a fixed or full width still says so in className and still wins.
+       */}
+      <SelectTrigger size="sm" className={cn("max-w-full", cell, className)}>
         <SelectValue placeholder={placeholder}>
           <span className={cn(chosen === undefined && "text-muted-foreground")}>{shown}</span>
         </SelectValue>
