@@ -1,0 +1,393 @@
+/**
+ * The business plan, built from the plan (§6.83).
+ *
+ * Every section is a function of `ReportInput`. It returns a draft, or `null` when the plan has nothing to
+ * put in it — and a `null` costs the reader a line in "What is not in this plan" rather than a heading with
+ * an empty table under it.
+ *
+ * The figures come in already computed, from the one forecast run every statement screen uses (§6.67).
+ * Nothing in this file reads the plan a second time, and nothing in it does arithmetic the engine has not
+ * already been held to by a test.
+ */
+import { FORECAST_YEARS, type Forecast } from "../forecast/model";
+import type { ServiceProfit } from "../pnl/lines";
+import type { Strength } from "../balance/lines";
+import type { Noun } from "../plan/vocabulary";
+import { marginalCash, ratios } from "./analysis";
+import { cell, num, numberSections, type Block, type Draft, type Omission, type ReportDoc } from "./blocks";
+import { COPY } from "./content";
+
+export type ReportInput = {
+  businessName: string;
+  forecast: Forecast;
+  strength: Strength[];
+  services: ServiceProfit[];
+  /** Year 1 units and price per line, for the products table a lender reads first. */
+  productLines: { name: string; averagePrice: number; units: number; revenue: number }[];
+  profile: { established: string | null; industry: string | null; country: string | null; legalStructure: string | null; customerType: string | null; productType: string | null };
+  framework: { vision: string | null; mission: string | null; purpose: string | null; brandPromise: string | null };
+  goals: { area: string; title: string }[];
+  capital: { name: string; amount: number; year: number }[];
+  overheads: { name: string; amount: number }[];
+  funding: { name: string; kind: string; amount: number }[];
+  extraordinary: { name: string; amount: number; year: number; income: boolean }[];
+  owners: { name: string; share: number | null; role: string | null }[];
+  noun: Noun;
+  taxLabel: string;
+  currency: string;
+  yearEndLabels: string[];
+  money: (v: number) => string;
+  date: string;
+};
+
+const pct = (v: number | null, dp = 1) => (v === null ? "—" : `${v.toFixed(dp)}%`);
+const times = (v: number | null) => (v === null ? "—" : `${v.toFixed(2)}×`);
+const plain = (v: number | null) => (v === null ? "—" : String(v));
+/** A column is the DATE the year ends on — the heading a lender expects above a five-year statement. */
+const yearCols = (labels: string[]) => labels.map((label) => ({ label, numeric: true, width: 110 }));
+
+/** Money out in brackets, the convention every statement in the product already uses (§6.76). */
+const signed = (money: (v: number) => string) => (v: number) => (v < 0 ? `(${money(Math.abs(v))})` : money(v));
+
+// ---------------------------------------------------------------------------
+// 1.0 Executive Summary
+// ---------------------------------------------------------------------------
+
+function executiveSummary(i: ReportInput): Draft {
+  const { forecast: f, money } = i;
+  const s = signed(money);
+  const p = f.pnl, bs = f.balanceSheet;
+  const cols = yearCols(i.yearEndLabels);
+
+  const snapshot: Draft = {
+    title: "Company snapshot",
+    blocks: [
+      { kind: "para", text: COPY.snapshot(i.businessName) },
+      { kind: "facts", rows: ([
+        ["Established", i.profile.established],
+        ["Industry", i.profile.industry],
+        ["Country of operations", i.profile.country],
+        ["Legal structure", i.profile.legalStructure],
+        ["Sales tax", i.taxLabel],
+        ["Currency", i.currency],
+        ["Plan period", `Year 1 ending ${i.yearEndLabels[0]}, through to ${i.yearEndLabels[i.yearEndLabels.length - 1]}`],
+      ] as [string, string | null][]).filter((r): r is [string, string] => !!r[1]) },
+    ],
+  };
+
+  const highlights: Draft = {
+    title: "Revenue and profit highlights",
+    blocks: [
+      { kind: "para", text: COPY.highlights(i.businessName) },
+      { kind: "table",
+        columns: [{ label: "Projected year", width: 110 }, { label: "Year ending", width: 120 },
+          { label: `Net profit after tax (${i.currency})`, numeric: true }, { label: "% of revenue", numeric: true }],
+        rows: FORECAST_YEARS.map((y) => [
+          cell(`Year ${y}`),
+          cell(i.yearEndLabels[y - 1], { muted: true }),
+          num(s(p[y].netProfit), { bold: true }),
+          num(pct(p[y].revenue === 0 ? null : (p[y].netProfit / p[y].revenue) * 100)),
+        ]) },
+    ],
+  };
+
+  const projections: Draft = {
+    title: "Financial projections",
+    blocks: [
+      { kind: "para", text: COPY.projections(i.businessName) },
+      statementTable(cols, [
+        ["Revenue", (y) => p[y].revenue, "head"],
+        ["Cost of sales", (y) => -p[y].cogs],
+        ["Gross profit", (y) => p[y].grossProfit, "sub"],
+        ["Overheads", (y) => -p[y].overheads],
+        ["Depreciation", (y) => -p[y].depreciation],
+        ["Operating profit", (y) => p[y].operatingProfit, "sub"],
+        ["Interest", (y) => -p[y].interest],
+        ["Profit before tax", (y) => p[y].profitBeforeTax, "sub"],
+        ["Tax", (y) => -p[y].tax],
+        ["Net profit after tax", (y) => p[y].netProfit, "total"],
+      ], s),
+      { kind: "lead", text: COPY.grossMarginLead },
+      { kind: "table", columns: [{ label: "" }, ...cols],
+        rows: [[cell("Gross profit margin"), ...FORECAST_YEARS.map((y) => num(pct(p[y].grossMargin)))]] },
+    ],
+  };
+
+  const mc = marginalCash(p, bs, FORECAST_YEARS);
+  const marginal: Draft = mc.every((m) => m.revenue === 0) ? null : {
+    title: "Marginal cash analysis",
+    blocks: [
+      { kind: "para", text: COPY.marginalCash },
+      { kind: "para", text: COPY.marginalCashWhy },
+      { kind: "table", columns: [{ label: "Per 100 units of revenue", width: 220 }, ...cols],
+        rows: ([
+          ["Revenue", (m: typeof mc[number]) => m.revenue, false],
+          ["Cost of goods", (m: typeof mc[number]) => m.costOfGoods, false],
+          ["Money owed to us", (m: typeof mc[number]) => m.receivables, false],
+          ["Stock and work in progress", (m: typeof mc[number]) => m.inventory, false],
+          ["Money we owe suppliers", (m: typeof mc[number]) => m.payables, false],
+          ["Overheads", (m: typeof mc[number]) => m.overheads, false],
+          ["Net variable cash flow", (m: typeof mc[number]) => m.netVariableCashFlow, true],
+        ] as [string, (m: typeof mc[number]) => number, boolean][]).map(([label, get, bold]) => [
+          cell(label, { bold }), ...mc.map((m) => num(get(m).toFixed(2), { bold })),
+        ]) },
+      { kind: "note", text: COPY.marginalCashNote },
+    ],
+  };
+
+  const rows = ratios(p, bs, FORECAST_YEARS);
+  const ratioSection: Draft = {
+    title: "Financial ratios",
+    blocks: [
+      { kind: "para", text: COPY.ratios(i.businessName) },
+      { kind: "table", columns: [{ label: "", width: 220 }, ...cols],
+        rows: (["Profitability", "Growth", "Efficiency & liquidity"] as const).flatMap((group) => [
+          [cell(group, { bold: true }), ...FORECAST_YEARS.map(() => cell(""))],
+          ...rows.filter((r) => r.group === group).map((r) => [
+            cell(r.label, { muted: true }),
+            ...r.values.map((v) => num(r.unit === "%" ? pct(v, 2) : r.unit === "x" ? times(v) : plain(v))),
+          ]),
+        ]) },
+    ],
+  };
+
+  const products: Draft = i.productLines.length === 0 ? null : {
+    title: `Overview of our ${i.noun.many}`,
+    blocks: [
+      { kind: "para", text: COPY.products(i.businessName, i.noun.many, i.profile.customerType ?? "customers") },
+      { kind: "table",
+        columns: [{ label: i.noun.head, width: 240 }, { label: `Average sale value (${i.currency})`, numeric: true },
+          { label: "Units in Year 1", numeric: true }, { label: `Year 1 revenue (${i.currency})`, numeric: true }],
+        rows: i.productLines.map((l) => [
+          cell(l.name), num(money(l.averagePrice)), num(l.units ? String(l.units) : "—"), num(money(l.revenue)),
+        ]).concat([[cell("Total", { bold: true }), num(""), num(""),
+          num(money(i.productLines.reduce((a, l) => a + l.revenue, 0)), { bold: true })]]) },
+    ],
+  };
+
+  const whatWeDo: Draft = i.framework.purpose ? {
+    title: "What we do", blocks: [{ kind: "para", text: i.framework.purpose }],
+  } : null;
+
+  const ownership: Draft = i.owners.length === 0 ? null : {
+    title: "Ownership",
+    blocks: [
+      { kind: "para", text: COPY.ownership(i.businessName) },
+      { kind: "table", columns: [{ label: "Owner", width: 240 }, { label: "Share held", numeric: true }, { label: "Position in the business" }],
+        rows: i.owners.map((o) => [cell(o.name), num(o.share === null ? "—" : `${o.share}%`), cell(o.role ?? "—", { muted: !o.role })]) },
+    ],
+  };
+
+  const statement = (title: string, text: string | null, lead: string): Draft =>
+    text ? { title, blocks: [{ kind: "para", text: lead }, { kind: "quote", text }] } : null;
+
+  const goals: Draft = i.goals.length === 0 ? null : {
+    title: "Important goals",
+    blocks: [
+      { kind: "para", text: COPY.goals(i.businessName) },
+      { kind: "list", items: i.goals.map((g) => `${g.area} — ${g.title}`) },
+    ],
+  };
+
+  const capital: Draft = i.capital.length === 0 ? null : {
+    title: "Capital requirements",
+    blocks: [
+      { kind: "para", text: COPY.capital(i.businessName) },
+      { kind: "table", columns: [{ label: "Item", width: 300 }, { label: "Year", numeric: true }, { label: `Value (${i.currency})`, numeric: true }],
+        rows: i.capital.map((c) => [cell(c.name), num(`Year ${c.year}`), num(money(c.amount))])
+          .concat([[cell("Total", { bold: true }), num(""), num(money(i.capital.reduce((a, c) => a + c.amount, 0)), { bold: true })]]) },
+    ],
+  };
+
+  return {
+    title: "Executive Summary",
+    children: [
+      snapshot, highlights, projections, marginal, ratioSection, products, whatWeDo, ownership,
+      statement("Our vision", i.framework.vision, COPY.visionLead(i.businessName)),
+      statement("Our mission", i.framework.mission, COPY.missionLead(i.businessName)),
+      statement("Our brand promise", i.framework.brandPromise, COPY.promiseLead(i.businessName)),
+      goals, capital,
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The five-year statement, the shape every financial table in the plan takes
+// ---------------------------------------------------------------------------
+
+type Line = [string, (y: number) => number, ("head" | "sub" | "total")?];
+
+function statementTable(cols: { label: string; numeric?: boolean; width?: number }[], lines: Line[], s: (v: number) => string): Block {
+  return {
+    kind: "table",
+    columns: [{ label: "", width: 220 }, ...cols],
+    rows: lines.map(([label, get, weight]) => [
+      cell(label, { bold: !!weight, muted: !weight }),
+      ...FORECAST_YEARS.map((y) => num(s(get(y)), { bold: !!weight })),
+    ]),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 9.0 Financial Plan
+// ---------------------------------------------------------------------------
+
+function financialPlan(i: ReportInput): Draft {
+  const { forecast: f, money } = i;
+  const s = signed(money);
+  const p = f.pnl, cf = f.cashFlow, bs = f.balanceSheet;
+  const cols = yearCols(i.yearEndLabels);
+
+  const overheads: Draft = i.overheads.length === 0 ? null : {
+    title: "Overheads",
+    blocks: [
+      { kind: "para", text: COPY.overheads(i.businessName) },
+      { kind: "table", columns: [{ label: "Expense", width: 300 }, { label: `Year 1 (${i.currency})`, numeric: true }],
+        rows: i.overheads.map((o) => [cell(o.name), num(money(o.amount))])
+          .concat([[cell("Total overheads", { bold: true }), num(money(p[1].overheads), { bold: true })]]) },
+    ],
+  };
+
+  const funding: Draft = i.funding.length === 0 ? null : {
+    title: "Funding",
+    blocks: [
+      { kind: "para", text: COPY.funding(i.businessName) },
+      { kind: "table", columns: [{ label: "Source", width: 300 }, { label: "Type" }, { label: `Amount (${i.currency})`, numeric: true }],
+        rows: i.funding.map((x) => [cell(x.name), cell(x.kind, { muted: true }), num(money(x.amount))]) },
+    ],
+  };
+
+  const oneOffs: Draft = i.extraordinary.length === 0 ? null : {
+    title: "One-off income and costs",
+    blocks: [
+      { kind: "para", text: COPY.oneOffs },
+      { kind: "table", columns: [{ label: "Item", width: 300 }, { label: "Year", numeric: true }, { label: `Amount (${i.currency})`, numeric: true }],
+        rows: i.extraordinary.map((x) => [cell(x.name), num(`Year ${x.year}`), num(s(x.income ? x.amount : -x.amount))]) },
+    ],
+  };
+
+  return {
+    title: "Financial Plan",
+    blocks: [{ kind: "para", text: COPY.financialPlanIntro(i.businessName) }],
+    children: [
+      { title: "Profit and loss projections",
+        blocks: [
+          { kind: "para", text: COPY.pnl },
+          statementTable(cols, [
+            ["Revenue", (y) => p[y].revenue, "head"],
+            ["Cost of sales", (y) => -p[y].cogs],
+            ["Gross profit", (y) => p[y].grossProfit, "sub"],
+            ["Overheads", (y) => -p[y].overheads],
+            ["Depreciation", (y) => -p[y].depreciation],
+            ["Operating profit", (y) => p[y].operatingProfit, "sub"],
+            ["Grant income", (y) => p[y].grantIncome],
+            ["One-off income", (y) => p[y].extraordinaryIncome],
+            ["One-off costs", (y) => -p[y].extraordinaryExpense],
+            ["Gain on asset sales", (y) => p[y].disposalGainLoss],
+            ["Interest", (y) => -p[y].interest],
+            ["Profit before tax", (y) => p[y].profitBeforeTax, "sub"],
+            ["Tax", (y) => -p[y].tax],
+            ["Net profit after tax", (y) => p[y].netProfit, "total"],
+            ["Dividends", (y) => -p[y].dividends],
+            ["Retained profit", (y) => p[y].retainedProfit, "sub"],
+          ], s),
+        ] },
+      { title: "Balance sheet projections",
+        blocks: [
+          { kind: "para", text: COPY.balanceSheet },
+          statementTable(cols, [
+            ["Cash", (y) => bs[y].cash, "head"],
+            ["Debtors", (y) => bs[y].accountsReceivable],
+            ["Stock and work in progress", (y) => bs[y].inventory],
+            ["Prepayments", (y) => bs[y].prepaid],
+            ["Other current assets", (y) => bs[y].otherCurrentAssets],
+            ["Current assets", (y) => bs[y].currentAssets, "sub"],
+            ["Fixed assets", (y) => bs[y].fixedAssets],
+            ["Other non-current assets", (y) => bs[y].otherNonCurrentAssets],
+            ["Total assets", (y) => bs[y].totalAssets, "total"],
+            ["Creditors", (y) => bs[y].accountsPayable],
+            ["Accruals", (y) => bs[y].accrued],
+            ["Tax owing", (y) => bs[y].taxPayable],
+            ["Loans due within a year", (y) => bs[y].debtCurrent],
+            ["Other current liabilities", (y) => bs[y].otherCurrentLiabilities],
+            ["Current liabilities", (y) => bs[y].currentLiabilities, "sub"],
+            ["Loans due later", (y) => bs[y].debtNonCurrent],
+            ["Other non-current liabilities", (y) => bs[y].otherNonCurrentLiabilities],
+            ["Total liabilities", (y) => bs[y].totalLiabilities, "sub"],
+            ["Equity", (y) => bs[y].equity],
+            ["Liabilities and equity", (y) => bs[y].totalLiabilitiesAndEquity, "total"],
+          ], s),
+        ] },
+      { title: "Cash flow projections",
+        blocks: [
+          { kind: "para", text: COPY.cashFlow },
+          statementTable(cols, [
+            ["Opening cash", (y) => cf[y].openingCash, "head"],
+            ["Received from customers", (y) => cf[y].receiptsFromCustomers],
+            ["Grants received", (y) => cf[y].grantsReceived],
+            ["One-off receipts", (y) => cf[y].extraordinaryReceipts],
+            ["Paid to suppliers and staff", (y) => -cf[y].paidToSuppliersAndEmployees],
+            ["One-off payments", (y) => -cf[y].extraordinaryPayments],
+            ["Tax paid", (y) => -cf[y].taxPaid],
+            ["Operating cash flow", (y) => cf[y].netOperating, "sub"],
+            ["Assets bought", (y) => -cf[y].capex],
+            ["Assets sold", (y) => cf[y].disposalProceeds],
+            ["Investing cash flow", (y) => cf[y].netInvesting, "sub"],
+            ["Money borrowed", (y) => cf[y].debtProceeds],
+            ["Money invested", (y) => cf[y].equityRaised],
+            ["Loan repayments", (y) => -cf[y].debtRepaid],
+            ["Interest paid", (y) => -cf[y].interestPaid],
+            ["Dividends paid", (y) => -cf[y].dividendsPaid],
+            ["Financing cash flow", (y) => cf[y].netFinancing, "sub"],
+            ["Closing cash", (y) => cf[y].closingCash, "total"],
+          ], s),
+          { kind: "note", text: COPY.cashFlowNote },
+        ] },
+      { title: `Revenue by ${i.noun.one}`, ...(i.services.length === 0 ? { blocks: [] } : {}),
+        blocks: i.services.length === 0 ? [{ kind: "para", text: COPY.noServices(i.noun.many) }] : [
+          { kind: "para", text: COPY.byService(i.noun.one) },
+          { kind: "table",
+            columns: [{ label: i.noun.head, width: 240 }, { label: `Revenue (${i.currency})`, numeric: true },
+              { label: `Cost of sales (${i.currency})`, numeric: true }, { label: `Gross profit (${i.currency})`, numeric: true }, { label: "Margin", numeric: true }],
+            rows: i.services.map((x) => [cell(x.name), num(money(x.revenue)), num(money(x.cogs)), num(money(x.grossProfit)), num(pct(x.margin))]) },
+          { kind: "note", text: COPY.byServiceNote(i.noun.one) },
+        ] },
+      overheads, funding, oneOffs,
+      { title: "Financial strength",
+        blocks: [
+          { kind: "para", text: COPY.strength },
+          { kind: "table", columns: [{ label: "", width: 220 }, ...cols],
+            rows: [
+              [cell("Working capital"), ...i.strength.map((x) => num(s(x.netWorkingCapital)))],
+              [cell("Borrowings"), ...i.strength.map((x) => num(money(x.totalDebt)))],
+              [cell("Net debt"), ...i.strength.map((x) => num(s(x.netDebt)))],
+              [cell("Net assets", { bold: true }), ...i.strength.map((x) => num(s(x.netAssets), { bold: true }))],
+            ] },
+        ] },
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+
+export function buildReport(i: ReportInput): ReportDoc {
+  const omitted: Omission[] = [];
+  const keep = (d: Draft, title: string, why: string): Draft => {
+    if (d === null) omitted.push({ title, why });
+    return d;
+  };
+
+  const sections = numberSections([
+    executiveSummary(i),
+    keep(financialPlan(i), "Financial Plan", "The forecast has not been built yet."),
+  ]);
+
+  /* Sections the plan has no module behind yet are not listed as missing: a client cannot fix them. */
+  return {
+    businessName: i.businessName,
+    subtitle: COPY.subtitle,
+    date: i.date,
+    sections,
+    omitted,
+  };
+}

@@ -105,3 +105,24 @@ export function currentFinancialYear(fyEndMonth: number | null | undefined, toda
 
 /** Year 1 of the plan runs to `firstProjectedYear`; Year N runs to that plus N-1. */
 export const planYearEnding = (first: number, planYear: number) => first + Math.max(1, Math.trunc(planYear)) - 1;
+
+/**
+ * The date a year ENDS, short, for a column heading (§6.83).
+ *
+ * `planYearLabel` gives the span — "July 2026 → June 2027" — which is right in a toolbar and far too long
+ * above a column of figures. A balance sheet column is a DATE, not a span, and a profit and loss column is
+ * the year that ends on it, so one label serves both.
+ */
+export function planYearEndLabel(planYear: number, fyEndMonth: number | null | undefined) {
+  const end = Math.min(12, Math.max(1, Math.trunc(Number(fyEndMonth)) || 6));
+  return `${MONTH_LONG[end - 1].slice(0, 3)} ${planYear}`;
+}
+
+/** A month-precision date as a person writes it: "June 1998", not "1998-06". */
+export function monthYearLabel(iso: string | null | undefined) {
+  const m = /^(\d{4})-(\d{2})/.exec(String(iso ?? ""));
+  if (!m) return null;
+  const month = Number(m[2]);
+  if (month < 1 || month > 12) return null;
+  return `${MONTH_LONG[month - 1]} ${m[1]}`;
+}
