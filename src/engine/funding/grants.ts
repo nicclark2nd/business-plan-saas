@@ -36,7 +36,16 @@ export type Grant = {
   start_month?: number | null;          // 1–12 within that year
   recognition_type?: Recognition | null;
   recognition_period_months?: number | null;
+  /**
+   * False for a non-assessable grant (§6.74): income in the profit and loss, excluded from taxable profit.
+   * Undefined means taxable, because that is the safe default — a grant assumed taxable and actually exempt
+   * understates the client's cash, and the reverse promises money the tax office is about to take.
+   */
+  taxable?: boolean | null;
 };
+
+/** A grant is assessable unless it has been said, in so many words, that it is not. */
+export const grantIsTaxable = (g: Grant) => g.taxable !== false;
 
 /**
  * The plan runs sixty months; this runs seventy-two. The extra year is not shown anywhere — it exists so
@@ -75,6 +84,8 @@ export type GrantYear = {
   received: number;
   /** Earned this year, and so in the profit and loss this year. */
   income: number;
+  /** The part of that income the tax office does not want (§6.74). Never more than `income`. */
+  incomeUntaxed: number;
   /** Received and not yet earned at year end — the liability, split by when it will be earned. */
   deferredCurrent: number;
   deferredNonCurrent: number;
@@ -84,9 +95,20 @@ export type GrantYear = {
 export function grantsByYear(grants: Grant[]): GrantYear[] {
   const received = Array(HORIZON).fill(0) as number[];
   const earned = Array(HORIZON).fill(0) as number[];
+  /**
+   * Untaxed income is accumulated on the SAME recognition schedule as the income itself (§6.74), not on the
+   * cash. A non-assessable grant spread over three years is exempt a slice at a time, exactly as it is
+   * earned a slice at a time — otherwise the exemption and the income would land in different years and the
+   * tax charge would be wrong in both.
+   */
+  const untaxed = Array(HORIZON).fill(0) as number[];
   for (const g of grants) {
     const m = grantMonths(g);
-    for (let i = 0; i < HORIZON; i++) { received[i] += m.received[i]; earned[i] += m.earned[i]; }
+    const exempt = !grantIsTaxable(g);
+    for (let i = 0; i < HORIZON; i++) {
+      received[i] += m.received[i]; earned[i] += m.earned[i];
+      if (exempt) untaxed[i] += m.earned[i];
+    }
   }
   return YEARS.map((year) => {
     const end = year * 12;
@@ -98,6 +120,7 @@ export function grantsByYear(grants: Grant[]): GrantYear[] {
       year,
       received: r2(sum(received, end - 12, end)),
       income: r2(sum(earned, end - 12, end)),
+      incomeUntaxed: r2(sum(untaxed, end - 12, end)),
       deferredClosing: r2(Math.max(0, closing)),
       deferredCurrent: r2(current),
       deferredNonCurrent: r2(Math.max(0, closing) - current),

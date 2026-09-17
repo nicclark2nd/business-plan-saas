@@ -62,7 +62,10 @@ export async function upsertFunding(
       row = { plan_id: planId, grant_name: name, amount_approved: money(r.amount),
         has_conditions: !!r.has_conditions, conditions: (r.conditions ?? "").trim() || null,
         recognition_type: r.recognition_type ?? "immediate",
-        recognition_period_months: r.recognition_type === "deferred" ? Math.max(1, Math.trunc(Number(r.recognition_period_months) || 12)) : null, ...when };
+        recognition_period_months: r.recognition_type === "deferred" ? Math.max(1, Math.trunc(Number(r.recognition_period_months) || 12)) : null,
+        // Assessable unless the client has said otherwise (§6.74). The safe default is the one that
+        // understates their cash rather than one that promises money the tax office is about to take.
+        taxable: r.taxable !== false, ...when };
       break;
     default:
       row = { plan_id: planId, provider: name, amount_received: money(r.amount),

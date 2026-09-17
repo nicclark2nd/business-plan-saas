@@ -53,6 +53,7 @@ export async function loadFundingRows(planId: string): Promise<FundingRow[]> {
       _key: g.id, id: g.id, kind: "grant" as const, name: g.grant_name ?? "Grant", amount: n(g.amount_approved),
       start_year: n(g.start_year) || 1, start_month: n(g.start_month) || 1,
       has_conditions: !!g.has_conditions, conditions: g.conditions, recognition_type: g.recognition_type,
+      taxable: g.taxable !== false,
       recognition_period_months: g.recognition_period_months === null ? null : n(g.recognition_period_months),
     })),
     ...(rbf.data ?? []).map((v) => ({

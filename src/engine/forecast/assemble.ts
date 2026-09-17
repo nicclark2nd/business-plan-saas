@@ -165,6 +165,7 @@ export function assembleBase(p: PlanSources): Record<number, YearBase> {
       equityRaised: r2(n(raised.equity[i])),
       grantsReceived: r2(n(grants[i]?.received)),
       grantIncome: r2(n(grants[i]?.income)),
+      grantIncomeUntaxed: r2(n(grants[i]?.incomeUntaxed)),
       deferredIncomeCurrent: r2(n(grants[i]?.deferredCurrent)),
       deferredIncomeNonCurrent: r2(n(grants[i]?.deferredNonCurrent)),
       // The disposal's own proceeds are investing cash, so they must not be counted as income as well.

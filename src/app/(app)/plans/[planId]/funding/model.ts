@@ -37,6 +37,8 @@ export type FundingRow = {
   // grant
   has_conditions?: boolean;
   conditions?: string | null;
+  /** False for a grant that is not assessable for tax (§6.74). */
+  taxable?: boolean;
   recognition_type?: Recognition;
   recognition_period_months?: number | null;
   // revenue-linked
@@ -105,6 +107,7 @@ export function grantOf(r: FundingRow): Grant | null {
     start_year: r.start_year, start_month: r.start_month,
     recognition_type: r.recognition_type ?? "immediate",
     recognition_period_months: r.recognition_period_months ?? null,
+    taxable: r.taxable ?? true,
   };
 }
 

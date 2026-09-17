@@ -352,7 +352,7 @@ function SourceRow({ r, bought, onEdit, onRemove, planId, fyEndMonth }: {
   const facility = r.kind === "debt" && r.loan_type === "line_of_credit";
 
   const cost = r.kind === "equity" ? `${r.equity_percent ?? 0}% of the business`
-    : r.kind === "grant" ? (r.has_conditions ? "Conditions apply" : "Nothing")
+    : r.kind === "grant" ? [r.has_conditions ? "Conditions apply" : null, r.taxable === false ? "Not taxed" : null].filter(Boolean).join(" · ") || "Nothing"
     : r.kind === "revenue_linked" ? `${r.repayment_percent ?? 0}% of sales, capped at ${r.cap_multiple ?? 1.5}×`
     : facility ? `${r.interest_rate ?? 0}% on what is drawn${r.annual_fee ? ` · ${num(r.annual_fee)} a year` : ""}`
     : loan ? `${r.interest_rate ?? 0}% over ${Math.round((r.term_months ?? 60) / 12)} yr` : "Nothing";
@@ -715,12 +715,27 @@ function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: 
                 <FieldSelect value={d.has_conditions ? "yes" : "no"} onValueChange={(v) => set({ has_conditions: v === "yes" })}
                   options={[{ value: "no", label: "None" }, { value: "yes", label: "Yes — say what" }]} />
               </div>
+              <div>
+                {/* Plenty of grants are not assessable, and the plan had no way to say so (§6.74). */}
+                <span className={label}>Taxed?</span>
+                <FieldSelect value={d.taxable === false ? "no" : "yes"} onValueChange={(v) => set({ taxable: v === "yes" })}
+                  options={[{ value: "yes", label: "Assessable" }, { value: "no", label: "Not assessable" }]} />
+              </div>
             </div>
             {d.has_conditions && (
               <div>
                 <span className={label}>What has to happen</span>
                 <Input value={d.conditions ?? ""} onChange={(e) => set({ conditions: e.target.value })}
                   placeholder="Two full-time hires by June, quarterly reporting" className={box} />
+              </div>
+            )}
+            {d.taxable === false && (
+              <div className="rounded border border-input bg-muted/40 px-3 py-2 text-[12px] text-muted-foreground">
+                <b>Not assessable</b> — it still counts as income in the profit and loss, and it is still
+                cash in the bank, but no tax is charged on it. A loss-making year keeps the whole loss to
+                carry forward: the exemption is not netted off against it.{" "}
+                <b>Check this against the grant&apos;s own terms.</b> Most grants are taxed; the ones that
+                are not usually say so in writing.
               </div>
             )}
             <div className="rounded border border-input bg-muted/40 px-3 py-2 text-[12px] text-muted-foreground">

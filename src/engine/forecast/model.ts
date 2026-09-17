@@ -54,6 +54,8 @@ export type YearBase = {
    */
   grantsReceived: number;
   grantIncome: number;
+  /** The part of grant income that is not assessable (§6.74). Nil on every plan that has not said so. */
+  grantIncomeUntaxed?: number;
   deferredIncomeCurrent: number;
   deferredIncomeNonCurrent: number;
   extraordinaryIncome: number;
@@ -201,7 +203,7 @@ export type Forecast = {
 const emptyBase = (): YearBase => ({
   revenue: 0, variableCogs: 0, fixedCogs: 0, overheads: 0, depreciation: 0, capex: 0, assetAdditions: 0, interest: 0,
   debtProceeds: 0, debtRepaid: 0, debtCurrent: 0, debtNonCurrent: 0, equityRaised: 0,
-  grantsReceived: 0, grantIncome: 0, deferredIncomeCurrent: 0, deferredIncomeNonCurrent: 0,
+  grantsReceived: 0, grantIncome: 0, grantIncomeUntaxed: 0, deferredIncomeCurrent: 0, deferredIncomeNonCurrent: 0,
   extraordinaryIncome: 0, extraordinaryExpense: 0, disposalProceeds: 0, disposedBookValue: 0,
   gst: NO_GST,
 });
@@ -249,9 +251,16 @@ export function buildForecast(input: ForecastInput): Forecast {
      * What this deliberately does not model: time limits, the tests some jurisdictions apply on a change of
      * ownership or of business, and group relief. Those are advice, not arithmetic, and the plan says so.
      */
-    const lossRelief = profitBeforeTax > 0 ? Math.min(profitBeforeTax, lossPool) : 0;
-    const taxableProfit = Math.max(0, profitBeforeTax - lossRelief);
-    lossPool = lossPool - lossRelief + (profitBeforeTax < 0 ? -profitBeforeTax : 0);
+    /**
+     * A non-assessable grant comes out BEFORE relief and before the loss pool is touched (§6.74). It is not
+     * a deduction and it is not a loss: it never entered the tax base at all. A business losing 100,000
+     * including 50,000 of exempt grant income has a tax loss of 150,000 to carry forward, not 100,000 —
+     * netting the exemption against the loss would quietly tax that 50,000 in a later year instead.
+     */
+    const taxBase = profitBeforeTax - n(b.grantIncomeUntaxed);
+    const lossRelief = taxBase > 0 ? Math.min(taxBase, lossPool) : 0;
+    const taxableProfit = Math.max(0, taxBase - lossRelief);
+    lossPool = lossPool - lossRelief + (taxBase < 0 ? -taxBase : 0);
 
     const tax = taxableProfit * taxRate;
     const netProfit = profitBeforeTax - tax;
