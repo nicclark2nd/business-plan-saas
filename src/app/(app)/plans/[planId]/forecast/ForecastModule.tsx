@@ -168,6 +168,15 @@ export function ForecastModule({
                 ? <>Year 1 closes on {num(cf[1].closingCash)} · lowest close over five years {num(Math.min(...FORECAST_YEARS.map((y) => cf[y].closingCash)))}</>
                 : <>{planYearLabel(firstYear, fyEndMonth)} · {cashShape(monthly, MONTHS, num)}</>}
             </Meta>
+            {/*
+              * A door to Break-Even (§6.68.1). This screen answers "what happens"; Break-Even answers "what
+              * has to happen for it to pay for itself" — and until now there was no route between them from
+              * anywhere in the app. Nic went looking for the charts and could not find them.
+              */}
+            <button type="button" onClick={() => router.push(`/plans/${planId}/break-even`)}
+              className="ml-3 text-[12px] font-semibold text-primary hover:underline">
+              Where it starts paying for itself →
+            </button>
             <SpanToggle span={span} onSpan={setSpan} />
           </Toolbar>
           {span === "years" ? (
