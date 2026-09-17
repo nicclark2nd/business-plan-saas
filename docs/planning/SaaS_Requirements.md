@@ -1686,3 +1686,49 @@ For a facility the top field is the **facility limit** and writes to `total_faci
 **The strip sits on the cash flow** — the statement it changes, and the screen that already runs the five-year forecast; Funding builds its own Year 1 cash check and has never run it. Name, limit, the deepest point and when, what it costs across five years, and what is owing at each year end. Then one line that answers the only question worth asking: **"The facility is not big enough" — by how much at its worst, in how many months, from which month.** Not *"check your facility"*. Where it is drawn but within the limit, how much room was left at the deepest point; where it was never drawn, that the plan pays its own way — **and the fee is still named if there is one, because an unused facility is not free.**
 
 *Caught on screen:* **"Deepest never drawn" is not a sentence.** A facility that was never used has no deepest point, so that figure is not rendered at all.
+
+## 6.73 Three small ones, each worse than it looked (17 Sep 2026)
+
+**The step number is a guided-path fact.** `ModuleFrame` printed *"STEP 7 OF 15"* whenever a module passed a step, in **both modes**. Advanced is *"every module and assumption"* in the sidebar's own words: **it has no steps**, so that line counted a journey the client is not on. It shows the group alone there now. Mode comes from the server session, so the toggle needs the reload it already does — which is why the first check appeared to fail.
+
+## 6.73.1 A salary is a whole number of dollars (17 Sep 2026)
+
+One per cent on 70,700 reaches **73,570.70** by Year 5, and nobody is paid seventy cents. Carrying the fraction put two directors on identical salaries, each row reading **73,571**, above a total of **147,141**. **Both roundings correct, neither adding up**, and a lender reading that sees a typo.
+
+Rounding **in the engine rather than on the screen** keeps the rows, the footer, the Overheads line and the forecast all quoting one figure — the rule this project keeps relearning (§6.19). Every year on Nic's plan now equals twice its row: 141,400 / 142,814 / 144,242 / 145,684 / 147,142.
+
+**This deliberately breaks an APeX-parity expectation.** APeX carried the cents and that test asserted them; it now asserts whole dollars, with the reason written beside it. The deviation is at most fifty cents a person a year, and **it is the kind that should be made on purpose rather than discovered later.**
+
+## 6.73.2 A cell keeps its contents inside itself (17 Sep 2026)
+
+At 575px the Sales list printed *"Shed and Tank Concrete Slabs"* on top of *"One-off job"* — **two columns drawn over each other.**
+
+**The first fix was wrong and the page said so.** Every grid is `table-fixed` with a `w-full` table, so it is always exactly as wide as its container and the `overflow-x-auto` above it never fires. A 680px floor went in and **the overlap survived untouched.** Measuring explained why: Sales fixes six of its seven columns at 720px between them, so a 680 floor left the flexible Service column **zero pixels wide**. **A floor has to clear the columns that have widths AND leave room for the one that does not** — 900.
+
+**And a floor alone is a bet.** `whitespace-nowrap` will paint any overflow across the neighbouring column, so a cell now clips to an ellipsis: **a squeezed cell looks squeezed rather than broken**, and the `title` means nothing is lost.
+
+## 6.74 A grant the tax office does not want (17 Sep 2026)
+
+**Every grant in the plan was taxed, and plenty are not.** Australian R&D and export grants, disaster and drought relief, a good many state programmes are non-assessable: they land in the bank, they belong in the profit and loss as income, and **the tax office does not want a cent.** The plan had no way to say so, so a client with a 60,000 exempt grant was shown 15,000 of tax on money that carries none — overstating the charge and understating the cash **in exactly the year a lender is reading.**
+
+**The subtlety, and the reason the exemption comes out BEFORE relief rather than after:** a business losing 100,000 including 50,000 of exempt grant income has a **tax loss of 150,000**, not 100,000. Netting the exemption against the loss would carry the smaller figure forward and **quietly tax that 50,000 again in a later year — the exemption would be borrowed rather than given.** There is a test that fails if anyone nets it.
+
+A deferred exempt grant is exempt **on the same schedule it is earned on**, not when the cash lands; otherwise the income and its exemption fall in different years and the charge is wrong in both.
+
+**`true` is the default everywhere** — column, converter and save action. A grant assumed taxable and actually exempt understates the client's cash, **which is the error that disappoints nobody**; the reverse writes a plan promising money the tax office is about to take. The dialog says so, and tells the client to check the grant's own terms.
+
+*Shape worth copying:* `grantIncomeUntaxed` is **optional** on `YearBase`, like `gst` — an addition that is nil on every plan that has not said otherwise, so no existing caller or fixture had to be rewritten and 503 tests passed before the six new ones were written.
+
+## 6.75 Four boxes that became a grid (17 Sep 2026)
+
+0035 turned one target-market box into `plan_market_segments` and **left the four source columns in place, unread, deliberately**: dropping them in the same migration that creates their replacement leaves no way back if the copy is wrong on a plan nobody has opened yet. The grid has been used since. They go now.
+
+**Looking properly before dropping them found something bigger than the drop.**
+
+`getCompleteness` scored the Marketing step out of four by counting `target_market`, market size, market trends and `customer_needs` — and **two of those four stopped being fillable** the day §6.62 replaced them with the grid. Nothing renders them; nothing writes them. So **a plan created after §6.62 could reach 2/4 on Marketing and never move again**, however much its owner wrote. **That is the §6.57 fault in a second place: a step nobody can finish.** Nic's own plan hides it, because his boxes were filled before the grid existed and still hold words.
+
+It now counts **a named segment, market size, market trends and positioning** — four things a client can actually type, all on the same tab.
+
+**The migration re-runs the copy before it drops anything**, for any plan with words in those boxes and no segment to hold them: one created between 0035 and today, or one where the boxes were filled after the first copy ran. **A plan that already has a segment is skipped entirely**, so anyone who has since edited their segments keeps exactly what they wrote. Both halves are guarded, so the whole thing runs twice safely.
+
+**It is the first destructive migration in the project**, and it went out with the rule written down: *apply it with the code, not before* — the old completeness query names two of the columns it drops and fails the moment they are gone.
