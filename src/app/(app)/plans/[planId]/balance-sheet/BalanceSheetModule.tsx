@@ -10,6 +10,7 @@ import { useMoney } from "@/components/MoneyProvider";
 import { cn } from "@/lib/utils";
 import { FORECAST_YEARS, type BalanceSheetYear } from "@/engine/forecast/model";
 import type { Strength, WorkingCapitalMonth } from "@/engine/balance/lines";
+import { navGroup } from "@/lib/nav";
 
 type AreaKey = "years" | "working" | "strength";
 
@@ -66,7 +67,7 @@ export function BalanceSheetModule({
 
   return (
     <ModuleFrame
-      group="Forecasts" title="Balance Sheet" subtitle="What the business owns, what it owes, and what is left over"
+      group={navGroup("balance-sheet")} title="Balance Sheet" subtitle="What the business owns, what it owes, and what is left over"
       mode={mode}
       areas={[
         { key: "years", label: "The years" },

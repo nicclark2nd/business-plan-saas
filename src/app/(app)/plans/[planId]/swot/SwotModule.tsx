@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { Toolbar, Meta, RemoveButton, CellTextarea, LinkButton, focusRow } from "@/components/module/DataGrid";
-import { GUIDED_STEPS } from "@/lib/nav";
+import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { upsertSwot, deleteSwot, continueFromSwot } from "./actions";
 import { QUADRANTS, QUADRANT_LABEL, QUADRANT_HINT, RESPONSE_PROMPT, RISK_QUADRANTS, QUADRANT_NOUN, type Quadrant, type SwotItem, type Suggestion, type LinkedGoal } from "./model";
@@ -73,7 +73,7 @@ export function SwotModule({ planId, initial, suggestions, goals, mode }: {
 
   return (
     <ModuleFrame
-      step={STEP} total={GUIDED_STEPS.length} group="Goals" title="SWOT" subtitle="Four honest lists — half of it is already in your plan" mode={mode}
+      step={STEP} total={GUIDED_STEPS.length} group={navGroup("swot")} title="SWOT" subtitle="Four honest lists — half of it is already in your plan" mode={mode}
       areas={[{ key: "swot", label: "SWOT", count: real.length }]} area="swot" onArea={() => {}} scope={{ label: "This plan" }}
       footer={<ModuleFooter planId={planId} moduleId="swot" formId="swot-form" />}
       help={<>

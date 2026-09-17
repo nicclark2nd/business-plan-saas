@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ModuleFrame, ModuleFooter } from "@/components/module/ModuleFrame";
 import { CellTextarea, LinkButton, Note, RemoveButton } from "@/components/module/DataGrid";
-import { GUIDED_STEPS } from "@/lib/nav";
+import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { useSaveOnce } from "@/lib/saveOnce";
 import { AREA_LABEL, GOAL_AREAS, type GoalArea } from "@/engine/whatif/goals";
@@ -100,7 +100,7 @@ export function GoalsModule({ planId, mode, initial, people, quarters, thisQuart
 
   return (
     <ModuleFrame
-      step={STEP} total={GUIDED_STEPS.length} group="Goals" title="Goals"
+      step={STEP} total={GUIDED_STEPS.length} group={navGroup("goals")} title="Goals"
       subtitle="One goal a year for each part of the business, and the quarters that get you there" mode={mode}
       areas={[
         { key: "areas", label: "By area", count: annualSet, tag: annualSet === GOAL_AREAS.length ? undefined : `${GOAL_AREAS.length - annualSet} to set` },

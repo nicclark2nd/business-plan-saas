@@ -15,6 +15,7 @@ import type { MonthlyCashFlow } from "@/engine/forecast/monthly";
 import type { OverdraftRun } from "@/engine/funding/overdraft";
 import type { GstSchedule } from "@/engine/plan/gst";
 import type { BridgeLine } from "@/engine/cash/bridge";
+import { navGroup } from "@/lib/nav";
 
 type AreaKey = "years" | "months" | "bridge";
 
@@ -75,7 +76,7 @@ export function CashFlowModule({
 
   return (
     <ModuleFrame
-      group="Forecasts" title="Cash Flow" subtitle="What actually reaches the bank, and when"
+      group={navGroup("cash-flow")} title="Cash Flow" subtitle="What actually reaches the bank, and when"
       mode={mode}
       areas={[
         { key: "years", label: "The years" },

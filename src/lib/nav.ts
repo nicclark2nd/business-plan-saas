@@ -113,6 +113,21 @@ export const NAV: NavGroup[] = [
 ];
 
 export const GUIDED_STEPS = NAV.flatMap((g) => g.items).filter((i) => i.step).sort((a, b) => a.step! - b.step!);
+/**
+ * The group heading a module sits under, DERIVED (§6.85).
+ *
+ * Every module typed its own group as a string literal, and §6.80 renamed two of them: SWOT moved to
+ * "Strengths & Risks" and Review forecast to "Review", while both modules kept printing the old name at the
+ * top of the screen. A client reading "STEP 5 OF 16 · GOALS" over a menu item filed under STRENGTHS & RISKS
+ * is being told two different things about where they are.
+ *
+ * Same fault as §6.79 and §6.81, a third time and in a third costume: one fact written down twice. The nav
+ * is the fact.
+ */
+export function navGroup(id: string) {
+  return NAV.find((g) => g.items.some((i) => i.id === id))?.group ?? "";
+}
+
 export function navLabel(id: string) { return NAV.flatMap((g) => g.items).find((i) => i.id === id)?.label ?? id; }
 
 /**

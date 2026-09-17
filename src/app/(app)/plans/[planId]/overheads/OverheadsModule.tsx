@@ -11,7 +11,7 @@ import { useGst } from "@/components/GstProvider";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
-import { GUIDED_STEPS } from "@/lib/nav";
+import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { planMonths, planMonthNames } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
 import { YEARS, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, distributionTotal, type MonthlyDistribution } from "@/engine/sales/projection";
@@ -109,7 +109,7 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
 
   return (
     <ModuleFrame
-      step={STEP} total={GUIDED_STEPS.length} group="Financials" title="Overheads" subtitle="What the business costs to run whether or not it sells anything" mode={mode}
+      step={STEP} total={GUIDED_STEPS.length} group={navGroup("overheads")} title="Overheads" subtitle="What the business costs to run whether or not it sells anything" mode={mode}
       areas={[{ key: "expenses", label: "Expenses", count: lines.length }, { key: "monthly", label: "Monthly projections" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "This plan" }}
       primaryAction={area === "expenses" ? <Button size="sm" type="button" onClick={add}>+ Expense</Button> : undefined}

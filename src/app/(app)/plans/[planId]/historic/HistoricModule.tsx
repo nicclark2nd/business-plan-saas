@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { Toolbar, Meta, Note, CellInput, RemoveButton } from "@/components/module/DataGrid";
-import { GUIDED_STEPS } from "@/lib/nav";
+import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { MONTH_SHORT } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
 import { deriveFromComponents, periodRatios, periodsFromTemplate, COMPONENT_INPUTS, TEMPLATE_ROWS, type PeriodField, type PeriodInput, type TemplateSheet } from "@/engine/historic/derive";
@@ -73,7 +73,7 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
 
   return (
     <ModuleFrame
-      step={STEP} total={GUIDED_STEPS.length} group="Financials" title="Historic" subtitle="Up to four years of accounts, newest first — the latest is where the forecast starts" mode={mode}
+      step={STEP} total={GUIDED_STEPS.length} group={navGroup("historic")} title="Historic" subtitle="Up to four years of accounts, newest first — the latest is where the forecast starts" mode={mode}
       areas={[{ key: "pnl", label: "Profit & loss", count: presentCount }, { key: "bs", label: "Balance sheet", count: presentCount }, { key: "import", label: "Import" }]}
       area={area} onArea={(k) => { flush(); setArea(k as AreaKey); }} scope={{ label: "This plan" }}
       primaryAction={<Button size="sm" type="button" variant={newBusiness ? "secondary" : "outline"} aria-pressed={newBusiness} onClick={toggleNewBusiness}>{newBusiness ? "✓ New business — no accounts yet" : "New business — no accounts yet"}</Button>}

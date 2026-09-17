@@ -6,7 +6,7 @@ import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/Module
 import { Grid, Th, Td, Row, FootRow, GroupRow, Toolbar, Meta, Note, NameLink, LinkButton, RemoveButton, CellInput, CellSelect, CellTextarea, focusRow } from "@/components/module/DataGrid";
 import { cn } from "@/lib/utils";
 import type { CapTable } from "@/engine/funding/ownership";
-import { GUIDED_STEPS } from "@/lib/nav";
+import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { SALARY_YEARS, planYearStart, startYearFromDate, tenureLabel, salarySchedule, scheduleChangeFromFirstYear, totalSalariesByYear } from "@/engine/people/salary";
 import { useMoney } from "@/components/MoneyProvider";
@@ -130,7 +130,7 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
 
   return (
     <ModuleFrame
-      step={2} total={GUIDED_STEPS.length} group="People" title="Leadership Team" subtitle="Owners, directors and the key people a lender asks about — not the whole payroll" mode={mode}
+      step={2} total={GUIDED_STEPS.length} group={navGroup("people")} title="Leadership Team" subtitle="Owners, directors and the key people a lender asks about — not the whole payroll" mode={mode}
       areas={areas} area={area} onArea={(k) => setArea(k as AreaKey)}
       scope={{ label: scoped ? scoped.name || `${scoped.first_name} ${scoped.last_name ?? ""}`.trim() || "New person" : "All people", onClear: scope ? () => setScope(null) : undefined }}
       primaryAction={<Button size="sm" type="button" onClick={addPerson}>+ New person</Button>}

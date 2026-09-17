@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
-import { GUIDED_STEPS } from "@/lib/nav";
+import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { planMonths } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
 import type { CapTable } from "@/engine/funding/ownership";
@@ -141,7 +141,7 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
 
   return (
     <ModuleFrame
-      step={STEP} total={GUIDED_STEPS.length} group="Financials" title="Funding" subtitle="Where the money comes from, and whether it is enough" mode={mode}
+      step={STEP} total={GUIDED_STEPS.length} group={navGroup("funding")} title="Funding" subtitle="Where the money comes from, and whether it is enough" mode={mode}
       areas={[{ key: "sources", label: "Sources", count: lines.length }, { key: "monthly", label: "Monthly projections" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "This plan" }}
       primaryAction={area === "sources" ? <Button size="sm" type="button" onClick={() => setDlg({ kind: "picker" })}>+ Funding</Button> : undefined}

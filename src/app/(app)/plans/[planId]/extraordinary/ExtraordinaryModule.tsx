@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, RemoveButton } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
-import { GUIDED_STEPS } from "@/lib/nav";
+import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { planMonths } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
 import { useSaveOnce } from "@/lib/saveOnce";
@@ -117,7 +117,7 @@ export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth,
 
   return (
     <ModuleFrame
-      step={STEP} total={GUIDED_STEPS.length} group="Financials" title="One-off income &amp; costs"
+      step={STEP} total={GUIDED_STEPS.length} group={navGroup("extraordinary")} title="One-off income &amp; costs"
       subtitle="Money in or out that has nothing to do with trading" mode={mode}
       areas={[{ key: "items", label: "One-offs", count: named.length }, { key: "monthly", label: "Monthly projections" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "This plan" }}

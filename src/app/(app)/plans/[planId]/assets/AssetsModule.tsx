@@ -11,7 +11,7 @@ import { useGst } from "@/components/GstProvider";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
-import { GUIDED_STEPS } from "@/lib/nav";
+import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { planMonths } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
 import { useSaveOnce } from "@/lib/saveOnce";
@@ -164,7 +164,7 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth,
 
   return (
     <ModuleFrame
-      step={STEP} total={GUIDED_STEPS.length} group="Financials" title="Fixed assets" subtitle="What the business owns, and what it writes off each year" mode={mode}
+      step={STEP} total={GUIDED_STEPS.length} group={navGroup("assets")} title="Fixed assets" subtitle="What the business owns, and what it writes off each year" mode={mode}
       areas={[{ key: "assets", label: "Assets", count: lines.length }, { key: "monthly", label: "Monthly projections" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "This plan" }}
       primaryAction={area === "assets" ? <Button size="sm" type="button" onClick={add}>+ Asset</Button> : undefined}

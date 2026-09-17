@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row, FootRow, Toolbar, Meta, Note, RemoveButton, CellInput, CellSelect, CellTextarea, focusRow } from "@/components/module/DataGrid";
 import { Section, FieldGrid, Field, FieldTextarea } from "@/components/module/FieldGrid";
-import { GUIDED_STEPS } from "@/lib/nav";
+import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { cn } from "@/lib/utils";
 import { useMoney } from "@/components/MoneyProvider";
@@ -169,7 +169,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
 
   return (
     <ModuleFrame
-      step={3} total={GUIDED_STEPS.length} group="Market" title="Marketing" subtitle={`Who your ${plural} are and what you will spend to win them`} mode={mode}
+      step={3} total={GUIDED_STEPS.length} group={navGroup("marketing")} title="Marketing" subtitle={`Who your ${plural} are and what you will spend to win them`} mode={mode}
       areas={[
         { key: "market", label: "Market", count: written },
         { key: "spend", label: "Channels & spend", count: rows.spend.filter((r) => r.approach.trim()).length,

@@ -20,6 +20,7 @@ import { type WorkingCapitalDays } from "@/engine/forecast/model";
 import { applyScenario, createGoalsFromScenario, undoLastApply, type GoalToCreate } from "./actions";
 import { plannedChanges, applyChanges, type Change } from "@/engine/whatif/apply";
 import type { Noun } from "@/engine/plan/vocabulary";
+import { navGroup } from "@/lib/nav";
 
 /**
  * What-If Planner (§6.41) — seven levers, and the real forecast underneath them.
@@ -161,7 +162,7 @@ export function WhatIfModule({
 
   return (
     <ModuleFrame
-      group="Financials" title="What if…?"
+      group={navGroup("what-if")} title="What if…?"
       subtitle="Move a lever and watch profit and cash change — nothing in your plan moves" mode={mode}
       areas={[{ key: "levers", label: "Levers" }, { key: "detail", label: "Baseline vs adjusted" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)}

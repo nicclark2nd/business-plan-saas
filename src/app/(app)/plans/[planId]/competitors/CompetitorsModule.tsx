@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Toolbar, Meta, RemoveButton, CellInput, CellSelect, CellTextarea, focusRow } from "@/components/module/DataGrid";
 import { Section, FieldGrid, Field, FieldTextarea } from "@/components/module/FieldGrid";
-import { GUIDED_STEPS } from "@/lib/nav";
+import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { cn } from "@/lib/utils";
 import { saveMarket, upsertRow, deleteRow } from "../marketing/actions";
@@ -82,7 +82,7 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
 
   return (
     <ModuleFrame
-      step={STEP} total={GUIDED_STEPS.length} group="Market" title="Competitors" subtitle={`Who else a ${customerWord} would consider, how they compare, and why they choose you`} mode={mode}
+      step={STEP} total={GUIDED_STEPS.length} group={navGroup("competitors")} title="Competitors" subtitle={`Who else a ${customerWord} would consider, how they compare, and why they choose you`} mode={mode}
       areas={[{ key: "competitors", label: "Competitors", count: rows.filter((r) => r.name.trim()).length }, { key: "position", label: "Our position", count: positioned }]}
       area={area} onArea={(k) => { flush(); setArea(k as AreaKey); }}
       scope={{ label: "This plan" }}

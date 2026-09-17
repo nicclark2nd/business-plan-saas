@@ -6,7 +6,7 @@ import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/Module
 import { Grid, Th, Td, Toolbar, Meta, Note, RemoveButton, CellInput, CellSelect, CellTextarea, focusRow } from "@/components/module/DataGrid";
 import { Section, FieldGrid, Field, FieldTextarea } from "@/components/module/FieldGrid";
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
-import { GUIDED_STEPS } from "@/lib/nav";
+import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { CAPACITY_FIELDS, DEPENDENCY, TENURE, type Capacity, type OpStep, type Premise, type Supplier } from "./model";
 import { continueFromOperations, deleteRow, saveCapacity, setPrimaryPremise, upsertRow, type RowKind } from "./actions";
@@ -123,7 +123,7 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
 
   return (
     <ModuleFrame
-      step={STEP} total={GUIDED_STEPS.length} group="Operations" title="Operations"
+      step={STEP} total={GUIDED_STEPS.length} group={navGroup("operations")} title="Operations"
       subtitle="Where the work happens, who supplies it, how it flows, and what limits it" mode={mode}
       areas={[
         { key: "premises", label: "Premises", count: namedPremises.length },

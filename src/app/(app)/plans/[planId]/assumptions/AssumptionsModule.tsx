@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { FORECAST_YEARS, type CashTiming, type WorkingCapitalDays } from "@/engine/forecast/model";
 import { creditorBalance, debtorBalance, inventoryBalance } from "@/engine/forecast/assumptions";
 import { revertToHistoricDays, saveAssumptions } from "./actions";
+import { navGroup } from "@/lib/nav";
 
 const box = "h-8";
 
@@ -65,7 +66,7 @@ export function AssumptionsModule({
 
   return (
     <ModuleFrame
-      group="Financials" title="Assumptions" subtitle="How fast money comes in and goes out" mode={mode}
+      group={navGroup("assumptions")} title="Assumptions" subtitle="How fast money comes in and goes out" mode={mode}
       areas={[{ key: "days", label: "Days & timing", tag: assumptionsSet ? undefined : "not set" }]}
       area="days" onArea={() => {}} scope={{ label: "Five years" }}
       footer={<ModuleStatusFooter planId={planId} />}

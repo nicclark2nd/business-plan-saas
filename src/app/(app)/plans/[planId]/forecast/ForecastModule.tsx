@@ -4,7 +4,7 @@ import { ModuleFrame, ModuleReadOnlyFooter } from "@/components/module/ModuleFra
 import { Grid, Th, Td, Row as GridRow, Toolbar, Meta, Note } from "@/components/module/DataGrid";
 import { StatTile, TileRow } from "@/components/chart/core";
 import { useMoney } from "@/components/MoneyProvider";
-import { GUIDED_STEPS } from "@/lib/nav";
+import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { FORECAST_YEARS, type Forecast } from "@/engine/forecast/model";
 import { checkGroups, type CheckGroup } from "@/engine/forecast/checks";
@@ -59,7 +59,7 @@ export function ForecastModule({ planId, mode, forecast, gstLabel }: {
 
   return (
     <ModuleFrame
-      step={STEP} total={GUIDED_STEPS.length} group="Forecasts" title="Review forecast"
+      step={STEP} total={GUIDED_STEPS.length} group={navGroup("forecast")} title="Review forecast"
       subtitle="Every check the plan is judged on, and whether it passed" mode={mode}
       areas={[{ key: "checks", label: "Checks", count: rows, ...(failed ? { tag: `${failed} failing` } : {}) }]}
       area="checks" onArea={() => {}} scope={{ label: "Five years" }}

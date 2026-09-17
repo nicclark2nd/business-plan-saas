@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { FORECAST_YEARS, type PnlYear } from "@/engine/forecast/model";
 import type { PnlMonth, ServiceProfit } from "@/engine/pnl/lines";
 import type { Noun } from "@/engine/plan/vocabulary";
+import { navGroup } from "@/lib/nav";
 
 type AreaKey = "year" | "months" | "service";
 
@@ -51,7 +52,7 @@ export function ProfitLossModule({
 
   return (
     <ModuleFrame
-      group="Forecasts" title="Profit &amp; Loss" subtitle="What the business earns, what it costs, and what is left"
+      group={navGroup("profit-loss")} title="Profit &amp; Loss" subtitle="What the business earns, what it costs, and what is left"
       mode={mode}
       areas={[
         { key: "year", label: "The year" },

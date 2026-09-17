@@ -9,6 +9,7 @@ import { BarRows, Columns, Trend } from "@/components/chart/plots";
 import { safetyOf, type BreakEvenYear, type CashCrossover, type ServiceBreakEven } from "@/engine/breakeven/point";
 import type { Noun } from "@/engine/plan/vocabulary";
 import { cn } from "@/lib/utils";
+import { navGroup } from "@/lib/nav";
 
 type AreaKey = "year" | "months" | "service";
 export type CashMonthRow = { month: number; netOperating: number; interestPaid: number };
@@ -49,7 +50,7 @@ export function BreakEvenModule({
 
   return (
     <ModuleFrame
-      group="Forecasts" title="Break-Even" subtitle="What has to be sold before the business stops losing money"
+      group={navGroup("break-even")} title="Break-Even" subtitle="What has to be sold before the business stops losing money"
       mode={mode}
       areas={[
         { key: "year", label: "The year" },

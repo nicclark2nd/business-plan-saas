@@ -10,7 +10,7 @@ import { useGst } from "@/components/GstProvider";
 
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
-import { GUIDED_STEPS } from "@/lib/nav";
+import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { planMonths, planMonthNames } from "@/engine/plan/calendar";
 import { productCostMonths } from "@/engine/cogs/direct";
@@ -125,7 +125,7 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
 
   return (
     <ModuleFrame
-      step={STEP} total={GUIDED_STEPS.length} group="Financials" title="COGS" subtitle="What each sale costs you to deliver — the gap between this and your prices is your gross profit" mode={mode}
+      step={STEP} total={GUIDED_STEPS.length} group={navGroup("cogs")} title="COGS" subtitle="What each sale costs you to deliver — the gap between this and your prices is your gross profit" mode={mode}
       areas={[{ key: "products", label: `By ${noun.one}`, count: priced.length, tag: priced.length - costed > 0 ? `${priced.length - costed} without a cost` : undefined },
               { key: "fixed", label: "Fixed costs", count: items.filter((i) => i.item_name.trim()).length },
               { key: "monthly", label: "Monthly projections" }]}

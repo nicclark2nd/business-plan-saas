@@ -12,7 +12,7 @@ import { useGst } from "@/components/GstProvider";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton, SortTh, sortRows, type Sort } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
-import { GUIDED_STEPS } from "@/lib/nav";
+import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { planMonths, planMonthNames, planYearLabel, firstProjectedYear } from "@/engine/plan/calendar";
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { cn } from "@/lib/utils";
@@ -153,7 +153,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
 
   return (
     <ModuleFrame
-      step={STEP} total={GUIDED_STEPS.length} group="Financials" title="Sales" subtitle="What you sell, what each line earns and how it grows — this is where the forecast's revenue comes from" mode={mode}
+      step={STEP} total={GUIDED_STEPS.length} group={navGroup("sales")} title="Sales" subtitle="What you sell, what each line earns and how it grows — this is where the forecast's revenue comes from" mode={mode}
       areas={[{ key: "products", label: noun.many, count: named.length }, { key: "annual", label: "Annual projections" }, { key: "monthly", label: "Monthly projections" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: `All ${many}` }}
       primaryAction={<Button size="sm" type="button" onClick={add}>+ {noun.head}</Button>}

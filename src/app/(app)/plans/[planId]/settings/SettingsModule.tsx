@@ -13,6 +13,7 @@ import { saveProfile, saveFinancial } from "./actions";
 import { DangerArea, type PlanInventory } from "./DangerArea";
 import { LicenceSection } from "./LicenceSection";
 import { legalStructuresFor, CUSTOMER_TYPES, PRODUCT_TYPES, COUNTRIES, CURRENCIES, MONTHS, profileMissing, type Settings, type Profile, type Financial, type Licence } from "./model";
+import { navGroup } from "@/lib/nav";
 
 type AreaKey = "profile" | "financial" | "branding" | "lifecycle";
 const opts = (xs: string[]) => xs.map((x) => ({ value: x, label: x }));
@@ -63,7 +64,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, a
 
   return (
     <ModuleFrame
-      group="Plan settings" title="Plan settings" subtitle="Who the business is, how its year runs, and how the plan is branded" mode={mode}
+      group={navGroup("settings")} title="Plan settings" subtitle="Who the business is, how its year runs, and how the plan is branded" mode={mode}
       areas={[
         { key: "profile", label: "Business profile", ...(missing.length ? { count: missing.length } : {}) },
         { key: "financial", label: "Financial year & tax" },

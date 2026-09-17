@@ -3,7 +3,7 @@
 import { ModuleFrame, ModuleReadOnlyFooter } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row as GridRow, Toolbar, Meta, Note } from "@/components/module/DataGrid";
 import { StatTile, TileRow } from "@/components/chart/core";
-import { GUIDED_STEPS } from "@/lib/nav";
+import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { walk, type Block, type ReportDoc, type Section } from "@/engine/report/blocks";
 import { COPY } from "@/engine/report/content";
@@ -36,7 +36,7 @@ export function ReportsModule({ planId, mode, doc, reconciled, missing }: {
 
   return (
     <ModuleFrame
-      step={STEP} total={GUIDED_STEPS.length} group="Reports" title="Business plan"
+      step={STEP} total={GUIDED_STEPS.length} group={navGroup("reports")} title="Business plan"
       subtitle="What a lender reads, built from everything in this plan" mode={mode}
       areas={[{ key: "plan", label: "The plan", count: flat.length }]}
       area="plan" onArea={() => {}} scope={{ label: "This plan" }}
