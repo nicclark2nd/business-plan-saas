@@ -11,6 +11,7 @@
  */
 import { YEARS } from "../sales/projection";
 import type { Grant } from "./grants";
+import type { Facility } from "./overdraft";
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -37,7 +38,22 @@ export type Loan = {
   start_year?: number | null;           // 1–5
   start_month?: number | null;          // 1–12 within that year
   annual_fee?: number | null;
+  /**
+   * Which kind of debt this is (§6.72). It reached the engine as a label and nothing else until the sweep
+   * existed, which is exactly how "Overdraft / line of credit" ended up behaving as a term loan.
+   */
+  loan_type?: string | null;
 };
+
+/**
+ * A facility is not a loan with a schedule, so it has none (§6.72).
+ *
+ * `loanMonths` is the single gate every balance, every year total and every monthly series funnels through
+ * — `loanByYear`, `debtByYear`, `debtSplitByYear`, `assembleBase` and `assembleMonths` all arrive here. One
+ * early return keeps a facility out of all of them, rather than ten call sites each remembering to ask.
+ * What it owes, what it costs and what it repays come from the sweep instead.
+ */
+export const isFacility = (l: Loan | null | undefined) => l?.loan_type === "line_of_credit";
 
 const startYear = (l: { start_year?: number | null }) => Math.min(5, Math.max(1, Math.trunc(num(l.start_year)) || 1));
 const startMonth = (l: { start_month?: number | null }) => Math.min(12, Math.max(1, Math.trunc(num(l.start_month)) || 1));
@@ -69,6 +85,7 @@ export type LoanMonth = { interest: number; principal: number; fees: number; pay
  */
 export function loanMonths(l: Loan): LoanMonth[] {
   const out: LoanMonth[] = Array.from({ length: 60 }, () => ({ interest: 0, principal: 0, fees: 0, payment: 0, balance: 0, drawn: 0 }));
+  if (isFacility(l)) return out;                  // swept, not scheduled (§6.72)
   const P = num(l.amount_drawn);
   const from = drawMonth(l);
   if (P <= 0 || from >= 60) return out;
@@ -396,4 +413,24 @@ export function adequacy(sources: FundingSource[], c: CashInputs, monthsToRun = 
   }
   const low = months.reduce((worst, p) => (p.closing < worst.closing ? p : worst), months[0]);
   return { months, low, shortfall: low.closing < 0 ? r2(-low.closing) : 0, covered: low.closing >= 0 };
+}
+
+/**
+ * The facilities in a plan, in the shape the sweep wants (§6.72). Order is the order the client listed them,
+ * which is also the order they are drawn on and repaid — stated rather than guessed at.
+ */
+export function facilitiesFrom(sources: FundingSource[]): Facility[] {
+  const out: Facility[] = [];
+  for (const s of sources) {
+    if (!isFacility(s.loan)) continue;
+    const l = s.loan!;
+    // A facility's size is its LIMIT. `amount_drawn` is what happened to be drawn on the day it was typed.
+    const limit = num(l.total_facility_amount) || num(l.amount_drawn);
+    out.push({
+      id: s.id, name: s.name || l.lender_name || "Overdraft",
+      limit, interestRate: num(l.interest_rate), annualFee: num(l.annual_fee),
+      availableFrom: drawMonth(l) + 1,
+    });
+  }
+  return out;
 }

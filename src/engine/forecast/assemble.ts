@@ -29,7 +29,7 @@ import { NOT_REGISTERED, type GstSettings } from "../plan/gst";
 import { planRevenueByYear, planRevenueMonths, sourceOf, type AnyProduct } from "../sales/product";
 import { planCogsByYear, planCogsMonths, type CostProduct, type FixedCost } from "../cogs/direct";
 import { overheadsByYear, overheadsMonths, planOverheadLines, type Overhead } from "../overheads/expenses";
-import { debtByYear, interestByYear, loanByYear, loanMonths, rbfByYear, rbfSplitMonths, type FundingSource } from "../funding/sources";
+import { debtByYear, interestByYear, isFacility, loanByYear, loanMonths, rbfByYear, rbfSplitMonths, type FundingSource } from "../funding/sources";
 import { assetsByYear, assetsMonths, capexMonths, withDisposals, type FixedAsset } from "../assets/depreciation";
 import { grantsByYear, grantsMonths, type Grant } from "../funding/grants";
 import { disposalBookValueByYear, extraordinaryByYear, extraordinaryCashMonths, isDisposal, soldMonthByAsset, type ExtraordinaryItem } from "../extraordinary/items";
@@ -93,6 +93,8 @@ export function raisedByYear(funding: FundingSource[]): { debt: number[]; equity
     const amount = n(s.amount);
     // A grant is neither borrowed nor subscribed: it is income, and it has its own path (§6.50).
     if (s.kind === "grant") continue;
+    // A facility is a LIMIT, not money arriving (§6.72). What it actually lends comes from the sweep.
+    if (isFacility(s.loan)) continue;
     const borrowed = s.kind === "debt" || s.kind === "revenue_linked" || (s.kind === "owner" && !!s.loan);
     const bucket = borrowed ? debt : equity;          // owner capital and investor money are not repayable
     bucket[year - 1] = r2(bucket[year - 1] + amount);
@@ -210,7 +212,9 @@ export function assembleMonths(
       const m = Math.min(12, Math.max(1, Math.trunc(n(s.loan?.start_month ?? s.rbf?.start_month ?? s.start_month)) || 1));
       // A grant is placed by its own schedule below, not here: it is operating cash, never money raised.
       if (s.kind !== "grant") {
-        const borrowed = s.kind === "debt" || s.kind === "revenue_linked" || (s.kind === "owner" && !!s.loan);
+        // A facility is a LIMIT, not money arriving (§6.72). What it actually lends comes from the sweep.
+    if (isFacility(s.loan)) continue;
+    const borrowed = s.kind === "debt" || s.kind === "revenue_linked" || (s.kind === "owner" && !!s.loan);
         const bucket = borrowed ? debtProceeds : equityRaised;
         bucket[m - 1] = r2(bucket[m - 1] + n(s.amount));
       }

@@ -86,7 +86,7 @@ export const FREQUENCIES: { value: PaymentFrequency; label: string }[] = [
 export function loanOf(r: FundingRow): Loan | null {
   if (r.kind === "debt" || (r.kind === "owner" && r.owner_type === "owner_loan")) {
     return {
-      id: r.id, lender_name: r.name, amount_drawn: r.amount,
+      id: r.id, lender_name: r.name, amount_drawn: r.amount, loan_type: r.loan_type ?? null,
       total_facility_amount: r.total_facility_amount ?? r.amount,
       interest_rate: r.interest_rate ?? 0, term_months: r.term_months ?? 60,
       repayment_type: r.repayment_type ?? "amortised", payment_frequency: r.payment_frequency ?? "monthly",
