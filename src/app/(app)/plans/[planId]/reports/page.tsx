@@ -9,9 +9,17 @@ import { productYears, sourceOf, type AnyProduct } from "@/engine/sales/product"
 import type { CostProduct } from "@/engine/cogs/direct";
 import { monthYearLabel, planYearEndLabel } from "@/engine/plan/calendar";
 import { buildReport, type ReportInput } from "@/engine/report/build";
+import { AREA_LABEL } from "@/engine/whatif/goals";
+import { SPEND_LABEL } from "../marketing/model";
+import { ROLE_LABEL } from "../people/model";
 import { ReportsModule } from "./ReportsModule";
 
 const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : Number(v) || 0);
+/* The label maps the screens use, so the report says what the client saw (§6.86). */
+const AREA: Record<string, string> = AREA_LABEL;
+const ROLE: Record<string, string> = ROLE_LABEL;
+const SPEND: Record<string, string> = SPEND_LABEL;
+
 const text = (v: unknown) => { const s = String(v ?? "").trim(); return s || null; };
 
 /**
@@ -26,13 +34,26 @@ export default async function ReportsPage({ params }: { params: Promise<{ planId
   const { plan, mode, components, taxLabel, fyEndMonth, firstYear, noun, settings } = await loadPlan(planId);
   const supabase = await createClient();
 
-  const [planRow, framework, goals, people, completeness] = await Promise.all([
+  const rows = <T,>(p: PromiseLike<{ data: T[] | null }>) => p.then((r) => r.data ?? []) as Promise<Record<string, unknown>[]>;
+  const [planRow, framework, goals, people, caps, licences, marketing, segments, evidence, spend, competitors, premises, suppliers, opSteps, opCapacity, completeness] = await Promise.all([
     supabase.from("plans").select("business_name, plan_year").eq("id", planId).maybeSingle().then((r) => r.data),
-    supabase.from("plan_framework").select("vision, mission, purpose, brand_promise").eq("plan_id", planId).maybeSingle().then((r) => r.data),
-    supabase.from("plan_goals").select("area, title").eq("plan_id", planId).is("parent_id", null).neq("title", "").then((r) => r.data ?? []),
-    supabase.from("plan_people").select("full_name, role, ownership_percent").eq("plan_id", planId).then((r) => r.data ?? []),
+    supabase.from("plan_framework").select("vision, mission, purpose, brand_promise, field_of_play").eq("plan_id", planId).maybeSingle().then((r) => r.data),
+    rows(supabase.from("plan_goals").select("*").eq("plan_id", planId).neq("title", "").order("year").order("quarter").order("sort_order")),
+    rows(supabase.from("plan_people").select("*").eq("plan_id", planId).order("sort_order")),
+    rows(supabase.from("plan_people_capabilities").select("*").eq("plan_id", planId).order("sort_order")),
+    rows(supabase.from("plan_licences").select("*").eq("plan_id", planId).order("sort_order")),
+    supabase.from("plan_marketing").select("*").eq("plan_id", planId).maybeSingle().then((r) => r.data),
+    rows(supabase.from("plan_market_segments").select("*").eq("plan_id", planId).order("sort_order")),
+    rows(supabase.from("plan_marketing_evidence").select("*").eq("plan_id", planId).order("sort_order")),
+    rows(supabase.from("plan_marketing_spend").select("*").eq("plan_id", planId).order("sort_order")),
+    rows(supabase.from("plan_competitors").select("*").eq("plan_id", planId).order("sort_order")),
+    rows(supabase.from("plan_outlets").select("*").eq("plan_id", planId).order("is_primary", { ascending: false }).order("sort_order")),
+    rows(supabase.from("plan_suppliers").select("*").eq("plan_id", planId).order("sort_order")),
+    rows(supabase.from("plan_operations_steps").select("*").eq("plan_id", planId).order("sort_order")),
+    supabase.from("plan_operations").select("*").eq("plan_id", planId).maybeSingle().then((r) => r.data),
     getCompleteness(planId),
   ]);
+  const swotItems = await rows(supabase.from("plan_swot_items").select("*").eq("plan_id", planId).order("sort_order"));
 
   const { checked } = runForecast(plan);
   const { sources } = plan;
@@ -60,6 +81,7 @@ export default async function ReportsPage({ params }: { params: Promise<{ planId
       averagePrice: n(p.average_price),
       units: n(p.units_sold),
       revenue: productYears(p, sourceOf(p, products))[0]?.revenue ?? 0,
+      description: text((p as unknown as Record<string, unknown>).description),
     })).filter((l) => l.revenue > 0 || l.averagePrice > 0),
     profile: {
       established: monthYearLabel(settings?.date_established as string | null),
@@ -72,8 +94,9 @@ export default async function ReportsPage({ params }: { params: Promise<{ planId
     framework: {
       vision: text(framework?.vision), mission: text(framework?.mission),
       purpose: text(framework?.purpose), brandPromise: text(framework?.brand_promise),
+      fieldOfPlay: text(framework?.field_of_play),
     },
-    goals: goals.map((g) => ({ area: String(g.area ?? ""), title: String(g.title ?? "") })),
+    goals: goals.filter((g) => !g.parent_id).map((g) => ({ area: AREA[String(g.area)] ?? String(g.area ?? ""), title: String(g.title ?? "") })),
     capital: (sources.assets as unknown as Record<string, unknown>[]).map((a) => ({
       name: String(a.name ?? "Asset"), amount: n(a.purchase_price), year: n(a.start_year) || 1,
     })).filter((a) => a.amount > 0),
@@ -88,10 +111,81 @@ export default async function ReportsPage({ params }: { params: Promise<{ planId
       income: String(x.kind ?? "") === "income",
     })).filter((x) => x.amount > 0),
     /** Only people with a stated share are owners. A team member with none is on the team, not the cap table. */
-    owners: people.filter((p) => n(p.ownership_percent) > 0).map((p) => ({
-      name: String(p.full_name ?? ""), share: n(p.ownership_percent), role: text(p.role),
+    owners: people.filter((p) => n(p.pct_shareholding) > 0).map((p) => ({
+      name: String(p.name ?? ""), share: n(p.pct_shareholding), role: text(p.position),
     })),
-    noun,
+
+    licences: licences.map((l) => ({
+      name: String(l.name ?? ""), number: text(l.number), issuer: text(l.issuer),
+      expires: l.expires_on ? new Date(String(l.expires_on)).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) : null,
+    })).filter((l) => l.name),
+
+    market: {
+      size: text(marketing?.market_size), trends: text(marketing?.market_trends),
+      positioning: text(marketing?.positioning), brandValues: text(marketing?.brand_values),
+      brandPersonality: text(marketing?.brand_personality), visualIdentity: text(marketing?.visual_identity),
+      salesProcess: text(marketing?.sales_process), salesTeam: text(marketing?.sales_team),
+    },
+    segments: segments.map((x) => ({
+      name: String(x.name ?? ""), profile: text(x.profile), caresAbout: text(x.cares_about),
+      share: x.revenue_share === null || x.revenue_share === undefined ? null : n(x.revenue_share),
+    })).filter((x) => x.name),
+    evidence: evidence.map((x) => ({
+      source: String(x.source ?? ""), method: text(x.method), finding: text(x.finding), decision: text(x.decision),
+    })).filter((x) => x.source),
+    spend: spend.map((x) => ({
+      label: SPEND[String(x.kind)] ?? String(x.kind ?? ""), approach: text(x.approach), budget: n(x.annual_budget),
+    })).filter((x) => x.approach || x.budget > 0),
+    competitors: competitors.map((x) => ({
+      name: String(x.name ?? ""), kind: text(x.kind), reach: text(x.reach), pricing: text(x.pricing),
+      threat: text(x.threat), strengths: text(x.strengths), weaknesses: text(x.weaknesses), howWeWin: text(x.how_we_win),
+    })).filter((x) => x.name),
+    position: {
+      ourAdvantage: text(marketing?.our_advantage), barriers: text(marketing?.barriers_to_entry),
+      futureThreats: text(marketing?.future_threats),
+    },
+    people: people.map((p) => ({
+      id: String(p.id), name: String(p.name ?? ""), position: text(p.position),
+      role: ROLE[String(p.role)] ?? text(p.role), share: n(p.pct_shareholding) || null,
+    })).filter((p) => p.name),
+    /**
+     * FILTERED AT THE BOUNDARY (§6.86). The People screen tells a client, in those words, that development
+     * areas are "never printed in an external report". This line is where that promise is kept.
+     */
+    capabilities: caps.filter((c) => c.internal !== true && c.kind !== "development").map((c) => ({
+      personId: String(c.person_id), kind: String(c.kind ?? ""), description: String(c.description ?? ""),
+    })).filter((c) => c.description.trim()),
+    swot: swotItems.map((x) => ({
+      quadrant: String(x.quadrant ?? ""), text: String(x.text ?? ""), response: text(x.response),
+    })).filter((x) => x.text.trim()),
+    goalsAnnual: goals.filter((g) => !g.parent_id).map((g) => ({
+      area: AREA[String(g.area)] ?? String(g.area ?? ""), title: String(g.title ?? ""), detail: text(g.detail),
+    })),
+    goalsQuarterly: goals.filter((g) => g.parent_id).map((g) => ({
+      area: AREA[String(g.area)] ?? String(g.area ?? ""), title: String(g.title ?? ""),
+      when: g.quarter ? `Q${n(g.quarter)}${g.year ? ` FY${n(g.year)}` : ""}` : null,
+      owner: text(people.find((p) => p.id === g.owner_person_id)?.name),
+      status: String(g.status ?? "not_started"),
+    })),
+    operations: {
+      premises: premises.map((x) => ({
+        name: String(x.name ?? ""), address: text(x.address), tenure: text(x.tenure),
+        isPrimary: x.is_primary === true, floorArea: text(x.floor_area), purpose: text(x.purpose),
+      })).filter((x) => x.name),
+      suppliers: suppliers.map((x) => ({
+        name: String(x.name ?? ""), supplies: text(x.supplies), terms: text(x.terms),
+        dependency: text(x.dependency), alternative: text(x.alternative),
+      })).filter((x) => x.name),
+      steps: opSteps.map((x) => ({
+        title: String(x.title ?? ""), detail: text(x.detail), owner: text(x.owner), duration: text(x.duration),
+      })).filter((x) => x.title),
+      capacity: {
+        operatingHours: text(opCapacity?.operating_hours), capacityNow: text(opCapacity?.capacity_now),
+        capacityConstraint: text(opCapacity?.capacity_constraint), capacityPlan: text(opCapacity?.capacity_plan),
+        qualityApproach: text(opCapacity?.quality_approach),
+      },
+    },
+    noun: { ...noun, aOne: `${/^[aeiou]/i.test(noun.one) ? "an" : "a"} ${noun.one}` },
     taxLabel: components.length ? taxLabel : "Not registered",
     currency,
     yearEndLabels: FORECAST_YEARS.map((y) => planYearEndLabel(firstYear + y - 1, fyEndMonth)),

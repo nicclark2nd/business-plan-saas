@@ -16,6 +16,7 @@ import type { Noun } from "../plan/vocabulary";
 import { marginalCash, ratios } from "./analysis";
 import { cell, num, numberSections, type Block, type Draft, type Omission, type ReportDoc } from "./blocks";
 import { COPY } from "./content";
+import { goalsAndMilestones, howWeOperate, marketingAndSales, ourPeople, risksAndMitigation, theBusiness, theCompetition, theMarket, whatWeSell } from "./narrative";
 
 export type ReportInput = {
   businessName: string;
@@ -23,16 +24,44 @@ export type ReportInput = {
   strength: Strength[];
   services: ServiceProfit[];
   /** Year 1 units and price per line, for the products table a lender reads first. */
-  productLines: { name: string; averagePrice: number; units: number; revenue: number }[];
+  productLines: { name: string; averagePrice: number; units: number; revenue: number; description: string | null }[];
   profile: { established: string | null; industry: string | null; country: string | null; legalStructure: string | null; customerType: string | null; productType: string | null };
-  framework: { vision: string | null; mission: string | null; purpose: string | null; brandPromise: string | null };
+  framework: { vision: string | null; mission: string | null; purpose: string | null; brandPromise: string | null; fieldOfPlay: string | null };
   goals: { area: string; title: string }[];
   capital: { name: string; amount: number; year: number }[];
   overheads: { name: string; amount: number }[];
   funding: { name: string; kind: string; amount: number }[];
   extraordinary: { name: string; amount: number; year: number; income: boolean }[];
   owners: { name: string; share: number | null; role: string | null }[];
-  noun: Noun;
+  licences: { name: string; number: string | null; issuer: string | null; expires: string | null }[];
+  /** Market and brand prose, as typed on Marketing. */
+  market: {
+    size: string | null; trends: string | null; positioning: string | null;
+    brandValues: string | null; brandPersonality: string | null; visualIdentity: string | null;
+    salesProcess: string | null; salesTeam: string | null;
+  };
+  segments: { name: string; profile: string | null; caresAbout: string | null; share: number | null }[];
+  evidence: { source: string; method: string | null; finding: string | null; decision: string | null }[];
+  spend: { label: string; approach: string | null; budget: number }[];
+  competitors: { name: string; kind: string | null; reach: string | null; pricing: string | null; threat: string | null; strengths: string | null; weaknesses: string | null; howWeWin: string | null }[];
+  position: { ourAdvantage: string | null; barriers: string | null; futureThreats: string | null };
+  people: { id: string; name: string; position: string | null; role: string | null; share: number | null }[];
+  /**
+   * ALREADY FILTERED (§6.86). The People screen promises on screen that development areas are "never
+   * printed in an external report", and this is the only place that promise can be broken. It is kept at
+   * the boundary rather than inside a renderer, so no future section can forget.
+   */
+  capabilities: { personId: string; kind: string; description: string }[];
+  swot: { quadrant: string; text: string; response: string | null }[];
+  goalsAnnual: { area: string; title: string; detail: string | null }[];
+  goalsQuarterly: { area: string; title: string; when: string | null; owner: string | null; status: string }[];
+  operations: {
+    premises: { name: string; address: string | null; tenure: string | null; isPrimary: boolean; floorArea: string | null; purpose: string | null }[];
+    suppliers: { name: string; supplies: string | null; terms: string | null; dependency: string | null; alternative: string | null }[];
+    steps: { title: string; detail: string | null; owner: string | null; duration: string | null }[];
+    capacity: { operatingHours: string | null; capacityNow: string | null; capacityConstraint: string | null; capacityPlan: string | null; qualityApproach: string | null };
+  };
+  noun: Noun & { aOne: string };
   taxLabel: string;
   currency: string;
   yearEndLabels: string[];
@@ -151,8 +180,9 @@ function executiveSummary(i: ReportInput): Draft {
     ],
   };
 
+  /* Settings labels the noun for a menu ("Services"); a heading mid-sentence wants it lower case. */
   const products: Draft = i.productLines.length === 0 ? null : {
-    title: `Overview of our ${i.noun.many}`,
+    title: `Overview of our ${i.noun.many.charAt(0).toLowerCase() + i.noun.many.slice(1)}`,
     blocks: [
       { kind: "para", text: COPY.products(i.businessName, i.noun.many, i.profile.customerType ?? "customers") },
       { kind: "table",
@@ -377,8 +407,25 @@ export function buildReport(i: ReportInput): ReportDoc {
     return d;
   };
 
+  /**
+   * THE ORDER IS THE STANDARD OUTLINE'S, NOT APeX'S (§6.86).
+   *
+   * Executive summary, then the business, what it sells, the market, the competition, how it markets and
+   * sells, who runs it, how it operates, what could go wrong, what it has committed to — and the money
+   * LAST. A lender reads the financials against a business they have already been told about; APeX puts
+   * them at 1.3 and again at 9, and a plan that opens on a table is a spreadsheet with a cover.
+   */
   const sections = numberSections([
     executiveSummary(i),
+    keep(theBusiness(i), "The Business", "Nothing recorded about the business itself yet."),
+    keep(whatWeSell(i), "What We Sell", `No ${i.noun.many} have been recorded.`),
+    keep(theMarket(i), "The Market", "No market size, trends or segments have been written."),
+    keep(theCompetition(i), "The Competition", "No competitors have been recorded."),
+    keep(marketingAndSales(i), "Marketing and Sales", "No positioning, brand or marketing spend has been written."),
+    keep(ourPeople(i), "Our People", "Nobody has been added to the team."),
+    keep(howWeOperate(i), "How We Operate", "No premises, suppliers, process or capacity have been recorded."),
+    keep(risksAndMitigation(i), "Risks and Mitigation", "No SWOT lines have been written."),
+    keep(goalsAndMilestones(i), "Goals and Milestones", "No goals have been set."),
     keep(financialPlan(i), "Financial Plan", "The forecast has not been built yet."),
   ]);
 

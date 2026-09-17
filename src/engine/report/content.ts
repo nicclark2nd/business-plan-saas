@@ -83,6 +83,49 @@ export const COPY = {
   strength:
     "The measures a lender applies to the balance sheet above: what is available to meet what falls due, how much of the business is borrowed, and what would be left if it stopped.",
 
+  // ---- the narrative sections (§6.86) -------------------------------------
+  glance: (name: string) => `${name} in brief.`,
+  licences: (name: string) =>
+    `What ${name} is licensed, registered and insured to do. These belong to the business rather than to any individual, and they are what the business is permitted to trade on.`,
+  whatWeSell: (name: string, many: string) =>
+    `The ${many} ${name} sells, what each is worth, and what each costs to deliver. This is where the revenue in the financial plan comes from, line by line.`,
+  margins: (one: string) =>
+    `What each ${one} line earns above the cost of delivering it.`,
+  marginsNote: (one: string) =>
+    `This stops at gross profit deliberately. Overheads — rent, wages, insurance — belong to the business rather than to any one ${one}, and splitting them across lines would need a basis nobody has agreed.`,
+
+  segments: (name: string) =>
+    `${name} does not sell to one undifferentiated market. The table below sets out each kind of buyer, what they have in common, and what they are actually buying on.`,
+  evidence:
+    "What follows is not assumption. Each entry is a question the business went and answered, how it was answered, and what changed as a result.",
+
+  competitors: (name: string) =>
+    `Who a customer would consider instead of ${name}, and how each compares. A plan that names no competitor is describing a market that does not exist.`,
+
+  spend: (name: string) =>
+    `What ${name} intends to spend on being found and being chosen, and what it expects each kind of spending to do.`,
+  spendNote:
+    "These budgets are already in the overheads in the financial plan; they are set out here so the intent behind the figure is visible rather than buried in a total.",
+
+  people: (name: string) =>
+    `The people who run ${name}, what each is responsible for, and the experience behind it. Development areas that individuals are working on are deliberately not included.`,
+
+  premises: (name: string) => `Where ${name} operates from.`,
+  suppliers: (name: string) =>
+    `Who ${name} depends on to deliver, on what terms, and what happens if one of them stops. A dependency named with its alternative is a managed risk; one named without is an open question.`,
+  process: (one: string) =>
+    `How ${one} is delivered once it has been won, step by step.`,
+
+  swot: (name: string) =>
+    `An honest reading of where ${name} is strong, where it is exposed, and what is being done about the second. The weaknesses and threats below are stated with their responses rather than listed alone.`,
+  strengths: "What the business does better than the alternatives available to a customer, and can demonstrate.",
+  opportunities: "Changes in the market, or gaps left by competitors, that the business is positioned to take.",
+  weaknesses: "Where the business is exposed today. Each is shown with what is being done about it.",
+  threats: "What could damage the business that it does not control. Each is shown with how it is guarded against.",
+
+  quarters:
+    "The annual goals above are delivered through the quarterly commitments below, each with a named owner.",
+
   omittedLead:
     "The following parts of a full business plan are not included, because the information behind them has not been recorded. Each is a section this plan will carry once it has something to put in it.",
 };
