@@ -33,7 +33,10 @@ export function buildSuggestions(p: {
    * the module was built ("the only QBCC open licence in the postcode") while the plan had nowhere to
    * record one (§6.64). Offered only: nothing enters the SWOT without a click.
    */
-  for (const l of p.licences ?? []) if (l.name.trim()) {
+  for (const l of p.licences ?? []) {
+    // A LAPSED licence is not a strength. Offering "Holds X" and "X expired and has not been renewed" in
+    // the same SWOT would let a client paste both in and hand a lender a plan that contradicts itself.
+    if (!l.name.trim() || (p.today && licenceState(l.expires_on, p.today) === "lapsed")) continue;
     out.push({ key: `licence:${l.id}`, quadrant: "strength", text: `Holds ${l.name.trim()}${l.issuer?.trim() ? ` (${l.issuer.trim()})` : ""}`, from: "Plan settings \u00b7 Licences" });
   }
 

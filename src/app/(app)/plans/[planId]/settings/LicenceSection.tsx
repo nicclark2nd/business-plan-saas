@@ -109,7 +109,9 @@ export function LicenceSection({ planId, initial, onPending }: {
                     className={cn(state === "lapsed" && "text-bad font-semibold", state === "soon" && "text-warn")}
                     onChange={(e) => edit(l.id, { expires_on: e.target.value || null })} /></Td>
                   <Td>
-                    {state === "lapsed" && <span className="mr-1.5 text-[9.5px] uppercase tracking-[.06em] text-bad">lapsed {formatExpiry(l.expires_on)}</span>}
+                    {/* The chip says only "lapsed": the date is already red in the cell beside it, and
+                        repeating it here overflowed the column (§6.64). */}
+                    {state === "lapsed" && <span className="mr-1.5 text-[9.5px] uppercase tracking-[.06em] text-bad" title={`Expired ${formatExpiry(l.expires_on)}`}>lapsed</span>}
                     {state === "soon" && <span className="mr-1.5 text-[9.5px] uppercase tracking-[.06em] text-warn">renew</span>}
                     <RemoveButton onClick={() => remove(l.id)} />
                   </Td>
