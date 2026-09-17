@@ -38,11 +38,13 @@ export const NAV: NavGroup[] = [
    * is what makes it a group — the assumptions behind the cash flow are an input and have moved up to
    * Financials with the rest of the inputs.
    *
-   * The profit and loss and the balance sheet now have modules of their own (§6.76, §6.77); the cash flow
-   * is still a tab on Review forecast, and `href` deep-links its name to the tab it opens. §6.32.3 put all
-   * three on one module bar because "three statements that must agree belong on one screen" — what that
-   * was protecting was never the adjacency, it was the CHECK, and the reconciliation strip travels to each
-   * module that leaves.
+   * All three statements have modules of their own now (§6.76, §6.77, §6.78), each with tiles, a chart and
+   * a reading the five-year table could not give. §6.32.3 put them on one module bar because "three
+   * statements that must agree belong on one screen" — what that was protecting was never the adjacency,
+   * it was the CHECK, and the reconciliation strip renders above every one of them wherever it lives.
+   *
+   * What is left on Review forecast is the question no single statement answers: whether they agree, and
+   * the days that drive all three. That is what step 13 was always for.
    *
    * `href` deep-links each name to the tab it opens. The module bar stays: it switches instantly, with no
    * round trip, which is what somebody comparing two statements is doing all afternoon.
@@ -60,8 +62,13 @@ export const NAV: NavGroup[] = [
      * owes, with no tiles, no chart and no reading of the year it actually describes.
      */
     { id: "balance-sheet", label: "Balance Sheet", tool: true },
+    /**
+     * And the cash flow, the last of the three to leave (§6.78). It is the statement a lender tests hardest
+     * — a profitable business that runs out of cash in month seven is the ordinary way a good plan fails —
+     * and it had a toolbar, a span toggle and a table.
+     */
+    { id: "cash-flow", label: "Cash Flow", tool: true },
     { id: "forecast", label: "Review forecast", step: 13 },
-    { id: "cash-flow", label: "Cash Flow", href: "forecast?area=cash" },
     /**
      * A TOOL, not a step (§6.68). Guided mode renders an item only if it carries a step number or is
      * flagged a tool, so Break-Even — which had neither — was invisible in the mode every client starts

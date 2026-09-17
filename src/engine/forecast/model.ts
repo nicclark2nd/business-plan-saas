@@ -169,6 +169,16 @@ export type BridgeYear = {
   deferredIncomeMovement: number;
   /** The change in tax collected and not yet paid over — cash the business holds but does not own. */
   gstMovement: number;
+  /**
+   * Tax reclaimed on assets bought (§6.78). The asset itself is investing cash; the credit on it is an
+   * operating receipt, so it belongs on this bridge.
+   *
+   * It was missing from this type while `operatingCashFlow` below was adding it in — which no check caught,
+   * because the invariant compares this total against the cash flow's total and both were computed. The
+   * parts were never added up by anything, because nothing ever showed them. The first screen to display
+   * the bridge found it in an afternoon.
+   */
+  gstOnCapexCredit: number;
   operatingCashFlow: number;
 };
 
@@ -356,6 +366,7 @@ export function buildForecast(input: ForecastInput): Forecast {
       // in what is collected and not yet paid over — otherwise the two ways of reaching operating cash stop
       // agreeing, which is precisely what the check below exists to catch.
       gstMovement: r2(n(g.payableClosing) - priorGstPayable),
+      gstOnCapexCredit: r2(n(g.onCapex)),
       operatingCashFlow: r2(netProfit + n(b.depreciation) - disposalGainLoss + n(b.interest)
         - dAR - dInv + dAP - dPrepaid + dAccrued + (tax - taxPaid) + dDeferred
         + (n(g.payableClosing) - priorGstPayable) + n(g.onCapex)),

@@ -6,81 +6,40 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ModuleFrame, ModuleFooter } from "@/components/module/ModuleFrame";
-import { Grid, Th, Td, Row as GridRow, TOTAL_ROW, Toolbar, Meta, Note } from "@/components/module/DataGrid";
-import { Statement, type StatementRow } from "@/components/module/Statement";
+import { Grid, Th, Td, Row as GridRow, Toolbar, Meta, Note } from "@/components/module/DataGrid";
 import { useMoney } from "@/components/MoneyProvider";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { FORECAST_YEARS, type CashTiming, type Forecast, type WorkingCapitalDays } from "@/engine/forecast/model";
 import { creditorBalance, debtorBalance, inventoryBalance } from "@/engine/forecast/assumptions";
-import type { MonthCash, MonthlyCashFlow } from "@/engine/forecast/monthly";
-import type { OverdraftRun } from "@/engine/funding/overdraft";
-import type { GstSchedule } from "@/engine/plan/gst";
-import { planMonths, planYearLabel } from "@/engine/plan/calendar";
 import { revertToHistoricDays, saveAssumptions } from "./actions";
 
 /**
- * Review forecast (§6.32.3, §6.77) — the cash flow, the assumptions behind it, and the strip that says
- * whether the whole forecast holds together.
+ * Review forecast (§6.32.3, §6.78) — do the statements agree, and what are the days driving them.
  *
- * It began as four tabs, on the rule that **three statements that must agree belong on one screen.** The
- * profit and loss left in §6.76 and the balance sheet in §6.77, each to a module with tiles and a chart and
- * a reading of its own — and what that rule was actually protecting went with them. It was never the
- * adjacency; it was the CHECK. The reconciliation strip is rendered above every statement in the product,
- * so a client still learns whether the figures agree before reading one, wherever they are standing.
+ * It began as four tabs, on the rule that **three statements that must agree belong on one screen.** All
+ * three have left: the profit and loss in §6.76, the balance sheet in §6.77, the cash flow in §6.78, each
+ * to a module with tiles, a chart and a reading of its own. What the rule was protecting went with them —
+ * it was never the adjacency, it was the CHECK, and the reconciliation strip renders above every statement
+ * in the product, so a client learns whether the figures agree before reading one, wherever they stand.
  *
- * What stays here is the question no single statement answers: whether the plan holds together. The checks,
- * the bridge from profit to cash, the month the bank goes tight, and the days that drive all of it.
+ * What is left is the question no single statement answers, which is what step 13 was always for: whether
+ * the plan holds together, and the days that decide it. One area rather than four, and that is honest —
+ * a tab bar of one is a smaller thing to explain than three statements pretending they still live here.
  */
-type AreaKey = "cash" | "assumptions";
 const STEP = GUIDED_STEPS.find((s) => s.id === "forecast")?.step ?? 13;
 const box = "h-8";
 
 export function ForecastModule({
-  planId, mode, forecast, monthly, overdraft, initialArea, workingCapital, cashTiming, impliedFromHistory, assumptionsSet, fyEndMonth, firstYear, gst, gstLabel, gstSchedules, gstComponents,
+  planId, mode, forecast, workingCapital, cashTiming, impliedFromHistory, assumptionsSet,
 }: {
-  planId: string; mode: "guided" | "advanced"; forecast: Forecast; monthly: MonthlyCashFlow; initialArea: AreaKey;
-  /** What the overdraft facility did, or null when the plan has none (§6.72.2). */
-  overdraft: OverdraftRun | null;
+  planId: string; mode: "guided" | "advanced"; forecast: Forecast;
   workingCapital: Record<number, WorkingCapitalDays>; cashTiming: Record<number, CashTiming>;
-  impliedFromHistory: WorkingCapitalDays | null; assumptionsSet: boolean; fyEndMonth: number; firstYear: number;
-  gst: { registered: boolean }; gstLabel: string; gstSchedules: Record<number, GstSchedule>;
-  gstComponents: { label: string; rate: number; frequency: string; reclaimable: boolean }[];
+  impliedFromHistory: WorkingCapitalDays | null; assumptionsSet: boolean;
 }) {
   const num = useMoney();
   const router = useRouter();
-  const [area, setArea] = useState<AreaKey>(initialArea);
-  /**
-   * The area lives in two places and they have to agree (§6.43.1).
-   *
-   * The module bar switches instantly on client state, with no round trip — which is the point of it, for
-   * somebody comparing two statements all afternoon. The left menu deep-links to the same four tabs by name.
-   * Those two were fighting: clicking "Cash Flow" in the menu is a navigation within the SAME route, so
-   * React kept the component mounted and `useState` kept whatever tab was already showing. The menu item
-   * appeared to do nothing.
-   *
-   * So the URL follows the bar and the bar follows the URL. Both directions are needed, and the first has to
-   * go through the ROUTER rather than `history.replaceState`: a shallow URL change leaves Next still
-   * believing it is on the old one, so the next menu click to that address is treated as a no-op navigation
-   * and the server component never re-renders. The tab switch still feels instant because local state has
-   * already moved; the router catches up behind it.
-   *
-   * Adjusted during render rather than in an effect: React re-runs this component before touching the DOM,
-   * so the right tab paints first time instead of flashing the old one.
-   */
-  const [cameFrom, setCameFrom] = useState(initialArea);
-  if (initialArea !== cameFrom) { setCameFrom(initialArea); setArea(initialArea); }
-  const goArea = (k: AreaKey) => {
-    setArea(k);
-    const q = `?area=${k}`;                       // §6.76: there is no default tab to leave unnamed now
-    startNav(() => router.replace(`/plans/${planId}/forecast${q}`, { scroll: false }));
-  };
-  // The cash flow is the one statement with two useful spans: the five years a lender reads, and the twelve
-  // months that decide whether the business survives to year two.
-  const [span, setSpan] = useState<"years" | "months">("years");
-  const MONTHS = useMemo(() => planMonths(fyEndMonth), [fyEndMonth]);
   const [pending, start] = useTransition();
-  const [, startNav] = useTransition();
   const [wc, setWc] = useState(workingCapital);
   const [ct, setCt] = useState(cashTiming);
   const [err, setErr] = useState<string>();
@@ -88,14 +47,14 @@ export function ForecastModule({
   /**
    * The grids are edited locally and saved on blur, so they are state — but the plan can move underneath
    * them (a revert here, or the days saved from the What-If planner), and `useState` would hold the old
-   * figures on screen while the statements above showed the new ones. Same rule as the area: adjusted during
-   * render off the prop, so the corrected grid paints first time.
+   * figures on screen while the statements above showed the new ones. Adjusted during render off the prop,
+   * so the corrected grid paints first time instead of flashing the old one.
    */
   const [gridFrom, setGridFrom] = useState(workingCapital);
   if (workingCapital !== gridFrom) { setGridFrom(workingCapital); setWc(workingCapital); setCt(cashTiming); }
 
   const failures = forecast.invariants.filter((i) => !i.passed);
-  const pnl = forecast.pnl, cf = forecast.cashFlow;
+  const pnl = forecast.pnl;
 
   const save = (nextWc = wc, nextCt = ct) => start(async () => {
     const r = await saveAssumptions(planId, { workingCapital: nextWc, cashTiming: nextCt });
@@ -117,20 +76,16 @@ export function ForecastModule({
   return (
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group="Forecasts" title="Review forecast"
-      subtitle="Cash, the checks behind it, and whether the plan holds together" mode={mode}
-      areas={[
-        { key: "cash", label: "Cash flow" },
-        { key: "assumptions", label: "Assumptions", tag: assumptionsSet ? undefined : "not set" },
-      ]}
-      area={area} onArea={(k) => goArea(k as AreaKey)} scope={{ label: "Five years" }}
+      subtitle="Whether the statements agree, and the days that drive them" mode={mode}
+      areas={[{ key: "assumptions", label: "Checks & assumptions", tag: assumptionsSet ? undefined : "not set" }]}
+      area="assumptions" onArea={() => {}} scope={{ label: "Five years" }}
       footer={<ModuleFooter planId={planId} prevId="extraordinary" formId="forecast-form" />}
       help={<>
-        <h3>What good looks like</h3>
-        <p><b>Profit &amp; loss</b> — one-off income and costs sit below operating profit and above tax, so a windfall never flatters the trading line and never dodges the tax on it. Selling an asset is not revenue: only the gain or loss against book value appears here.</p>
-        <p><b>Cash flow</b> — interest is financing, not operating; asset proceeds are investing. A profitable business that runs out of cash in month seven is the ordinary way a good plan fails, which is why this is the statement a lender tests hardest.</p>
+        <h3>What this screen is for</h3>
+        <p><b>The checks</b> above every statement in the product are computed here. The balance sheet has to balance, the profit has to explain the cash, and each year has to open where the last one closed — in all five years. Until they pass, the plan is not worth printing.</p>
         <p><b>Assumptions</b> — debtor days, creditor days and tax timing. Leave them at zero and the forecast assumes every client pays on the day of the job and every bill is settled the same day. That is not conservative, it is the most optimistic cash flow that can be drawn.</p>
-        <h3>Where this goes</h3>
-        <p>All three statements → the business plan, where a bank reads them first. The checks above have to pass before the plan is worth printing.</p>
+        <h3>Where the statements went</h3>
+        <p><b>Profit &amp; Loss</b>, <b>Balance Sheet</b> and <b>Cash Flow</b> each have their own screen in this group now, with tiles, a chart and readings this table could never give. They are built from the same run of the same forecast, so they cannot disagree — and the strip above says so on every one of them.</p>
       </>}
     >
       <form id="forecast-form" className="hidden" />
@@ -142,75 +97,7 @@ export function ForecastModule({
         * actually asks — whether the three statements hold together — and the two that had nowhere else
         * to be read from.
         */}
-      {area === "cash" && (
-        <>
-          <Toolbar>
-            <Meta className="ml-0">
-              {span === "years"
-                ? <>Year 1 closes on {num(cf[1].closingCash)} · lowest close over five years {num(Math.min(...FORECAST_YEARS.map((y) => cf[y].closingCash)))}</>
-                : <>{planYearLabel(firstYear, fyEndMonth)} · {cashShape(monthly, MONTHS, num)}</>}
-            </Meta>
-            {/*
-              * A door to Break-Even (§6.68.1). This screen answers "what happens"; Break-Even answers "what
-              * has to happen for it to pay for itself" — and until now there was no route between them from
-              * anywhere in the app. Nic went looking for the charts and could not find them.
-              */}
-            <button type="button" onClick={() => router.push(`/plans/${planId}/break-even`)}
-              className="ml-3 text-[12px] font-semibold text-primary hover:underline">
-              Where it starts paying for itself →
-            </button>
-            <SpanToggle span={span} onSpan={setSpan} />
-          </Toolbar>
-          {overdraft && <FacilityStrip od={overdraft} num={num} months={MONTHS} />}
-          {span === "years" ? (
-            <Statement rows={[
-              ["Opening cash", (y) => cf[y].openingCash, "head"],
-              ["Received from customers", (y) => cf[y].receiptsFromCustomers],
-              ["Grants received", (y) => cf[y].grantsReceived],
-              ["One-off receipts", (y) => cf[y].extraordinaryReceipts],
-              ["Paid to suppliers and staff", (y) => -cf[y].paidToSuppliersAndEmployees],
-              ["One-off payments", (y) => -cf[y].extraordinaryPayments],
-              ["Tax paid", (y) => -cf[y].taxPaid],
-              ...(gst.registered ? [[`${gstLabel} paid over`, (y: number) => -cf[y].gstRemitted] as StatementRow] : []),
-              ["Operating cash flow", (y) => cf[y].netOperating, "sub"],
-              ["Assets bought", (y) => -cf[y].capex],
-              ["Assets sold", (y) => cf[y].disposalProceeds],
-              ["Investing cash flow", (y) => cf[y].netInvesting, "sub"],
-              ["Money borrowed", (y) => cf[y].debtProceeds],
-              ["Money invested", (y) => cf[y].equityRaised],
-              ["Loan repayments", (y) => -cf[y].debtRepaid],
-              ["Interest paid", (y) => -cf[y].interestPaid],
-              ["Dividends paid", (y) => -cf[y].dividendsPaid],
-              ["Financing cash flow", (y) => cf[y].netFinancing, "sub"],
-              ["Closing cash", (y) => cf[y].closingCash, "total"],
-            ]} num={num} />
-          ) : (
-            <MonthlyStatement monthly={monthly} months={MONTHS} num={num} registered={gst.registered} gstLabel={gstLabel} />
-          )}
-          <Note>
-            {span === "years"
-              ? <>Interest is financing, not operating. Money from selling an asset is investing, never revenue. A grant is operating: it is income the business earned, not money it raised.</>
-              : <>
-                  The twelve add to Year 1 exactly — the column on the right is the same figure the five-year view shows.
-                  Debtors, stock and creditors move across the year on their own driver&rsquo;s shape, so a busy quarter
-                  builds receivables rather than a twelfth arriving each month. Tax is spread the way instalments fall;
-                  a dividend is taken in the last month, once the year&rsquo;s profit is known.
-                </>}
-          </Note>
-          {gst.registered && <GstNote components={gstComponents} label={gstLabel} schedule={gstSchedules[1]} months={MONTHS} num={num} />}
-          {span === "months" && monthly.negative.length > 0 && (
-            <div className="mt-2 rounded border border-bad/40 bg-bad-soft px-3 py-2 text-[12.5px]">
-              <b className="text-bad">The bank account goes below zero</b>
-              <span className="ml-2 text-muted-foreground">
-                In {monthly.negative.length === 1 ? MONTHS[monthly.negative[0] - 1] : `${monthly.negative.length} months — ${monthly.negative.map((m) => MONTHS[m - 1]).join(", ")}`}.
-                {" "}The year still closes on {num(monthly.total.closingCash)}, which is exactly why the annual column cannot be trusted on its own.
-              </span>
-            </div>
-          )}
-        </>
-      )}
-
-      {area === "assumptions" && (
+      {(
         <>
           <Toolbar><Meta className="ml-0">
             {assumptionsSet
@@ -412,205 +299,3 @@ function MoneyRow({ label, hint, value, onChange, onBlur, pending }: {
 }
 
 /** Five years, or the twelve months inside the first one. One statement, two spans. */
-function SpanToggle({ span, onSpan }: { span: "years" | "months"; onSpan: (s: "years" | "months") => void }) {
-  return (
-    <div className="ml-auto inline-flex overflow-hidden rounded border border-input">
-      {(["years", "months"] as const).map((k) => (
-        <button key={k} type="button" onClick={() => onSpan(k)}
-          aria-pressed={span === k}
-          className={cn("px-2.5 py-1 text-[12px] leading-none",
-            span === k ? "bg-primary text-primary-foreground font-semibold" : "bg-background text-muted-foreground hover:bg-secondary")}>
-          {k === "years" ? "Five years" : "Year 1 by month"}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/**
- * The twelve months of Year 1, with the year beside them (§6.36). The total column is not decoration: it is
- * the same figure the five-year view shows in its Year 1 column, so the client can see the two agree instead
- * of being told they do.
- */
-function MonthlyStatement({ monthly, months, num, registered, gstLabel }: {
-  monthly: MonthlyCashFlow; months: string[]; num: (v: number) => string;
-  registered: boolean; gstLabel: string;
-}) {
-  const money = (v: number) => (v < 0 ? `(${num(Math.abs(v))})` : v === 0 ? "—" : num(v));
-  const rows: [string, (m: MonthCash) => number, (t: MonthlyCashFlow["total"]) => number, ("head" | "sub" | "total")?][] = [
-    ["Opening cash", (m) => m.openingCash, (t) => t.openingCash, "head"],
-    ["Received from customers", (m) => m.receiptsFromCustomers, (t) => t.receiptsFromCustomers],
-    ["Grants received", (m) => m.grantsReceived, (t) => t.grantsReceived],
-    ["One-off receipts", (m) => m.extraordinaryReceipts, (t) => t.extraordinaryReceipts],
-    ["Paid to suppliers and staff", (m) => -m.paidToSuppliersAndEmployees, (t) => -t.paidToSuppliersAndEmployees],
-    ["One-off payments", (m) => -m.extraordinaryPayments, (t) => -t.extraordinaryPayments],
-    ["Tax paid", (m) => -m.taxPaid, (t) => -t.taxPaid],
-    ...(registered
-      ? [[`${gstLabel} paid over`, (m: MonthCash) => -m.gstRemitted, (t: MonthlyCashFlow["total"]) => -t.gstRemitted] as typeof rows[number]]
-      : []),
-    ["Operating cash flow", (m) => m.netOperating, (t) => t.netOperating, "sub"],
-    ["Assets bought", (m) => -m.capex, (t) => -t.capex],
-    ["Assets sold", (m) => m.disposalProceeds, (t) => t.disposalProceeds],
-    ["Investing cash flow", (m) => m.netInvesting, (t) => t.netInvesting, "sub"],
-    ["Money borrowed", (m) => m.debtProceeds, (t) => t.debtProceeds],
-    ["Money invested", (m) => m.equityRaised, (t) => t.equityRaised],
-    ["Loan repayments", (m) => -m.debtRepaid, (t) => -t.debtRepaid],
-    ["Interest paid", (m) => -m.interestPaid, (t) => -t.interestPaid],
-    ["Dividends paid", (m) => -m.dividendsPaid, (t) => -t.dividendsPaid],
-    ["Financing cash flow", (m) => m.netFinancing, (t) => t.netFinancing, "sub"],
-    ["Movement in cash", (m) => m.netMovement, (t) => t.netMovement, "sub"],
-    ["Closing cash", (m) => m.closingCash, (t) => t.closingCash, "total"],
-  ];
-  return (
-    <Grid className="min-w-[1120px]">
-      <thead><tr>
-        {/* Thirteen columns do not fit a laptop, so the line name stays put while the year scrolls under it. */}
-        <Th style={{ width: 190 }} className="sticky left-0 z-[2] border-r border-input" />
-        {months.map((label, i) => (
-          <Th key={label + i} right style={{ width: 72 }}
-            className={cn(monthly.low.month === i + 1 && "text-foreground")}>
-            {label}{monthly.low.month === i + 1 && <span aria-hidden className="ml-0.5">▼</span>}
-          </Th>
-        ))}
-        <Th right style={{ width: 112 }} className="border-l border-input">Year 1</Th>
-      </tr></thead>
-      <tbody>
-        {rows.map(([label, get, total, weight]) => {
-          const cells = monthly.months.map((m) => get(m));
-          const body = (
-            <>
-              {/* Opaque, and the table's own white — not the page grey — or the pinned column reads as a band. */}
-              <Td className={cn("sticky left-0 z-[1] border-r border-input",
-                weight === "sub" || weight === "total" ? "bg-secondary font-semibold" : "bg-card",
-                weight === "head" && "font-semibold", !weight && "text-muted-foreground")}>{label}</Td>
-              {cells.map((v, i) => (
-                <Td key={i} right className={cn("num", weight && "font-semibold",
-                  v < 0 && "text-bad",
-                  label === "Closing cash" && monthly.months[i].closingCash < 0 && "font-semibold text-destructive")}>
-                  {money(v)}
-                </Td>
-              ))}
-              <Td right className={cn("num border-l border-input font-semibold")}>{money(total(monthly.total))}</Td>
-            </>
-          );
-          // A plain row, not GridRow: its hover tint is translucent, and a translucent pinned cell shows the
-          // months scrolling underneath it. Nothing on a statement is clickable, so the hover bought nothing.
-          return <tr key={label} className={cn(weight === "total" ? TOTAL_ROW : weight === "sub" && "[&>td]:bg-secondary")}>{body}</tr>;
-        })}
-      </tbody>
-    </Grid>
-  );
-}
-
-/**
- * What the twelve months actually say, in a sentence that cannot come out meaningless. "Tightest in June" is
- * no reading at all when June is simply the last month of a year that falls every single month — that is a
- * business burning cash, and it should be told so.
- */
-function cashShape(monthly: MonthlyCashFlow, months: string[], num: (v: number) => string) {
-  const closes = monthly.months.map((m) => m.closingCash);
-  const falls = closes.every((v, i) => i === 0 || v <= closes[i - 1]);
-  const rises = closes.every((v, i) => i === 0 || v >= closes[i - 1]);
-  const low = months[monthly.low.month - 1];
-  if (falls) return <>down every month, from {num(closes[0])} to {num(closes[11])}</>;
-  if (rises) return <>up every month, from {num(closes[0])} to {num(closes[11])}</>;
-  return <>closes on {num(monthly.total.closingCash)} · tightest in {low} at {num(monthly.low.closingCash)}</>;
-}
-
-/**
- * The two things the profit and loss does that a client did not ask for, said out loud. Both are ordinary
- * law and ordinary tax, and both change the figure they were expecting — so neither gets to be silent.
- */
-/**
- * What the tax is doing to the cash, in a sentence. The figure that surprises a client is never the rate —
- * it is how much of the bank balance was never theirs, and which month it leaves in (§6.38).
- */
-function GstNote({ components, label, schedule, months, num }: {
-  components: { label: string; rate: number; frequency: string; reclaimable: boolean }[];
-  label: string; schedule: GstSchedule | undefined; months: string[]; num: (v: number) => string;
-}) {
-  if (!schedule || !components.length) return null;
-  const due = schedule.months.filter((m) => m.remitted !== 0);
-  const refunds = due.filter((m) => m.remitted < 0);
-  const owed = schedule.closingPayable;
-  const notReclaimed = components.filter((c) => !c.reclaimable);
-  const many = components.length > 1;
-  /**
-   * A monthly filer settles in eleven of the twelve months, and listing them all reads as noise rather than
-   * information. Past a handful, say the shape instead of the months (§6.39.1).
-   */
-  const when = due.length > 4
-    ? "every month but the first"
-    : due.map((m) => months[m.month - 1]).join(", ");
-  return (
-    <Note>
-      {components.map((c) => `${c.label} at ${c.rate}%, filed ${c.frequency}`).join(" · ")}.{" "}
-      {due.length > 0 && <>
-        {label} {many ? "settle" : "settles"} in {when}
-        {refunds.length > 0 && <> — {refunds.length === 1 ? "one of those is a refund coming back" : `${refunds.length} of those are refunds coming back`}</>}.{" "}
-      </>}
-      {owed > 0
-        ? <><b>{num(owed)}</b> is still owed at the end of Year 1 and is sitting in the bank. It is on the balance sheet as {label} owing, not as cash.</>
-        : owed < 0
-          ? <><b>{num(-owed)}</b> is owed back to the business at the end of Year 1, shown as a refund due.</>
-          : <>Nothing is outstanding at the end of Year 1.</>}
-      {notReclaimed.length > 0 && (
-        <> {notReclaimed.map((c) => c.label).join(" and ")} {notReclaimed.length === 1 ? "is" : "are"} charged
-          on sales but never claimed back on purchases, so what the business pays on its own buying is part
-          of the cost rather than a credit.</>
-      )}
-      {" "}Sales and costs everywhere else in the plan are tax-exclusive, so this has not changed the profit by a cent.
-    </Note>
-  );
-}
-
-/**
- * What the facility actually did (§6.72.2).
- *
- * The engine has known all of this since the sweep was wired in and no screen said a word: how deep the
- * business goes, when, what it costs, and whether the limit was enough. A facility used silently is no
- * better than one modelled wrongly — the whole reason to put an overdraft in a plan is to find out.
- *
- * It sits on the cash flow rather than on Funding because that is the statement it changes, and because
- * Funding builds its own Year 1 cash check and has never run the five-year forecast.
- */
-function FacilityStrip({ od, num, months }: { od: OverdraftRun; num: (v: number) => string; months: string[] }) {
-  const cost = od.totalInterest + od.totalFees;
-  const drew = od.peak.month > 0 && od.peak.drawn > 0;
-  const name = od.facilities.length === 1 ? od.facilities[0].name : `${od.facilities.length} facilities`;
-  return (
-    <div className="border-b border-border px-5 py-2.5 text-[12.5px]">
-      <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
-        <span className="font-semibold">{name}</span>
-        <span className="text-muted-foreground">Limit <b className="num text-foreground">{num(od.limit)}</b></span>
-        {/* "Deepest never drawn" is not a sentence. A facility that was never used has no deepest point. */}
-        {drew && (
-          <span className="text-muted-foreground">
-            Deepest <b className="num text-foreground">{num(od.peak.drawn)}</b> in {months[(od.peak.month - 1) % 12]} of Year {Math.ceil(od.peak.month / 12)}
-          </span>
-        )}
-        <span className="text-muted-foreground">Costs <b className="num text-foreground">{num(cost)}</b> over five years</span>
-      </div>
-      <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-muted-foreground">
-        <span>Owing at each year end:</span>
-        {FORECAST_YEARS.map((y) => (
-          <span key={y} className="num">Y{y} <b className={cn(od.byYear[y].closingDrawn > 0 ? "text-foreground" : "text-faint")}>{num(od.byYear[y].closingDrawn)}</b></span>
-        ))}
-      </div>
-      {od.short.length > 0 ? (
-        /* The number a lender reaches for. Not "check your facility" — by how much, and from when. */
-        <div className="mt-1.5 text-bad">
-          <b>The facility is not big enough.</b> Even drawn to its limit the plan is still short — by{" "}
-          <b className="num">{num(Math.max(...od.months.map((m) => m.shortfall)))}</b> at its worst, in{" "}
-          {od.short.length === 1 ? "one month" : `${od.short.length} months`}, from month {od.short[0]}.
-        </div>
-      ) : drew ? (
-        <div className="mt-1.5 text-muted-foreground">
-          The limit covers every month of the plan, with <b className="num text-foreground">{num(od.limit - od.peak.drawn)}</b> to spare at the deepest point.
-        </div>
-      ) : (
-        <div className="mt-1.5 text-muted-foreground">Never drawn on — the plan pays its own way every month{cost > 0 ? ", though the facility still costs its fee" : ""}.</div>
-      )}
-    </div>
-  );
-}

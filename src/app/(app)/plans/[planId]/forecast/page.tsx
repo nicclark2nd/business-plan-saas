@@ -22,33 +22,25 @@ export default async function ForecastPage({ params, searchParams }: {
   if (area === "pnl") redirect(`/plans/${planId}/profit-loss`);
   /** And the balance sheet, which left the same way in §6.77. Same reasoning: send the link where the thing went. */
   if (area === "balance") redirect(`/plans/${planId}/balance-sheet`);
-  const { plan, mode, components, taxLabel, fyEndMonth, firstYear, impliedFromHistory, assumptionsSet } =
-    await loadPlan(planId);
+  /** And the cash flow, the last to leave (§6.78). */
+  if (area === "cash") redirect(`/plans/${planId}/cash-flow`);
+  const { plan, mode, impliedFromHistory, assumptionsSet } = await loadPlan(planId);
   const { workingCapital, cashTiming } = plan;
 
   /**
-   * GST (§6.38). Assembled once and fed into the year and the months from the same place, so the liability
-   * on the balance sheet and the BAS payment on the cash flow can never be two different readings.
+   * One pipeline (§6.67), and this screen takes only the CHECKS off it. `checked` is the forecast with the
+   * monthly checks folded in, so twelve months that stop adding to their own year fail visibly here rather
+   * than drifting quietly — and it is the same run the three statements are drawn from, which is the whole
+   * reason the strip above them can be trusted.
    */
-  /**
-   * One pipeline (§6.67): GST assembled once, the five years built, then Year 1 month by month off the
-   * balances the year just computed rather than a second reading of the plan. `checked` is the forecast
-   * with the monthly checks folded into the strip, so twelve months that stop adding to their own year
-   * fail visibly here instead of drifting quietly.
-   */
-  const { checked, monthly, gst, overdraft } = runForecast(plan);
+  const { checked } = runForecast(plan);
 
-  const areas = ["cash", "assumptions"] as const;
   return (
     <ForecastModule
-      planId={planId} mode={mode} forecast={checked} monthly={monthly} overdraft={overdraft}
-      initialArea={areas.includes((area ?? "") as typeof areas[number]) ? (area as typeof areas[number]) : "cash"}
+      planId={planId} mode={mode} forecast={checked}
       workingCapital={workingCapital} cashTiming={cashTiming}
       impliedFromHistory={impliedFromHistory}
       assumptionsSet={assumptionsSet}
-      fyEndMonth={fyEndMonth} firstYear={firstYear}
-      gst={{ registered: components.length > 0 }} gstLabel={taxLabel}
-      gstSchedules={gst.schedules} gstComponents={components.map((c) => ({ label: c.label, rate: c.rate, frequency: c.frequency, reclaimable: c.reclaimable }))}
     />
   );
 }
