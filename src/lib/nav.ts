@@ -2,84 +2,89 @@
 export type NavItem = { id: string; label: string; step?: number; advancedLabel?: string; tag?: string; tool?: boolean; href?: string /* deep link into another module's area */ };
 export type NavGroup = { group: string; items: NavItem[] };
 
+/**
+ * ORDER (§6.80). The numbered path runs straight down the page, 1 to 15, and everything without a number
+ * sits below it.
+ *
+ * Nic, in front of a client: "13 is six menu items away from 12 ... What-If Planner is stuck in the middle
+ * of everything ... 15 is Business plan and I can't see a 14."
+ *
+ * All three are one fault. The sidebar was doing two jobs that had quietly stopped agreeing: a TOPIC MAP
+ * (Market, Financials, Forecasts) and a NUMBERED JOURNEY. They used to roughly coincide. §6.76 to §6.78
+ * put three new modules into the Forecasts group and finished off what was left — 13 ended up six items
+ * below 12, and 14 sat ABOVE 6, because Goals is filed next to SWOT for topical reasons while being the
+ * last thing the plan drafts.
+ *
+ * A number is only a guide if the next one is the next thing down. So the journey wins the ordering, and
+ * the topics keep the grouping WITHIN it. Nothing is renumbered: every step keeps the number it had, and
+ * only its position moves, so the Save-and-continue chain is untouched.
+ *
+ * Below the path, in their own groups: the statements the plan produces, the tools, the unbuilt, the
+ * settings. An unnumbered item can then never appear between two numbered ones, which is what made
+ * Assumptions and What-If read as steps somebody had skipped.
+ */
 export const NAV: NavGroup[] = [
   { group: "", items: [{ id: "dashboard", label: "Dashboard", tool: true }] },
+
+  // ---- the guided path, 1 to 15, in order -------------------------------
   { group: "Strategy & Direction", items: [{ id: "vision", label: "Vision & Purpose", step: 1 }] },
-  { group: "Assets", items: [
-    { id: "outlets", label: "Outlets" }, { id: "social", label: "Social Media" }, { id: "memberships", label: "Membership" },
-    { id: "ip", label: "Intellectual Property" },
-  ] },
   { group: "People", items: [{ id: "people", label: "Leadership Team", step: 2 }] },
   { group: "Market", items: [{ id: "marketing", label: "Marketing", step: 3 }, { id: "competitors", label: "Competitors", step: 4 }] },
-  { group: "Goals", items: [{ id: "swot", label: "SWOT", step: 5 }, { id: "goals", label: "Goals", step: 14, tag: "AI-drafted" }] },
+  /**
+   * SWOT on its own, under its own name. It shared a "Goals" heading with Goals, and the two are at
+   * opposite ends of the journey — 5 and 14. One heading holding the fifth step and the fourteenth was
+   * the single place where the topic order and the step order tore.
+   */
+  { group: "Strengths & Risks", items: [{ id: "swot", label: "SWOT", step: 5 }] },
   { group: "Financials", items: [
     { id: "historic", label: "Historic", step: 6 }, { id: "sales", label: "Sales", step: 7 }, { id: "cogs", label: "COGS", step: 8 },
     { id: "overheads", label: "Overheads", step: 9 }, { id: "funding", label: "Funding", step: 10 },
     { id: "assets", label: "Fixed Assets", step: 11 },
     { id: "extraordinary", label: "One-off income & costs", step: 12 },
     /**
-     * An input, filed with the inputs (§6.43.1, §6.79). Debtor, stock and creditor days sat in the Forecasts
-     * group, which is a list of things the plan PRODUCES — and they are a thing the client TYPES.
+     * An input, filed with the inputs (§6.43.1, §6.79), and it stays where Nic asked for it: directly under
+     * item 12. It carries no number, but it is the LAST item in its group rather than a gap in the middle
+     * of a run — 13 starts a new heading underneath. An unnumbered item at the end of a group reads as
+     * "and also this"; the same item between 12 and 13 reads as a step you have somehow missed.
      *
-     * §6.43.1 moved the NAME here and left the grid behind as a deep link into Review forecast, which meant
-     * the same screen answered to two menu items in two different groups. §6.79 moved the grid to the name.
-     *
-     * A tool rather than a step: the guided path reaches these on the way through, so this is the door for
-     * somebody who wants to change them again afterwards.
+     * That the guided path never forces a client through it is a real gap, and a separate one.
      */
     { id: "assumptions", label: "Assumptions", tool: true },
-    { id: "what-if", label: "What-If Planner", tool: true },
   ] },
+  { group: "Review", items: [{ id: "forecast", label: "Review forecast", step: 13 }] },
+  { group: "Goals", items: [{ id: "goals", label: "Goals", step: 14, tag: "AI-drafted" }] },
+  { group: "Reports", items: [{ id: "reports", label: "Business plan", step: 15, tool: true }] },
+
+  // ---- what the plan produces, and what you do with it -------------------
   /**
-   * Five outputs, and nothing else (§6.43.1). Everything in this group is something the plan PRODUCES, which
-   * is what makes it a group — the assumptions behind the cash flow are an input and have moved up to
-   * Financials with the rest of the inputs.
-   *
-   * All three statements have modules of their own now (§6.76, §6.77, §6.78), each with tiles, a chart and
-   * a reading the five-year table could not give. §6.32.3 put them on one module bar because "three
-   * statements that must agree belong on one screen" — what that was protecting was never the adjacency,
-   * it was the CHECK, and the reconciliation strip renders above every one of them wherever it lives.
-   *
-   * What is left on Review forecast is the question no single statement answers: whether they agree, and
-   * the days that drive all three. That is what step 13 was always for.
-   *
-   * `href` deep-links each name to the tab it opens. The module bar stays: it switches instantly, with no
-   * round trip, which is what somebody comparing two statements is doing all afternoon.
+   * Five outputs, and nothing else (§6.43.1) — each now a module of its own (§6.76, §6.77, §6.78) rather
+   * than a tab on step 13. They sit BELOW the path because they have no number, which is the cost of the
+   * rule and worth paying: these are the screens a client opens again and again, and burying them slightly
+   * is cheaper than putting four unnumbered items back in the middle of the journey.
    */
   { group: "Forecasts", items: [
-    /**
-     * Profit & Loss has its own module now (§6.76), so this no longer answers to that name in Advanced.
-     * Step 13 stays here: "whether the plan holds together" is the question the reconciliation strip and
-     * three statements side by side answer, and it is not the same question as "what did we earn".
-     */
     { id: "profit-loss", label: "Profit & Loss", tool: true },
-    /**
-     * And the balance sheet, for the same reasons and by the same move (§6.77). It was a tab with a
-     * one-line toolbar and a table on it — the statement that says whether the business owns more than it
-     * owes, with no tiles, no chart and no reading of the year it actually describes.
-     */
     { id: "balance-sheet", label: "Balance Sheet", tool: true },
-    /**
-     * And the cash flow, the last of the three to leave (§6.78). It is the statement a lender tests hardest
-     * — a profitable business that runs out of cash in month seven is the ordinary way a good plan fails —
-     * and it had a toolbar, a span toggle and a table.
-     */
     { id: "cash-flow", label: "Cash Flow", tool: true },
-    { id: "forecast", label: "Review forecast", step: 13 },
     /**
      * A TOOL, not a step (§6.68). Guided mode renders an item only if it carries a step number or is
-     * flagged a tool, so Break-Even — which had neither — was invisible in the mode every client starts
-     * in. It is the only screen in the product with charts on it and the only one with no other door:
-     * Cash Flow and Balance Sheet at least survive as tabs on Review forecast. A client would have had to
-     * find the Advanced toggle to reach it, which means they would never have reached it.
-     *
-     * Unit Economics is gone rather than flagged: there is no module behind it. A menu item pointing at a
-     * route that does not exist is the §6.43.1 fault, and it survived here because nobody could see it.
+     * flagged a tool, so Break-Even — which had neither — was invisible in the mode every client starts in.
      */
     { id: "break-even", label: "Break-Even", tool: true },
   ] },
+  /**
+   * An ACTIVITY, not a step and not an output (§6.80). Nic: "the What-If planner seems to be an activity
+   * and not a report but it has no number." It sat in Financials, the group where a client TYPES things,
+   * while being the one screen you can only use once a forecast already exists to bend.
+   */
+  { group: "Tools", items: [{ id: "what-if", label: "What-If Planner", tool: true }] },
+
+  // ---- not built yet, and the settings -----------------------------------
+  { group: "Assets", items: [
+    { id: "outlets", label: "Outlets" }, { id: "social", label: "Social Media" }, { id: "memberships", label: "Membership" },
+    { id: "ip", label: "Intellectual Property" },
+  ] },
   { group: "Strategy (AI)", items: [{ id: "strategy", label: "Recommendations", tag: "soon" }] },
-  { group: "Reports", items: [{ id: "reports", label: "Business plan", step: 15, tool: true }] },
   { group: "Plan", items: [{ id: "settings", label: "Plan settings", tool: true }] },
 ];
 
