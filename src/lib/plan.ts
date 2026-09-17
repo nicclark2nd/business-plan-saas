@@ -52,7 +52,22 @@ export const getCompleteness = cache(async (planId: string) => {
       const ids = (pp.data ?? []).map((x) => x.id);
       return { n: ids.length, covered: ids.filter((id) => written.has(id)).length };
     }),
-    supabase.from("plan_marketing").select("target_market,market_size,market_trends,customer_needs").eq("plan_id", planId).maybeSingle().then((r) => (r.data ? Object.values(r.data).filter(Boolean).length : 0)),
+    /**
+     * Marketing, out of four things the client can ACTUALLY fill in (§6.75).
+     *
+     * It used to count `target_market`, market size, market trends and `customer_needs` — and two of those
+     * four stopped being fillable the day §6.62 replaced them with the segments grid. A plan created after
+     * that could reach 2/4 on Marketing and never move again however much its owner wrote, which is the
+     * §6.57 fault in a second place: a step nobody can finish.
+     */
+    Promise.all([
+      supabase.from("plan_marketing").select("market_size,market_trends,positioning").eq("plan_id", planId).maybeSingle(),
+      supabase.from("plan_market_segments").select("name").eq("plan_id", planId),
+    ]).then(([m, seg]) => {
+      const written = m.data ? Object.values(m.data).filter((v) => String(v ?? "").trim()).length : 0;
+      const named = (seg.data ?? []).some((x) => String(x.name ?? "").trim());
+      return written + (named ? 1 : 0);
+    }),
     Promise.all([count("plan_competitors"), supabase.from("plan_marketing").select("our_advantage").eq("plan_id", planId).maybeSingle().then((r) => (r.data?.our_advantage ? 1 : 0))]).then(([c, a]) => Math.min(c, 1) + a),
     count("plan_swot_items"),
     count("plan_goals", { annualOnly: true }),
