@@ -1998,3 +1998,106 @@ The first check after the fix read **nine charts on screen and nine images in th
 The other absent chart is correct: share of sales by segment is suppressed because no segment on this plan has a share, which is §6.83's rule working rather than a second bug.
 
 *An operational note worth keeping:* every git command run through the device shell left an `index.lock` it could not delete, which would have blocked the next commit. Deleting inside `.git` needs a permission grant of its own. Ask for it before it strands somebody mid-commit.
+
+## 6.93 A column with an editor, and two decisions about what leaves the building (17 Sep 2026)
+
+Three things shipped together because they answer the same question: what does a client get to decide about
+the document they hand to a bank?
+
+**The dead column, resurrected properly.** §6.88 grouped the plan's overheads table by
+`plan_overheads.category`. §6.89 tore that out, because there was no category field on the Overheads screen:
+nobody could set it, every plan collapsed under one heading called "Other", and the plan was printing
+structure the client could not account for. The answer was never "leave the column dead" — it was "give it an
+editor", and that is 0041 plus a select on the Expense dialog.
+
+Two decisions inside that are worth keeping.
+
+*It is not free text.* The column has been `text` since 0003. Left free, three clients type "Rent", "rent"
+and "Premises" and the plan prints three groups of one. A grouped table whose groups are typos is worse for
+the reader than the flat table it replaced. Eight keys, checked in the database so nothing but those eight can
+land there whichever code writes it, with the words in `engine/overheads/categories.ts` — the database holds
+the key, the app holds the label, and neither is a second copy of the other.
+
+*Nothing was back-filled, and the plan does not group until a client has grouped something.* Guessing a
+category from a line's name — "Rent" → Premises — would be §6.89 wearing better manners: structure invented in
+the client's name. `groupByCategory` reports `grouped: false` when not one line carries a category, and the
+report prints exactly the flat table it printed before. The two synced lines always carry one, because
+Leadership Team salaries genuinely IS People & admin and the marketing budget genuinely IS Sales & marketing,
+and those are facts about what the lines are rather than guesses about what the client meant.
+
+**Salaries, and a toggle that must not lie.** Per-person salaries now print in the Financial Plan, directly
+above the Overheads line that totals them, read through the same `salaryForYear` the People screen and the
+synced overhead use — never a second arithmetic (§6.41). Contractors excluded, exactly as
+`totalSalariesByYear` excludes them, and the note says so rather than leaving a reader to wonder why the
+table and the line agree.
+
+The toggle that suppresses it is where the care went. **It does not hide the money, and nothing on the screen
+may suggest it does:** "Leadership Team salaries" still prints in Overheads and the figure still sits in the
+profit and loss whichever way it is set. What it controls is *attribution*. A client who believes a figure is
+suppressed when it is not will send that document to the wrong person, so the label spells out what still
+prints. It defaults ON, because off-by-default would mean a client types every salary and silently never sees
+them — the §6.87 complaint that started this whole pass. And its state shows on the Reports screen, beside the
+download button, because **a setting that changes what leaves the building must not be invisible from the
+screen it leaves by**.
+
+One shape was considered and rejected: a three-way with "positions only". In a business with one Operations
+Manager, "Operations Manager — $95,000" is not anonymous. That is fake privacy, and fake privacy is worse than
+none, because people rely on it.
+
+**The page size nobody had ever chosen.** `docx.ts` set margins and never set a page size, so every plan this
+app has ever produced took the `docx` library's own default — A4 portrait, 11906 × 16838 twips. Right for
+almost every plan, decided by nobody. A client in Dallas got 210mm paper out of a Letter printer because of a
+dependency's default value.
+
+> **A DEFAULT INHERITED FROM A DEPENDENCY IS NOT A DECISION.** It is a decision the dependency made, about its
+> own users, some years ago. Anything that reaches the client's hands has to be set deliberately, even when
+> the deliberate value is the same one that was being inherited.
+
+It is derived rather than asked: stored null for almost every plan, with the country answering it, so a client
+in Brisbane never sees a question they do not need. A stored `'a4'` could not be told apart from a client who
+chose A4, and a plan later moved to the United States would go on printing the old country's paper. The screen
+report is untouched — its 900px measure is a reading width, not a paper size (§6.92) — and the label says so.
+
+Tested by unzipping the document and reading `w:pgSz` out of `word/document.xml`, not by comparing the
+constant to itself (§6.92.1). Letter is wider and shorter than A4, and the tables are laid out in percentages,
+so the columns reflow and only the page breaks move.
+
+## 6.93.1 The table that did not add up to its own total (17 Sep 2026)
+
+Found on Nic's screen, minutes after §6.93 shipped, by the copy §6.93 had just written.
+
+The Financial Plan's Overheads table listed twelve expenses adding to 704,080, under a total that said
+936,574. The missing 232,494 was the Leadership Team's salaries, the marketing budget and the on-costs.
+
+The cause is one line in `gather.ts`: it read `current_value` off each `plan_overheads` row. The two synced
+lines carry **0** there — their figures live in People and in Marketing and are joined in by
+`planOverheadLines` — so a `.filter(o => o.amount > 0)` intended to drop empty rows dropped both of them
+instead. On-costs were never a row at all: they are a percentage of the wage lines, computed by the engine,
+so nothing in the table could have carried them.
+
+> **A TABLE THAT DOES NOT ADD UP TO ITS OWN TOTAL IS WORSE THAN NO TABLE.** Every other figure in the
+> document was right. A lender who adds that column, finds a hole a quarter the size of the total, and gets
+> no explanation has been given a reason to doubt the whole plan — and the doubt is cheap to acquire and
+> expensive to answer.
+
+The fix is the rule this project keeps arriving at from new directions: the report builds the list through
+`planOverheadLines` and `overheadByYear`, the same two functions the Overheads screen and the forecast use,
+and adds the on-costs as their own named line. One calculation, three readers (§6.67).
+
+Two things about HOW it was found are worth more than the fix.
+
+**It had been wrong since the Overheads section was written, and every check passed.** The total came from
+the forecast and was correct. The rows came from the database and were each correct. tsc, eslint and 582
+tests were green. Nothing in the app was in a state anyone would call broken — the table simply did not
+reconcile, and only a reader adding a column would ever know.
+
+**The new copy is what exposed it.** §6.93's salary table says, in the document, "These figures are the
+Leadership Team salaries line in the overheads below" — and there was no such line below. Writing a sentence
+that pointed at something turned a silent omission into a visible broken promise within one screen.
+
+> **PROSE THAT POINTS AT A FIGURE IS A TEST OF WHETHER THE FIGURE IS THERE.** A table can be quietly
+> incomplete for months. A sentence that names what the reader should find next cannot.
+
+The general form, for the next section that prints a list beside a total: *a list is not the same object as
+the total it sits under, and nothing but adding it up proves they agree.* Print them from one calculation, or
+expect them to drift.

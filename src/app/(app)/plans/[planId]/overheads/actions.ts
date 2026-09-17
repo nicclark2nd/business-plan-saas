@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { distributionValid, exactHundred, type MonthlyDistribution } from "@/engine/sales/projection";
 import { nextHref } from "@/lib/nav";
+import { normalizeCategory } from "@/engine/overheads/categories";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
@@ -19,7 +20,7 @@ const pctMap = (raw: Record<string, number> | null | undefined) => {
 
 /** A typed overhead. Synced lines never come through here — their figures belong to the module that owns them. */
 export async function upsertOverhead(planId: string, o: {
-  id?: string; name: string; current_value: number; start_year?: number | null; on_cost?: boolean | null; gst_applies?: boolean;
+  id?: string; name: string; current_value: number; start_year?: number | null; on_cost?: boolean | null; gst_applies?: boolean; category?: string | null;
   yearly_change?: Record<string, number> | null; monthly_distribution?: MonthlyDistribution | null;
 }): Promise<Result<{ id: string }>> {
   const supabase = await createClient();
@@ -28,6 +29,9 @@ export async function upsertOverhead(planId: string, o: {
   if (o.monthly_distribution && !distributionValid(o.monthly_distribution)) return { ok: false, error: "The monthly split must add up to 100%." };
   const row = {
     plan_id: planId, name, source: "entered" as const,
+    // Anything that is not one of the eight is stored as null, not as itself — the DB check would reject it
+    // anyway (0041), and a silent null reads as "uncategorised" rather than failing the client's save.
+    category: normalizeCategory(o.category),
     current_value: Math.max(0, Number(o.current_value) || 0),
     start_year: Math.min(5, Math.max(1, Math.trunc(Number(o.start_year)) || 1)),
     on_cost: !!o.on_cost,

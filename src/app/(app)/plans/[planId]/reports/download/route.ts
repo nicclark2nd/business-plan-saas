@@ -15,8 +15,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ planId: string }> }) {
   const { planId } = await params;
-  const { doc, missing } = await gatherReport(planId);
-  const buffer = await renderDocx(doc, missing);
+  /* The paper comes from the plan, not from this route — the screen and the file are one gather (§6.90). */
+  const { doc, missing, pageSize } = await gatherReport(planId);
+  const buffer = await renderDocx(doc, missing, pageSize);
   return new Response(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

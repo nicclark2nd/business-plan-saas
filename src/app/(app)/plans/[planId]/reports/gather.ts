@@ -7,7 +7,10 @@ import { strengthByYear } from "@/engine/balance/lines";
 import { serviceProfit } from "@/engine/pnl/lines";
 import { productYears, sourceOf, type AnyProduct } from "@/engine/sales/product";
 import type { CostProduct } from "@/engine/cogs/direct";
-import { monthYearLabel, planYearEndLabel } from "@/engine/plan/calendar";
+import { monthYearLabel, planYearEndLabel, firstProjectedYear } from "@/engine/plan/calendar";
+import { planYearStart, startYearFromDate, salaryForYear, SALARY_YEARS } from "@/engine/people/salary";
+import { resolvePageSize } from "@/engine/report/pageSize";
+import { planOverheadLines, overheadByYear, type Overhead } from "@/engine/overheads/expenses";
 import { buildReport, type ReportInput } from "@/engine/report/build";
 import { AREA_LABEL } from "@/engine/whatif/goals";
 import { SPEND_LABEL } from "../marketing/model";
@@ -46,6 +49,8 @@ const text = (v: unknown) => { const s = String(v ?? "").trim(); return s || nul
 export async function gatherReport(planId: string) {
   const { plan, mode, components, taxLabel, fyEndMonth, firstYear, noun, settings } = await loadPlan(planId);
   const supabase = await createClient();
+  /* The first day of plan Year 1 — what a person's Started date is measured against (§6.11). */
+  const salaryFyStart = planYearStart(firstProjectedYear(settings?.first_projected_year as number | null, fyEndMonth), fyEndMonth);
 
   const rows = <T,>(p: PromiseLike<{ data: T[] | null }>) => p.then((r) => r.data ?? []) as Promise<Record<string, unknown>[]>;
   const [planRow, framework, goals, people, caps, licences, marketing, segments, evidence, spend, competitors, premises, suppliers, opSteps, opCapacity, completeness] = await Promise.all([
@@ -122,9 +127,51 @@ export async function gatherReport(planId: string) {
       category: text(a.category), usefulLifeMonths: n(a.useful_life_months) || null,
       residual: n(a.residual_value), financed: !!a.funding_debt_id,
     })).filter((a) => a.amount > 0),
-    overheads: (sources.overheads as unknown as Record<string, unknown>[]).map((o) => ({
-      name: String(o.name ?? "Expense"), amount: n(o.current_value),
-    })).filter((o) => o.amount > 0),
+    /**
+     * EVERY LINE THE TOTAL IS MADE OF (§6.93.1).
+     *
+     * This read `current_value` off each row, and the two synced lines carry 0 there — their figures live in
+     * People and in Marketing. So the plan printed twelve expenses adding to 704,080 under a total of
+     * 936,574, and the 232,494 difference — the Leadership Team's salaries, the marketing budget and the
+     * on-costs — was simply absent. The total was right; the table under it did not add up to it, in the
+     * document a client hands to a bank.
+     *
+     * > A TABLE THAT DOES NOT ADD UP TO ITS OWN TOTAL IS WORSE THAN NO TABLE. A reader who checks it and
+     * > finds a hole stops trusting every other figure in the plan.
+     *
+     * It is built through `planOverheadLines` and `overheadByYear` — the same two functions the Overheads
+     * screen and the forecast use — so the line, the screen and the statement are one calculation (§6.67).
+     *
+     * The CATEGORY comes too, and `source`, because the two synced lines take their category from what they
+     * are rather than from a column nobody can set on them.
+     */
+    overheads: (() => {
+      const rows = sources.overheads as unknown as Overhead[];
+      const lines = planOverheadLines(rows, sources.salaries as number[], sources.marketing as number[])
+        .map(({ o, synced }) => ({
+          name: String(o.name ?? "Expense"),
+          amount: overheadByYear(o, synced)[0],
+          category: text((o as unknown as Record<string, unknown>).category),
+          source: (o.source ?? "entered") as "entered" | "people" | "marketing",
+          wages: !!o.on_cost || o.source === "people",
+        }));
+      /*
+       * On-costs are a percentage of the wage lines rather than a line anybody typed, and they ARE part of
+       * the total — so the table has to show them or it does not reconcile. Carried as a `people` line so it
+       * groups under People & admin without counting as a category the client set.
+       */
+      const onCostPct = n(sources.onCostPct);
+      const wages = lines.filter((l) => l.wages).reduce((t, l) => t + l.amount, 0);
+      const onCosts = Number((wages * onCostPct / 100).toFixed(2));
+      const printed = [
+        ...lines,
+        ...(onCosts > 0 ? [{
+          name: `On-costs at ${onCostPct}% on wages`, amount: onCosts,
+          category: null, source: "people" as const, wages: false,
+        }] : []),
+      ].filter((o) => o.amount > 0);
+      return printed.map((o) => ({ name: o.name, amount: o.amount, category: o.category, source: o.source }));
+    })(),
     funding: (sources.funding as unknown as Record<string, unknown>[]).map((x) => {
       const loan = raw(x.loan);
       return {
@@ -182,6 +229,27 @@ export async function gatherReport(planId: string) {
       role: ROLE[String(p.role)] ?? text(p.role), share: n(p.pct_shareholding) || null,
     })).filter((p) => p.name),
     /**
+     * WHAT EACH KEY PERSON IS PAID, YEAR BY YEAR (§6.93).
+     *
+     * Read through `salaryForYear`, the SAME function the People screen and the synced Overheads line use —
+     * not a second arithmetic of salaries assembled here. A salary table in the plan that disagreed with the
+     * Overheads line above it by a dollar would destroy a reader's trust in every other figure (§6.41).
+     *
+     * CONTRACTORS ARE EXCLUDED, exactly as `totalSalariesByYear` excludes them, so the table's total IS the
+     * overheads line. The note under the table says so rather than leaving a reader to wonder.
+     */
+    keyPeople: people
+      .filter((p) => p.role !== "contractor" && String(p.name ?? "").trim())
+      .map((p) => {
+        const startYear = startYearFromDate(p.started_on as string | null, salaryFyStart);
+        return {
+          name: String(p.name).trim(), position: text(p.position),
+          role: ROLE[String(p.role)] ?? text(p.role), startYear,
+          salaries: SALARY_YEARS.map((y) => salaryForYear(n(p.annual_salary), p.salary_adjustments ?? null, startYear, y)),
+        };
+      })
+      .filter((p) => p.salaries.some((v) => v > 0)),
+    /**
      * FILTERED AT THE BOUNDARY (§6.86). The People screen tells a client, in those words, that development
      * areas are "never printed in an external report". This line is where that promise is kept.
      */
@@ -237,6 +305,8 @@ export async function gatherReport(planId: string) {
     taxLabel: components.length ? taxLabel : "Not registered",
     currency,
     yearEndLabels: FORECAST_YEARS.map((y) => planYearEndLabel(firstYear + y - 1, fyEndMonth)),
+    /* Whether the salary table prints at all. The money prints either way — this decides whose name is on it. */
+    printSalaries: settings?.print_key_people_salaries !== false,
     money,
     date: new Date().toLocaleDateString("en-AU", { month: "long", year: "numeric" }),
   };
@@ -247,5 +317,7 @@ export async function gatherReport(planId: string) {
    */
     const doc = buildReport(input);
   const missing = completeness.sections.filter((s) => s.done === 0).map((s) => ({ label: s.label, id: s.id }));
-  return { doc, missing, mode, reconciled: checked.reconciled };
+  /* The .docx needs the paper; the screen does not (§6.93), so it rides beside the doc rather than inside it. */
+  const pageSize = resolvePageSize(settings?.page_size as string | null, settings?.country as string | null);
+  return { doc, missing, mode, reconciled: checked.reconciled, pageSize, printSalaries: input.printSalaries };
 }

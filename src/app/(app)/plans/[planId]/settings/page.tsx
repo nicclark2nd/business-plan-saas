@@ -43,9 +43,13 @@ export default async function SettingsPage({ params, searchParams }: { params: P
     tax_region: s.tax_region ?? null,
     tax_components: (Array.isArray(s.tax_components) ? s.tax_components : []).map(cleanComponent),
     currency: s.currency ?? "AUD", logo_path: s.logo_path ?? null,
+    /* Default true: a client who typed every salary should see them in the plan unless someone decided
+       otherwise (§6.93). `?? true` covers the row that predates the column as well as a genuine null. */
+    print_key_people_salaries: s.print_key_people_salaries ?? true,
+    page_size: (s.page_size === "a4" || s.page_size === "letter" ? s.page_size : null),
   };
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
-  const initialArea = area === "financial" || area === "branding" || area === "lifecycle" ? area : "profile";
+  const initialArea = area === "financial" || area === "printing" || area === "branding" || area === "lifecycle" ? area : "profile";
   return <SettingsModule planId={planId} initial={initial} mode={mode} initialArea={initialArea}
     licences={(licences.data ?? []) as Licence[]}
     archivedAt={plan.data?.archived_at ?? null} inventory={inventory} />;

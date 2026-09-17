@@ -15,8 +15,9 @@ import type { Strength } from "../balance/lines";
 import type { Noun } from "../plan/vocabulary";
 import { marginalCash, ratios } from "./analysis";
 import { barsChart, columnsChart, linesChart, trendChart } from "./charts";
-import { cell, num, numberSections, type Block, type Draft, type Omission, type ReportDoc } from "./blocks";
+import { cell, num, numberSections, type Block, type Cell, type Draft, type Omission, type ReportDoc } from "./blocks";
 import { COPY } from "./content";
+import { groupByCategory } from "../overheads/categories";
 import { goalsAndMilestones, historicAppendix, howWeOperate, marketingAndSales, ourPeople, risksAndMitigation, theBusiness, theCompetition, theMarket, whatWeSell } from "./narrative";
 
 export type ReportInput = {
@@ -38,7 +39,18 @@ export type ReportInput = {
   framework: { vision: string | null; mission: string | null; purpose: string | null; brandPromise: string | null; fieldOfPlay: string | null };
   goals: { area: string; title: string }[];
   capital: { name: string; amount: number; year: number; category: string | null; usefulLifeMonths: number | null; residual: number; financed: boolean }[];
-  overheads: { name: string; amount: number }[];
+  /** Year 1 figure, plus the category the client set and what kind of line it is (§6.93). */
+  overheads: { name: string; amount: number; category: string | null; source: "entered" | "people" | "marketing" }[];
+  /**
+   * What each key person is paid, year by year, already computed through `salaryForYear` and already free of
+   * contractors — so the table's total IS the Leadership Team salaries line above it (§6.41).
+   */
+  keyPeople: { name: string; position: string | null; role: string | null; startYear: number; salaries: number[] }[];
+  /**
+   * Whether the salary table prints. It does NOT decide whether the money prints: the overheads line and the
+   * profit and loss carry it either way, and any wording that suggests otherwise is a lie to the client (§6.93).
+   */
+  printSalaries: boolean;
   /**
    * The TERMS, not just the amount (§6.88). A funding section that says "Bank loan 250,000" and stops has
    * left out everything a lender reads it for: the rate, the term, how it is repaid and when it starts.
@@ -346,21 +358,69 @@ function financialPlan(i: ReportInput): Draft {
   const p = f.pnl, cf = f.cashFlow, bs = f.balanceSheet;
   const cols = yearCols(i.yearEndLabels);
 
+  /*
+   * GROUPED ONLY ONCE A CLIENT HAS GROUPED SOMETHING (§6.93).
+   *
+   * §6.88 grouped this table by `plan_overheads.category`, and §6.89 tore it out, because the column had no
+   * editor: every plan collapsed under one heading called "Other" — structure invented from a field nobody
+   * could reach. 0041 gave the column an editor and a check constraint, so the data is real now.
+   *
+   * What does NOT come back is grouping a plan that has not been categorised. `groupByCategory` reports
+   * `grouped: false` when not one line carries a category, and this prints exactly the flat table it printed
+   * before. The two synced lines always carry one, so any plan with salaries or a marketing budget groups —
+   * which is correct: those two lines genuinely are People & admin and Sales & marketing.
+   */
+  const og = groupByCategory(i.overheads);
+  const overheadRows: Cell[][] = og.grouped
+    ? og.groups.flatMap((g) => [
+        [cell(g.label, { bold: true }), num("")],
+        ...g.rows.map((o) => [cell(`    ${o.name}`), num(money(o.amount))]),
+        [cell(`    ${g.label} total`, { muted: true }), num(money(g.total), { muted: true })],
+      ])
+    : i.overheads.map((o) => [cell(o.name), num(money(o.amount))]);
+
   const overheads: Draft = i.overheads.length === 0 ? null : {
     title: "Overheads",
     blocks: [
       { kind: "para", text: COPY.overheads(i.businessName) },
-      /*
-       * NO GROUPING (§6.89). §6.88 grouped these by `plan_overheads.category` — and there is no category
-       * field on the Overheads screen. Nobody can set it, so every plan grouped under one heading called
-       * "Other": structure invented from a column a client cannot reach.
-       *
-       * That is the §6.87 rule inverted and it is just as wrong. A field with no editor is not data, and
-       * the plan must not be built on one. The column is dead until Overheads grows a way to set it.
-       */
       { kind: "table", columns: [{ label: "Expense", width: 300 }, { label: `Year 1 (${i.currency})`, numeric: true }],
-        rows: i.overheads.map((o) => [cell(o.name), num(money(o.amount))])
-          .concat([[cell("Total overheads", { bold: true }), num(money(p[1].overheads), { bold: true })]]) },
+        rows: [...overheadRows, [cell("Total overheads", { bold: true }), num(money(p[1].overheads), { bold: true })]] },
+      /* A chart of one bar is a heading with a rectangle under it. Two groups is where it starts to say something. */
+      ...(og.grouped && og.groups.length > 1 ? [chartBlock(barsChart({
+        title: "Where the overheads go",
+        note: "Year 1, by category, largest first.",
+        rows: og.groups.map((g) => ({ label: g.label, value: g.total })), money,
+      }))] : []),
+      ...(og.grouped ? [{ kind: "note" as const, text: COPY.overheadsGrouped }] : []),
+    ],
+  };
+
+  /*
+   * WHAT EACH KEY PERSON IS PAID (§6.93), directly above the overheads line that totals them.
+   *
+   * It sits here rather than in Our People for two reasons. The total has to be readable against the
+   * "Leadership Team salaries" line, which is in this section; and a salary written down in two places is
+   * two readings of one fact (§6.41), which is the fault this project keeps relearning.
+   *
+   * `printSalaries` decides whether it prints AT ALL, and decides nothing else. The money is in the
+   * overheads table and the profit and loss whatever this says.
+   */
+  const keyPeople: Draft = !i.printSalaries || i.keyPeople.length === 0 ? null : {
+    title: "Key people salaries",
+    blocks: [
+      { kind: "para", text: COPY.keyPeople(i.businessName) },
+      { kind: "table",
+        columns: [{ label: "Name", width: 190 }, { label: "Position", width: 180 }, ...cols],
+        rows: [
+          ...i.keyPeople.map((x) => [
+            cell(x.name), cell(x.position ?? "\u2014", { muted: !x.position }),
+            ...FORECAST_YEARS.map((y) => num(x.salaries[y - 1] ? money(x.salaries[y - 1]) : "\u2014",
+              x.salaries[y - 1] ? {} : { muted: true })),
+          ]),
+          [cell("Total", { bold: true }), cell(""), ...FORECAST_YEARS.map((y) =>
+            num(money(i.keyPeople.reduce((t, x) => t + (x.salaries[y - 1] ?? 0), 0)), { bold: true }))],
+        ] },
+      { kind: "note", text: COPY.keyPeopleNote },
     ],
   };
 
@@ -498,7 +558,7 @@ function financialPlan(i: ReportInput): Draft {
           })),
           { kind: "note", text: COPY.byServiceNote(i.noun.one) },
         ] },
-      overheads, funding, oneOffs,
+      keyPeople, overheads, funding, oneOffs,
       { title: "Financial strength",
         blocks: [
           { kind: "para", text: COPY.strength },

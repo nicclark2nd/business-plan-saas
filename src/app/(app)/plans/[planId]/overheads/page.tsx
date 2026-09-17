@@ -34,6 +34,7 @@ export default async function OverheadsPage({ params }: { params: Promise<{ plan
   const rows = (overheads.data ?? []).map((o) => ({
     ...o, current_value: Number(o.current_value ?? 0),
     source: o.source ?? "entered", start_year: Number(o.start_year ?? 1) || 1, on_cost: !!o.on_cost,
+    category: o.category ?? null,
     yearly_change: o.yearly_change ?? null, monthly_distribution: o.monthly_distribution ?? null,
   })) as OverheadRow[];
 

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseMonth } from "../people/model";
-import type { Profile, Financial, Licence } from "./model";
+import type { Profile, Financial, Printing, Licence } from "./model";
 import { serializeComponents } from "@/engine/plan/gst";
 
 type Result = { ok: true; data?: { date_established: string | null } } | { ok: false; error: string };
@@ -73,6 +73,27 @@ export async function saveFinancial(planId: string, f: Partial<Financial>): Prom
     currency: (f.currency || "AUD").toUpperCase().slice(0, 3),
   }, { onConflict: "plan_id" });
   if (error) { console.error("financial", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }
+  touch(planId);
+  return { ok: true };
+}
+
+/**
+ * How the plan prints (§6.93). Both choices save the moment they are made — neither is typed, so there is
+ * no field to leave.
+ *
+ * `page_size` stores null for "follow the country", and that is deliberate rather than lazy: a stored 'a4'
+ * could not be told apart from a client who chose A4, and a plan later moved to the United States would go
+ * on printing 210mm paper because of a default nobody remembered making.
+ */
+export async function savePrinting(planId: string, p: Partial<Printing>): Promise<Result> {
+  const supabase = await createClient();
+  const size = p.page_size === "a4" || p.page_size === "letter" ? p.page_size : null;
+  const { error } = await supabase.from("plan_settings").upsert({
+    plan_id: planId,
+    print_key_people_salaries: p.print_key_people_salaries !== false,
+    page_size: size,
+  }, { onConflict: "plan_id" });
+  if (error) { console.error("printing", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }
   touch(planId);
   return { ok: true };
 }

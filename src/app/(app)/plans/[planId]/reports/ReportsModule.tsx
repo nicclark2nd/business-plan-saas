@@ -2,6 +2,7 @@
 
 import { ModuleFrame, ModuleReadOnlyFooter } from "@/components/module/ModuleFrame";
 import { Toolbar, Meta, Note } from "@/components/module/DataGrid";
+import { PAGE_SIZE_LABEL, type PageSize } from "@/engine/report/pageSize";
 import { StatTile, TileRow } from "@/components/chart/core";
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { Button } from "@/components/ui/button";
@@ -26,11 +27,19 @@ import { COPY } from "@/engine/report/content";
  */
 const STEP = GUIDED_STEPS.find((s) => s.id === "reports")?.step ?? 16;
 
-export function ReportsModule({ planId, mode, doc, reconciled, missing }: {
+export function ReportsModule({ planId, mode, doc, reconciled, missing, pageSize, printSalaries }: {
   planId: string; mode: "guided" | "advanced"; doc: ReportDoc;
   reconciled: boolean;
   /** Steps with nothing in them yet — named so a client can go and fix them (§6.57). */
   missing: { label: string; id: string }[];
+  /**
+   * How this plan prints (§6.93), SHOWN ON THE SCREEN THE DOWNLOAD HAPPENS ON.
+   *
+   * Both of these live in Plan settings, and a setting that changes what leaves the building must not be
+   * invisible from the screen it changes. A client who cleared the salary toggle three weeks ago and cannot
+   * see that from here is a client who does not know what is in the file they are about to email a bank.
+   */
+  pageSize: PageSize; printSalaries: boolean;
 }) {
   const flat = walk(doc.sections);
   const tables = flat.reduce((a, s) => a + s.blocks.filter((b) => b.kind === "table").length, 0);
@@ -72,9 +81,16 @@ export function ReportsModule({ planId, mode, doc, reconciled, missing }: {
         <Note><span className="text-bad">The forecast has a check that is not balancing, so this plan cannot be relied on yet — <b>Review forecast</b> shows which.</span></Note>
       )}
 
-      <Toolbar><Meta className="ml-0">
-        <b>{doc.businessName}</b> · {doc.subtitle} · {doc.date}
-      </Meta></Toolbar>
+      <Toolbar>
+        <Meta className="ml-0"><b>{doc.businessName}</b> · {doc.subtitle} · {doc.date}</Meta>
+        <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+          {printSalaries
+            ? "Key people salaries print by name"
+            : "Key people salaries are left out — the total still prints"}
+          · Word download on {PAGE_SIZE_LABEL[pageSize].split(" — ")[0]}
+          <a href={`/plans/${planId}/settings?area=printing`} className="font-semibold text-primary hover:underline">Change</a>
+        </span>
+      </Toolbar>
 
       {/* A document measure, not a module measure: a line of prose stops being readable past about 90 characters. */}
       <div className="mx-auto max-w-[900px] px-5 py-6">

@@ -37,6 +37,35 @@ async function documentXml(buf: Buffer) {
   return zip.file("word/document.xml")!.async("string");
 }
 
+/**
+ * THE PAGE SIZE, READ BACK OUT OF THE FILE (§6.93).
+ *
+ * Not compared against `PAGE_DIMENSIONS` — that would be the constant agreeing with itself (§6.92.1). These
+ * assertions unzip the document Word will actually open and read the `w:pgSz` element out of it.
+ */
+describe("the page it prints on", () => {
+  it("defaults to A4 when nothing is passed", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    expect(xml).toContain('w:w="11906"');
+    expect(xml).toContain('w:h="16838"');
+  });
+
+  it("lays out for Letter when asked", async () => {
+    const xml = await documentXml(await renderDocx(doc(), [], "letter"));
+    expect(xml).toContain('w:w="12240"');
+    expect(xml).toContain('w:h="15840"');
+    expect(xml).not.toContain('w:w="11906"');
+  });
+
+  it("keeps the same 2cm margins on both papers", async () => {
+    for (const size of ["a4", "letter"] as const) {
+      const xml = await documentXml(await renderDocx(doc(), [], size));
+      expect(xml).toContain('w:top="1134"');
+      expect(xml).toContain('w:left="1134"');
+    }
+  });
+});
+
 describe("the Word renderer", () => {
   it("produces a real Word file", async () => {
     const buf = await renderDocx(doc(), []);

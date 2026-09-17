@@ -106,7 +106,23 @@ export type Financial = {
   tax_components: TaxComponent[];
   currency: string;
 };
-export type Settings = Profile & Financial & { logo_path: string | null };
+/**
+ * How the plan prints (§6.93). Two per-plan decisions, because the same consultant writes a bank copy and a
+ * board copy in the same week and they are not the same document.
+ */
+export type Printing = {
+  /**
+   * Whether the Financial Plan prints each key person's salary against their NAME.
+   *
+   * It does NOT hide the money, and nothing on the screen may suggest it does: the Leadership Team salaries
+   * line still prints in Overheads and the figure still sits in the profit and loss either way. What this
+   * controls is attribution.
+   */
+  print_key_people_salaries: boolean;
+  /** null means "whatever this plan's country uses" — the answer for almost every plan (§6.93). */
+  page_size: "a4" | "letter" | null;
+};
+export type Settings = Profile & Financial & Printing & { logo_path: string | null };
 
 /** The fields a report's business overview cannot do without. */
 /** What a report cannot open without. The products & services statement moved to Sales (§6.34). */

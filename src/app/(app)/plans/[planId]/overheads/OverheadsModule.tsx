@@ -16,6 +16,7 @@ import { planMonths, planMonthNames } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
 import { YEARS, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, distributionTotal, type MonthlyDistribution } from "@/engine/sales/projection";
 import { enteredByYear, overheadByYear, overheadMonths, overheadsByYear, type Overhead } from "@/engine/overheads/expenses";
+import { OVERHEAD_CATEGORIES, CATEGORY_LABEL, categoryForSource, normalizeCategory } from "@/engine/overheads/categories";
 import { useMoney } from "@/components/MoneyProvider";
 import { upsertOverhead, deleteOverhead, saveSyncedShape, saveOnCostPct, continueFromOverheads } from "./actions";
 import { SOURCE_LABEL, SOURCE_STEP, type OverheadRow } from "./model";
@@ -35,9 +36,12 @@ type Dlg = { kind: "expense" | "split"; key: string } | null;
 type Row = OverheadRow & { _key: string; _error?: string };
 const STEP = GUIDED_STEPS.find((s) => s.id === "overheads")?.step ?? 9;
 const isNew = (r: Row) => r.id.startsWith("tmp-");
+const CATEGORY_HINT: Record<string, string> = Object.fromEntries(OVERHEAD_CATEGORIES.map((c) => [c.value, c.hint]));
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
 const box = "h-8";
 const START_OPTIONS = YEARS.map((y) => ({ value: String(y), label: y === 1 ? "Year 1" : `Year ${y}` }));
+/* "Not set" is a real answer, listed first, and it is what every line says until someone chooses (§6.93). */
+const CATEGORY_OPTIONS = [{ value: "", label: "Not set" }, ...OVERHEAD_CATEGORIES.map((c) => ({ value: c.value, label: c.label }))];
 
 export function OverheadsModule({ planId, initial, mode, salaries, marketing, peopleCount, marketingLines, onCostPct, fyEndMonth }: {
   planId: string; initial: OverheadRow[]; mode: "guided" | "advanced";
@@ -61,6 +65,7 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
     id: `tmp-${source}`, _key: `synced-${source}`, source, sort_order: source === "people" ? -2 : -1,
     name: source === "people" ? "Leadership Team salaries" : "Marketing spend",
     current_value: 0, yearly_change: null, monthly_distribution: null, start_year: 1, on_cost: source === "people", gst_applies: source !== "people",
+    category: categoryForSource(source),
   };
   const syncedValues = (source: "people" | "marketing") => (source === "people" ? salaries : marketing);
   const entered = rows.filter((r) => r.source === "entered" && r.name.trim());
@@ -87,7 +92,7 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
   };
   const add = () => {
     const id = `tmp-${crypto.randomUUID()}`;
-    setDraftNew({ id, _key: id, source: "entered", name: "", current_value: 0, yearly_change: null, monthly_distribution: null, start_year: 1, on_cost: false, gst_applies: true, sort_order: 0 });
+    setDraftNew({ id, _key: id, source: "entered", name: "", current_value: 0, yearly_change: null, monthly_distribution: null, start_year: 1, on_cost: false, gst_applies: true, category: null, sort_order: 0 });
     setDlg({ kind: "expense", key: id });
   };
   const commitOnCost = () => {
@@ -144,7 +149,7 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
       <Grid>
         {/* Five years, not six. An overhead's amount IS its Year 1 figure, the same as a product's price
             (§6.47) — the old "This year" column put a year in front of Year 1 that the plan does not have. */}
-        <thead><tr><Th>Expense</Th>{YEARS.map((y) => <Th key={y} right style={{ width: 110 }}>Year {y}</Th>)}<Th style={{ width: 80 }} /></tr></thead>
+        <thead><tr><Th>Expense</Th><Th style={{ width: 170 }}>Category</Th>{YEARS.map((y) => <Th key={y} right style={{ width: 110 }}>Year {y}</Th>)}<Th style={{ width: 80 }} /></tr></thead>
         <tbody>
           {lines.map((r) => {
             const synced = r.source !== "entered";
@@ -161,6 +166,21 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
                   {r.on_cost && <span className="ml-2 text-[11px] text-muted-foreground">+ on-costs</span>}
                   {!synced && r.start_year > 1 && <span className="ml-2 text-[11px] text-muted-foreground">from Year {r.start_year}</span>}
                 </Td>
+                {/*
+                  A synced line's category comes from WHAT IT IS, never from the column — the row in the
+                  database carries only its monthly shape, so its `category` is null and reading it directly
+                  printed "Not set" against Marketing spend, which is plainly Sales & marketing.
+                  `categoryForSource` is the single answer to that question (§6.93); this cell asks it rather
+                  than keeping a second opinion, which is how the screen and the plan stay in agreement.
+
+                  An ENTERED line with nothing set says "Not set" rather than "Other". The plan prints it
+                  under Other; the screen is where a client can still change that, so it must show the gap.
+                */}
+                <Td className={cn(!synced && !r.category && "text-muted-foreground/70")}>
+                  {synced
+                    ? CATEGORY_LABEL[categoryForSource(r.source)!]
+                    : r.category ? CATEGORY_LABEL[r.category] ?? "Not set" : "Not set"}
+                </Td>
                 {v.map((x, i) => <Td key={i} right className="num">{num(x)}</Td>)}
                 <Td className="whitespace-nowrap text-right">
                   {!synced && <IconButton title="Edit expense" onClick={() => setDlg({ kind: "expense", key: r._key })}>✎</IconButton>}
@@ -172,7 +192,7 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
           })}
         </tbody>
         <FootRow>
-          <Td>Total overheads{onCost > 0 && <span className="ml-2 font-normal text-muted-foreground">including {onCost}% on-costs</span>}</Td>
+          <Td colSpan={2}>Total overheads{onCost > 0 && <span className="ml-2 font-normal text-muted-foreground">including {onCost}% on-costs</span>}</Td>
           {totals.map((t) => <Td key={t.year} right className="num">{num(t.total)}</Td>)}
           <Td />
         </FootRow>
@@ -260,6 +280,12 @@ function ExpenseDialog({ r, onSave, onClose }: { r: Row; onSave: (r: Row) => voi
             <div className="col-span-2"><label className={label}>What it is</label><Input autoFocus value={d.name} placeholder="e.g. Rent" onChange={(e) => setD((x) => ({ ...x, name: e.target.value }))} className={box} /></div>
             <div><label className={label}>Cost in {(d.start_year || 1) === 1 ? "Year 1" : `Year ${d.start_year}`}</label><Input inputMode="decimal" value={d.current_value ? num(d.current_value) : ""} placeholder="0" onChange={(e) => setD((x) => ({ ...x, current_value: parseNum(e.target.value) }))} className={cn(box, "num text-right")} /></div>
             <div><label className={label}>Starts in</label><FieldSelect value={String(d.start_year || 1)} options={START_OPTIONS} onValueChange={(v) => setD((x) => ({ ...x, start_year: Number(v) }))} /></div>
+            {/* Optional, and it stays optional. The plan groups its overheads table only once a client has
+                set some; until then it prints the flat list it always printed (§6.93). */}
+            <div className="col-span-2"><label className={label}>Category</label>
+              <FieldSelect value={d.category ?? ""} options={CATEGORY_OPTIONS}
+                onValueChange={(v) => setD((x) => ({ ...x, category: normalizeCategory(v) }))} /></div>
+            <div className="col-span-2 self-end pb-1.5 text-[11.5px] text-muted-foreground">{CATEGORY_HINT[d.category ?? ""] ?? "Groups this expense in the business plan. Leave it if none fits."}</div>
           </div>
           <label className="flex items-center gap-2 text-[13px]">
             <input type="checkbox" checked={d.on_cost} onChange={(e) => setD((x) => ({ ...x, on_cost: e.target.checked }))} className="size-3.5 accent-primary" />

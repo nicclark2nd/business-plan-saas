@@ -86,6 +86,17 @@ export const COPY = {
 
   overheads: (name: string) =>
     `The running costs ${name} carries whether or not it sells anything, as projected for Year 1.`,
+  overheadsGrouped:
+    "Expenses are grouped by category. Anything not categorised is shown under Other, and the total is the same figure carried into the profit and loss above.",
+
+  /*
+   * The salary table's own words. They name what the table is FOR — a lender checking that the wages line in
+   * the forecast is accounted for person by person — rather than apologising for printing salaries.
+   */
+  keyPeople: (name: string) =>
+    `What ${name} pays the people running it, year by year. These figures are the Leadership Team salaries line in the overheads below, set out person by person.`,
+  keyPeopleNote:
+    "Contractors are not included: they are paid for work delivered rather than employed, and their cost sits in the cost of sales or in overheads with the work it belongs to. On-costs — superannuation, payroll tax and workers' compensation — are added on top of these figures in the forecast.",
 
   funding: (name: string) =>
     `The money behind ${name}, and where it comes from. Repayments and interest on any borrowing are in the projections above.`,

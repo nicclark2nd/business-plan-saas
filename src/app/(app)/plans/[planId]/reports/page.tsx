@@ -7,6 +7,7 @@ import { ReportsModule } from "./ReportsModule";
  */
 export default async function ReportsPage({ params }: { params: Promise<{ planId: string }> }) {
   const { planId } = await params;
-  const { doc, missing, mode, reconciled } = await gatherReport(planId);
-  return <ReportsModule planId={planId} mode={mode} doc={doc} reconciled={reconciled} missing={missing} />;
+  const { doc, missing, mode, reconciled, pageSize, printSalaries } = await gatherReport(planId);
+  return <ReportsModule planId={planId} mode={mode} doc={doc} reconciled={reconciled} missing={missing}
+    pageSize={pageSize} printSalaries={printSalaries} />;
 }

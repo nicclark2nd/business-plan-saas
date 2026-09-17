@@ -9,13 +9,14 @@ import { currentFinancialYear, firstProjectedYear, planYearEnding, planYearLabel
 import { taxComponents, taxHeading } from "@/engine/plan/gst";
 import { needsRegion, regimeFor, regionLabel, regionsFor, type TaxComponent } from "@/engine/plan/taxRegimes";
 import { formatMonth } from "../people/model";
-import { saveProfile, saveFinancial } from "./actions";
+import { saveProfile, saveFinancial, savePrinting } from "./actions";
+import { PAGE_SIZE_LABEL, defaultPageSizeFor } from "@/engine/report/pageSize";
 import { DangerArea, type PlanInventory } from "./DangerArea";
 import { LicenceSection } from "./LicenceSection";
 import { legalStructuresFor, CUSTOMER_TYPES, PRODUCT_TYPES, COUNTRIES, CURRENCIES, MONTHS, profileMissing, type Settings, type Profile, type Financial, type Licence } from "./model";
 import { navGroup } from "@/lib/nav";
 
-type AreaKey = "profile" | "financial" | "branding" | "lifecycle";
+type AreaKey = "profile" | "financial" | "printing" | "branding" | "lifecycle";
 const opts = (xs: string[]) => xs.map((x) => ({ value: x, label: x }));
 
 export function SettingsModule({ planId, initial, mode, initialArea, licences, archivedAt, inventory }: {
@@ -53,6 +54,15 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, a
     });
   };
   const left = (e: React.FocusEvent<HTMLElement>) => !e.currentTarget.contains(e.relatedTarget as Node);
+  /* Neither printing control is typed, so there is no field to leave — both save on the choice itself. */
+  const editPrinting = (changes: Partial<Settings>) => {
+    const next = { ...ref.current, ...changes };
+    setS(next); setError(undefined);
+    start(async () => {
+      const res = await savePrinting(planId, next);
+      if (!res.ok) setError(res.error);
+    });
+  };
   const missing = profileMissing(s);
   /**
    * The licence list saves on its own schedule, so it reports its own state up rather than sharing `dirty`.
@@ -68,6 +78,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, a
       areas={[
         { key: "profile", label: "Business profile", ...(missing.length ? { count: missing.length } : {}) },
         { key: "financial", label: "Financial year & tax" },
+        { key: "printing", label: "How the plan prints" },
         { key: "branding", label: "Branding", tag: "Soon" },
         { key: "lifecycle", label: "Archive & delete" },
       ]}
@@ -144,6 +155,55 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, a
           <DangerArea planId={planId} planName={s.business_name || "this plan"} archivedAt={archivedAt} inventory={inventory} />
         </>
       )}
+
+      {area === "printing" && (() => {
+        const derived = defaultPageSizeFor(s.country);
+        return (
+        <>
+          <Toolbar><Meta className="ml-0">Two decisions about the business plan document. Neither changes a figure — the forecast, the statements and the totals are the same either way.</Meta></Toolbar>
+          <Section title="Key people salaries">
+            <label className="flex items-start gap-2 text-[13px]">
+              <input type="checkbox" checked={s.print_key_people_salaries}
+                onChange={(e) => editPrinting({ print_key_people_salaries: e.target.checked })}
+                className="mt-[3px] size-3.5 shrink-0 accent-primary" />
+              <span>
+                The Financial Plan names each person and what they are paid
+                {/*
+                  THE WORDING IS THE POINT (§6.93). Clearing this does not hide the money and the screen must
+                  not let a client believe it does — the total still prints, and a client who thinks a figure
+                  is suppressed when it is not will send the document to the wrong person.
+                */}
+                <span className="mt-1 block text-[11.5px] text-muted-foreground">
+                  Clear it and the salary table is left out, but the money is not hidden: <b>Leadership Team salaries</b> still
+                  prints as one line in Overheads and still sits in the profit and loss. This controls whose name is against it.
+                </span>
+                <span className="mt-1 block text-[11.5px] text-muted-foreground">
+                  On for a plan going to a bank or an investor. Off for a copy going to staff, or to someone you have not signed with yet.
+                </span>
+              </span>
+            </label>
+          </Section>
+          <Section title="Page size">
+            <FieldGrid>
+              <Field label="Word download" span={2} hint="The screen version is unchanged — this is the .docx only.">
+                <FieldSelect value={s.page_size ?? ""} options={[
+                  { value: "", label: `Follow the country — ${PAGE_SIZE_LABEL[derived]}` },
+                  { value: "a4", label: PAGE_SIZE_LABEL.a4 },
+                  { value: "letter", label: PAGE_SIZE_LABEL.letter },
+                ]} onValueChange={(v) => editPrinting({ page_size: v === "a4" || v === "letter" ? v : null })} />
+              </Field>
+              <Field label="" span={2}>
+                <p className="pt-[22px] text-[11.5px] text-muted-foreground">
+                  {s.page_size
+                    ? <>Set for every copy of this plan, whatever the country says.</>
+                    : <>{s.country ? <><b>{s.country}</b> uses {PAGE_SIZE_LABEL[derived].split(" — ")[0]}.</> : <>No country set, so A4.</>} Change the country and the paper follows it.</>}
+                </p>
+              </Field>
+            </FieldGrid>
+          </Section>
+        </>
+        );
+      })()}
 
       {area === "branding" && (
         <>

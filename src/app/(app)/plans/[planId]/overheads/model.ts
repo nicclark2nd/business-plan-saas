@@ -5,6 +5,8 @@ import type { OverheadSource } from "@/engine/overheads/expenses";
 
 export type OverheadRow = {
   id: string; name: string; source: OverheadSource; current_value: number;
+  /** One of the eight in `engine/overheads/categories.ts`, or null for a line nobody has categorised (§6.93). */
+  category: string | null;
   yearly_change: Record<string, number> | null;
   monthly_distribution: MonthlyDistribution | null;
   start_year: number; on_cost: boolean; gst_applies: boolean; sort_order: number;

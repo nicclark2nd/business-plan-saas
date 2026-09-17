@@ -16,6 +16,7 @@ import {
 import type { Block, ReportDoc, Section } from "./blocks";
 import { walk } from "./blocks";
 import { rasterise } from "./rasterise";
+import { PAGE_DIMENSIONS, type PageSize } from "./pageSize";
 
 /** The plan's one accent. Everything else is black on white, because a bank prints in mono. */
 const ACCENT = "1F3A5F";
@@ -138,7 +139,7 @@ function sectionToDocx(s: Section, pngs: Map<string, Buffer>): (Paragraph | Tabl
   ];
 }
 
-export async function renderDocx(doc: ReportDoc, omitted: { label: string }[]): Promise<Buffer> {
+export async function renderDocx(doc: ReportDoc, omitted: { label: string }[], pageSize: PageSize = "a4"): Promise<Buffer> {
   const flat = walk(doc.sections);
 
   /**
@@ -183,8 +184,16 @@ export async function renderDocx(doc: ReportDoc, omitted: { label: string }[]): 
     })),
   ];
 
+  /*
+   * THE PAGE SIZE IS SET, NOT INHERITED (§6.93).
+   *
+   * This said `margin` and nothing else, so the document took the `docx` library's own default — A4 portrait,
+   * 11906 × 16838 twips. It was right for almost every plan and nobody had decided it: a plan written in
+   * Dallas printed 210mm paper because of a dependency's default value. The margins stay 1134 twips (2cm) on
+   * both papers; Letter is wider and shorter, and the tables are laid out in percentages, so they reflow.
+   */
   const section: ISectionOptions = {
-    properties: { page: { margin: { top: 1134, bottom: 1134, left: 1134, right: 1134 } } },
+    properties: { page: { size: PAGE_DIMENSIONS[pageSize], margin: { top: 1134, bottom: 1134, left: 1134, right: 1134 } } },
     footers: undefined,
     children: [...cover, ...doc.sections.flatMap((s) => sectionToDocx(s, pngs)), ...tail],
   };
