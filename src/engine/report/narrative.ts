@@ -115,7 +115,13 @@ export function whatWeSell(i: ReportInput): Draft {
             rows: i.services.map((s) => [
               cell(s.name), num(i.money(s.revenue)), num(i.money(s.cogs)), num(i.money(s.grossProfit)), num(pct(s.margin)),
             ]) },
-          { kind: "note", text: COPY.marginsNote(i.noun.one) },
+          chartBlock(barsChart({
+            title: `Margin by ${lower(i.noun.one)}`,
+            note: "What share of each line's revenue survives the cost of delivering it. A line can earn a lot and keep little.",
+            rows: i.services.filter((s2) => s2.margin !== null).map((s2) => ({ label: s2.name, value: s2.margin! })),
+            money: (v) => `${v.toFixed(1)}%`,
+          })),
+          { kind: "note", text: COPY.marginsNote(lower(i.noun.one)) },
         ] },
       /*
        * EVERYTHING THE CLIENT TYPED ABOUT A LINE (§6.87). "What it is", "why they buy it, margin,
