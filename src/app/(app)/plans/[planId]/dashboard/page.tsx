@@ -9,6 +9,12 @@ import { createClient } from "@/lib/supabase/server";
 import { profileMissing } from "../settings/model";
 import { firstProjectedYear, planQuarters, planYearEnding, quarterOf } from "@/engine/plan/calendar";
 import { AREA_LABEL, type GoalArea } from "@/engine/whatif/goals";
+import { loadPlan } from "@/lib/planLoad";
+import { runForecast } from "@/engine/forecast/run";
+import { breakEvenByYear } from "@/engine/breakeven/point";
+import { FORECAST_YEARS } from "@/engine/forecast/model";
+import { MONTH_SHORT } from "@/engine/plan/calendar";
+import { CashChart, RevenueChart } from "./Charts";
 import { STATUS_LABEL, type GoalStatus } from "../goals/model";
 
 function Panel({ title, badge, children, className }: { title: string; badge?: React.ReactNode; children: React.ReactNode; className?: string }) {
@@ -48,6 +54,27 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
   const DOT: Record<GoalStatus, string> = {
     not_started: "bg-faint", in_progress: "bg-primary", done: "bg-good", at_risk: "bg-warn",
   };
+  /**
+   * The dashboard reads the SAME run as every other screen (§6.67, §6.69). It used to read none at all:
+   * five KPI tiles hard-coded to an em dash and a cash panel that said "Not yet", on a plan with five years
+   * of statements that agree. The first page a client opens was the last one wired to the engine.
+   */
+  const { plan: planInput } = await loadPlan(planId);
+  const { forecast, monthly } = runForecast(planInput);
+  const y1 = forecast.pnl[1];
+  const be = breakEvenByYear(forecast.pnl);
+  const fmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
+  const signed = (v: number) => (v < 0 ? `(${fmt.format(Math.abs(v))})` : fmt.format(v));
+  const pct1 = (v: number | null) => (v === null ? "\u2014" : `${v.toFixed(1)}%`);
+  const lowMonth = monthly.low;
+  const tiles: { label: string; value: string; sub: string; bad?: boolean }[] = [
+    { label: "Revenue", value: fmt.format(y1.revenue), sub: "Year 1 of five" },
+    { label: "Gross margin", value: pct1(y1.grossMargin), sub: `${fmt.format(y1.grossProfit)} of gross profit` },
+    { label: "Net profit", value: signed(y1.netProfit), sub: y1.netProfit < 0 ? "After tax \u2014 a loss in Year 1" : "After tax", bad: y1.netProfit < 0 },
+    { label: "Cash at year end", value: signed(forecast.cashFlow[1].closingCash), sub: `Opened at ${fmt.format(forecast.cashFlow[1].openingCash)}`, bad: forecast.cashFlow[1].closingCash < 0 },
+    { label: "Lowest cash month", value: signed(lowMonth.closingCash), sub: `${MONTH_SHORT[(lowMonth.month - 1) % 12]} \u00b7 month ${lowMonth.month}`, bad: lowMonth.closingCash < 0 },
+  ];
+
   const missingProfile = profileMissing({ business_name: plan.business_name, ...(ps ?? {}) });
   const nextStep = GUIDED_STEPS.find((s) => { const sec = c.sections.find((x) => x.id === s.id); return sec && sec.done < sec.total; }) ?? GUIDED_STEPS[GUIDED_STEPS.length - 1];
   const hasNumbers = c.sections.filter((s) => ["sales", "overheads"].includes(s.id)).every((s) => s.done >= s.total);
@@ -70,18 +97,33 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
       )}
 
       <div className="mb-3 grid grid-cols-5 gap-3">
-        {["Revenue", "Gross margin", "Net profit", "Cash at year end", "Debtor days"].map((k) => (
-          <Card key={k} className="gap-1 py-3.5"><CardContent className="px-4">
-            <div className="text-xs font-semibold text-muted-foreground">{k}</div>
-            <div className="num mt-1 text-2xl font-bold tracking-[-0.01em] text-faint">—</div>
-            <div className="mt-0.5 text-xs text-faint">{hasNumbers ? "Forecast pending" : "Needs Sales & Overheads"}</div>
+        {tiles.map((t) => (
+          <Card key={t.label} className="gap-1 py-3.5"><CardContent className="px-4">
+            <div className="text-xs font-semibold text-muted-foreground">{t.label}</div>
+            <div className={cn("num mt-1 text-2xl font-bold tracking-[-0.01em]", hasNumbers ? (t.bad ? "text-bad" : "") : "text-faint")}>
+              {hasNumbers ? t.value : "\u2014"}
+            </div>
+            <div className="mt-0.5 text-xs text-muted-foreground">{hasNumbers ? t.sub : "Needs Sales & Overheads"}</div>
           </CardContent></Card>
         ))}
       </div>
 
       <div className="mb-3 grid grid-cols-[1.2fr_1fr_1fr] gap-3">
-        <Panel title="Cash runway" badge={<Badge variant="outline" className="text-muted-foreground">Not yet</Badge>}>
-          <p className="text-[13px] text-muted-foreground">Your lowest projected cash month and how long opening cash lasts. Appears once Historic and Funding are in.</p>
+        <Panel title="Cash through Year 1"
+          badge={<Badge variant="outline" className={cn(hasNumbers && lowMonth.closingCash < 0 ? "border-bad/40 text-bad" : "text-muted-foreground")}>
+            {!hasNumbers ? "Not yet" : monthly.negative.length ? `${monthly.negative.length} month${monthly.negative.length === 1 ? "" : "s"} below zero` : "Never below zero"}
+          </Badge>}>
+          {hasNumbers ? (
+            <>
+              <CashChart months={MONTH_SHORT.slice(0, 12)} values={monthly.months.map((m) => m.closingCash)} />
+              <p className="mt-1 text-[12px] text-muted-foreground">
+                Lowest at <b className={cn(lowMonth.closingCash < 0 && "text-bad")}>{signed(lowMonth.closingCash)}</b> in {MONTH_SHORT[(lowMonth.month - 1) % 12]}.
+                {" "}It is the month, not the year, that runs a business out of money.
+              </p>
+            </>
+          ) : (
+            <p className="text-[13px] text-muted-foreground">Your lowest projected cash month and how long opening cash lasts. Appears once Sales and Overheads are in.</p>
+          )}
         </Panel>
         <Panel title="Plan completeness" badge={<Badge variant="secondary" className="num bg-accent text-accent-foreground">{c.percent}%</Badge>}>
           {c.sections.map((s) => (
@@ -118,8 +160,18 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
       </div>
 
       <div className="grid grid-cols-[1.6fr_1fr] gap-3">
-        <Panel title="AI insights" badge={waiting}>
-          <p className="text-[13px] text-muted-foreground">Three observations about your plan, read from your own numbers — margins, costs, cash timing. They appear as soon as Historic and Sales are in.</p>
+        <Panel title="Revenue against break-even"
+          badge={<span className="eyebrow">{hasNumbers ? "Five years" : "Not yet"}</span>}>
+          {hasNumbers ? (
+            <>
+              <RevenueChart labels={FORECAST_YEARS.map((y) => `Year ${y}`)} revenue={be.map((b) => b.revenue)} breakEven={be.map((b) => b.breakEvenRevenue)} />
+              <p className="mt-1 text-[12px] text-muted-foreground">
+                The bar is what you plan to sell; the rule across it is what you have to sell. <Link className="font-semibold text-primary" href={`${base}/break-even`}>Open Break-Even →</Link>
+              </p>
+            </>
+          ) : (
+            <p className="text-[13px] text-muted-foreground">What you plan to sell against what you have to sell, year by year. Appears once Sales and Overheads are in.</p>
+          )}
         </Panel>
         <Card className="gap-2 border-primary bg-accent">
           <CardHeader><div className="eyebrow text-primary">Next action</div><CardTitle className="text-[15px]">Step {nextStep.step}: {nextStep.label}</CardTitle></CardHeader>
@@ -129,6 +181,10 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
           </CardContent>
         </Card>
       </div>
+
+      <Panel className="mt-3" title="AI insights" badge={waiting}>
+        <p className="text-[13px] text-muted-foreground">Three observations about your plan, read from your own numbers — margins, costs, cash timing.</p>
+      </Panel>
     </div>
   );
 }
