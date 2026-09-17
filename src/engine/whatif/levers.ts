@@ -371,7 +371,7 @@ export function runPlan(plan: WhatIfPlan, levers: Levers, dayScope: DayScope = "
     openingCash: forecast.cashFlow[1].openingCash,
     opening: {
       accountsReceivable: plan.opening.accountsReceivable, inventory: plan.opening.inventory,
-      accountsPayable: plan.opening.accountsPayable, prepaid: 0, accrued: 0,
+      accountsPayable: plan.opening.accountsPayable, prepaid: plan.opening.prepaid, accrued: plan.opening.accrued,
     },
     closing: {
       accountsReceivable: forecast.workingCapital[1].accountsReceivable,

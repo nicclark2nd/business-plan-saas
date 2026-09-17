@@ -38,7 +38,7 @@ export default async function BreakEvenPage({ params, searchParams }: {
     openingCash: forecast.cashFlow[1].openingCash,
     opening: {
       accountsReceivable: opening.accountsReceivable, inventory: opening.inventory,
-      accountsPayable: opening.accountsPayable, prepaid: 0, accrued: 0,
+      accountsPayable: opening.accountsPayable, prepaid: opening.prepaid, accrued: opening.accrued,
     },
     closing: {
       accountsReceivable: forecast.workingCapital[1].accountsReceivable,

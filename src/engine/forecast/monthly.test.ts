@@ -221,3 +221,53 @@ describe("cost of sales follows the line its clients come from", () => {
     expect(sum(months.cogs)).toBeCloseTo(assembleBase(sources)[1].variableCogs, 1);
   });
 });
+
+/**
+ * The monthly view opens where the year opens (§6.66.1). Four call sites passed `prepaid: 0, accrued: 0`
+ * as the monthly OPENING — the same hard-coded zero §6.66 removed from the annual model, left behind one
+ * layer down. Unlike the annual fault this one was never silent: the twelve months stop adding to their own
+ * year, and the strip says so. It was simply never exercised, because no plan had an opening balance to
+ * carry until §6.66 gave it somewhere to live.
+ */
+describe("the monthly view opens where the year opens", () => {
+  const history = {
+    revenue: 1_000_000, cogs: 400_000, accounts_receivable: 0, inventory_wip: 0, accounts_payable: 0,
+    prepayments: 12_000, accruals: 8_000, cash: 60_000, equity: 64_000,
+  };
+  const sources = { products: [], costProducts: [], fixedCogs: [], overheads: [], salaries: [], funding: [], assets: [], extraordinary: [] } as unknown as PlanSources;
+  const carried = Object.fromEntries(FORECAST_YEARS.map((y) => [y, { taxPaidPct: 100, prepaidClosing: 12_000, accruedClosing: 8_000 }]));
+  const days = Object.fromEntries(FORECAST_YEARS.map((y) => [y, { debtorDays: 0, inventoryDays: 0, creditorDays: 0 }]));
+
+  const opening = assembleOpening(history, 60_000, 0);
+  const forecast = buildForecast({ base: assembleBase(sources), opening, workingCapital: days, cashTiming: carried, taxRate: 0, dividendRate: 0 });
+  const monthlyWith = (open: { prepaid: number; accrued: number }) => buildMonthlyCashFlow({
+    openingCash: forecast.cashFlow[1].openingCash,
+    opening: { accountsReceivable: 0, inventory: 0, accountsPayable: 0, ...open },
+    closing: {
+      accountsReceivable: forecast.workingCapital[1].accountsReceivable,
+      inventory: forecast.workingCapital[1].inventory,
+      accountsPayable: forecast.workingCapital[1].accountsPayable,
+      prepaid: forecast.workingCapital[1].prepaid,
+      accrued: forecast.workingCapital[1].accrued,
+    },
+    taxPaid: forecast.cashFlow[1].taxPaid,
+    dividends: forecast.cashFlow[1].dividendsPaid,
+    shapes: assembleMonths(sources),
+  });
+
+  it("reads the opening balances off the same opening the year used", () => {
+    const failures = monthlyInvariants(monthlyWith({ prepaid: opening.prepaid, accrued: opening.accrued }), forecast.cashFlow[1]).filter((i) => !i.passed);
+    expect(failures.map((f) => f.label)).toEqual([]);
+  });
+
+  it("breaks the twelve-months-add-to-the-year check when it opens at zero instead", () => {
+    const failures = monthlyInvariants(monthlyWith({ prepaid: 0, accrued: 0 }), forecast.cashFlow[1]).filter((i) => !i.passed);
+    // 12,000 of prepaid less 8,000 of accrued that the year never moved: exactly 4,000 of phantom cash out.
+    expect(failures.map((f) => `${f.label.replace("Year 1's twelve months add to Year 1 \u2014 ", "")} ${f.difference}`)).toEqual([
+      "Paid to suppliers and staff 4000",
+      "Operating cash flow -4000",
+      "Movement in cash -4000",
+      "Closing cash -4000",
+    ]);
+  });
+});
