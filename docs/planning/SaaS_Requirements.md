@@ -1465,3 +1465,121 @@ Without a link between them **the same sentence would be typed in two places and
 **The dialog does not guess the area.** Nothing about a weakness says whether answering it is a marketing job or an operational one, so it asks, and *Add goal* stays disabled until an area is picked — **a wrong default files the goal under the wrong heading in the report, which is worse than one more click.**
 
 *Found on the way:* `CellSelect` rendered an empty box instead of its placeholder whenever its value was `""` rather than `null`, because `??` does not treat `""` as absent. **Any select with nothing picked looked broken rather than waiting.** Fixed generally; a matching option still wins.
+
+## 6.60 Marketing actions are goals (16 Sep 2026)
+
+**§6.13 sent APeX's Action Plan to Goals and said the rows would stay "until Goals absorbs them". Goals was built and the absorption never happened.** `plan_marketing_actions` had been read by nothing in `src/` since — a table collecting titles, owners and deadlines that no screen in the product could show back. **A promise in a decisions document is not a migration.**
+
+Marketing gains an **Actions** tab over the **same `plan_goals` rows** the Goals step shows: one list, two windows. Not a copy, not a sync — the same rows, filtered to the marketing area. **The quarterly dialog moved to `components/goals/` so there is literally one dialog rather than two that drift**, which is the same reasoning as §6.52.1, where the Funding page had grown its own copy of the loader.
+
+Migration 0032 carries any typed rows across as marketing goals **before** dropping the table. **Nobody's work is thrown away to tidy a schema.**
+
+## 6.61 The half of Marketing that was never asked for (16 Sep 2026)
+
+Nic: *"there seems to be a lot of marketing missing? Is it missing because you believe we do not need it?"* **No.** Counted against APeX and against a standard marketing-plan structure: **APeX collects 39 fields, we collected 20.** Three of the gaps had never been put to him at all, and one had been put badly — I had called APeX's distribution fields *"prose nobody reads back"*, **an opinion written as a fact, aimed straight at the lean answer.** That is how a review ends up agreeing with the reviewer.
+
+**Research got its four questions back**, including the one migration 0008 dropped entirely: *what the business will DO about the finding.* On Nic's own plan that line now reads *"Position our retaining wall …"* — **the only part of a research record that changes anything, and it had nowhere to go.** Brand returns **without** brand purpose, which really is Vision & Purpose's Purpose and Brand promise; **the same fact stored twice is the fault this project keeps paying for.** Sales process — how a prospect becomes a customer — **had never existed in this app at all.**
+
+**Six categories, prompted not forced.** §6.13 called APeX's fixed promotion blocks rigid and replaced them with an empty grid, **which threw out what the rigidity was FOR**: a concreter who has never thought about retention does not add a retention row, and the plan then looks finished. **Rigid was wrong; silent is worse.** The categories with no row are offered as faint suggestions, the way SWOT offers lines drawn from the plan.
+
+**What a customer costs to win** is the one marketing KPI that is arithmetic rather than a wish — *"website traffic: 5,000"* typed into a box is a hope with a number attached. Marketing spend over the plan's own count of new jobs and clients, so **it moves when the What-If sliders move.** Two traps, both tested: a **linked** line wins nobody new — its clients are another line's jobs arriving again under a maintenance plan, and counting both would **halve the cost on exactly the plans that thought hardest about retention** — and a job is not a client-month. §6.49.1's refusal of a blended unit applies to revenue per unit, **not to counting one customer deciding once.** On Nic's plan: 105 a customer in Year 1, falling to 87 by Year 5 on flat spend.
+
+*A correction owed.* I told Nic `positioning` was a dead unwired column and therefore free to reuse. **It is not dead — migration 0009 renamed it to `our_advantage` a week after it was added, and §6.35's audit still described it under the old name.** I read the document instead of the schema, 0033 failed on a comment for a column that was not there, and Nic found it. 0034 adds the column that never existed, and §6.35 now carries the correction: **an audit of what is stored is only as good as the schema it was run against.**
+
+## 6.62 Marketing reviewed for the person filling it in (16 Sep 2026)
+
+Nic asked whether the area reads plainly for an SME owner — sole trader to $50M — and whether anything a lender or a growing business needs is still missing. **Four things were hard to understand, two were missing, and one expected gap turned out to be signposting.**
+
+**Three boxes asking one question.** §6.61 added *"what they have in common"* and *"what they care about"* beside `target_market`, whose own hint still read *"who buys, where, and what they have in common"* — **the same words as the new field's label, one section below it.** An owner would stall on which box to type in, **and that collision was made the same morning it was found.**
+
+**Who you sell to is a grid now.** One box cannot hold a business with a commercial arm and a residential one, and Nic's own answer to it opens *"We serve two primary customer segments"* — **a structure being worked around in prose is a structure that is wrong.** One row reads exactly like the old box; five rows describe five arms. Share of sales is optional and the footer only speaks when shares are given and miss 100. Migration 0035 carries what was typed into the first segment, joining `psychographics` and `customer_needs` **because they were the same question asked twice.** The four source columns are **left in place, unread**: dropping them in the migration that creates their replacement leaves no way back if the copy is wrong on a plan nobody has opened yet. **§6.29 is about a reader bridging a deploy, not about destroying the old shape the moment the new one compiles.**
+
+**"How a job is won" now uses the plan's own noun** (§6.31.1). A clinic gets *"How a treatment is won"* and a software business does not win jobs. **Nic built that vocabulary so nobody reads someone else's words, and "job" was hardcoded the day before.**
+
+**Why this price, on Sales.** The SBA asks for it in words — how much you charge and why that price fits the market while still making a profit — and **the plan has collected the number since day one and never the reasoning.** It sits under the price rather than on Marketing, because **a rationale kept on another screen drifts from the figure it is about.**
+
+Smaller: *"Question or source"* was two things in one column header and is now *"What you wanted to know"*; Brand says it is optional; and the spend note finally mentions that lumpy spend — a March campaign, an August trade show — takes its month-by-month shape on the Marketing line in Overheads. **That last one had been assumed to be a missing feature until it was checked: it has always worked and nothing ever said so.**
+
+*Caught in verification, before it shipped:* **there was no way to add a second segment.** The grid went out with no *+ Segment*, which is the whole point of a grid.
+
+**Deliberately not built:** buyer personas — an SME plan gets *"Builder Barry, 42"* and learns nothing the segment rows do not already say — and a free-text KPI list, because **a number with no arithmetic behind it is a wish.** Which channel actually works needs actuals and belongs with them.
+
+## 6.62.1 A dropdown is as wide as its longest option (16 Sep 2026)
+
+Nic: *"Customer retention & loyalty"* loses its end on the Channels & spend Type column, and the picker is not wide enough to read the values either. **Two causes, and only one of them was about this column.**
+
+**The popup was pinned to its trigger.** `SelectContent` carried `w-(--anchor-width)`, so **every dropdown in the app was exactly as wide as the box that opened it** — a narrow cell gave a narrow list, and the longest option was clipped **in the one place a client goes to read the options.** It is `min-w-(--anchor-width) w-max` now, capped at 28rem and at the space available: never narrower than its trigger, wide enough for its content, never off the screen. **That is a fix for every select in the product, not just this one.**
+
+**And the column was 220.** The longest label decides a column of labels, **not the header above it** — 248 fits the longest with the chevron clear of it.
+
+## 6.62.2 The written columns leave the facts grid (16 Sep 2026)
+
+Nic, on the Competitors tab: the comments *"span the competitor name and the type dropdown"*, and would a second pass find something better.
+
+**Three prose fields were three `colSpan={2}` cells laid across six fact columns.** They landed on column boundaries by arithmetic and on the wrong headings by meaning: *Where they're weak* sat on REACH's exact left edge, *How we win* on THREAT's. **Two unrelated things sharing a vertical line reads as a mistake even when every cell is where it belongs.**
+
+**Even thirds did not fix it, and the first attempt claimed they had.** Measured at 1512px, the blocks moved 34px and 61px — **a near-miss, which looks sloppier than a clean collision and is indistinguishable from the old layout at a glance.** Nic said so immediately: *"visually everything seems the same to me."* **He was right, and the mistake was calling it fixed from arithmetic without asking whether a human eye would register it.**
+
+So the band stops pretending to belong to the grid at all: **one tinted panel, indented to the competitor's name rather than the table edge, with a left accent and hairline rules between the thirds.** It spans the fact columns *deliberately* instead of accidentally, and stacks below 1180px rather than becoming three unreadable ribbons.
+
+## 6.62.3 A dropdown hugs its value (17 Sep 2026)
+
+Nic, still on the same screen: *"the selection of each visually has them looking a bit strange."*
+
+**`CellSelect` was `w-full`, so every trigger stretched across its whole column and parked the chevron up to 125px from the word it belongs to.** *Direct* is 36px of text followed by 101px of nothing and then a chevron that reads as if it belongs to the next column. **And because only the hovered or focused trigger draws its border, one control looked like a box while its neighbours looked like loose text — the same control, two appearances, side by side.**
+
+`SelectTrigger` is already `w-fit` on its own, so the fix was **to stop overriding it**; `max-w-full` keeps a long label inside its cell. A call site that genuinely wants a fixed or full width still says so in `className` and still wins, so the dialog selects and the scope chips are untouched. **Blast radius was four modules and one dialog — smaller than the warning given before the change.**
+
+## 6.63 Roles & Capability says what is missing (17 Sep 2026)
+
+Nic: *"it would be easy to miss adding details for skills, strengths, expertise etc. Do you want to place a warning on the screen or stats on what has been done. I dont want to force a client to fill in all areas."*
+
+**The app already speaks this way and this one list did not.** Marketing says *"A strategy nobody is accountable for is a strategy that does not happen."* Goals says *"Nobody is accountable for them yet."* Assets says *"Nothing here yet — and for plenty of businesses that is the right answer."* **Roles & Capability's only note explained hatched rows.**
+
+**The evidence was on Nic's own plan.** Both directors: one Skill and two Responsibilities each, and **no Expertise, Licence or Education between them.** The bios said what they do and **nothing about why they can be trusted to do it**, which is the half a lender reads.
+
+So each person's group row names **its own gap**, beside the *+ Add* that fixes it, and only while there is one — *nothing yet* → *no responsibility yet* → *no expertise, licence or education yet*. **Not "fill in all seven types":** Strength is colour and Development area never leaves the building, so demanding them is busywork on a page a lender reads. **The pair that carries a bio is what the person owns and the evidence behind it.**
+
+**The gap is computed from all of a person's rows, never the filtered ones** — and that was tested rather than assumed. Filtered to *Skill*, both lines still read *"no expertise, licence or education yet"*. **Computing it from the visible rows would have made the type filter invent gaps.**
+
+**And the Leadership Team tick stopped counting names.** It was `Math.min(people, 1)`, so one named person turned the menu green with an empty Roles & Capability list behind it — **the §6.57 fault again, a section reporting done while the substance is missing.** Every named person now needs at least one written row; which kind it is stays the client's call. **A percentage bar was refused: scoring a judgement list makes optional things feel mandatory and invites padding to lift the number, on a page a lender reads.**
+
+## 6.64 The licence the business holds (17 Sep 2026)
+
+Nic, asked whether a trade licence belongs to a person or the business: **"QBCC licence belongs to the business."**
+
+**The plan already argued from a licence it had no field for.** SWOT's help text offers *"the only QBCC open licence in the postcode"* as its example of a proper strength, and Marketing's barriers-to-entry placeholder reads *"e.g. QBCC open licence"*. **The app asked an owner to reason from a licence twice, in two prose boxes, with nowhere to record its number, its issuer or the date it runs out.**
+
+The only licence the plan could hold was a **person's**: `plan_people_capabilities` has a `licence` kind, which is the right home for an individual's ticket and the wrong one for a contractor licence. **That is held by the entity, it is what the entity is allowed to do, and when it lapses the business stops trading whoever is on the payroll.** Filed against a director it would be lost the day that director left.
+
+`plan_licences`, and a list under the identity fields in **Plan settings** — the module that opens every report's business overview, so a lender reads legal structure, years trading and what the business may do **in that order**. **No blank first row:** a grid that always shows an empty line reads as an obligation, and a bookkeeper with no trade licence would be looking at a form asking for something she does not have.
+
+**The expiry earns its keep, and the obvious rule was wrong.** *Warn if it expires within a year* is useless here: a QBCC licence, a public liability policy and a vehicle registration all renew **annually**, so every licence a business holds is permanently inside twelve months of running out. **Flag them all, always, and the owner has been taught to skip the flag by the second read.** A 60-day renewal window says so on the screen where it is typed and nowhere else; **only a licence that has already lapsed reaches SWOT**, as a threat. A licence held is offered as a strength — **the example SWOT's own help text has used since it was built.**
+
+*Found while writing it:* **today is read through `useSyncExternalStore`, never during render.** This is a client component Next still renders on the server, so a date taken during render is the **server's** date, and **a plan opened either side of midnight would hydrate with two different answers to "has this lapsed".**
+
+## 6.64.1 A lapsed licence is not a strength (17 Sep 2026)
+
+**Found by running the thing rather than reading it.** With the QBCC licence back-dated to test the threat path, SWOT offered *"Holds QBCC contractor licence"* as a **strength** and *"QBCC contractor licence expired on 30 Jun 2025 and has not been renewed"* as a **threat**, at the same time. **A client clicking Use on each would hand a lender a plan that contradicts itself on one page.** The strength loop never asked what state the licence was in.
+
+The lapsed chip also read *"lapsed 30 Jun 2025"* in a 104px column and overflowed. **It says "lapsed"; the date is already red in the cell beside it.**
+
+## 6.65 Assumption hints stop running under Year 1 (17 Sep 2026)
+
+**The assumption's name and its hint were one `whitespace-nowrap` line in a 28% column, so every hint ran straight on under the Year 1 input**: *"How long clients take to pay. Each day holds this much in debtor"* with a number box sitting on top of the rest of the sentence. **Three rows wrote that markup by hand, so the same fault was in the grid three times over.**
+
+One `AssumptionLabel` instead, hint on its own line and allowed to wrap. **Nothing is truncated: that sentence explains what the number does to the cash flow, which is the one thing somebody typing into this screen needs to read.** Measured rather than eyeballed — every hint now ends 34px short of where the Year 1 column begins, against an overlap before. **Same fault class as §6.62.2: content laid out as though the column were wider than it is.**
+
+## 6.66 The balance you already carry (17 Sep 2026)
+
+Nic, reading the Assumptions tab: *"If I have payments of an overhead e.g. insurance in the overheads area … BUT I have 50% of the value being paid in assumptions — how is that addressed?"* **Answering that honestly meant reading the engine, and the engine was wrong.**
+
+Prepayments and accruals are entered as **closing** balances and the cash flow moves on the change in them — `dPrepaid = prepaid - priorPrepaid`. **`priorPrepaid` was hard-coded to 0 for Year 1**, because `OpeningBalance` had no prepaid or accrued field and the historic balance sheet had no column to fill one from. **Accounts receivable, inventory, accounts payable, bank loans and tax payable all carry over from the last historic period. These two were the only working-capital balances that did not.**
+
+**So a business that has always paid its insurance a year ahead was shown paying that half-premium again in Year 1**, out of cash that left the bank before the plan started; the accrual side did the reverse and handed it money it did not have. **Year 1 cash is the year a lender reads hardest.**
+
+**And "the statements agree" stayed green throughout**, because the cash-flow bridge reconciles against the same wrong movement — **the plan agreed with itself about the wrong number.** Only a test that knows what the cash *should* be catches that, so there is now one that asserts the old behaviour explicitly: **−12,000 of phantom Year 1 outflow, `reconciled: true`.** This is the same fault as §6.32.4, where the opening bank loan was missing: **a balance sheet is short by exactly what you forget to put on it.**
+
+Two lines on the historic balance sheet, carried into `assembleOpening` and into `priorPrepaid`/`priorAccrued`. **Both default to 0, so no existing period changes until somebody fills one in.** On the **totals** path they cost nothing to adopt — *other current assets* is the residual, so naming a prepayment **moves** it out of other rather than adding it twice, and total current assets never moves. On the **components** path the line's help text says to take it out of *Other current assets*.
+
+*Found on the way:* the first draft of the engine test reported five broken invariants **that were the fixture's own fault** — opening equity had been typed as the cash figure, so the opening balance sheet did not balance once it carried a prepaid asset. **The fixture now derives equity from the rest, which is what a balance sheet does.**
