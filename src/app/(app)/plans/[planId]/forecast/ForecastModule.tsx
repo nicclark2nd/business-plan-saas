@@ -20,15 +20,19 @@ import { planMonths, planYearLabel } from "@/engine/plan/calendar";
 import { revertToHistoricDays, saveAssumptions } from "./actions";
 
 /**
- * Review forecast (§6.32.3) — profit and loss, cash flow, balance sheet and the assumptions behind them, on
- * one module bar with a reconciliation strip above all four.
+ * Review forecast (§6.32.3, §6.77) — the cash flow, the assumptions behind it, and the strip that says
+ * whether the whole forecast holds together.
  *
- * They are tabs rather than the four separate pages APeX uses, for one reason: **three statements that must
- * agree belong on one screen.** Every fault this project has had was two views of the same number that never
- * met, and the forecast is where that is most expensive. The strip says whether they agree before the client
- * reads a single figure.
+ * It began as four tabs, on the rule that **three statements that must agree belong on one screen.** The
+ * profit and loss left in §6.76 and the balance sheet in §6.77, each to a module with tiles and a chart and
+ * a reading of its own — and what that rule was actually protecting went with them. It was never the
+ * adjacency; it was the CHECK. The reconciliation strip is rendered above every statement in the product,
+ * so a client still learns whether the figures agree before reading one, wherever they are standing.
+ *
+ * What stays here is the question no single statement answers: whether the plan holds together. The checks,
+ * the bridge from profit to cash, the month the bank goes tight, and the days that drive all of it.
  */
-type AreaKey = "cash" | "balance" | "assumptions";
+type AreaKey = "cash" | "assumptions";
 const STEP = GUIDED_STEPS.find((s) => s.id === "forecast")?.step ?? 13;
 const box = "h-8";
 
@@ -91,7 +95,7 @@ export function ForecastModule({
   if (workingCapital !== gridFrom) { setGridFrom(workingCapital); setWc(workingCapital); setCt(cashTiming); }
 
   const failures = forecast.invariants.filter((i) => !i.passed);
-  const pnl = forecast.pnl, cf = forecast.cashFlow, bs = forecast.balanceSheet;
+  const pnl = forecast.pnl, cf = forecast.cashFlow;
 
   const save = (nextWc = wc, nextCt = ct) => start(async () => {
     const r = await saveAssumptions(planId, { workingCapital: nextWc, cashTiming: nextCt });
@@ -113,10 +117,9 @@ export function ForecastModule({
   return (
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group="Forecasts" title="Review forecast"
-      subtitle="Profit, cash and the balance sheet — whether the plan holds together" mode={mode}
+      subtitle="Cash, the checks behind it, and whether the plan holds together" mode={mode}
       areas={[
         { key: "cash", label: "Cash flow" },
-        { key: "balance", label: "Balance sheet" },
         { key: "assumptions", label: "Assumptions", tag: assumptionsSet ? undefined : "not set" },
       ]}
       area={area} onArea={(k) => goArea(k as AreaKey)} scope={{ label: "Five years" }}
@@ -204,42 +207,6 @@ export function ForecastModule({
               </span>
             </div>
           )}
-        </>
-      )}
-
-      {area === "balance" && (
-        <>
-          <Toolbar><Meta className="ml-0">
-            {failures.some((f) => f.key === "balance-sheet-equation")
-              ? <span className="text-bad">The balance sheet does not balance — see the checks above.</span>
-              : <>Balances in every year · Year 5 equity {num(bs[5].equity)}</>}
-          </Meta></Toolbar>
-          <Statement rows={[
-            ["Cash", (y) => bs[y].cash, "head"],
-            ["Debtors", (y) => bs[y].accountsReceivable],
-            ["Stock and work in progress", (y) => bs[y].inventory],
-            ["Prepayments", (y) => bs[y].prepaid],
-            ...(gst.registered ? [[`${gstLabel} refund due`, (y: number) => bs[y].gstReceivable] as StatementRow] : []),
-            ["Other current assets", (y) => bs[y].otherCurrentAssets],
-            ["Current assets", (y) => bs[y].currentAssets, "sub"],
-            ["Fixed assets", (y) => bs[y].fixedAssets],
-            ["Other non-current assets", (y) => bs[y].otherNonCurrentAssets],
-            ["Total assets", (y) => bs[y].totalAssets, "total"],
-            ["Creditors", (y) => bs[y].accountsPayable],
-            ["Accruals", (y) => bs[y].accrued],
-            ["Tax owing", (y) => bs[y].taxPayable],
-            ...(gst.registered ? [[`${gstLabel} owing`, (y: number) => bs[y].gstPayable] as StatementRow] : []),
-            ["Loans due within a year", (y) => bs[y].debtCurrent],
-            ["Grant income not yet earned", (y) => bs[y].deferredIncomeCurrent],
-            ["Other current liabilities", (y) => bs[y].otherCurrentLiabilities],
-            ["Current liabilities", (y) => bs[y].currentLiabilities, "sub"],
-            ["Loans due later", (y) => bs[y].debtNonCurrent],
-            ["Grant income earned after next year", (y) => bs[y].deferredIncomeNonCurrent],
-            ["Other non-current liabilities", (y) => bs[y].otherNonCurrentLiabilities],
-            ["Total liabilities", (y) => bs[y].totalLiabilities, "sub"],
-            ["Equity", (y) => bs[y].equity],
-            ["Liabilities and equity", (y) => bs[y].totalLiabilitiesAndEquity, "total"],
-          ]} num={num} />
         </>
       )}
 

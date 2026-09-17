@@ -20,6 +20,8 @@ export default async function ForecastPage({ params, searchParams }: {
    * the cash flow would land somebody on a statement they did not ask for and look like it worked.
    */
   if (area === "pnl") redirect(`/plans/${planId}/profit-loss`);
+  /** And the balance sheet, which left the same way in §6.77. Same reasoning: send the link where the thing went. */
+  if (area === "balance") redirect(`/plans/${planId}/balance-sheet`);
   const { plan, mode, components, taxLabel, fyEndMonth, firstYear, impliedFromHistory, assumptionsSet } =
     await loadPlan(planId);
   const { workingCapital, cashTiming } = plan;
@@ -36,7 +38,7 @@ export default async function ForecastPage({ params, searchParams }: {
    */
   const { checked, monthly, gst, overdraft } = runForecast(plan);
 
-  const areas = ["cash", "balance", "assumptions"] as const;
+  const areas = ["cash", "assumptions"] as const;
   return (
     <ForecastModule
       planId={planId} mode={mode} forecast={checked} monthly={monthly} overdraft={overdraft}
