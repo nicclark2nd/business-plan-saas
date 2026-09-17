@@ -14,7 +14,7 @@
  * and its own split across the twelve months.
  */
 import { YEARS, yearlyProjection, normalizeDistribution, monthlySales, type MonthlyDistribution } from "../sales/projection";
-import { recurring, baseYear, unitsByMonth, productYears, productYear1Clients, clientMonthsByYear, type AnyProduct } from "../sales/product";
+import { recurring, baseYear, unitsByMonth, productYears, productYear1Clients, clientMonths60, clientMonthsByYear, settleTo, type AnyProduct } from "../sales/product";
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -60,6 +60,31 @@ export function productCostMonths(p: CostProduct, source?: AnyProduct | null): n
   return unitsByMonth(p).map((u) => r2(u * c));
 }
 
+/**
+ * Sixty months of variable cost (§6.71), the same shape `productMonths` gives revenue.
+ *
+ * Each year's twelve months are settled to that year's own annual cost, so the months can never add to
+ * something the year does not say — which is exactly the check the monthly cash flow runs against.
+ */
+export function productCostMonths60(p: CostProduct, source?: AnyProduct | null): number[] {
+  const costs = unitCostByYear(p);
+  const years = productCostYears(p, source);
+  const out: number[] = [];
+  if (recurring(p)) {
+    const active = clientMonths60(p, source);
+    for (let y = 0; y < 5; y++) {
+      const raw = active.slice(y * 12, y * 12 + 12).map((a: number) => a * (costs[y] / 12));
+      out.push(...settleTo(raw, years[y].cost));
+    }
+    return out;
+  }
+  for (let y = 0; y < 5; y++) {
+    const raw = unitsByMonth(p as unknown as AnyProduct, y + 1).map((u) => u * costs[y]);
+    out.push(...settleTo(raw, years[y].cost));
+  }
+  return out;
+}
+
 // ---------- fixed COGS ----------
 export type FixedCost = {
   annual_cost: number | null; yearly_growth_rates?: Record<string, number> | null;
@@ -79,7 +104,8 @@ export function fixedCostByYear(f: FixedCost): number[] {
     return r2(v);
   });
 }
-export const fixedCostMonths = (f: FixedCost) => monthlySales(fixedCostByYear(f)[0], normalizeDistribution(f.monthly_distribution));
+export const fixedCostMonths = (f: FixedCost, year = 1) =>
+  monthlySales(fixedCostByYear(f)[Math.min(5, Math.max(1, Math.trunc(year) || 1)) - 1], normalizeDistribution(f.monthly_distribution));
 
 // ---------- the plan ----------
 export type CogsYear = { year: number; variable: number; fixed: number; total: number; revenue: number; grossProfit: number; margin: number | null };
@@ -95,10 +121,11 @@ export function planCogsByYear(products: CostProduct[], fixed: FixedCost[], sour
   });
 }
 
-/** Year 1 by month across the plan — what the twelve-month cash flow consumes. */
-export function planCogsMonths(products: CostProduct[], fixed: FixedCost[], sourceFor: (p: CostProduct) => AnyProduct | null = () => null) {
+/** One year by month across the plan — what that year's twelve-month cash flow consumes. */
+export function planCogsMonths(products: CostProduct[], fixed: FixedCost[], sourceFor: (p: CostProduct) => AnyProduct | null = () => null, year = 1) {
+  const y = Math.min(5, Math.max(1, Math.trunc(year) || 1));
   const totals = Array(12).fill(0);
-  for (const p of products) productCostMonths(p, sourceFor(p)).forEach((v, i) => { totals[i] += v; });
-  for (const f of fixed) fixedCostMonths(f).forEach((v, i) => { totals[i] += v; });
+  for (const p of products) productCostMonths60(p, sourceFor(p)).slice((y - 1) * 12, y * 12).forEach((v, i) => { totals[i] += v; });
+  for (const f of fixed) fixedCostMonths(f, y).forEach((v, i) => { totals[i] += v; });
   return totals.map(r2);
 }

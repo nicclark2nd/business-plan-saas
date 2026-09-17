@@ -105,13 +105,15 @@ export function grantsByYear(grants: Grant[]): GrantYear[] {
   });
 }
 
-/** Year 1 month by month — cash in, and income earned — for the twelve-month statements. */
-export function grantsMonths(grants: Grant[]): { received: number[]; earned: number[] } {
+/** One year month by month — cash in, and income earned — for that year's twelve-month statements. */
+export function grantsMonths(grants: Grant[], year = 1): { received: number[]; earned: number[] } {
+  const y = Math.min(5, Math.max(1, Math.trunc(year) || 1));
+  const from = (y - 1) * 12;
   const received = Array(12).fill(0) as number[];
   const earned = Array(12).fill(0) as number[];
   for (const g of grants) {
     const m = grantMonths(g);
-    for (let i = 0; i < 12; i++) { received[i] = r2(received[i] + m.received[i]); earned[i] = r2(earned[i] + m.earned[i]); }
+    for (let i = 0; i < 12; i++) { received[i] = r2(received[i] + num(m.received[from + i])); earned[i] = r2(earned[i] + num(m.earned[from + i])); }
   }
   return { received, earned };
 }

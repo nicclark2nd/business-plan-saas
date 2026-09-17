@@ -57,8 +57,9 @@ export function overheadByYear(o: Overhead, synced?: number[] | null): number[] 
 }
 
 /** Year 1 across the twelve months. A synced line falls evenly unless it has been given a shape of its own. */
-export function overheadMonths(o: Overhead, synced?: number[] | null): number[] {
-  return monthlySales(overheadByYear(o, synced)[0], normalizeDistribution(o.monthly_distribution));
+export function overheadMonths(o: Overhead, synced?: number[] | null, year = 1): number[] {
+  const y = Math.min(5, Math.max(1, Math.trunc(year) || 1));
+  return monthlySales(overheadByYear(o, synced)[y - 1], normalizeDistribution(o.monthly_distribution));
 }
 
 /**
@@ -108,12 +109,12 @@ export function overheadsByYear(lines: { o: Overhead; synced?: number[] | null }
 }
 
 /** Year 1 by month across the plan, on-costs included — what the twelve-month cash flow consumes. */
-export function overheadsMonths(lines: { o: Overhead; synced?: number[] | null }[], onCostPct: number): number[] {
+export function overheadsMonths(lines: { o: Overhead; synced?: number[] | null }[], onCostPct: number, year = 1): number[] {
   const pct = Math.max(0, num(onCostPct)) / 100;
   const totals = Array(12).fill(0);
   for (const { o, synced } of lines) {
     const factor = o.on_cost || o.source === "people" ? 1 + pct : 1;
-    overheadMonths(o, synced).forEach((v, i) => { totals[i] += v * factor; });
+    overheadMonths(o, synced, year).forEach((v, i) => { totals[i] += v * factor; });
   }
   return totals.map(r2);
 }

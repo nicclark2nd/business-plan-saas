@@ -47,6 +47,8 @@ export type PlanRun = {
   forecast: Forecast;
   /** Year 1, month by month, off the annual figures — never a second reading of the plan. */
   monthly: MonthlyCashFlow;
+  /** All five years, month by month. Year 1 is the same object as `monthly`. */
+  monthlyByYear: Record<number, MonthlyCashFlow>;
   /** The same forecast with the monthly checks folded into the strip and `reconciled` recomputed. */
   checked: Forecast;
   gst: GstAssembly;
@@ -72,26 +74,41 @@ export function runForecast(input: PlanInput): PlanRun {
     openingGstPayable,
   });
 
-  const monthly = buildMonthlyCashFlow({
-    openingCash: forecast.cashFlow[1].openingCash,
-    opening: {
-      accountsReceivable: opening.accountsReceivable, inventory: opening.inventory,
-      accountsPayable: opening.accountsPayable, prepaid: opening.prepaid, accrued: opening.accrued,
-    },
-    closing: {
-      accountsReceivable: forecast.workingCapital[1].accountsReceivable,
-      inventory: forecast.workingCapital[1].inventory,
-      accountsPayable: forecast.workingCapital[1].accountsPayable,
-      prepaid: forecast.workingCapital[1].prepaid,
-      accrued: forecast.workingCapital[1].accrued,
-    },
-    taxPaid: forecast.cashFlow[1].taxPaid,
-    dividends: forecast.cashFlow[1].dividendsPaid,
-    shapes: assembleMonths(sources, components, openingGstPayable),
-  });
+  /**
+   * Every year, month by month (§6.71). Year 1 used to be the only one that existed, because
+   * `assembleMonths` was sliced to it — so an overdraft could only ever have been swept through the first
+   * twelve months of a five-year plan.
+   *
+   * Each year opens on the LAST year's closing balances, never on the plan's opening ones, which is the
+   * whole reason these have to be built in order rather than independently.
+   */
+  const monthlyByYear: Record<number, MonthlyCashFlow> = {};
+  for (const y of FORECAST_YEARS) {
+    const prior = y === 1 ? null : forecast.workingCapital[y - 1];
+    monthlyByYear[y] = buildMonthlyCashFlow({
+      openingCash: forecast.cashFlow[y].openingCash,
+      opening: prior
+        ? { accountsReceivable: prior.accountsReceivable, inventory: prior.inventory, accountsPayable: prior.accountsPayable, prepaid: prior.prepaid, accrued: prior.accrued }
+        : { accountsReceivable: opening.accountsReceivable, inventory: opening.inventory, accountsPayable: opening.accountsPayable, prepaid: opening.prepaid, accrued: opening.accrued },
+      closing: {
+        accountsReceivable: forecast.workingCapital[y].accountsReceivable,
+        inventory: forecast.workingCapital[y].inventory,
+        accountsPayable: forecast.workingCapital[y].accountsPayable,
+        prepaid: forecast.workingCapital[y].prepaid,
+        accrued: forecast.workingCapital[y].accrued,
+      },
+      taxPaid: forecast.cashFlow[y].taxPaid,
+      dividends: forecast.cashFlow[y].dividendsPaid,
+      shapes: assembleMonths(sources, components, openingGstPayable, y),
+    });
+  }
+  const monthly = monthlyByYear[1];
 
-  const invariants = [...forecast.invariants, ...monthlyInvariants(monthly, forecast.cashFlow[1])];
+  const invariants = [
+    ...forecast.invariants,
+    ...FORECAST_YEARS.flatMap((y) => monthlyInvariants(monthlyByYear[y], forecast.cashFlow[y], y)),
+  ];
   const checked: Forecast = { ...forecast, invariants, reconciled: invariants.every((i) => i.passed) };
 
-  return { forecast, monthly, checked, gst };
+  return { forecast, monthly, monthlyByYear, checked, gst };
 }

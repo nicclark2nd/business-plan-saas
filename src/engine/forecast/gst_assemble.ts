@@ -105,11 +105,18 @@ export type GstAssembly = {
   /** What the forecast model consumes. */
   byYear: Record<number, GstOnYear>;
   /**
-   * Year 1's tax, month by month, ready for the cash flow. Computed here once and read there, rather than
-   * the rate being applied a second time somewhere else (§6.39).
+   * Each year's tax, month by month, ready for that year's cash flow. Computed here once and read there,
+   * rather than the rate being applied a second time somewhere else (§6.39).
+   *
+   * The loop below has always computed all five years' worth; until §6.71 it threw four of them away and
+   * kept Year 1, because Year 1 was the only year that had a monthly cash flow to feed.
    */
-  year1: { onSales: number[]; onCogs: number[]; onOverheads: number[]; onCapex: number[]; remitted: number[] };
+  monthsByYear: Record<number, GstMonths>;
+  /** Year 1, by the name every existing caller already uses for it. */
+  year1: GstMonths;
 };
+
+export type GstMonths = { onSales: number[]; onCogs: number[]; onOverheads: number[]; onCapex: number[]; remitted: number[] };
 
 const ZERO_SCHEDULE: GstSchedule = {
   months: Array.from({ length: 12 }, (_, i) => ({ month: i + 1, collected: 0, credits: 0, net: 0, remitted: 0, payable: 0 })),
@@ -153,7 +160,10 @@ export function assembleGst(
   const byComponent: Record<number, { label: string; schedule: GstSchedule }[]> = {};
   const byYear: Record<number, GstOnYear> = {};
   const zero12 = () => Array.from({ length: 12 }, () => 0);
-  const year1 = { onSales: zero12(), onCogs: zero12(), onOverheads: zero12(), onCapex: zero12(), remitted: zero12() };
+  const monthsByYear: Record<number, GstMonths> = {};
+  for (const y of FORECAST_YEARS) {
+    monthsByYear[y] = { onSales: zero12(), onCogs: zero12(), onOverheads: zero12(), onCapex: zero12(), remitted: zero12() };
+  }
 
   // One carried balance per component: each files on its own cycle, so each owes its own closing period.
   const carried = live.map(() => 0);
@@ -195,14 +205,13 @@ export function assembleGst(
       totals.remitted = r2(totals.remitted + schedule.remitted);
       totals.payableClosing = r2(totals.payableClosing + schedule.closingPayable);
 
-      if (year === 1) {
-        for (let m = 0; m < 12; m++) {
-          year1.onSales[m] = r2(year1.onSales[m] + onSalesM[m]);
-          year1.onCogs[m] = r2(year1.onCogs[m] + onCogsM[m]);
-          year1.onOverheads[m] = r2(year1.onOverheads[m] + onOhM[m]);
-          year1.onCapex[m] = r2(year1.onCapex[m] + onCapexM[m]);
-          year1.remitted[m] = r2(year1.remitted[m] + schedule.months[m].remitted);
-        }
+      const my = monthsByYear[year];
+      for (let m = 0; m < 12; m++) {
+        my.onSales[m] = r2(my.onSales[m] + onSalesM[m]);
+        my.onCogs[m] = r2(my.onCogs[m] + onCogsM[m]);
+        my.onOverheads[m] = r2(my.onOverheads[m] + onOhM[m]);
+        my.onCapex[m] = r2(my.onCapex[m] + onCapexM[m]);
+        my.remitted[m] = r2(my.remitted[m] + schedule.months[m].remitted);
       }
     });
 
@@ -211,5 +220,5 @@ export function assembleGst(
     byYear[year] = { ...totals };
   }
 
-  return { schedules, byComponent, byYear, year1 };
+  return { schedules, byComponent, byYear, monthsByYear, year1: monthsByYear[1] };
 }

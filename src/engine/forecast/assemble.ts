@@ -26,7 +26,7 @@ import { FORECAST_YEARS, type OpeningBalance, type YearBase } from "./model";
 import type { MonthlyShapes } from "./monthly";
 import { assembleGst, type GstPlanSources } from "./gst_assemble";
 import { NOT_REGISTERED, type GstSettings } from "../plan/gst";
-import { planRevenueByYear, planRevenueMonths, planYear1Months, sourceOf, type AnyProduct } from "../sales/product";
+import { planRevenueByYear, planRevenueMonths, sourceOf, type AnyProduct } from "../sales/product";
 import { planCogsByYear, planCogsMonths, type CostProduct, type FixedCost } from "../cogs/direct";
 import { overheadsByYear, overheadsMonths, planOverheadLines, type Overhead } from "../overheads/expenses";
 import { debtByYear, interestByYear, loanByYear, loanMonths, rbfByYear, rbfSplitMonths, type FundingSource } from "../funding/sources";
@@ -183,9 +183,19 @@ export function assembleBase(p: PlanSources): Record<number, YearBase> {
  * using the identical test, so a source cannot be equity by the year and debt by the month.
  */
 export function assembleMonths(
-  p: PlanSources, components: GstSettings[] = [NOT_REGISTERED], openingGstPayable = 0,
+  p: PlanSources, components: GstSettings[] = [NOT_REGISTERED], openingGstPayable = 0, year = 1,
 ): MonthlyShapes {
-  // The same assembly the year uses, sliced to Year 1 — not a second reading (§6.38).
+  /**
+   * The same assembly the year uses, sliced to ONE year — not a second reading (§6.38).
+   *
+   * `year` is last and defaults to 1 on purpose (§6.71): every existing caller keeps working untouched, and
+   * the twelve months this returns are the twelve months of whichever year is asked for. The sixty-month
+   * series underneath were already there for revenue, depreciation, loans, revenue-based finance and
+   * grants — the Year 1 wrappers simply threw four fifths of them away.
+   */
+  const y = Math.min(5, Math.max(1, Math.trunc(year) || 1));
+  const from = (y - 1) * 12;
+  const win = (a: number[]) => a.slice(from, from + 12);
   const gst = assembleGst(p as unknown as GstPlanSources, components, openingGstPayable);
   const revenueMonths = planRevenueMonths(p.products);
   const debtProceeds = Array(12).fill(0) as number[];
@@ -196,7 +206,7 @@ export function assembleMonths(
   for (const s of p.funding) {
     // The same rule as the year: the schedule's own draw date, so the month and the year cannot disagree.
     const drawYear = Math.trunc(n(s.loan?.start_year ?? s.rbf?.start_year ?? s.start_year)) || 1;
-    if (drawYear === 1) {
+    if (drawYear === y) {
       const m = Math.min(12, Math.max(1, Math.trunc(n(s.loan?.start_month ?? s.rbf?.start_month ?? s.start_month)) || 1));
       // A grant is placed by its own schedule below, not here: it is operating cash, never money raised.
       if (s.kind !== "grant") {
@@ -208,37 +218,38 @@ export function assembleMonths(
     if (s.loan) {
       const months = loanMonths(s.loan);
       for (let i = 0; i < 12; i++) {
-        debtRepaid[i] = r2(debtRepaid[i] + n(months[i]?.principal));
-        interest[i] = r2(interest[i] + n(months[i]?.interest) + n(months[i]?.fees));
+        debtRepaid[i] = r2(debtRepaid[i] + n(months[from + i]?.principal));
+        interest[i] = r2(interest[i] + n(months[from + i]?.interest) + n(months[from + i]?.fees));
       }
     } else if (s.rbf) {
       const months = rbfSplitMonths(s.rbf, revenueMonths);
       for (let i = 0; i < 12; i++) {
-        debtRepaid[i] = r2(debtRepaid[i] + n(months[i]?.principal));
-        interest[i] = r2(interest[i] + n(months[i]?.cost));
+        debtRepaid[i] = r2(debtRepaid[i] + n(months[from + i]?.principal));
+        interest[i] = r2(interest[i] + n(months[from + i]?.cost));
       }
     }
   }
 
-  const cash = extraordinaryCashMonths(p.extraordinary, 1);
-  const grants = grantsMonths(p.funding.map((f) => f.grant).filter((g): g is Grant => !!g));
+  const cash = extraordinaryCashMonths(p.extraordinary, y);
+  const grants = grantsMonths(p.funding.map((f) => f.grant).filter((g): g is Grant => !!g), y);
+  const gstM = gst.monthsByYear[y];
   return {
-    revenue: planYear1Months(p.products),
-    cogs: planCogsMonths(p.costProducts, p.fixedCogs, (c) => sourceOf(c, p.products)),
-    overheads: overheadsMonths(planOverheadLines(p.overheads, p.salaries, p.marketing), p.onCostPct),
-    capex: capexMonths(p.assets),
-    depreciation: assetsMonths(withDisposals(p.assets, soldMonthByAsset(p.extraordinary))),
+    revenue: win(revenueMonths),
+    cogs: planCogsMonths(p.costProducts, p.fixedCogs, (c) => sourceOf(c, p.products), y),
+    overheads: overheadsMonths(planOverheadLines(p.overheads, p.salaries, p.marketing), p.onCostPct, y),
+    capex: capexMonths(p.assets, y),
+    depreciation: assetsMonths(withDisposals(p.assets, soldMonthByAsset(p.extraordinary)), y),
     debtProceeds, equityRaised, debtRepaid, interest,
     grantsReceived: grants.received,
     grantIncome: grants.earned,
     extraordinaryReceipts: cash.receipts,
     extraordinaryPayments: cash.payments,
     disposalProceeds: cash.disposals,
-    gstOnSales: gst.year1.onSales,
-    gstOnCogs: gst.year1.onCogs,
-    gstOnOverheads: gst.year1.onOverheads,
-    gstOnCapex: gst.year1.onCapex,
-    gstRemitted: gst.year1.remitted,
+    gstOnSales: gstM.onSales,
+    gstOnCogs: gstM.onCogs,
+    gstOnOverheads: gstM.onOverheads,
+    gstOnCapex: gstM.onCapex,
+    gstRemitted: gstM.remitted,
   };
 }
 

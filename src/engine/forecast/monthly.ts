@@ -33,7 +33,7 @@
  * tax paid in the year is spread evenly, the way instalments fall; a dividend is taken in month twelve,
  * because a private company declares one once the year's profit is known.
  */
-import type { CashFlowYear, Invariant } from "./model";
+import type { CashFlowYear, ForecastYear, Invariant } from "./model";
 
 const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -264,7 +264,7 @@ export function buildMonthlyCashFlow(input: MonthlyInput): MonthlyCashFlow {
  * all six to it at once, and it is checked line by line rather than only on the total, because two lines that
  * are wrong in opposite directions add up to a total that looks right.
  */
-export function monthlyInvariants(monthly: MonthlyCashFlow, year1: CashFlowYear): Invariant[] {
+export function monthlyInvariants(monthly: MonthlyCashFlow, yearCash: CashFlowYear, year: ForecastYear = 1): Invariant[] {
   const lines: [keyof MonthlyTotal & keyof CashFlowYear, string][] = [
     ["receiptsFromCustomers", "Received from customers"],
     ["extraordinaryReceipts", "One-off receipts"],
@@ -284,11 +284,11 @@ export function monthlyInvariants(monthly: MonthlyCashFlow, year1: CashFlowYear)
     ["closingCash", "Closing cash"],
   ];
   return lines.map(([key, label]) => {
-    const difference = r2(n(monthly.total[key]) - n(year1[key]));
+    const difference = r2(n(monthly.total[key]) - n(yearCash[key]));
     return {
-      key: "year-1-months-to-year",
-      label: `Year 1's twelve months add to Year 1 — ${label}`,
-      year: 1 as const,
+      key: `year-${year}-months-to-year`,
+      label: `Year ${year}'s twelve months add to Year ${year} — ${label}`,
+      year,
       difference,
       passed: Math.abs(difference) <= 0.5,
     };

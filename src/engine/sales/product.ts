@@ -72,15 +72,22 @@ const newByYear = (p: AnyProduct) => {
  * by month did not, and cost of sales quietly disagreed with itself: 1,207 out on the live plan, found by the
  * twelve-months check the moment it went on screen (§6.36). One rule for splitting a year, used by both.
  */
-export function unitsByMonth(p: AnyProduct): number[] {
-  if (firstYearOf(p) > 1) return Array(12).fill(0);
-  const y1 = newByYear(p)[0];
+export function unitsByMonth(p: AnyProduct, year = 1): number[] {
+  const y = Math.min(5, Math.max(1, Math.trunc(year) || 1));
+  if (firstYearOf(p) > y) return Array(12).fill(0);
+  const total = newByYear(p)[y - 1];
   if (recurring(p)) {
-    // Clients won each month are counts the client typed, not shares of a year, so they are taken as given.
+    /**
+     * Clients won each month are counts the client TYPED, not shares of a year, so they are taken as given.
+     * They are typed for Year 1 only (§6.71): there is no screen asking for month-by-month intake in Year 4,
+     * and inventing one from a Year 1 shape would put a number in front of a lender that nobody entered.
+     * Later years fall evenly, which is what the annual figure already says.
+     */
+    if (y > 1) return Array(12).fill(total / 12);
     const monthly = Array.from({ length: 12 }, (_, i) => num(p.monthly_new_clients?.[String(i + 1)]));
-    return monthly.some((v) => v > 0) ? monthly : Array(12).fill(y1 / 12);
+    return monthly.some((v) => v > 0) ? monthly : Array(12).fill(total / 12);
   }
-  return monthlySales(y1, normalizeDistribution(p.monthly_distribution));
+  return monthlySales(total, normalizeDistribution(p.monthly_distribution));
 }
 /** Units won in each plan year. */
 export const unitsByYear = (p: AnyProduct) => newByYear(p);
@@ -114,6 +121,13 @@ export function productYear1Months(p: AnyProduct, source?: AnyProduct | null): n
 /** Active clients at the end of each month of Year 1 — shown beside the acquisition boxes. */
 export function productYear1Clients(p: AnyProduct, source?: AnyProduct | null): number[] {
   return recurring(p) ? recurringBase(p, source).months.slice(0, 12).map((m) => m.active) : [];
+}
+/**
+ * Clients on the books in every month of the plan (§6.71) — the sixty-month form of `productYear1Clients`,
+ * which the monthly cost series needs for years the twelve-month version cannot reach.
+ */
+export function clientMonths60(p: AnyProduct, source?: AnyProduct | null): number[] {
+  return recurring(p) ? recurringBase(p, source).months.map((m) => num(m.active)) : Array(60).fill(0);
 }
 /** Clients arriving in each month of Year 1 — entered by hand, or inherited from the line they come from. */
 export function newClientsYear1(p: AnyProduct, source?: AnyProduct | null): number[] {
@@ -174,7 +188,7 @@ export function productMonths(p: AnyProduct, source?: AnyProduct | null): number
 }
 
 /** Twelve raw figures rounded to a stated total, the last month taking the remainder (§6.17). */
-function settleTo(raw: number[], total: number): number[] {
+export function settleTo(raw: number[], total: number): number[] {
   const out = raw.map(r2);
   const first11 = out.slice(0, 11).reduce((a, b) => a + b, 0);
   out[11] = r2(num(total) - first11);

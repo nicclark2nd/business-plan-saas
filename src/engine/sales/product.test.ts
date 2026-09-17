@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { productYears, productYear1Months, planRevenueByYear, planYear1Months, newClientsYear1, sourceOf, bookNow } from "./product";
+import { productYears, productYear1Months, planRevenueByYear, planRevenueMonths, planYear1Months, clientMonths60, newClientsYear1, sourceOf, bookNow } from "./product";
 
 const oneOff = { average_price: 16800, units_sold: 36, start_selling_year: 1, yearly_growth: {}, monthly_distribution: null, sold_as: "one_off" };
 const coach = {
@@ -85,5 +85,38 @@ describe("a line fed by another line (§6.17)", () => {
     const solo = { ...royalty, clients_from_product_id: null, units_sold: 6, monthly_new_clients: null };
     expect(sourceOf(solo, plan)).toBe(null);
     expect(productYears(solo, null)[0].newClients).toBeCloseTo(6, 6);
+  });
+});
+
+/**
+ * §6.71 swapped the monthly cash flow's Year 1 revenue from `planYear1Months` to the first twelve of
+ * `planRevenueMonths`, so that years 2-5 could use the same series. That swap is only safe if the two
+ * agree MONTH BY MONTH — the totals agreeing would hide a reshuffle, and the reconciliation checks only
+ * ever compare totals.
+ */
+describe("the two Year 1 revenue series are the same series", () => {
+  // Rebuilt here rather than reached for: the linked pair below lives inside another describe's scope.
+  const licences = { id: "L", average_price: 50000, units_sold: 6, start_selling_year: 1, yearly_growth: {}, monthly_distribution: null, sold_as: "one_off" };
+  const royalty = {
+    id: "R", average_price: 24000, units_sold: 0, start_selling_year: 1, yearly_growth: {}, sold_as: "recurring",
+    opening_clients: 40, client_life_months: 36, life_mode: "average", clients_from_product_id: "L", monthly_new_clients: null,
+  };
+  const cases: [string, unknown[]][] = [
+    ["a one-off line", [oneOff]],
+    ["an ongoing line with hand-typed intake", [coach]],
+    ["a mixed plan with a linked line", [licences, royalty]],
+  ];
+  for (const [what, products] of cases) {
+    it(`agrees month by month on ${what}`, () => {
+      const a = planYear1Months(products as never).map((v) => Math.round(v * 100) / 100);
+      const b = planRevenueMonths(products as never).slice(0, 12).map((v) => Math.round(v * 100) / 100);
+      expect(b).toEqual(a);
+    });
+  }
+
+  it("keeps sixty months of clients for an ongoing line, not twelve", () => {
+    const m = clientMonths60(coach);
+    expect(m).toHaveLength(60);
+    expect(m.slice(0, 12).some((v) => v > 0)).toBe(true);
   });
 });

@@ -197,10 +197,11 @@ export const additionsByYear = (a: FixedAsset) => capexByYear(a);
  * The Funding page carried this loop inline; the moment the forecast needed the same twelve months it
  * became a fact with two computations, so it lives here with the year it has to agree with.
  */
-export function capexMonths(assets: FixedAsset[]): number[] {
+export function capexMonths(assets: FixedAsset[], year = 1): number[] {
+  const y = Math.min(5, Math.max(1, Math.trunc(year) || 1));
   const out = Array(12).fill(0) as number[];
   for (const a of assets) {
-    const cash = capexByYear(a)[0];                 // nil unless this asset is bought in Year 1 at all
+    const cash = capexByYear(a)[y - 1];             // nil unless this asset is bought in that year at all
     if (!cash) continue;
     const m = Math.min(12, Math.max(1, Math.trunc(num(a.start_month)) || 1));
     out[m - 1] = r2(out[m - 1] + cash);
@@ -221,11 +222,12 @@ export function assetsByYear(assets: FixedAsset[]): AssetYear[] {
 }
 
 /** Year 1 depreciation month by month, for the twelve-month cash flow and P&L. */
-export function assetsMonths(assets: FixedAsset[]): number[] {
+export function assetsMonths(assets: FixedAsset[], year = 1): number[] {
+  const y = Math.min(5, Math.max(1, Math.trunc(year) || 1));
   const out = Array(12).fill(0);
   for (const a of assets) {
-    const m = depreciationMonths(a);
-    for (let i = 0; i < 12; i++) out[i] = r2(out[i] + m[i]);
+    const m = depreciationMonths(a).slice((y - 1) * 12, y * 12);
+    for (let i = 0; i < 12; i++) out[i] = r2(out[i] + num(m[i]));
   }
   return out;
 }
