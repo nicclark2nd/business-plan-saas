@@ -1,7 +1,7 @@
 "use client";
 
 import { ModuleFrame, ModuleReadOnlyFooter } from "@/components/module/ModuleFrame";
-import { Grid, Th, Td, Row as GridRow, Toolbar, Meta, Note } from "@/components/module/DataGrid";
+import { Toolbar, Meta, Note } from "@/components/module/DataGrid";
 import { StatTile, TileRow } from "@/components/chart/core";
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { Button } from "@/components/ui/button";
@@ -128,6 +128,44 @@ function SectionView({ section }: { section: Section }) {
   );
 }
 
+/**
+ * A DOCUMENT TABLE, not a data grid (§6.92).
+ *
+ * The report was rendering its tables with the shared `Grid`, which carries `min-w-[900px]` — a floor that
+ * exists so a full-width page grid's flexible column never collapses to nothing (§6.73.2). The document's
+ * own measure is 900px, so every table was a hair wider than the page that holds it: each one grew its own
+ * horizontal scrollbar and cut its right-hand column off.
+ *
+ * Nic, on his own plan: "a number of tables are not built correctly ... they have active sliders as the
+ * table width is cut so it fits. The right column is not fully shown."
+ *
+ * The same lesson as §6.89, in a third place: **a constraint written for one context is not a fact about
+ * every context.** A document table has no scrollbar — it fits the measure or it wraps. So the report has
+ * its own table, which is `w-full` with no floor, lets text wrap, and keeps only the figures from wrapping.
+ */
+function DocTable({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mt-3">
+      <table className="w-full border-collapse text-[12.5px]">{children}</table>
+    </div>
+  );
+}
+
+/** A px width in the model is a PROPORTION of the document measure, never a hard size. */
+const DOC_MEASURE = 900;
+const pctWidth = (w?: number) => (w ? { width: `${Math.min(60, Math.round((w / DOC_MEASURE) * 100))}%` } : undefined);
+
+function DocCell({ children, numeric, className }: { children: React.ReactNode; numeric?: boolean; className?: string }) {
+  return (
+    <td className={cn("px-2 py-[7px] align-top leading-snug",
+      /* Figures never wrap; words always may. A broken number is unreadable, a broken sentence is not. */
+      numeric ? "whitespace-nowrap text-right tabular-nums" : "text-left",
+      className)}>
+      {children}
+    </td>
+  );
+}
+
 function BlockView({ block }: { block: Block }) {
   switch (block.kind) {
     case "para":
@@ -160,37 +198,44 @@ function BlockView({ block }: { block: Block }) {
       );
     case "facts":
       return (
-        <div className="mt-3 overflow-x-auto"><Grid>
+        <DocTable>
           <tbody>
             {block.rows.map(([k, v]) => (
-              <GridRow key={k}>
-                <Td className="w-[240px] text-muted-foreground">{k}</Td>
-                <Td className="font-medium">{v}</Td>
-              </GridRow>
+              <tr key={k} className="border-b border-border last:border-b-0">
+                <DocCell className="w-[38%] text-muted-foreground">{k}</DocCell>
+                <DocCell className="font-medium">{v}</DocCell>
+              </tr>
             ))}
           </tbody>
-        </Grid></div>
+        </DocTable>
       );
     case "table":
       return (
-        <div className="mt-3 overflow-x-auto"><Grid>
-          <thead><tr>
-            {block.columns.map((c, i) => (
-              <Th key={i} right={c.numeric} style={c.width ? { width: c.width } : undefined}>{c.label}</Th>
-            ))}
-          </tr></thead>
+        <DocTable>
+          <thead>
+            <tr className="border-b border-input">
+              {block.columns.map((c, i) => (
+                <th key={i} style={pctWidth(c.width)}
+                  className={cn("px-2 py-1.5 align-bottom text-[10.5px] font-semibold uppercase tracking-[.04em] text-muted-foreground",
+                    c.numeric ? "text-right" : "text-left")}>
+                  {c.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
           <tbody>
             {block.rows.map((row, i) => (
-              <GridRow key={i}>
+              <tr key={i} className="border-b border-border last:border-b-0">
                 {row.map((c, j) => (
-                  <Td key={j} right={c.numeric} className={cn(c.numeric && "num", c.bold && "font-semibold", c.muted && "text-muted-foreground")}>
+                  <DocCell key={j} numeric={c.numeric}
+                    className={cn(c.bold && "font-semibold", c.muted && "text-muted-foreground")}>
                     {c.text}
-                  </Td>
+                  </DocCell>
                 ))}
-              </GridRow>
+              </tr>
             ))}
           </tbody>
-        </Grid></div>
+        </DocTable>
       );
   }
 }

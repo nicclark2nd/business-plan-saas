@@ -105,8 +105,13 @@ const plain = (v: number | null) => (v === null ? "—" : String(v));
 /** A column is the DATE the year ends on — the heading a lender expects above a five-year statement. */
 const yearCols = (labels: string[]) => labels.map((label) => ({ label, numeric: true, width: 110 }));
 
-/** Money out in brackets, the convention every statement in the product already uses (§6.76). */
-const signed = (money: (v: number) => string) => (v: number) => (v < 0 ? `(${money(Math.abs(v))})` : money(v));
+/**
+ * Money out in brackets and NOTHING FOR NIL — the convention every statement in the product already uses
+ * (§6.76), and the report had drifted from it (§6.92). A five-year statement printed a column of `0`s where
+ * the screens print dashes, which reads as twelve measured zeros rather than "this does not apply".
+ */
+const signed = (money: (v: number) => string) => (v: number) =>
+  v === 0 ? "\u2014" : v < 0 ? `(${money(Math.abs(v))})` : money(v);
 
 // ---------------------------------------------------------------------------
 // 1.0 Executive Summary
