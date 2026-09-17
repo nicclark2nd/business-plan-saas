@@ -1810,3 +1810,51 @@ That is the right thing to say **first**. It is not the only thing worth saying:
 `Invariant` carries `group` and `row` rather than the screen recovering them by **splitting a sentence on an em dash** — which works right up until somebody edits the sentence. A year with no invariant for a row renders as **nothing, never as a tick**: "not tested" and "tested and fine" are different answers, and a table that draws them the same is telling the reader something it does not know.
 
 **And a fault that existed only because nothing displayed it.** The monthly check row was hard-coded `"GST paid over"`. **An engine has no business knowing it is Australian.** It emits "Sales tax paid over" and the screen substitutes the plan's own name, so a British plan is not shown a check about a tax it does not have. §6.78's rule, confirmed the same day it was written.
+
+## 6.80 The numbers run down the page (17 Sep 2026)
+
+Nic, in front of a client: "13 is six menu items away from 12 ... the What-If planner seems to be an activity and not a report but it has no number ... 15 is Business plan and I can't see a 14."
+
+**Three observations, one fault.** The sidebar was doing two jobs that had quietly stopped agreeing — a **topic map** (Market, Financials, Forecasts) and a **numbered journey.** They used to roughly coincide. §6.76 to §6.78 put three new modules into the Forecasts group and finished off what was left: 13 ended up six items below 12, and **14 sat ABOVE 6**, because Goals is filed next to SWOT for topical reasons while being the last thing the plan drafts.
+
+**A number is only a guide if the next one is the next thing down.** They were not, so they had stopped being navigation and become decoration.
+
+The journey wins the ordering; the topics keep the grouping within it. **Nothing is renumbered** — every step keeps its number and only its position moves, so the Save-and-continue chain is untouched. Below the path, in their own groups: the four statements, the What-If planner, the unbuilt, the settings.
+
+SWOT gets its own heading, **"Strengths & Risks"**. It shared "Goals" with Goals, and those two are steps 5 and 14 — **one heading holding the fifth step and the fourteenth was the single place where the two orders tore.**
+
+What-If moves to **Tools**. Nic had it exactly: it is an **activity**, not a step and not an output, and it sat in the group where a client TYPES things while being the one screen that needs a forecast to already exist.
+
+Assumptions stays directly under item 12 (§6.79) and is now the **last item in its group** rather than a gap in the middle of a run. **An unnumbered item at the end of a group reads as "and also this"; the same item between 12 and 13 reads as a step you have somehow missed.**
+
+*The cost, accepted openly:* the four statements are the screens a client opens most and they now sit below the path. Cheaper than four unnumbered items back in the middle of the journey.
+
+`nav.test.ts` **locks the rule rather than trusting the next person to remember it**: numbers in order top to bottom, none skipped or repeated, no unnumbered item between two numbered ones.
+
+## 6.81 The guided path is defined once, and it was already broken (17 Sep 2026)
+
+The order lived in two places: step numbers in `nav.ts`, and a hard-coded module name inside each of thirteen "Save and continue" redirects. Nothing compared them. **§6.80 flagged the risk as a thing that COULD drift.**
+
+**It already had, in two places, and both were live.**
+
+**Marketing sent a client past Competitors.** Step 3's redirect said `swot`, which is step 5. Anybody following the guided path — **the mode every client starts in** — skipped step 4 entirely and was never shown it again. *Back* worked, because Competitors' own `prevId` was right, so **the two halves of one journey disagreed about whether step 4 existed.** There is no telling how long it had been there.
+
+**And step 13 was a dead end.** Review forecast rendered a form with no action on it, so "Save and continue" submitted nothing and went nowhere: **a client could not reach Goals from the screen before it.** That screen writes nothing now (§6.79), so it gets `ModuleReadOnlyFooter` — same three positions, "Nothing to save on this screen", and forward is a link.
+
+The fix is the one this project keeps making (§6.41): **the number is the fact, and everything else asks it.** `stepAfter`, `stepBefore`, `nextHref`, `backHref`. Thirteen redirects and thirteen `prevId` props are gone — a footer takes its **own** id and works out both directions. The test **walks the whole path forwards, then backwards**, and fails on the Marketing skip if anyone reintroduces it.
+
+Also, five `\uXXXX` escapes rendering as **literal text** in Marketing — two in JSX text, three in JSX attribute strings. **JSX is not JavaScript and neither position processes the escape.** Same fault as §6.76's "Open Break-Even →", sitting in copy a client reads at step 3.
+
+## 6.82 Plan settings goes first, and starts counting (17 Sep 2026)
+
+Nic: "Plan settings is critical, and being right at the bottom of the left-hand menu its sure to be never seen. Most people start at the top. They can do all the numbers and then print the plan and never see it."
+
+**Right, and worse than buried: it is UPSTREAM of every step rather than beside them.** The country decides the sales tax and what it is called; the financial year end decides **every month column in the product**; the customer and product words change the labels on Sales, COGS, Break-Even and the profit and loss. Unset, they default to 30 June and 25% with no GST — **defaults that are PLAUSIBLE, which is exactly what makes them dangerous.** A client in Britain gets an Australian financial year and a tax rate nobody chose, and nothing on screen says so.
+
+So it sits directly under Dashboard, above step 1, under **"Set up"**. It carries no number and should not: **it is not a step in the story a plan tells, it is what you set before the story starts.** The §6.80 rule holds — unnumbered, in a group of its own with no numbers in it.
+
+**And it counts now, which is the half that actually protects a client.** Business name, industry, country and legal structure are the app's own definition of what a report cannot open without (`PROFILE_REQUIRED`), and **none of them were counted** — a plan could read 94% complete while the thing the whole exercise produces could not be printed. **§6.57 in a new place.**
+
+*The near-miss, written down because it is the more useful half.* The first version added all four fields to the existing `plan_settings` select — and `business_name` is on `plans`. **Selecting a column a table does not have errors the WHOLE query, and that query swallows its error into `null`**, so four unrelated sections silently zeroed and the plan fell to 81%. Plan settings 0/4, and Review forecast 0/1 because `assumptionsSet` reads the same row.
+
+**`tsc`, eslint and 541 tests all passed. The dashboard showed it in three seconds.** That is the same lesson as §6.78 and §6.81 — **unshown output does not get checked, and reasoning about whether something is wrong is not the same as looking at it.** Three times in two days, which is enough for it to be a rule rather than an anecdote.
