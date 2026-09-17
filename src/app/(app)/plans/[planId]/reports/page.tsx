@@ -12,6 +12,7 @@ import { buildReport, type ReportInput } from "@/engine/report/build";
 import { AREA_LABEL } from "@/engine/whatif/goals";
 import { SPEND_LABEL } from "../marketing/model";
 import { ROLE_LABEL } from "../people/model";
+import { BS_LINES, PNL_LINES } from "../historic/model";
 import { ReportsModule } from "./ReportsModule";
 
 const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : Number(v) || 0);
@@ -20,6 +21,7 @@ const AREA: Record<string, string> = AREA_LABEL;
 const ROLE: Record<string, string> = ROLE_LABEL;
 const SPEND: Record<string, string> = SPEND_LABEL;
 
+const raw = (v: unknown) => v as Record<string, unknown>;
 const text = (v: unknown) => { const s = String(v ?? "").trim(); return s || null; };
 
 /**
@@ -53,6 +55,8 @@ export default async function ReportsPage({ params }: { params: Promise<{ planId
     supabase.from("plan_operations").select("*").eq("plan_id", planId).maybeSingle().then((r) => r.data),
     getCompleteness(planId),
   ]);
+  const historicRow = await supabase.from("plan_historic_periods").select("*").eq("plan_id", planId)
+    .order("period_number").limit(1).maybeSingle().then((r) => r.data);
   const swotItems = await rows(supabase.from("plan_swot_items").select("*").eq("plan_id", planId).order("sort_order"));
 
   const { checked } = runForecast(plan);
@@ -81,7 +85,12 @@ export default async function ReportsPage({ params }: { params: Promise<{ planId
       averagePrice: n(p.average_price),
       units: n(p.units_sold),
       revenue: productYears(p, sourceOf(p, products))[0]?.revenue ?? 0,
-      description: text((p as unknown as Record<string, unknown>).description),
+      description: text(raw(p).description),
+      whyTheyBuy: text(raw(p).notes),
+      pricingRationale: text(raw(p).pricing_rationale),
+      lifecycle: text(raw(p).lifecycle),
+      soldAs: text(raw(p).sold_as),
+      startYear: n(raw(p).start_selling_year) || 1,
     })).filter((l) => l.revenue > 0 || l.averagePrice > 0),
     profile: {
       established: monthYearLabel(settings?.date_established as string | null),
@@ -185,6 +194,20 @@ export default async function ReportsPage({ params }: { params: Promise<{ planId
         qualityApproach: text(opCapacity?.quality_approach),
       },
     },
+    /* The client's own accounts, which until now reached the opening balances and no further (§6.87). */
+    historic: historicRow ? (() => {
+      const pick = (defs: { field: string; label: string }[]) => defs
+        .map((d) => ({ label: d.label, value: n((historicRow as Record<string, unknown>)[d.field]) }))
+        .filter((r) => r.value !== 0);
+      const pnl = pick(PNL_LINES), balance = pick(BS_LINES);
+      if (!pnl.length && !balance.length) return null;
+      return {
+        label: historicRow.period_end
+          ? `Year ended ${new Date(String(historicRow.period_end)).toLocaleDateString("en-AU", { month: "short", year: "numeric" })}`
+          : "Last full year",
+        pnl, balance,
+      };
+    })() : null,
     noun: { ...noun, aOne: `${/^[aeiou]/i.test(noun.one) ? "an" : "a"} ${noun.one}` },
     taxLabel: components.length ? taxLabel : "Not registered",
     currency,

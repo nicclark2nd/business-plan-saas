@@ -16,7 +16,7 @@ import type { Noun } from "../plan/vocabulary";
 import { marginalCash, ratios } from "./analysis";
 import { cell, num, numberSections, type Block, type Draft, type Omission, type ReportDoc } from "./blocks";
 import { COPY } from "./content";
-import { goalsAndMilestones, howWeOperate, marketingAndSales, ourPeople, risksAndMitigation, theBusiness, theCompetition, theMarket, whatWeSell } from "./narrative";
+import { goalsAndMilestones, historicAppendix, howWeOperate, marketingAndSales, ourPeople, risksAndMitigation, theBusiness, theCompetition, theMarket, whatWeSell } from "./narrative";
 
 export type ReportInput = {
   businessName: string;
@@ -24,7 +24,15 @@ export type ReportInput = {
   strength: Strength[];
   services: ServiceProfit[];
   /** Year 1 units and price per line, for the products table a lender reads first. */
-  productLines: { name: string; averagePrice: number; units: number; revenue: number; description: string | null }[];
+  /**
+   * Everything a client typed about a line (§6.87), not the four figures the forecast needs. "Why this
+   * price" and "why they buy it" are the two a lender reads hardest, and they were collected and dropped.
+   */
+  productLines: {
+    name: string; averagePrice: number; units: number; revenue: number;
+    description: string | null; whyTheyBuy: string | null; pricingRationale: string | null;
+    lifecycle: string | null; soldAs: string | null; startYear: number;
+  }[];
   profile: { established: string | null; industry: string | null; country: string | null; legalStructure: string | null; customerType: string | null; productType: string | null };
   framework: { vision: string | null; mission: string | null; purpose: string | null; brandPromise: string | null; fieldOfPlay: string | null };
   goals: { area: string; title: string }[];
@@ -61,6 +69,8 @@ export type ReportInput = {
     steps: { title: string; detail: string | null; owner: string | null; duration: string | null }[];
     capacity: { operatingHours: string | null; capacityNow: string | null; capacityConstraint: string | null; capacityPlan: string | null; qualityApproach: string | null };
   };
+  /** The client's own prior accounts, if they entered any. `null` for a business with no history. */
+  historic: { label: string; pnl: { label: string; value: number }[]; balance: { label: string; value: number }[] } | null;
   noun: Noun & { aOne: string };
   taxLabel: string;
   currency: string;
@@ -68,6 +78,13 @@ export type ReportInput = {
   money: (v: number) => string;
   date: string;
 };
+
+/** The stage labels the Sales screen uses, so the plan says what the client picked. */
+export const LIFECYCLE: Record<string, string> = {
+  development: "In development", introduction: "Introduction", growth: "Growth",
+  maturity: "Maturity", decline: "Decline",
+};
+export const SOLD_AS: Record<string, string> = { one_off: "One-off job", recurring: "Ongoing client" };
 
 const pct = (v: number | null, dp = 1) => (v === null ? "—" : `${v.toFixed(dp)}%`);
 const times = (v: number | null) => (v === null ? "—" : `${v.toFixed(2)}×`);
@@ -184,14 +201,23 @@ function executiveSummary(i: ReportInput): Draft {
   const products: Draft = i.productLines.length === 0 ? null : {
     title: `Overview of our ${i.noun.many.charAt(0).toLowerCase() + i.noun.many.slice(1)}`,
     blocks: [
-      { kind: "para", text: COPY.products(i.businessName, i.noun.many, i.profile.customerType ?? "customers") },
+      { kind: "para", text: COPY.products(i.businessName, i.noun.many.charAt(0).toLowerCase() + i.noun.many.slice(1), (i.profile.customerType ?? "customer").toLowerCase() + "s") },
+      /*
+       * An OVERVIEW is not a price list (§6.87). It says what each line IS and where it sits in its own
+       * life, next to what it earns — which is what somebody reading the summary needs before deciding
+       * whether to read section 3 at all. The case for each line lives there.
+       */
       { kind: "table",
-        columns: [{ label: i.noun.head, width: 240 }, { label: `Average sale value (${i.currency})`, numeric: true },
-          { label: "Units in Year 1", numeric: true }, { label: `Year 1 revenue (${i.currency})`, numeric: true }],
+        columns: [{ label: i.noun.head, width: 180 }, { label: "What it is" }, { label: "Stage", width: 110 },
+          { label: `Average sale (${i.currency})`, numeric: true }, { label: `Year 1 revenue (${i.currency})`, numeric: true }],
         rows: i.productLines.map((l) => [
-          cell(l.name), num(money(l.averagePrice)), num(l.units ? String(l.units) : "—"), num(money(l.revenue)),
-        ]).concat([[cell("Total", { bold: true }), num(""), num(""),
+          cell(l.name, { bold: true }),
+          cell(l.description?.trim() ?? "—", { muted: !l.description }),
+          cell(LIFECYCLE[l.lifecycle ?? ""] ?? "—", { muted: !l.lifecycle }),
+          num(money(l.averagePrice)), num(money(l.revenue)),
+        ]).concat([[cell("Total", { bold: true }), cell(""), cell(""), num(""),
           num(money(i.productLines.reduce((a, l) => a + l.revenue, 0)), { bold: true })]]) },
+      { kind: "note", text: COPY.productsNote(i.noun.many.charAt(0).toLowerCase() + i.noun.many.slice(1)) },
     ],
   };
 
@@ -427,6 +453,7 @@ export function buildReport(i: ReportInput): ReportDoc {
     keep(risksAndMitigation(i), "Risks and Mitigation", "No SWOT lines have been written."),
     keep(goalsAndMilestones(i), "Goals and Milestones", "No goals have been set."),
     keep(financialPlan(i), "Financial Plan", "The forecast has not been built yet."),
+    historicAppendix(i),
   ]);
 
   /* Sections the plan has no module behind yet are not listed as missing: a client cannot fix them. */

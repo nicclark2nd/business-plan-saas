@@ -12,7 +12,7 @@
  */
 import type { Draft } from "./blocks";
 import { cell, num } from "./blocks";
-import type { ReportInput } from "./build";
+import { LIFECYCLE, SOLD_AS, type ReportInput } from "./build";
 import { COPY } from "./content";
 
 const listOr = <T,>(xs: T[], f: (x: T) => Draft | null): Draft[] => xs.map(f).filter((d): d is Draft => d !== null);
@@ -75,10 +75,19 @@ export function theBusiness(i: ReportInput): Draft {
 
 export function whatWeSell(i: ReportInput): Draft {
   if (i.productLines.length === 0) return null;
-  const withWords = i.productLines.filter((l) => has(l.description));
+  const detail = i.productLines.filter((l) => has(l.description) || has(l.whyTheyBuy) || has(l.pricingRationale));
+  /** Stage, how it is sold, and when it starts — the three facts that are one line rather than a paragraph. */
+  const lifeLine = (l: ReportInput["productLines"][number]) => {
+    const bits = [
+      LIFECYCLE[l.lifecycle ?? ""] ?? null,
+      SOLD_AS[l.soldAs ?? ""] ?? null,
+      l.startYear > 1 ? `First sold in Year ${l.startYear}` : null,
+    ].filter(Boolean);
+    return bits.length ? bits.join(" · ") : null;
+  };
   return {
     title: `What We Sell`,
-    blocks: [para(COPY.whatWeSell(i.businessName, i.noun.many))],
+    blocks: [para(COPY.whatWeSell(i.businessName, lower(i.noun.many)))],
     children: [
       { title: `The ${lower(i.noun.many)} we offer`,
         blocks: [
@@ -97,7 +106,7 @@ export function whatWeSell(i: ReportInput): Draft {
       i.services.length === 0 ? null : {
         title: "What each line earns",
         blocks: [
-          para(COPY.margins(i.noun.one)),
+          para(COPY.margins(lower(i.noun.one))),
           { kind: "table",
             columns: [{ label: i.noun.head, width: 220 }, { label: `Revenue (${i.currency})`, numeric: true },
               { label: `Cost to deliver (${i.currency})`, numeric: true }, { label: `Gross profit (${i.currency})`, numeric: true }, { label: "Margin", numeric: true }],
@@ -106,9 +115,24 @@ export function whatWeSell(i: ReportInput): Draft {
             ]) },
           { kind: "note", text: COPY.marginsNote(i.noun.one) },
         ] },
-      withWords.length === 0 ? null : {
+      /*
+       * EVERYTHING THE CLIENT TYPED ABOUT A LINE (§6.87). "What it is", "why they buy it, margin,
+       * weaknesses" and "why this price" are three separate boxes on the Sales screen and all three were
+       * collected and never printed. The last is the one a lender reads hardest — a price with a reason
+       * behind it is a business decision; a price without one is a guess.
+       */
+      detail.length === 0 ? null : {
         title: "In detail",
-        children: withWords.map((l) => ({ title: l.name, blocks: [para(l.description!.trim())] })),
+        blocks: [para(COPY.inDetail(lower(i.noun.many)))],
+        children: detail.map((l) => ({
+          title: l.name,
+          blocks: [
+            ...(lifeLine(l) ? [{ kind: "lead" as const, text: lifeLine(l)! }] : []),
+            ...(has(l.description) ? [para(l.description!.trim())] : []),
+            ...(has(l.whyTheyBuy) ? [para(`${COPY.whyTheyBuy}: ${l.whyTheyBuy!.trim()}`)] : []),
+            ...(has(l.pricingRationale) ? [{ kind: "note" as const, text: `${COPY.whyThisPrice}: ${l.pricingRationale!.trim()}` }] : []),
+          ],
+        })),
       },
     ],
   };
@@ -414,6 +438,36 @@ export function goalsAndMilestones(i: ReportInput): Draft {
               cell(STATUS[g.status] ?? g.status, { muted: g.status === "not_started" }),
             ]) },
         ] },
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Appendix — the accounts the forecast opens from
+// ---------------------------------------------------------------------------
+
+/**
+ * WHERE THE PROJECTION STARTS (§6.87).
+ *
+ * A whole module's worth of typing — the client's own prior-period profit and loss and balance sheet —
+ * reached the forecast's opening balances and NOTHING ELSE. The plan showed five projected years with no
+ * statement of where year zero was, which is the first thing a lender with the accounts in front of them
+ * checks. It is an appendix rather than a section because it is evidence, not argument.
+ */
+export function historicAppendix(i: ReportInput): Draft {
+  const h = i.historic;
+  if (!h || (h.pnl.length === 0 && h.balance.length === 0)) return null;
+  const table = (rows: { label: string; value: number }[]) => ({
+    kind: "table" as const,
+    columns: [{ label: "", width: 300 }, { label: `${h.label} (${i.currency})`, numeric: true }],
+    rows: rows.map((r) => [cell(r.label, { muted: true }), num(i.money(r.value))]),
+  });
+  return {
+    title: "Appendix — historical accounts",
+    blocks: [para(COPY.historic(i.businessName))],
+    children: [
+      h.pnl.length === 0 ? null : { title: "Historical profit and loss", blocks: [table(h.pnl)] },
+      h.balance.length === 0 ? null : { title: "Historical balance sheet", blocks: [table(h.balance)] },
     ],
   };
 }

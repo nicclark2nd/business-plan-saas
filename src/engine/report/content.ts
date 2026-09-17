@@ -42,6 +42,19 @@ export const COPY = {
   products: (name: string, many: string, customers: string) =>
     `The table below sets out the ${many} ${name} sells to its ${customers}, with the average value of each sale and what Year 1 is expected to produce. Together these are how the business earns.`,
 
+  productsNote: (many: string) =>
+    `Each of these ${many} is set out in full later in this plan — what it is, why customers buy it, why it is priced where it is, and what it earns above the cost of delivering it.`,
+
+  inDetail: (many: string) =>
+    `Each of the ${many} above, in the words of the business: what it is, why a customer chooses it, and the thinking behind its price.`,
+  whyTheyBuy: "Why customers buy it",
+  whyThisPrice: "Why it is priced where it is",
+  lifecycleLead: (stage: string, soldAs: string, start: string) =>
+    [stage, soldAs, start].filter(Boolean).join(" · "),
+
+  historic: (name: string) =>
+    `${name}'s own accounts for the period before this plan begins. The forecast opens from these figures, so a reader can see where the projection starts rather than taking it on trust.`,
+
   ownership: (name: string) =>
     `Ownership of ${name} is held as follows.`,
 
