@@ -1583,3 +1583,57 @@ Prepayments and accruals are entered as **closing** balances and the cash flow m
 Two lines on the historic balance sheet, carried into `assembleOpening` and into `priorPrepaid`/`priorAccrued`. **Both default to 0, so no existing period changes until somebody fills one in.** On the **totals** path they cost nothing to adopt — *other current assets* is the residual, so naming a prepayment **moves** it out of other rather than adding it twice, and total current assets never moves. On the **components** path the line's help text says to take it out of *Other current assets*.
 
 *Found on the way:* the first draft of the engine test reported five broken invariants **that were the fixture's own fault** — opening equity had been typed as the cash figure, so the opening balance sheet did not balance once it carried a prepaid asset. **The fixture now derives equity from the rest, which is what a balance sheet does.**
+
+## 6.67 One pipeline, run once (17 Sep 2026)
+
+Five places assembled a forecast — Review forecast, Break-Even, Fixed Assets, the What-If planner and the monthly test — and **each of them wrote the same twenty-five lines by hand**: assemble GST, assemble the years, push GST onto each year, build the forecast, rebuild Year 1 month by month off the balances the forecast had just computed.
+
+Character for character identical, **with two silent exceptions that prove the point.** Only What-If threaded `openingGstPayable` through. And until §6.66.1, three of them opened the monthly view at `prepaid: 0, accrued: 0` while handing the same call real opening receivables, inventory and payables **in the same object literal**.
+
+That is §6.52.1 at a larger scale: **a copy of the loader is a copy of every future mistake.** The overdraft sweep has to go in exactly here, and going in five times is how it drifts.
+
+`runForecast` returns `forecast`, `monthly`, `gst`, and `checked` — the forecast with the monthly invariants folded into the strip and `reconciled` recomputed. **Both are returned deliberately:** Review forecast has always appended those checks and Break-Even and Fixed Assets have not, so the extraction changes no screen and **that choice can be made on purpose later rather than smuggled inside a refactor.**
+
+**A refactor is only worth trusting if nothing moved.** 476 tests pass unchanged, and on the live plan Review forecast still reads operating profit (87,248) / (19,791) / 72,198 / 178,430 / 289,764 with the statements agreeing in all five years.
+
+## 6.68 Break-Even was invisible in the mode every client starts in (17 Sep 2026)
+
+Nic: *"I can see a left hand menu called 'Review forecasts' but for the life of me I cant find break even … if I cant find graphs or the Break Even then the client is fucked — they will never find — maybe by accident."*
+
+`Sidebar.tsx` renders an item in Guided mode **only if it carries a step number or is flagged a tool**. Break-Even had neither, and **Guided is the default** — so the one screen in the product with charts on it was reachable only by finding the Advanced toggle in the header first. **It is also the only hidden screen with no other door**: Cash Flow and Balance Sheet survive as tabs on Review forecast, which is exactly why nobody noticed this one.
+
+It is a **tool, not a step** — the same shape as What-If Planner and Assumptions, which sit in that menu already: things you go to rather than steps you walk.
+
+**Unit Economics is removed rather than flagged.** There is no module behind it; the directory does not exist. A menu item pointing at a route that is not there is the §6.43.1 fault, and **it survived in this corner precisely because the default mode never drew it.**
+
+## 6.68.1 A door from Review forecast to Break-Even (17 Sep 2026)
+
+Nic: *"I cant see any graphs or button or sneaky links. Again bloody hard to find."*
+
+Cash Flow and Balance Sheet were never missing — **they are the second and third tabs on Review forecast's own module bar**, and he had already been using the fourth. What was genuinely missing is **any route from that screen to Break-Even**. The two answer halves of one question — this one says what happens, Break-Even says what has to happen for it to pay for itself — **and there was no link between them from anywhere in the product.**
+
+It sits on the Cash flow toolbar, beside the figure it is about, and **says what is on the other side rather than naming a menu item**: *"Where it starts paying for itself →"*.
+
+## 6.69 The dashboard was a mockup nobody had wired (17 Sep 2026)
+
+Going to look for the charts turned up something larger than where they were. **The first page a client opens never loaded the forecast at all.** Five KPI tiles hard-coded to an em dash with *"Forecast pending"* beneath them, a *"Cash runway"* panel reading *"Not yet"*, and **no call to the engine anywhere in the file** — on a plan thirteen steps of fifteen complete, with five years of statements that agree.
+
+It reads the same run as every other screen now, **which is a one-line call because §6.67 made it one.** The dashboard cannot disagree with Review forecast about a figure it is showing larger.
+
+Two charts, both from the kit built in §6.49.2 and **used by exactly one module until today**. Closing cash month by month through Year 1, badged *"Never below zero"* or the count of months that are — because **it is the month, not the year, that runs a business out of money**. And revenue against break-even across five years: amber where the bar is under the rule, green where it clears it. On Nic's plan Years 1 and 2 are amber and 3 to 5 are green, **which is the plan's whole argument in one picture** — and it was previously only visible on a screen the default mode would not draw.
+
+*Caught on screen before committing:* `→` and `—` written into **JSX text**, where they are six characters rather than an escape, so *"Open Break-Even →"* rendered exactly like that. **The same sequences inside string literals in the same file were fine, which is precisely why reading the diff would not have caught it and looking at the page did.**
+
+## 6.70 The unbuilt screens stop talking to the developer (17 Sep 2026)
+
+Auditing the rest of the *"can't find a fucking thing"* complaint turned up one genuine thing, and **it was not a navigation fault.**
+
+The placeholder every unbuilt module falls through to read: *"This module is next in the build queue. The design is in `docs/mockup` and the fields in `docs/planning/Data_Model.md`."* **A developer's note, naming two internal repository paths, shown to a business owner paying for the product.**
+
+**And the likeliest person to see it was the worst possible one. Business plan is step 15** — the last step of the guided path and the entire reason a client filled in the other fourteen. They walk the whole way, click the deliverable, and **are told to go and read a markdown file.**
+
+Six menu items land here: Business plan, Recommendations, and the four unbuilt Assets modules. Each now says what the screen is for **in the words a client would use**, and what to do meanwhile. **None names a file, promises a date, or pretends the thing exists.** On a guided step it also says how far along the plan is and links the step actually waiting on them — *"Your plan is 94% complete. The next thing waiting on you is step 14, Goals."*
+
+**Reports themselves stay deferred, deliberately** (Nic: *"I dont want to do reports yet"*). Nothing here starts building one; this is only what the client reads until there is one.
+
+**The rest of the audit came back clean, which is worth recording**: after §6.68 there are no menu items pointing at routes that do not exist beyond those six, **no route folder without a menu entry**, and **no built module hidden in Guided**.
