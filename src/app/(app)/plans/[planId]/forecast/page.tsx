@@ -27,12 +27,12 @@ export default async function ForecastPage({ params, searchParams }: {
    * with the monthly checks folded into the strip, so twelve months that stop adding to their own year
    * fail visibly here instead of drifting quietly.
    */
-  const { checked, monthly, gst } = runForecast(plan);
+  const { checked, monthly, gst, overdraft } = runForecast(plan);
 
   const areas = ["pnl", "cash", "balance", "assumptions"] as const;
   return (
     <ForecastModule
-      planId={planId} mode={mode} forecast={checked} monthly={monthly}
+      planId={planId} mode={mode} forecast={checked} monthly={monthly} overdraft={overdraft}
       initialArea={areas.includes((area ?? "") as typeof areas[number]) ? (area as typeof areas[number]) : "pnl"}
       workingCapital={workingCapital} cashTiming={cashTiming}
       impliedFromHistory={impliedFromHistory}

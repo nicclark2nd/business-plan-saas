@@ -81,6 +81,10 @@ export type OverdraftRun = {
   short: number[];
   /** True when there is no facility at all, so the caller can leave the plan exactly as it was. */
   idle: boolean;
+  /** Everything the business may owe at once, added up — what the peak is judged against. */
+  limit: number;
+  /** The facilities themselves, so a screen can name them without reading the plan a second time. */
+  facilities: Facility[];
 };
 
 /**
@@ -167,5 +171,6 @@ export function sweepOverdraft(input: {
     totalFees = r2(totalFees + fee);
   }
 
-  return { months, byYear, peak, totalInterest, totalFees, short, idle: facilities.length === 0 };
+  const limit = r2(facilities.reduce((a, f) => a + num(f.limit), 0));
+  return { months, byYear, peak, totalInterest, totalFees, short, idle: facilities.length === 0, limit, facilities };
 }

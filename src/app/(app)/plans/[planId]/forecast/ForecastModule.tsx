@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { FORECAST_YEARS, type CashTiming, type Forecast, type WorkingCapitalDays } from "@/engine/forecast/model";
 import { creditorBalance, debtorBalance, inventoryBalance } from "@/engine/forecast/assumptions";
 import type { MonthCash, MonthlyCashFlow } from "@/engine/forecast/monthly";
+import type { OverdraftRun } from "@/engine/funding/overdraft";
 import type { GstSchedule } from "@/engine/plan/gst";
 import { planMonths, planYearLabel } from "@/engine/plan/calendar";
 import { revertToHistoricDays, saveAssumptions } from "./actions";
@@ -31,9 +32,11 @@ const STEP = GUIDED_STEPS.find((s) => s.id === "forecast")?.step ?? 13;
 const box = "h-8";
 
 export function ForecastModule({
-  planId, mode, forecast, monthly, initialArea, workingCapital, cashTiming, impliedFromHistory, assumptionsSet, fyEndMonth, firstYear, gst, gstLabel, gstSchedules, gstComponents,
+  planId, mode, forecast, monthly, overdraft, initialArea, workingCapital, cashTiming, impliedFromHistory, assumptionsSet, fyEndMonth, firstYear, gst, gstLabel, gstSchedules, gstComponents,
 }: {
   planId: string; mode: "guided" | "advanced"; forecast: Forecast; monthly: MonthlyCashFlow; initialArea: AreaKey;
+  /** What the overdraft facility did, or null when the plan has none (§6.72.2). */
+  overdraft: OverdraftRun | null;
   workingCapital: Record<number, WorkingCapitalDays>; cashTiming: Record<number, CashTiming>;
   impliedFromHistory: WorkingCapitalDays | null; assumptionsSet: boolean; fyEndMonth: number; firstYear: number;
   gst: { registered: boolean }; gstLabel: string; gstSchedules: Record<number, GstSchedule>;
@@ -179,6 +182,7 @@ export function ForecastModule({
             </button>
             <SpanToggle span={span} onSpan={setSpan} />
           </Toolbar>
+          {overdraft && <FacilityStrip od={overdraft} num={num} months={MONTHS} />}
           {span === "years" ? (
             <Statement rows={[
               ["Opening cash", (y) => cf[y].openingCash, "head"],
@@ -673,5 +677,56 @@ function GstNote({ components, label, schedule, months, num }: {
       )}
       {" "}Sales and costs everywhere else in the plan are tax-exclusive, so this has not changed the profit by a cent.
     </Note>
+  );
+}
+
+/**
+ * What the facility actually did (§6.72.2).
+ *
+ * The engine has known all of this since the sweep was wired in and no screen said a word: how deep the
+ * business goes, when, what it costs, and whether the limit was enough. A facility used silently is no
+ * better than one modelled wrongly — the whole reason to put an overdraft in a plan is to find out.
+ *
+ * It sits on the cash flow rather than on Funding because that is the statement it changes, and because
+ * Funding builds its own Year 1 cash check and has never run the five-year forecast.
+ */
+function FacilityStrip({ od, num, months }: { od: OverdraftRun; num: (v: number) => string; months: string[] }) {
+  const cost = od.totalInterest + od.totalFees;
+  const drew = od.peak.month > 0 && od.peak.drawn > 0;
+  const name = od.facilities.length === 1 ? od.facilities[0].name : `${od.facilities.length} facilities`;
+  return (
+    <div className="border-b border-border px-5 py-2.5 text-[12.5px]">
+      <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+        <span className="font-semibold">{name}</span>
+        <span className="text-muted-foreground">Limit <b className="num text-foreground">{num(od.limit)}</b></span>
+        {/* "Deepest never drawn" is not a sentence. A facility that was never used has no deepest point. */}
+        {drew && (
+          <span className="text-muted-foreground">
+            Deepest <b className="num text-foreground">{num(od.peak.drawn)}</b> in {months[(od.peak.month - 1) % 12]} of Year {Math.ceil(od.peak.month / 12)}
+          </span>
+        )}
+        <span className="text-muted-foreground">Costs <b className="num text-foreground">{num(cost)}</b> over five years</span>
+      </div>
+      <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-muted-foreground">
+        <span>Owing at each year end:</span>
+        {FORECAST_YEARS.map((y) => (
+          <span key={y} className="num">Y{y} <b className={cn(od.byYear[y].closingDrawn > 0 ? "text-foreground" : "text-faint")}>{num(od.byYear[y].closingDrawn)}</b></span>
+        ))}
+      </div>
+      {od.short.length > 0 ? (
+        /* The number a lender reaches for. Not "check your facility" — by how much, and from when. */
+        <div className="mt-1.5 text-bad">
+          <b>The facility is not big enough.</b> Even drawn to its limit the plan is still short — by{" "}
+          <b className="num">{num(Math.max(...od.months.map((m) => m.shortfall)))}</b> at its worst, in{" "}
+          {od.short.length === 1 ? "one month" : `${od.short.length} months`}, from month {od.short[0]}.
+        </div>
+      ) : drew ? (
+        <div className="mt-1.5 text-muted-foreground">
+          The limit covers every month of the plan, with <b className="num text-foreground">{num(od.limit - od.peak.drawn)}</b> to spare at the deepest point.
+        </div>
+      ) : (
+        <div className="mt-1.5 text-muted-foreground">Never drawn on — the plan pays its own way every month{cost > 0 ? ", though the facility still costs its fee" : ""}.</div>
+      )}
+    </div>
   );
 }

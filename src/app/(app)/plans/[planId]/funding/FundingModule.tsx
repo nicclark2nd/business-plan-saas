@@ -347,13 +347,18 @@ function SourceRow({ r, bought, onEdit, onRemove, planId, fyEndMonth }: {
   const summary = loan ? loanSummary(loan) : null;
   const y1 = loan ? loanByYear(loan)[0] : null;
   const backed = r.kind === "debt" && isAssetBacked(r.loan_type);
+  // A facility has no schedule, so it has no payment, no term and no closing balance of its own here — what
+  // it ends up owing is worked out by the sweep against the plan's cash (§6.72).
+  const facility = r.kind === "debt" && r.loan_type === "line_of_credit";
 
   const cost = r.kind === "equity" ? `${r.equity_percent ?? 0}% of the business`
     : r.kind === "grant" ? (r.has_conditions ? "Conditions apply" : "Nothing")
     : r.kind === "revenue_linked" ? `${r.repayment_percent ?? 0}% of sales, capped at ${r.cap_multiple ?? 1.5}×`
+    : facility ? `${r.interest_rate ?? 0}% on what is drawn${r.annual_fee ? ` · ${num(r.annual_fee)} a year` : ""}`
     : loan ? `${r.interest_rate ?? 0}% over ${Math.round((r.term_months ?? 60) / 12)} yr` : "Nothing";
 
-  const effect = summary && y1
+  const effect = facility ? "Drawn only when a month falls short — see Review forecast"
+    : summary && y1
     ? `${num(summary.payment)}/${summary.frequency === "monthly" ? "mo" : summary.frequency === "weekly" ? "wk" : summary.frequency === "fortnightly" ? "fn" : "qtr"} · ${num(y1.interest)} interest · ${num(y1.closing)} owing${r.deposit ? ` · ${num(r.deposit)} down` : ""}`
     : r.kind === "revenue_linked" ? `Repays ${num(rbfCap(r as never))} in all — ${num(rbfCost(r as never))} of cost`
     : r.kind === "equity" ? (r.dividend_policy ? "Dividends payable" : "No repayment")
@@ -497,7 +502,9 @@ function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: 
   const [buys, setBuys] = useState(buysName ?? "");
   const set = (patch: Partial<Row>) => setD((x) => ({ ...x, ...patch }));
   const loan = loanOf(d);
-  const summary = loan && d.amount > 0 ? loanSummary(loan) : null;
+  /** A facility has no schedule and no arrival, so most of a loan's fields do not apply to it (§6.72.2). */
+  const isLoc = d.kind === "debt" && d.loan_type === "line_of_credit";
+  const summary = loan && !isLoc && d.amount > 0 ? loanSummary(loan) : null;
   const per = d.payment_frequency === "weekly" ? "a week" : d.payment_frequency === "fortnightly" ? "a fortnight" : d.payment_frequency === "quarterly" ? "a quarter" : "a month";
 
   const title = d.kind === "owner" ? "Your own money" : d.kind === "debt" ? "A loan"
@@ -527,12 +534,22 @@ function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: 
                 placeholder={d.kind === "debt" ? "Citibank" : d.kind === "equity" ? "John Smith" : d.kind === "grant" ? "Export grant" : "Your name"} className={box} />
             </div>
             <div>
-              <span className={label}>Amount</span>
-              <Input inputMode="decimal" defaultValue={d.amount ? String(d.amount) : ""}
-                onBlur={(e) => set({ amount: parseNum(e.target.value) })} placeholder="0" className={cn(box, "num text-right")} />
+              {/*
+                * A facility's size is its LIMIT, and nothing arrives when you open one (§6.72.2). The same
+                * box asks for the limit and writes it to `total_facility_amount`, leaving what is actually
+                * drawn at nil — because on day one, it is.
+                */}
+              <span className={label}>{isLoc ? "Facility limit" : "Amount"}</span>
+              {isLoc ? (
+                <Input inputMode="decimal" defaultValue={d.total_facility_amount ? String(d.total_facility_amount) : ""}
+                  onBlur={(e) => set({ total_facility_amount: parseNum(e.target.value), amount: 0 })} placeholder="0" className={cn(box, "num text-right")} />
+              ) : (
+                <Input inputMode="decimal" defaultValue={d.amount ? String(d.amount) : ""}
+                  onBlur={(e) => set({ amount: parseNum(e.target.value) })} placeholder="0" className={cn(box, "num text-right")} />
+              )}
             </div>
             <div>
-              <span className={label}>Arrives in</span>
+              <span className={label}>{isLoc ? "Available from" : "Arrives in"}</span>
               <FieldSelect value={String(d.start_year)} onValueChange={(v) => set({ start_year: Number(v) })} options={YEAR_OPTIONS} />
             </div>
             <div>
@@ -574,12 +591,30 @@ function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: 
                 <Input inputMode="decimal" defaultValue={d.interest_rate ? String(d.interest_rate) : ""}
                   onBlur={(e) => set({ interest_rate: parseNum(e.target.value) })} placeholder="0" className={cn(box, "num text-right")} />
               </div>
-              <div>
-                <span className={label}>Term (months)</span>
-                <Input inputMode="numeric" defaultValue={d.term_months ? String(d.term_months) : ""}
-                  onBlur={(e) => set({ term_months: parseNum(e.target.value) })} placeholder="60" className={cn(box, "num text-right")} />
-              </div>
+              {isLoc ? (
+                <div>
+                  <span className={label}>Annual fee</span>
+                  <Input inputMode="decimal" defaultValue={d.annual_fee ? String(d.annual_fee) : ""}
+                    onBlur={(e) => set({ annual_fee: parseNum(e.target.value) })} placeholder="0" className={cn(box, "num text-right")} />
+                </div>
+              ) : (
+                <div>
+                  <span className={label}>Term (months)</span>
+                  <Input inputMode="numeric" defaultValue={d.term_months ? String(d.term_months) : ""}
+                    onBlur={(e) => set({ term_months: parseNum(e.target.value) })} placeholder="60" className={cn(box, "num text-right")} />
+                </div>
+              )}
             </div>
+            {isLoc && (
+              <div className="rounded border border-input bg-muted/40 px-3 py-2 text-[12px] text-muted-foreground">
+                <b>A limit, not a lump sum.</b> Nothing is drawn when you open it. The plan draws only what a
+                month is actually short, up to {num(d.total_facility_amount ?? 0)}, and pays it straight back
+                down out of the next month that has cash spare — so interest is charged on what you really
+                owe rather than on the whole facility. What it ends up costing appears on{" "}
+                <b>Review forecast</b>, along with the deepest month and whether the limit was enough.
+              </div>
+            )}
+            {!isLoc && (
             <div className="grid grid-cols-4 items-end gap-3">
               <div>
                 <span className={label}>Repayments</span>
@@ -608,6 +643,7 @@ function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: 
                   onBlur={(e) => set({ annual_fee: parseNum(e.target.value) })} placeholder="0" className={cn(box, "num text-right")} />
               </div>
             </div>
+            )}
             {isAssetBacked(d.loan_type) && (<>
               <div className="grid grid-cols-4 items-end gap-3">
                 <div className="col-span-2">
