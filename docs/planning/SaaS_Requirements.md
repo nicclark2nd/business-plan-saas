@@ -1858,3 +1858,99 @@ So it sits directly under Dashboard, above step 1, under **"Set up"**. It carrie
 *The near-miss, written down because it is the more useful half.* The first version added all four fields to the existing `plan_settings` select — and `business_name` is on `plans`. **Selecting a column a table does not have errors the WHOLE query, and that query swallows its error into `null`**, so four unrelated sections silently zeroed and the plan fell to 81%. Plan settings 0/4, and Review forecast 0/1 because `assumptionsSet` reads the same row.
 
 **`tsc`, eslint and 541 tests all passed. The dashboard showed it in three seconds.** That is the same lesson as §6.78 and §6.81 — **unshown output does not get checked, and reasoning about whether something is wrong is not the same as looking at it.** Three times in two days, which is enough for it to be a rule rather than an anecdote.
+
+## 6.83 The business plan is a structure, not a document with holes in it (17 Sep 2026)
+
+Nic, handing over an APeX plan and one from the old system: *"The next is to build the plan. This is very complex."* The old system holds a document and merges values into it — `[BUSINESS_NAME]`, `[RPHY1]`.
+
+**The sample he sent is the argument against merge, in print.** It shipped with `[customers]`, `<<Products.Or.Services_Proper>>`, "My Product Number 1", "My Goal Number 1" and four paragraphs of lorem ipsum, **in a finished plan.** In a merge pipeline an unresolved token ships, and what ships is the document a client hands to a bank.
+
+So the plan is a **data structure**. A section is a function of the plan and the forecast returning typed blocks, and three things follow that a template cannot do.
+
+**A section with nothing to say returns nothing.** A template prints the heading and an empty table — §6.57, in the one artefact that leaves the building. Here the draft is `null`, the numbering closes over the gap, and what was left out is listed at the end. On BNE, Ownership dropped: nobody had a stated share, and **a cap table of one blank row is worse than no cap table.**
+
+**The numbering is derived.** Drop a section and the next takes its number. Neither sample does this, which is why both have headings with nothing under them.
+
+**Every figure is the forecast's**, from the one run every statement screen uses (§6.67). A report whose profit and loss disagreed with the Profit & Loss screen would be the worst fault this app could have, **because the report is the thing that leaves.**
+
+The one advantage merge had is kept: all the prose is in `content.ts`, typed. Two rules at the top of it — it speaks in the **client's** voice and never the app's, and a sentence introducing a table says what the table **means**, not what it contains.
+
+*Caught on screen rather than reasoned about:* a month-precision date printed `1998-06`, and `-pnl[y].tax` on a year with no tax is **negative zero**, which `Intl` renders as `-0` — on a business plan going to a bank.
+
+## 6.84 Operations — the section every outline asks for and we had no data for (17 Sep 2026)
+
+Audited against a standard business-plan outline at Nic's request: *"at some point 99% of the data in the entry fields will end up in the plan."* Exactly one hole, and it was a whole section. **A client could not say where the work happens, who supplies it, how it flows, or what limits it.**
+
+Four areas, and the boundary with the rest of the app is the design. **Premises** extends `plan_outlets`, which had existed since migration 0002 with no screen ever rendering it — a second table meaning "a place this business operates from" is how two readings of one fact start (§6.41). Its monthly cost is recorded and **deliberately not fed to the forecast**: rent is already an overhead, and a figure reaching the engine twice is counted twice.
+
+**Suppliers earns its place on one column — dependency.** A critical supplier with no alternative named is a risk visible on the face of the plan, and no other screen can say it.
+
+**How the work gets done** begins where the **sales** process on Marketing ends. One is how a job is won, the other how it is delivered, and a plan that confuses them describes neither.
+
+Exactly one primary premises, enforced in the action and **not** in the database: a client mid-edit with none set is an ordinary state, not a violation, and a constraint would reject the save and lose their typing. Setting one clears the others **in that order**, so a failure leaves two marked rather than none — two reads as a mistake, none reads as data loss.
+
+**Inserting a step renumbered everything after it, and that cost one edit to `nav.ts`.** Before §6.81 it would have meant thirteen hand-written redirects as well. The path is 16 steps now, and the sweep found one hard-coded `step={15} total={15}` that would have said "STEP 15 OF 15" on the sixteenth step.
+
+## 6.85 A module prints the group the menu files it under (17 Sep 2026)
+
+Nic sent a screenshot about a viewport problem. It showed something else: the header read **"STEP 5 OF 16 · GOALS"** while the menu beside it filed SWOT under **STRENGTHS & RISKS**.
+
+Every module typed its own group as a literal. §6.80 renamed two and §6.82 a third; all three kept printing the old name. `navGroup(id)` derives it and all twenty-two modules ask.
+
+*Worth recording on its own:* **found in a screenshot sent about something else entirely.**
+
+## 6.86 The narrative pass — nine sections, and the money last (17 Sep 2026)
+
+The plan runs the **standard outline's** order, not APeX's: the business, what it sells, the market, the competition, marketing and sales, who runs it, how it operates, what could go wrong, what it has committed to — and **the money last**, at 11.0.
+
+That order is the point. **A lender reads financials against a business they have already been told about.** APeX puts a profit and loss at 1.3 and again at 9, and a plan that opens on a table is a spreadsheet with a cover on it.
+
+**One promise kept that is made somewhere else.** The People screen tells a client, in those words, that development areas are *"never printed in an external report"*. This report is the only place that promise can be broken, so capabilities arrive **already filtered at the page boundary** rather than inside a renderer. A promise made on one screen and kept nowhere is worse than one never made.
+
+Weaknesses and threats are **tables with a second column**; strengths and opportunities are lists. A risk stated without a response is the one a lender remembers, and where there is none the plan says "Not yet addressed in this plan" rather than leaving a gap.
+
+*Caught on screen:* research entries were subsections **titled by a free-text field** — on Nic's plan a sixty-word method description, which put a paragraph in the contents page. A heading is a name, and that was not one.
+
+## 6.87 Six things a client typed that the plan never printed (17 Sep 2026)
+
+Nic: *"If a client finds out they had to enter data and it did not show up in the plan, they will be upset."*
+
+**On the Sales screen alone, five boxes were collected and dropped:** why they buy it, **why this price**, the lifecycle stage, one-off versus ongoing, and the year a line starts selling. The plan printed the four figures the **forecast** needs and treated the rest as though it existed for the screen's benefit. *A price with a reason behind it is a business decision; a price without one is a guess* — which is exactly the difference a lender is reading for.
+
+**And a whole module's typing went nowhere:** the client's own prior accounts reached the forecast's **opening balances** and nothing else. The plan showed five projected years with no statement of where year zero was. Appendix now, because it is evidence rather than argument.
+
+**1.6 stopped being a price list.** An overview says what each line **is** and where it sits in its own life; the case for each line lives in 3.3.
+
+**THE RULE: A FIELD ON A SCREEN IS A PROMISE.** Asking a client to type something is asking for their time, and the only honest reason to ask is that it goes somewhere. Anything collected and never shown is either a missing section or a field that should not exist.
+
+## 6.88 Clearing the rest of the list (17 Sep 2026)
+
+**Funding said the amount and stopped.** The rate, term, repayment type, frequency and start year were all entered and none printed — everything a lender opens a funding section for. A note says the interest, repayments and balance are already in the three statements, so nobody reads the table as a second set of numbers.
+
+**Fixed assets** gained category, useful life and cash-versus-finance. **Goals** gained the due date that was already in the database: *a commitment with a date is a goal; one without is a wish.*
+
+**Two deliberate exclusions, recorded so they are decisions rather than oversights.** Per-person salaries stay out of an external plan — the total staff cost is in the overheads where a lender needs it. Time-in-sales is a costing input, not a fact about the business.
+
+## 6.89 Three faults Nic found, and one of them was mine inventing structure (17 Sep 2026)
+
+**First, and worst: the §6.88 report to Nic contained a fabricated figure.** It said funding "said *Bank loan 250,000* and stopped" — a number nowhere in his plan, written as a generic illustration and presented as his data, **while he was checking the claims against his own screen.** Nothing in a report of findings may be invented, including the examples. The same habit produced a wrong commit count in the same session; the correction is to **verify before stating a number**, every time.
+
+**The overheads grouping was reversed.** §6.88 grouped by `plan_overheads.category` — and **there is no category field on the Overheads screen.** Nobody can set it, so every plan grouped under one heading called "Other": structure invented from a column a client cannot reach.
+
+**This is §6.87's rule inverted, and it is just as wrong. A COLUMN WITH NO EDITOR IS NOT DATA, and the plan must not be built on one.**
+
+**The Fixed Assets dialog did not fit the window** — a fixed 620px box holding four-column grids whose tracks cannot shrink below their content, plus a preview table inheriting the shared 900px grid floor. It clipped its own text at **both** edges.
+
+**The due date was there and unusable.** It saved correctly; it was called "Milestone date", which names an internal concept rather than the question it asks, and the list printed the raw ISO string.
+
+## 6.90 The Word download — the same plan, rendered twice (17 Sep 2026)
+
+The second renderer over the blocks `buildReport` produces. **Neither renderer knows how a figure was reached and neither can add or drop a section, because both walk one structure.** That is the whole reason the report was built as data.
+
+`gatherReport` **moved out of the page the moment a second caller existed** — two copies of "what the report reads" would drift on the first field added, and this project has now met that fault in five costumes. *Moving it before the drift rather than after is the only new thing here.*
+
+A route rather than a server action, because the thing returned is a **file**. `force-dynamic` and `no-store`: **a business plan must never come from a cache** — a client who changes a price and downloads again is entitled to the price they just typed.
+
+Typography is deliberately plain: one accent, no shading, no banding, no vertical rules. *A five-year statement is read down its columns, and every line drawn across it is one more thing between the reader and the figure.*
+
+*A near-miss worth keeping:* the test imported `jszip`, which was present only **through `docx`'s own dependency tree**. A test that depends on another package's dependency breaks the day that package reorganises, for a reason having nothing to do with the code under test. Declared before it shipped.
