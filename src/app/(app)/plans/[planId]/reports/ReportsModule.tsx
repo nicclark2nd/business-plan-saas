@@ -4,6 +4,7 @@ import { ModuleFrame, ModuleReadOnlyFooter } from "@/components/module/ModuleFra
 import { Grid, Th, Td, Row as GridRow, Toolbar, Meta, Note } from "@/components/module/DataGrid";
 import { StatTile, TileRow } from "@/components/chart/core";
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { walk, type Block, type ReportDoc, type Section } from "@/engine/report/blocks";
 import { COPY } from "@/engine/report/content";
@@ -40,6 +41,15 @@ export function ReportsModule({ planId, mode, doc, reconciled, missing }: {
       subtitle="What a lender reads, built from everything in this plan" mode={mode}
       areas={[{ key: "plan", label: "The plan", count: flat.length }]}
       area="plan" onArea={() => {}} scope={{ label: "This plan" }}
+      /*
+        * A plain link, not a button that fetches (§6.90). The browser saves files; asking React to hold a
+        * 200KB document in memory first so it can hand it back to the browser buys nothing and can fail.
+        */
+      primaryAction={
+        <Button size="sm" render={<a href={`/plans/${planId}/reports/download`} download />}>
+          Download as Word
+        </Button>
+      }
       footer={<ModuleReadOnlyFooter planId={planId} moduleId="reports" nextLabel="Done →" />}
       help={<>
         <h3>What this is</h3>

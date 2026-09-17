@@ -1,0 +1,170 @@
+/**
+ * The same plan, as a Word file (§6.90).
+ *
+ * This is the SECOND renderer over the blocks `buildReport` produces — the screen is the first. Neither
+ * knows how a figure was reached and neither can drop or add a section, because both walk one structure.
+ * That is the whole reason the report was built as data rather than as a template: the plan a client reads
+ * on screen and the plan they send to a bank cannot say different things, because there is only one plan.
+ *
+ * Nothing here decides content. If this file is ever tempted to compute something, the answer is that the
+ * computation belongs in `build.ts` where the screen gets it too.
+ */
+import {
+  AlignmentType, BorderStyle, Document, HeadingLevel, Packer, Paragraph,
+  Table, TableCell, TableRow, TextRun, WidthType, type ISectionOptions,
+} from "docx";
+import type { Block, ReportDoc, Section } from "./blocks";
+import { walk } from "./blocks";
+
+/** The plan's one accent. Everything else is black on white, because a bank prints in mono. */
+const ACCENT = "1F3A5F";
+const MUTED = "6B7280";
+const RULE = { style: BorderStyle.SINGLE, size: 4, color: "D1D5DB" };
+
+const text = (s: string, o: { bold?: boolean; italics?: boolean; color?: string; size?: number } = {}) =>
+  new TextRun({ text: s, bold: o.bold, italics: o.italics, color: o.color, size: o.size ?? 20 });
+
+function blockToDocx(b: Block): (Paragraph | Table)[] {
+  switch (b.kind) {
+    case "para":
+      return [new Paragraph({ children: [text(b.text)], spacing: { after: 160, line: 276 } })];
+    case "lead":
+      return [new Paragraph({ children: [text(b.text, { bold: true, color: ACCENT })], spacing: { before: 120, after: 80 } })];
+    case "quote":
+      return [new Paragraph({
+        children: [text(b.text, { italics: true })],
+        indent: { left: 340 }, border: { left: { ...RULE, size: 12, color: ACCENT, space: 12 } },
+        spacing: { before: 120, after: 160, line: 276 },
+      })];
+    case "note":
+      return [new Paragraph({ children: [text(b.text, { color: MUTED, size: 18 })], spacing: { after: 160, line: 264 } })];
+    case "list":
+      return b.items.map((t) => new Paragraph({
+        children: [text(t)], bullet: { level: 0 }, spacing: { after: 60, line: 264 },
+      }));
+    case "facts":
+      return [table(
+        b.rows.map(([k, v]) => [
+          { text: k, muted: true, width: 34 },
+          { text: v, bold: true },
+        ]),
+        null,
+      )];
+    case "table":
+      return [table(
+        b.rows.map((row) => row.map((c, i) => ({
+          text: c.text, bold: c.bold, muted: c.muted, right: !!b.columns[i]?.numeric,
+        }))),
+        b.columns.map((c) => ({ text: c.label, right: !!c.numeric })),
+      )];
+  }
+}
+
+type DCell = { text: string; bold?: boolean; muted?: boolean; right?: boolean; width?: number };
+
+/**
+ * One table shape for the whole document.
+ *
+ * A header row when the block has one, a hairline under it, and nothing else — no shading, no banding, no
+ * vertical rules. A five-year statement is read down its columns, and every line a designer adds across it
+ * is one more thing between the reader and the figure.
+ */
+function table(rows: DCell[][], header: { text: string; right?: boolean }[] | null): Table {
+  const cell = (c: DCell, isHeader = false) => new TableCell({
+    width: c.width ? { size: c.width, type: WidthType.PERCENTAGE } : undefined,
+    margins: { top: 60, bottom: 60, left: 80, right: 80 },
+    borders: {
+      top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+      bottom: isHeader ? RULE : { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+      left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+      right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+    },
+    children: [new Paragraph({
+      alignment: c.right ? AlignmentType.RIGHT : AlignmentType.LEFT,
+      spacing: { after: 0, line: 252 },
+      children: [text(c.text, { bold: c.bold || isHeader, color: c.muted && !isHeader ? MUTED : undefined, size: 18 })],
+    })],
+  });
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      ...(header ? [new TableRow({ tableHeader: true, children: header.map((h) => cell({ text: h.text, right: h.right }, true)) })] : []),
+      ...rows.map((r) => new TableRow({ children: r.map((c) => cell(c)) })),
+    ],
+  });
+}
+
+function sectionToDocx(s: Section): (Paragraph | Table)[] {
+  const top = s.number.endsWith(".0");
+  return [
+    new Paragraph({
+      heading: top ? HeadingLevel.HEADING_1 : HeadingLevel.HEADING_2,
+      /* A top-level section starts a page. A business plan a reader can flick through is worth the paper. */
+      pageBreakBefore: top && s.number !== "1.0",
+      spacing: { before: top ? 0 : 280, after: top ? 200 : 120 },
+      border: top ? { bottom: { ...RULE, space: 6 } } : undefined,
+      children: [
+        text(`${s.number}  `, { bold: true, color: MUTED, size: top ? 28 : 22 }),
+        text(s.title, { bold: true, color: ACCENT, size: top ? 28 : 22 }),
+      ],
+    }),
+    ...s.blocks.flatMap(blockToDocx),
+    ...s.children.flatMap(sectionToDocx),
+  ];
+}
+
+export async function renderDocx(doc: ReportDoc, omitted: { label: string }[]): Promise<Buffer> {
+  const flat = walk(doc.sections);
+
+  const cover: (Paragraph | Table)[] = [
+    new Paragraph({ spacing: { before: 2400 }, children: [text(doc.businessName, { bold: true, color: ACCENT, size: 56 })] }),
+    new Paragraph({ spacing: { before: 120 }, children: [text(doc.subtitle, { size: 32, color: MUTED })] }),
+    new Paragraph({ spacing: { before: 80, after: 2400 }, children: [text(doc.date, { size: 22, color: MUTED })] }),
+    new Paragraph({
+      spacing: { after: 160 }, pageBreakBefore: true,
+      children: [text("Contents", { bold: true, color: ACCENT, size: 28 })],
+    }),
+    ...flat.map((s) => new Paragraph({
+      spacing: { after: 40 },
+      indent: { left: s.number.endsWith(".0") ? 0 : 340 },
+      children: [
+        text(`${s.number}`.padEnd(8, " "), { color: MUTED, size: 18 }),
+        text(s.title, { bold: s.number.endsWith(".0"), size: 18 }),
+      ],
+    })),
+  ];
+
+  const tail: Paragraph[] = omitted.length === 0 ? [] : [
+    new Paragraph({
+      pageBreakBefore: true, spacing: { after: 160 },
+      children: [text("What is not in this plan", { bold: true, color: ACCENT, size: 26 })],
+    }),
+    ...omitted.map((o) => new Paragraph({
+      bullet: { level: 0 }, spacing: { after: 60 },
+      children: [text(o.label, { bold: true }), text(" — nothing recorded yet.", { color: MUTED })],
+    })),
+  ];
+
+  const section: ISectionOptions = {
+    properties: { page: { margin: { top: 1134, bottom: 1134, left: 1134, right: 1134 } } },
+    footers: undefined,
+    children: [...cover, ...doc.sections.flatMap(sectionToDocx), ...tail],
+  };
+
+  const document = new Document({
+    creator: doc.businessName,
+    title: `${doc.businessName} — ${doc.subtitle}`,
+    description: `${doc.subtitle} for ${doc.businessName}, ${doc.date}`,
+    styles: {
+      default: {
+        document: { run: { font: "Calibri", size: 20, color: "111827" }, paragraph: { spacing: { line: 276 } } },
+      },
+    },
+    sections: [section],
+  });
+  return Packer.toBuffer(document);
+}
+
+/** A file name a client can find again in a downloads folder six months from now. */
+export const docxFileName = (doc: ReportDoc) =>
+  `${doc.businessName.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-")}-Business-Plan-${doc.date.replace(/\s+/g, "-")}.docx`;
