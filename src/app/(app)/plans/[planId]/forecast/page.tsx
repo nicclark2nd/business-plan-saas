@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { loadPlan } from "@/lib/planLoad";
 import { ForecastModule } from "./ForecastModule";
 import { runForecast } from "@/engine/forecast/run";
@@ -13,6 +14,12 @@ export default async function ForecastPage({ params, searchParams }: {
 }) {
   const { planId } = await params;
   const { area } = await searchParams;
+  /**
+   * The profit and loss used to be this module's first tab and is its own module now (§6.76). A bookmark or
+   * an old link saying `?area=pnl` is sent to where the thing it asked for actually went — falling back to
+   * the cash flow would land somebody on a statement they did not ask for and look like it worked.
+   */
+  if (area === "pnl") redirect(`/plans/${planId}/profit-loss`);
   const { plan, mode, components, taxLabel, fyEndMonth, firstYear, impliedFromHistory, assumptionsSet } =
     await loadPlan(planId);
   const { workingCapital, cashTiming } = plan;
@@ -29,11 +36,11 @@ export default async function ForecastPage({ params, searchParams }: {
    */
   const { checked, monthly, gst, overdraft } = runForecast(plan);
 
-  const areas = ["pnl", "cash", "balance", "assumptions"] as const;
+  const areas = ["cash", "balance", "assumptions"] as const;
   return (
     <ForecastModule
       planId={planId} mode={mode} forecast={checked} monthly={monthly} overdraft={overdraft}
-      initialArea={areas.includes((area ?? "") as typeof areas[number]) ? (area as typeof areas[number]) : "pnl"}
+      initialArea={areas.includes((area ?? "") as typeof areas[number]) ? (area as typeof areas[number]) : "cash"}
       workingCapital={workingCapital} cashTiming={cashTiming}
       impliedFromHistory={impliedFromHistory}
       assumptionsSet={assumptionsSet}

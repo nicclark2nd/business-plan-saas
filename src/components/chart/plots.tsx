@@ -175,3 +175,64 @@ export function BarRows({ width, rows, format, height }: {
     </svg>
   );
 }
+
+/**
+ * Several lines against the same scale (§6.76).
+ *
+ * `Trend` draws one series and fills under it, which is right when the series IS the subject — cumulative
+ * cash, on Break-Even. Three lines is a different question: not "where does this go" but "how far apart do
+ * these stay". So there is no fill here; the GAP between the lines is the thing being read, and shading one
+ * of them would weight an answer the reader is supposed to reach themselves.
+ *
+ * The series slots are assigned in the fixed order §6.49.2 set and never cycled. A legend appears because
+ * there is more than one line — with one, the title has already said what it is.
+ */
+export function Lines({ width, height = 260, categories, series, format }: {
+  width: number; height?: number; categories: string[];
+  series: { label: string; values: number[] }[];
+  format: (v: number) => string;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+  const all = series.flatMap((s) => s.values);
+  const scale = niceScale(Math.min(...all, 0), Math.max(...all, 0));
+  const h = height - PLOT.top - PLOT.bottom;
+  const inner = Math.max(0, width - PLOT.left - PLOT.right);
+  const n = Math.max(1, categories.length);
+  const step = inner / n;
+  const px = (i: number) => PLOT.left + i * step + step / 2;
+  const py = (v: number) => PLOT.top + h - ((v - scale.lo) / (scale.hi - scale.lo)) * h;
+  const band = (i: number) => ({ x: PLOT.left + i * step, w: step });
+  const colour = (i: number) => `var(--chart-${(i % 5) + 1})`;
+
+  return (
+    <>
+      <div className="mb-1 flex flex-wrap gap-x-4 gap-y-1">
+        {series.map((s, i) => (
+          <span key={s.label} className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+            <i className="inline-block h-[3px] w-4 rounded-full" style={{ background: colour(i) }} />{s.label}
+          </span>
+        ))}
+      </div>
+      <Frame width={width} height={height} scale={scale} categories={categories} band={band}>
+        {series.map((s, si) => (
+          <path key={s.label} fill="none" stroke={colour(si)} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round"
+            d={s.values.map((v, i) => `${i ? "L" : "M"}${px(i)} ${py(v)}`).join(" ")} />
+        ))}
+        {hover !== null && (
+          <>
+            <line x1={px(hover)} x2={px(hover)} y1={PLOT.top} y2={PLOT.top + h} stroke="var(--input)" strokeWidth={1} />
+            {series.map((s, si) => (
+              <circle key={s.label} cx={px(hover)} cy={py(s.values[hover] ?? 0)} r={4} fill={colour(si)} stroke="var(--card)" strokeWidth={2} />
+            ))}
+            <Tip x={px(hover)} y={py(Math.max(...series.map((s) => s.values[hover] ?? 0)))} width={width}
+              lines={series.map((s) => [s.label, format(s.values[hover] ?? 0)] as [string, string])} />
+          </>
+        )}
+        {categories.map((_, i) => (
+          <rect key={i} x={band(i).x} y={PLOT.top} width={band(i).w} height={h} fill="transparent"
+            onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} />
+        ))}
+      </Frame>
+    </>
+  );
+}

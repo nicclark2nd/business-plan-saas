@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ModuleFrame, ModuleFooter } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row as GridRow, TOTAL_ROW, Toolbar, Meta, Note } from "@/components/module/DataGrid";
+import { Statement, type StatementRow } from "@/components/module/Statement";
 import { useMoney } from "@/components/MoneyProvider";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
@@ -27,7 +28,7 @@ import { revertToHistoricDays, saveAssumptions } from "./actions";
  * met, and the forecast is where that is most expensive. The strip says whether they agree before the client
  * reads a single figure.
  */
-type AreaKey = "pnl" | "cash" | "balance" | "assumptions";
+type AreaKey = "cash" | "balance" | "assumptions";
 const STEP = GUIDED_STEPS.find((s) => s.id === "forecast")?.step ?? 13;
 const box = "h-8";
 
@@ -67,7 +68,7 @@ export function ForecastModule({
   if (initialArea !== cameFrom) { setCameFrom(initialArea); setArea(initialArea); }
   const goArea = (k: AreaKey) => {
     setArea(k);
-    const q = k === "pnl" ? "" : `?area=${k}`;
+    const q = `?area=${k}`;                       // §6.76: there is no default tab to leave unnamed now
     startNav(() => router.replace(`/plans/${planId}/forecast${q}`, { scroll: false }));
   };
   // The cash flow is the one statement with two useful spans: the five years a lender reads, and the twelve
@@ -114,7 +115,6 @@ export function ForecastModule({
       step={STEP} total={GUIDED_STEPS.length} group="Forecasts" title="Review forecast"
       subtitle="Profit, cash and the balance sheet — whether the plan holds together" mode={mode}
       areas={[
-        { key: "pnl", label: "Profit & loss" },
         { key: "cash", label: "Cash flow" },
         { key: "balance", label: "Balance sheet" },
         { key: "assumptions", label: "Assumptions", tag: assumptionsSet ? undefined : "not set" },
@@ -134,35 +134,11 @@ export function ForecastModule({
       <Reconciled failures={failures} />
       {err && <Note><span className="text-bad">{err}</span></Note>}
 
-      {area === "pnl" && (
-        <>
-          <Toolbar><Meta className="ml-0">
-            Year 1 revenue {num(pnl[1].revenue)} · gross margin {pnl[1].grossMargin === null ? "—" : `${pnl[1].grossMargin}%`} · net profit {num(pnl[1].netProfit)}
-          </Meta></Toolbar>
-          <Statement rows={[
-            ["Revenue", (y) => pnl[y].revenue, "head"],
-            ["Cost of sales", (y) => -pnl[y].cogs],
-            ["Gross profit", (y) => pnl[y].grossProfit, "sub"],
-            ["Overheads", (y) => -pnl[y].overheads],
-            ["Depreciation", (y) => -pnl[y].depreciation],
-            ["Operating profit", (y) => pnl[y].operatingProfit, "sub"],
-            ["Grant income", (y) => pnl[y].grantIncome],
-            ["One-off income", (y) => pnl[y].extraordinaryIncome],
-            ["One-off costs", (y) => -pnl[y].extraordinaryExpense],
-            ["Gain on asset sales", (y) => pnl[y].disposalGainLoss],
-            ["Interest", (y) => -pnl[y].interest],
-            ["Profit before tax", (y) => pnl[y].profitBeforeTax, "sub"],
-            ["Losses brought forward", (y) => -pnl[y].lossRelief],
-            ["Taxable profit", (y) => pnl[y].taxableProfit],
-            ["Tax", (y) => -pnl[y].tax],
-            ["Net profit", (y) => pnl[y].netProfit, "total"],
-            ["Dividends", (y) => -pnl[y].dividends],
-            ["Retained profit", (y) => pnl[y].retainedProfit, "sub"],
-          ]} num={num} />
-          <TaxNotes pnl={pnl} num={num} />
-        </>
-      )}
-
+      {/*
+        * The profit and loss moved to its own module (§6.76). What stays here is the question step 13
+        * actually asks — whether the three statements hold together — and the two that had nowhere else
+        * to be read from.
+        */}
       {area === "cash" && (
         <>
           <Toolbar>
@@ -413,38 +389,6 @@ function Reconciled({ failures }: { failures: Forecast["invariants"] }) {
   );
 }
 
-type StatementRow = [string, (y: number) => number, ("head" | "sub" | "total")?];
-
-/** Five years across, one line per row. Money out shows in brackets, the convention a lender reads. */
-function Statement({ rows, num }: { rows: StatementRow[]; num: (v: number) => string }) {
-  const money = (v: number) => (v < 0 ? `(${num(Math.abs(v))})` : v === 0 ? "—" : num(v));
-  return (
-    <Grid>
-      <thead><tr>
-        <Th style={{ width: "30%" }} />
-        {FORECAST_YEARS.map((y) => <Th key={y} right style={{ width: 130 }}>Year {y}</Th>)}
-      </tr></thead>
-      <tbody>
-        {rows.map(([label, get, weight]) => weight === "total" ? (
-          // A statement's totals are not table footers: Net profit has Dividends under it (§6.40.1).
-          <tr key={label} className={TOTAL_ROW}>
-            <Td>{label}</Td>
-            {FORECAST_YEARS.map((y) => <Td key={y} right className="num">{money(get(y))}</Td>)}
-          </tr>
-        ) : (
-          <GridRow key={label} className={cn(weight === "sub" && "bg-secondary/50")}>
-            <Td className={cn(weight ? "font-semibold" : "text-muted-foreground")}>{label}</Td>
-            {FORECAST_YEARS.map((y) => {
-              const v = get(y);
-              return <Td key={y} right className={cn("num", weight && "font-semibold", v < 0 && "text-bad")}>{money(v)}</Td>;
-            })}
-          </GridRow>
-        ))}
-      </tbody>
-    </Grid>
-  );
-}
-
 /** A number of days, with what that many days is actually worth underneath it. */
 /**
  * An assumption's name and what it means (§6.65).
@@ -610,33 +554,6 @@ function cashShape(monthly: MonthlyCashFlow, months: string[], num: (v: number) 
  * The two things the profit and loss does that a client did not ask for, said out loud. Both are ordinary
  * law and ordinary tax, and both change the figure they were expecting — so neither gets to be silent.
  */
-function TaxNotes({ pnl, num }: { pnl: Forecast["pnl"]; num: (v: number) => string }) {
-  const relieved = FORECAST_YEARS.filter((y) => pnl[y].lossRelief > 0);
-  const carried = FORECAST_YEARS.filter((y) => pnl[y].lossesCarriedForward > 0);
-  const withheld = FORECAST_YEARS.filter((y) => pnl[y].dividendsWithheld > 0);
-  if (!relieved.length && !carried.length && !withheld.length) return null;
-  const list = (ys: number[]) => (ys.length === 1 ? `Year ${ys[0]}` : `Years ${ys.join(", ")}`);
-  return (
-    <Note>
-      {relieved.length > 0 && (
-        <>Losses from earlier years come off the profit in {list(relieved)}, so the tax is charged on what is
-          left rather than on the whole year.{" "}</>
-      )}
-      {carried.length > 0 && (
-        <><b>{num(pnl[carried[carried.length - 1]].lossesCarriedForward)}</b> of losses is still unrelieved at
-          the end of {list([carried[carried.length - 1]])}.{" "}</>
-      )}
-      {withheld.length > 0 && (
-        <span className="text-warn">
-          The dividend policy asks for more than the company has made: {num(withheld.reduce((a, y) => a + pnl[y].dividendsWithheld, 0))}
-          {" "}could not be paid across {list(withheld)}, because a dividend can only come out of accumulated
-          profit. Set the accumulated profit the business starts with in Plan settings if it has reserves already.
-        </span>
-      )}
-    </Note>
-  );
-}
-
 /**
  * What the tax is doing to the cash, in a sentence. The figure that surprises a client is never the rate —
  * it is how much of the bank balance was never theirs, and which month it leaves in (§6.38).

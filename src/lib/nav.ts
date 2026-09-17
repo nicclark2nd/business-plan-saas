@@ -48,7 +48,13 @@ export const NAV: NavGroup[] = [
    * round trip, which is what somebody comparing two statements is doing all afternoon.
    */
   { group: "Forecasts", items: [
-    { id: "forecast", label: "Review forecast", step: 13, advancedLabel: "Profit & Loss" },
+    /**
+     * Profit & Loss has its own module now (§6.76), so this no longer answers to that name in Advanced.
+     * Step 13 stays here: "whether the plan holds together" is the question the reconciliation strip and
+     * three statements side by side answer, and it is not the same question as "what did we earn".
+     */
+    { id: "profit-loss", label: "Profit & Loss", tool: true },
+    { id: "forecast", label: "Review forecast", step: 13 },
     { id: "cash-flow", label: "Cash Flow", href: "forecast?area=cash" },
     { id: "balance-sheet", label: "Balance Sheet", href: "forecast?area=balance" },
     /**

@@ -22,7 +22,7 @@ import {
   FORECAST_YEARS, buildForecast,
   type CashTiming, type Forecast, type OpeningBalance, type WorkingCapitalDays,
 } from "./model";
-import { buildMonthlyCashFlow, monthlyInvariants, type MonthlyCashFlow } from "./monthly";
+import { buildMonthlyCashFlow, monthlyInvariants, type MonthlyCashFlow, type MonthlyShapes } from "./monthly";
 import { NOT_REGISTERED, type GstSettings } from "../plan/gst";
 import { facilitiesFrom } from "../funding/sources";
 import { sweepOverdraft, type OverdraftRun } from "../funding/overdraft";
@@ -52,6 +52,12 @@ export type PlanRun = {
   monthly: MonthlyCashFlow;
   /** All five years, month by month. Year 1 is the same object as `monthly`. */
   monthlyByYear: Record<number, MonthlyCashFlow>;
+  /**
+   * The month series each year was built from (§6.76). Returned rather than re-derived, because a profit
+   * and loss that read the plan a second time to draw its own months is exactly the fault this pipeline
+   * exists to prevent (§6.41).
+   */
+  shapesByYear: Record<number, MonthlyShapes>;
   /** The same forecast with the monthly checks folded into the strip and `reconciled` recomputed. */
   checked: Forecast;
   gst: GstAssembly;
@@ -123,6 +129,7 @@ export function runForecast(input: PlanInput): PlanRun {
      * whole reason these have to be built in order rather than independently.
      */
     const monthlyByYear: Record<number, MonthlyCashFlow> = {};
+    const shapesByYear: Record<number, MonthlyShapes> = {};
     for (const y of FORECAST_YEARS) {
       const prior = y === 1 ? null : forecast.workingCapital[y - 1];
       const shapes = assembleMonths(sources, components, openingGstPayable, y);
@@ -150,8 +157,9 @@ export function runForecast(input: PlanInput): PlanRun {
         dividends: forecast.cashFlow[y].dividendsPaid,
         shapes,
       });
+      shapesByYear[y] = shapes;
     }
-    return { forecast, monthlyByYear };
+    return { forecast, monthlyByYear, shapesByYear };
   };
 
   /**
@@ -187,7 +195,7 @@ export function runForecast(input: PlanInput): PlanRun {
       run = pass(od);
     }
   }
-  const { forecast, monthlyByYear } = run;
+  const { forecast, monthlyByYear, shapesByYear } = run;
   const monthly = monthlyByYear[1];
 
   const invariants = [
@@ -201,5 +209,5 @@ export function runForecast(input: PlanInput): PlanRun {
   ];
   const checked: Forecast = { ...forecast, invariants, reconciled: invariants.every((i) => i.passed) };
 
-  return { forecast, monthly, monthlyByYear, checked, gst, overdraft: od };
+  return { forecast, monthly, monthlyByYear, shapesByYear, checked, gst, overdraft: od };
 }
