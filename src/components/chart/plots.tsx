@@ -176,6 +176,9 @@ export function BarRows({ width, rows, format, height }: {
   );
 }
 
+/** The legend's own height, reserved out of the caller's box rather than added on top of it. */
+const LEGEND_H = 20;
+
 /**
  * Several lines against the same scale (§6.76).
  *
@@ -195,7 +198,16 @@ export function Lines({ width, height = 260, categories, series, format }: {
   const [hover, setHover] = useState<number | null>(null);
   const all = series.flatMap((s) => s.values);
   const scale = niceScale(Math.min(...all, 0), Math.max(...all, 0));
-  const h = height - PLOT.top - PLOT.bottom;
+  /**
+   * `height` is the whole chart INCLUDING its legend, because that is what the caller reserved for it.
+   *
+   * ChartBox fixes the height of the box these render into. Adding a legend inside that box and then asking
+   * the plot for the full height pushes the plot down by exactly the legend's height, and it overflows: the
+   * axis labels ended up drawn five pixels under the table header below. A component that puts furniture in
+   * a fixed box has to fit inside it.
+   */
+  const plotHeight = Math.max(80, height - LEGEND_H);
+  const h = plotHeight - PLOT.top - PLOT.bottom;
   const inner = Math.max(0, width - PLOT.left - PLOT.right);
   const n = Math.max(1, categories.length);
   const step = inner / n;
@@ -206,14 +218,14 @@ export function Lines({ width, height = 260, categories, series, format }: {
 
   return (
     <>
-      <div className="mb-1 flex flex-wrap gap-x-4 gap-y-1">
+      <div style={{ height: LEGEND_H }} className="flex flex-wrap items-center gap-x-4 gap-y-1">
         {series.map((s, i) => (
           <span key={s.label} className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
             <i className="inline-block h-[3px] w-4 rounded-full" style={{ background: colour(i) }} />{s.label}
           </span>
         ))}
       </div>
-      <Frame width={width} height={height} scale={scale} categories={categories} band={band}>
+      <Frame width={width} height={plotHeight} scale={scale} categories={categories} band={band}>
         {series.map((s, si) => (
           <path key={s.label} fill="none" stroke={colour(si)} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round"
             d={s.values.map((v, i) => `${i ? "L" : "M"}${px(i)} ${py(v)}`).join(" ")} />
