@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { ModuleFrame, ModuleStatusFooter, useModule } from "@/components/module/ModuleFrame";
 import { Section, FieldGrid, Field, FieldInput, FieldSelect } from "@/components/module/FieldGrid";
 import { Input } from "@/components/ui/input";
@@ -11,13 +11,16 @@ import { needsRegion, regimeFor, regionLabel, regionsFor, type TaxComponent } fr
 import { formatMonth } from "../people/model";
 import { saveProfile, saveFinancial } from "./actions";
 import { DangerArea, type PlanInventory } from "./DangerArea";
-import { legalStructuresFor, CUSTOMER_TYPES, PRODUCT_TYPES, COUNTRIES, CURRENCIES, MONTHS, profileMissing, type Settings, type Profile, type Financial } from "./model";
+import { LicenceSection } from "./LicenceSection";
+import { legalStructuresFor, CUSTOMER_TYPES, PRODUCT_TYPES, COUNTRIES, CURRENCIES, MONTHS, profileMissing, type Settings, type Profile, type Financial, type Licence } from "./model";
 
 type AreaKey = "profile" | "financial" | "branding" | "lifecycle";
 const opts = (xs: string[]) => xs.map((x) => ({ value: x, label: x }));
 
-export function SettingsModule({ planId, initial, mode, initialArea, archivedAt, inventory }: {
+export function SettingsModule({ planId, initial, mode, initialArea, licences, archivedAt, inventory }: {
   planId: string; initial: Settings; mode: "guided" | "advanced"; initialArea: AreaKey;
+  /** What the business itself is licensed, registered or insured to do (§6.64). */
+  licences: Licence[];
   /** When the plan was put away, or null (§6.58). */
   archivedAt: string | null;
   /** What the plan holds, so deleting it can say so rather than asking "are you sure?". */
@@ -50,6 +53,13 @@ export function SettingsModule({ planId, initial, mode, initialArea, archivedAt,
   };
   const left = (e: React.FocusEvent<HTMLElement>) => !e.currentTarget.contains(e.relatedTarget as Node);
   const missing = profileMissing(s);
+  /**
+   * The licence list saves on its own schedule, so it reports its own state up rather than sharing `dirty`.
+   * One PendingBridge per module: two of them race and the footer flickers between "Saving" and "Saved".
+   */
+  const [licBusy, setLicBusy] = useState(false);
+  const [licError, setLicError] = useState<string | undefined>();
+  const onLicPending = useCallback((busy: boolean, e?: string) => { setLicBusy(busy); setLicError(e); }, []);
 
   return (
     <ModuleFrame
@@ -74,7 +84,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, archivedAt,
         <p>Debtor, stock and creditor days, tax timing and CapEx are forecast assumptions, not settings. They live with the forecast, defaulted from your historic figures.</p>
       </>}
     >
-      <PendingBridge pending={pending} dirty={!!dirty} error={error} />
+      <PendingBridge pending={pending || licBusy} dirty={!!dirty} error={error ?? licError} />
 
       {area === "profile" && (
         <div onBlur={(e) => left(e) && dirty === "profile" && commit("profile")}>
@@ -93,6 +103,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, archivedAt,
               <Field label="Type of product sold" span={2}><FieldSelect value={s.product_type} options={PRODUCT_TYPES} placeholder="Choose" onValueChange={(v) => edit({ product_type: v }, "profile", true)} /></Field>
             </FieldGrid>
           </Section>
+          <LicenceSection planId={planId} initial={licences} onPending={onLicPending} />
         </div>
       )}
 

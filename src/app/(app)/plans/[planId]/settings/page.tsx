@@ -2,7 +2,7 @@ import { cleanComponent } from "@/engine/plan/gst";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { SettingsModule } from "./SettingsModule";
-import type { Settings } from "./model";
+import type { Settings, Licence } from "./model";
 
 export default async function SettingsPage({ params, searchParams }: { params: Promise<{ planId: string }>; searchParams: Promise<{ area?: string }> }) {
   const { planId } = await params;
@@ -16,10 +16,11 @@ export default async function SettingsPage({ params, searchParams }: { params: P
     supabase.from(table).select("*", { count: "exact", head: true }).eq("plan_id", planId)
       .then(({ count }) => ({ label: (count ?? 0) === 1 ? label : plural, count: count ?? 0 }));
 
-  const [session, plan, settings, ...inventory] = await Promise.all([
+  const [session, plan, settings, licences, ...inventory] = await Promise.all([
     getSession(),
     supabase.from("plans").select("business_name, plan_year, archived_at").eq("id", planId).single(),
     supabase.from("plan_settings").select("*").eq("plan_id", planId).maybeSingle(),
+    supabase.from("plan_licences").select("id, name, number, issuer, expires_on, sort_order").eq("plan_id", planId).order("sort_order").order("created_at"),
     held("plan_products", "product"),
     held("plan_overheads", "overhead"),
     held("plan_people", "person", "people"),
@@ -46,5 +47,6 @@ export default async function SettingsPage({ params, searchParams }: { params: P
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
   const initialArea = area === "financial" || area === "branding" || area === "lifecycle" ? area : "profile";
   return <SettingsModule planId={planId} initial={initial} mode={mode} initialArea={initialArea}
+    licences={(licences.data ?? []) as Licence[]}
     archivedAt={plan.data?.archived_at ?? null} inventory={inventory} />;
 }

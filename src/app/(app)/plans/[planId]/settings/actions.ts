@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseMonth } from "../people/model";
-import type { Profile, Financial } from "./model";
+import type { Profile, Financial, Licence } from "./model";
 import { serializeComponents } from "@/engine/plan/gst";
 
 type Result = { ok: true; data?: { date_established: string | null } } | { ok: false; error: string };
@@ -73,6 +73,44 @@ export async function saveFinancial(planId: string, f: Partial<Financial>): Prom
     currency: (f.currency || "AUD").toUpperCase().slice(0, 3),
   }, { onConflict: "plan_id" });
   if (error) { console.error("financial", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }
+  touch(planId);
+  return { ok: true };
+}
+
+/**
+ * A licence row saves like every other list line (§6.10): on leaving the field, never on a Save button.
+ * `expires_on` is passed straight through as an ISO date or null — the screen owns the date picker, and a
+ * registration with no expiry is a real answer, so an empty string must land as null rather than as today.
+ */
+export async function saveLicence(planId: string, l: Partial<Licence> & { id?: string }): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const name = (l.name ?? "").trim();
+  if (!name) return { ok: false, error: "A licence needs a name \u2014 what is it, and what does it let the business do?" };
+  const expires = (l.expires_on ?? "").trim();
+  if (expires && !/^\d{4}-\d{2}-\d{2}$/.test(expires)) return { ok: false, error: "The expiry should be a date." };
+  const row = {
+    plan_id: planId, name,
+    number: (l.number ?? "").trim() || null,
+    issuer: (l.issuer ?? "").trim() || null,
+    expires_on: expires || null,
+    sort_order: Math.trunc(Number(l.sort_order)) || 0,
+  };
+  const { data, error } = l.id
+    ? await supabase.from("plan_licences").update(row).eq("id", l.id).eq("plan_id", planId).select("id").maybeSingle()
+    : await supabase.from("plan_licences").insert(row).select("id").maybeSingle();
+  if (error) { console.error("licence", error); return { ok: false, error: `Couldn't save the licence: ${error.message}` }; }
+  /**
+   * An update that RLS refuses comes back as a success with no rows (§6.58 found the same thing on delete),
+   * so a missing row here is a refusal and has to be reported rather than swallowed.
+   */
+  if (!data?.id) return { ok: false, error: "That licence could not be saved \u2014 reload the plan and try again." };
+  touch(planId);
+  return { ok: true, id: data.id };
+}
+
+export async function deleteLicence(planId: string, id: string): Promise<{ ok: boolean }> {
+  const supabase = await createClient();
+  await supabase.from("plan_licences").delete().eq("id", id).eq("plan_id", planId);
   touch(planId);
   return { ok: true };
 }

@@ -60,6 +60,22 @@ export const CURRENCIES = ["AUD", "NZD", "USD", "GBP", "CAD", "SGD", "EUR", "ZAR
 /** Calendar order here on purpose: this picks *which* month the financial year ends in. */
 export { MONTH_LONG as MONTHS } from "@/engine/plan/calendar";
 
+/**
+ * What the BUSINESS is licensed, registered or insured to do (§6.64) — not what a person holds, which
+ * stays a `licence` row on that person in Roles & Capability. A contractor licence belongs to the entity:
+ * it is what the entity is allowed to do, and when it lapses the business stops trading whoever is on the
+ * payroll.
+ */
+export type Licence = {
+  id: string;
+  name: string;
+  number: string | null;
+  issuer: string | null;
+  /** ISO date, or null — plenty of registrations never expire, and that is an answer rather than a blank. */
+  expires_on: string | null;
+  sort_order: number;
+};
+
 export type Profile = {
   business_name: string;
   date_established: string | null;      // ISO date, month precision

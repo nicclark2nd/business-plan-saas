@@ -7,7 +7,7 @@ import type { SwotItem, LinkedGoal } from "./model";
 export default async function SwotPage({ params }: { params: Promise<{ planId: string }> }) {
   const { planId } = await params;
   const supabase = await createClient();
-  const [session, items, goals, competitors, marketing, people, capabilities, succession] = await Promise.all([
+  const [session, items, goals, competitors, marketing, people, capabilities, succession, licences] = await Promise.all([
     getSession(),
     supabase.from("plan_swot_items").select("*").eq("plan_id", planId).order("sort_order").order("created_at"),
     // Which lines somebody is actually accountable for (§6.59.1) — a response is intent, a goal is a commitment.
@@ -17,11 +17,13 @@ export default async function SwotPage({ params }: { params: Promise<{ planId: s
     supabase.from("plan_people").select("id, name, role").eq("plan_id", planId),
     supabase.from("plan_people_capabilities").select("person_id, kind, description").eq("plan_id", planId),
     supabase.from("plan_people_succession").select("person_id, dependency, successor_person_id, successor_external").eq("plan_id", planId),
+    supabase.from("plan_licences").select("id, name, issuer, expires_on").eq("plan_id", planId),
   ]);
   const suggestions = buildSuggestions({
     competitors: competitors.data ?? [],
     position: marketing.data ?? { our_advantage: null, barriers_to_entry: null, future_threats: null, market_trends: null },
     people: people.data ?? [], capabilities: capabilities.data ?? [], succession: succession.data ?? [],
+    licences: licences.data ?? [], today: new Date(),
   });
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
   return <SwotModule planId={planId} initial={(items.data ?? []) as SwotItem[]} suggestions={suggestions}

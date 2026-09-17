@@ -1,3 +1,4 @@
+import { licenceState, formatExpiry } from "@/engine/plan/licences";
 import type { Suggestion } from "./model";
 
 /**
@@ -9,10 +10,16 @@ type Position = { our_advantage: string | null; barriers_to_entry: string | null
 type Person = { id: string; name: string; role: string };
 type Capability = { person_id: string; kind: string; description: string };
 type Succession = { person_id: string; dependency: string; successor_person_id: string | null; successor_external: boolean };
+type Licence = { id: string; name: string; issuer: string | null; expires_on: string | null };
 
 const sentences = (t: string | null | undefined) => (t ?? "").split(/(?<=[.;!?])\s+|\n+/).map((s) => s.trim()).filter((s) => s.length > 3);
 
-export function buildSuggestions(p: { competitors: Competitor[]; position: Position; people: Person[]; capabilities: Capability[]; succession: Succession[] }): Suggestion[] {
+export function buildSuggestions(p: {
+  competitors: Competitor[]; position: Position; people: Person[]; capabilities: Capability[];
+  succession: Succession[]; licences?: Licence[];
+  /** Passed in rather than read from the clock, so the same plan classifies the same way in a test. */
+  today?: string | Date;
+}): Suggestion[] {
   const out: Suggestion[] = [];
   const first = (t: string | null | undefined) => sentences(t)[0];
 
@@ -20,6 +27,15 @@ export function buildSuggestions(p: { competitors: Competitor[]; position: Posit
   if (first(p.position.our_advantage)) out.push({ key: "position:advantage", quadrant: "strength", text: first(p.position.our_advantage)!, from: "Competitors · Our position" });
   if (first(p.position.barriers_to_entry)) out.push({ key: "position:barriers", quadrant: "strength", text: first(p.position.barriers_to_entry)!, from: "Competitors · Our position" });
   for (const c of p.competitors) if (first(c.how_we_win)) out.push({ key: `competitor:${c.id}:win`, quadrant: "strength", text: `${first(c.how_we_win)} (vs ${c.name})`, from: "Competitors" });
+  /**
+   * A licence the business holds is offered as a strength because it is one a rival cannot simply decide to
+   * have — which is the test this quadrant is for. The SWOT help text has used exactly this example since
+   * the module was built ("the only QBCC open licence in the postcode") while the plan had nowhere to
+   * record one (§6.64). Offered only: nothing enters the SWOT without a click.
+   */
+  for (const l of p.licences ?? []) if (l.name.trim()) {
+    out.push({ key: `licence:${l.id}`, quadrant: "strength", text: `Holds ${l.name.trim()}${l.issuer?.trim() ? ` (${l.issuer.trim()})` : ""}`, from: "Plan settings \u00b7 Licences" });
+  }
 
   // Weaknesses: development areas, high dependency without a successor
   for (const cap of p.capabilities) if (cap.kind === "development") {
@@ -38,7 +54,17 @@ export function buildSuggestions(p: { competitors: Competitor[]; position: Posit
 
   // Threats: what could change, high/critical competitors
   for (const [i, t] of sentences(p.position.future_threats).slice(0, 4).entries()) out.push({ key: `position:change:${i}`, quadrant: "threat", text: t, from: "Competitors · Our position" });
-  for (const c of p.competitors) if (c.threat === "high" || c.threat === "critical") out.push({ key: `competitor:${c.id}:threat`, quadrant: "threat", text: `${c.name} — rated a ${c.threat} threat${first(c.strengths) ? `: ${first(c.strengths)}` : ""}`, from: "Competitors" });
+  for (const c of p.competitors) if (c.threat === "high" || c.threat === "critical") out.push({ key: `competitor:${c.id}:threat`, quadrant: "threat", text: `${c.name} \u2014 rated a ${c.threat} threat${first(c.strengths) ? `: ${first(c.strengths)}` : ""}`, from: "Competitors" });
+  /**
+   * Only a licence that has ALREADY lapsed reaches the SWOT. A renewal falling due is diary work and says
+   * so on the screen where it is typed — every annually renewed licence is permanently within a year of
+   * expiring, so promoting those to threats would fill the quadrant with noise and teach the owner to skip it.
+   */
+  if (p.today) for (const l of p.licences ?? []) {
+    if (l.name.trim() && licenceState(l.expires_on, p.today) === "lapsed") {
+      out.push({ key: `licence:${l.id}:lapsed`, quadrant: "threat", text: `${l.name.trim()} expired on ${formatExpiry(l.expires_on)} and has not been renewed`, from: "Plan settings \u00b7 Licences" });
+    }
+  }
 
   return out;
 }
