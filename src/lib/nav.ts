@@ -18,19 +18,16 @@ export const NAV: NavGroup[] = [
     { id: "assets", label: "Fixed Assets", step: 11 },
     { id: "extraordinary", label: "One-off income & costs", step: 12 },
     /**
-     * An input, filed with the inputs (§6.43.1). Debtor, stock and creditor days sat in the Forecasts group,
-     * which is a list of things the plan PRODUCES — and they are a thing the client TYPES. It was the only
-     * input in that group, which is exactly why it read as not belonging.
+     * An input, filed with the inputs (§6.43.1, §6.79). Debtor, stock and creditor days sat in the Forecasts
+     * group, which is a list of things the plan PRODUCES — and they are a thing the client TYPES.
      *
-     * It lands on the forecast module's fourth tab, because that is where the grid lives and three
-     * statements that must agree still belong on one screen. The client does not know or care which module
-     * owns it; they know that what they type lives under Financials.
+     * §6.43.1 moved the NAME here and left the grid behind as a deep link into Review forecast, which meant
+     * the same screen answered to two menu items in two different groups. §6.79 moved the grid to the name.
      *
-     * A tool rather than a step: the guided path already walks through these at step 13, so this is the
-     * door for somebody who wants to change them again afterwards and would never think to look behind a
-     * menu item called Profit & Loss.
+     * A tool rather than a step: the guided path reaches these on the way through, so this is the door for
+     * somebody who wants to change them again afterwards.
      */
-    { id: "assumptions", label: "Assumptions", href: "forecast?area=assumptions", tool: true },
+    { id: "assumptions", label: "Assumptions", tool: true },
     { id: "what-if", label: "What-If Planner", tool: true },
   ] },
   /**

@@ -271,7 +271,7 @@ export function monthlyInvariants(monthly: MonthlyCashFlow, yearCash: CashFlowYe
     ["paidToSuppliersAndEmployees", "Paid to suppliers and staff"],
     ["extraordinaryPayments", "One-off payments"],
     ["taxPaid", "Tax paid"],
-    ["gstRemitted", "GST paid over"],
+    ["gstRemitted", "Sales tax paid over"],
     ["netOperating", "Operating cash flow"],
     ["capex", "Assets bought"],
     ["disposalProceeds", "Assets sold"],
@@ -286,11 +286,13 @@ export function monthlyInvariants(monthly: MonthlyCashFlow, yearCash: CashFlowYe
   return lines.map(([key, label]) => {
     const difference = r2(n(monthly.total[key]) - n(yearCash[key]));
     return {
-      key: `year-${year}-months-to-year`,
+      key: "months-to-year",
       label: `Year ${year}'s twelve months add to Year ${year} — ${label}`,
       year,
       difference,
       passed: Math.abs(difference) <= 0.5,
+      group: "months" as const,
+      row: label,
     };
   });
 }

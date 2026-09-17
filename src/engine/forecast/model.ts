@@ -198,7 +198,17 @@ export type BalanceSheetYear = {
   balanceCheck: number;
 };
 
-export type Invariant = { key: string; label: string; year: ForecastYear; difference: number; passed: boolean };
+export type Invariant = {
+  key: string; label: string; year: ForecastYear; difference: number; passed: boolean;
+  /**
+   * Which family of check this is, and what to call the ROW when the checks are laid out as a table
+   * (§6.79). Both carried rather than parsed back out of `label`: the screen that shows every check needs
+   * one row per test with the five years across it, and recovering "Received from customers" by splitting
+   * a sentence on an em dash is the kind of thing that works until somebody edits the sentence.
+   */
+  group: "statements" | "months" | "engine";
+  row: string;
+};
 
 export type Forecast = {
   pnl: Record<number, PnlYear>;
@@ -431,7 +441,8 @@ function checks(
 ): { invariants: Invariant[]; reconciled: boolean } {
   const invariants: Invariant[] = [];
   const add = (key: string, label: string, year: ForecastYear, difference: number, tolerance = 0.5) =>
-    invariants.push({ key, label, year, difference: r2(difference), passed: Math.abs(difference) <= tolerance });
+    invariants.push({ key, label, year, difference: r2(difference), passed: Math.abs(difference) <= tolerance,
+      group: "statements", row: label });
 
   for (const year of FORECAST_YEARS) {
     add("balance-sheet-equation", "The balance sheet balances", year, bs[year].balanceCheck);

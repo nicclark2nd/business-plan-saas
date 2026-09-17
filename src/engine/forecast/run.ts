@@ -205,6 +205,7 @@ export function runForecast(input: PlanInput): PlanRun {
       key: "overdraft-settled",
       label: `The overdraft did not settle in ${MAX_PASSES} passes — the facility's cost and the tax on it are chasing each other`,
       year: 1 as const, difference: 0, passed: false,
+      group: "engine" as const, row: "The overdraft settles",
     }]),
   ];
   const checked: Forecast = { ...forecast, invariants, reconciled: invariants.every((i) => i.passed) };

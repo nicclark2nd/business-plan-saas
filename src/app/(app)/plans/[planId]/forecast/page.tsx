@@ -24,8 +24,9 @@ export default async function ForecastPage({ params, searchParams }: {
   if (area === "balance") redirect(`/plans/${planId}/balance-sheet`);
   /** And the cash flow, the last to leave (§6.78). */
   if (area === "cash") redirect(`/plans/${planId}/cash-flow`);
-  const { plan, mode, impliedFromHistory, assumptionsSet } = await loadPlan(planId);
-  const { workingCapital, cashTiming } = plan;
+  /** And the assumptions grid, which went up to Financials with the rest of the inputs (§6.79). */
+  if (area === "assumptions") redirect(`/plans/${planId}/assumptions`);
+  const { plan, mode, taxLabel } = await loadPlan(planId);
 
   /**
    * One pipeline (§6.67), and this screen takes only the CHECKS off it. `checked` is the forecast with the
@@ -36,11 +37,6 @@ export default async function ForecastPage({ params, searchParams }: {
   const { checked } = runForecast(plan);
 
   return (
-    <ForecastModule
-      planId={planId} mode={mode} forecast={checked}
-      workingCapital={workingCapital} cashTiming={cashTiming}
-      impliedFromHistory={impliedFromHistory}
-      assumptionsSet={assumptionsSet}
-    />
+    <ForecastModule planId={planId} mode={mode} forecast={checked} gstLabel={taxLabel} />
   );
 }

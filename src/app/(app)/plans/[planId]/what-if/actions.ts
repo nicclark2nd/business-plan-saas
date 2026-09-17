@@ -7,7 +7,7 @@ import { GOAL_AREAS, type GoalArea } from "@/engine/whatif/goals";
 import { applyChanges, plannedChanges } from "@/engine/whatif/apply";
 import { planLevers, type DayScope, type Levers, type StartYear } from "@/engine/whatif/levers";
 import { FORECAST_YEARS, type WorkingCapitalDays } from "@/engine/forecast/model";
-import { saveAssumptions } from "../forecast/actions";
+import { saveAssumptions } from "../assumptions/actions";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 
