@@ -51,7 +51,17 @@ export const NAV: NavGroup[] = [
     { id: "forecast", label: "Review forecast", step: 13, advancedLabel: "Profit & Loss" },
     { id: "cash-flow", label: "Cash Flow", href: "forecast?area=cash" },
     { id: "balance-sheet", label: "Balance Sheet", href: "forecast?area=balance" },
-    { id: "break-even", label: "Break-Even" }, { id: "unit-economics", label: "Unit Economics" },
+    /**
+     * A TOOL, not a step (§6.68). Guided mode renders an item only if it carries a step number or is
+     * flagged a tool, so Break-Even — which had neither — was invisible in the mode every client starts
+     * in. It is the only screen in the product with charts on it and the only one with no other door:
+     * Cash Flow and Balance Sheet at least survive as tabs on Review forecast. A client would have had to
+     * find the Advanced toggle to reach it, which means they would never have reached it.
+     *
+     * Unit Economics is gone rather than flagged: there is no module behind it. A menu item pointing at a
+     * route that does not exist is the §6.43.1 fault, and it survived here because nobody could see it.
+     */
+    { id: "break-even", label: "Break-Even", tool: true },
   ] },
   { group: "Strategy (AI)", items: [{ id: "strategy", label: "Recommendations", tag: "soon" }] },
   { group: "Reports", items: [{ id: "reports", label: "Business plan", step: 15, tool: true }] },
