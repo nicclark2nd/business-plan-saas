@@ -1,0 +1,328 @@
+"use client";
+
+import { useEffect, useRef, useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
+import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
+import { Grid, Th, Td, Toolbar, Meta, Note, RemoveButton, CellInput, CellSelect, CellTextarea, focusRow } from "@/components/module/DataGrid";
+import { Section, FieldGrid, Field, FieldTextarea } from "@/components/module/FieldGrid";
+import { ConfirmDelete } from "@/components/module/ConfirmDelete";
+import { GUIDED_STEPS } from "@/lib/nav";
+import { cn } from "@/lib/utils";
+import { CAPACITY_FIELDS, DEPENDENCY, TENURE, type Capacity, type OpStep, type Premise, type Supplier } from "./model";
+import { continueFromOperations, deleteRow, saveCapacity, setPrimaryPremise, upsertRow, type RowKind } from "./actions";
+
+type AreaKey = "premises" | "suppliers" | "process" | "capacity";
+type Dirty = { _dirty?: boolean; _error?: string };
+const STEP = GUIDED_STEPS.find((s) => s.id === "operations")?.step ?? 6;
+const proseLabel = "mb-0.5 pl-1.5 text-[10.5px] font-semibold uppercase tracking-[.05em] text-muted-foreground";
+
+/**
+ * Operations (§6.84) — the section every business plan outline asks for and this app had no data for.
+ *
+ * Four areas, and the boundaries between them and the rest of the app are the whole design:
+ *
+ *   **Premises** extends `plan_outlets`, which has existed since 0002 with no screen behind it. The monthly
+ *   cost is recorded and DELIBERATELY NOT fed to the forecast — rent is already an overhead on step 9, and
+ *   a figure that reached the engine from two places would be counted twice (§6.41).
+ *
+ *   **Suppliers** earns its place on one column: dependency. A critical supplier with no alternative is a
+ *   risk visible on the face of the plan, and no other screen in the product can say it.
+ *
+ *   **How the work gets done** begins where the SALES process on Marketing ends. One is how a job is won,
+ *   the other how it is delivered, and a plan that confuses them describes neither.
+ *
+ *   **Capacity** is the part that connects the operation to the money. "What limits it" is asked for the
+ *   binding constraint rather than a list, because a list is not a constraint.
+ */
+export function OperationsModule({ planId, mode, initialArea, initialPremises, initialSuppliers, initialSteps, initialCapacity, noun }: {
+  planId: string; mode: "guided" | "advanced"; initialArea: AreaKey;
+  initialPremises: Premise[]; initialSuppliers: Supplier[]; initialSteps: OpStep[]; initialCapacity: Capacity;
+  noun: { one: string; many: string };
+}) {
+  const [area, setArea] = useState<AreaKey>(initialArea);
+  const [error, setError] = useState<string>();
+  const [pending, start] = useTransition();
+  const [kill, setKill] = useState<{ kind: RowKind; id: string; name: string } | null>(null);
+
+  const blankPremise = (id: string): Premise & Dirty => ({ id, name: "", address: null, tenure: null, is_primary: false, floor_area: null, monthly_cost: 0, purpose: null, sort_order: 0 });
+  const blankSupplier = (id: string): Supplier & Dirty => ({ id, name: "", supplies: null, terms: null, dependency: "medium", alternative: null, sort_order: 0 });
+  const blankStep = (id: string): OpStep & Dirty => ({ id, title: "", detail: null, owner: null, duration: null, sort_order: 0 });
+
+  const [premises, setPremises] = useState<(Premise & Dirty)[]>(initialPremises.length ? initialPremises : [blankPremise("tmp-p")]);
+  const [suppliers, setSuppliers] = useState<(Supplier & Dirty)[]>(initialSuppliers.length ? initialSuppliers : [blankSupplier("tmp-s")]);
+  const [steps, setSteps] = useState<(OpStep & Dirty)[]>(initialSteps.length ? initialSteps : [blankStep("tmp-o")]);
+  const [capacity, setCapacity] = useState<Capacity>(initialCapacity);
+  const [capacityDirty, setCapacityDirty] = useState(false);
+
+  const pRef = useRef(premises); useEffect(() => { pRef.current = premises; }, [premises]);
+  const sRef = useRef(suppliers); useEffect(() => { sRef.current = suppliers; }, [suppliers]);
+  const oRef = useRef(steps); useEffect(() => { oRef.current = steps; }, [steps]);
+  const cRef = useRef(capacity); useEffect(() => { cRef.current = capacity; }, [capacity]);
+  const left = (e: React.FocusEvent<HTMLElement>) => !e.currentTarget.contains(e.relatedTarget as Node);
+
+  const setter = (kind: RowKind) => (kind === "premises" ? setPremises : kind === "suppliers" ? setSuppliers : setSteps) as React.Dispatch<React.SetStateAction<(Record<string, unknown> & Dirty & { id: string })[]>>;
+  const listOf = (kind: RowKind) => (kind === "premises" ? pRef.current : kind === "suppliers" ? sRef.current : oRef.current) as (Record<string, unknown> & Dirty & { id: string })[];
+
+  const edit = (kind: RowKind, id: string, changes: Record<string, unknown>, immediate = false) => {
+    setter(kind)((xs) => xs.map((x) => (x.id === id ? { ...x, ...changes, _dirty: true, _error: undefined } : x)));
+    setError(undefined);
+    if (immediate) queueMicrotask(() => commit(kind, id));
+  };
+  const commit = (kind: RowKind, id: string) => {
+    const row = listOf(kind).find((x) => x.id === id);
+    if (!row || !row._dirty) return;
+    setter(kind)((xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: false } : x)));
+    start(async () => {
+      const r = await upsertRow(planId, kind, { ...row, id: id.startsWith("tmp-") ? undefined : id });
+      if (!r.ok) { setter(kind)((xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: true, _error: r.error } : x))); return; }
+      setter(kind)((xs) => xs.map((x) => (x.id === id ? { ...x, id: r.data!.id } : x)));
+    });
+  };
+  const add = (kind: RowKind) => {
+    const tmp = `tmp-${crypto.randomUUID()}`;
+    const blank = kind === "premises" ? blankPremise(tmp) : kind === "suppliers" ? blankSupplier(tmp) : blankStep(tmp);
+    setter(kind)((xs) => [blank as never, ...xs]);
+    focusRow(`[data-row="${tmp}"]`);
+  };
+  const askRemove = (kind: RowKind, id: string, name: string) => {
+    if (!name.trim() && id.startsWith("tmp-")) { remove(kind, id); return; }
+    setKill({ kind, id, name });
+  };
+  const remove = (kind: RowKind, id: string) => {
+    setKill(null);
+    const blank = kind === "premises" ? blankPremise : kind === "suppliers" ? blankSupplier : blankStep;
+    setter(kind)((xs) => { const rest = xs.filter((x) => x.id !== id); return rest.length ? rest : [blank(`tmp-${crypto.randomUUID()}`) as never]; });
+    if (!id.startsWith("tmp-")) start(async () => { await deleteRow(planId, kind, id); });
+  };
+  const commitCapacity = () => {
+    if (!capacityDirty) return;
+    setCapacityDirty(false);
+    start(async () => { const r = await saveCapacity(planId, cRef.current); if (!r.ok) { setError(r.error); setCapacityDirty(true); } });
+  };
+  const makePrimary = (id: string) => {
+    setPremises((xs) => xs.map((x) => ({ ...x, is_primary: x.id === id })));
+    if (!id.startsWith("tmp-")) start(async () => { const r = await setPrimaryPremise(planId, id); if (!r.ok) setError(r.error); });
+  };
+  const flush = () => {
+    commitCapacity();
+    (["premises", "suppliers", "steps"] as RowKind[]).forEach((k) => listOf(k).forEach((r) => r._dirty && commit(k, r.id)));
+  };
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const intent = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value === "later" ? "later" : "next";
+    flush(); start(async () => { await continueFromOperations(planId, intent); });
+  };
+
+  const namedPremises = premises.filter((x) => x.name.trim());
+  const namedSuppliers = suppliers.filter((x) => x.name.trim());
+  const namedSteps = steps.filter((x) => x.title.trim());
+  const capacityWritten = CAPACITY_FIELDS.filter((f) => capacity[f.key].trim()).length;
+  const critical = namedSuppliers.filter((x) => (x.dependency === "critical" || x.dependency === "high") && !x.alternative?.trim());
+  const rowError = [...premises, ...suppliers, ...steps].find((r) => r._error)?._error;
+  const dirty = [...premises, ...suppliers, ...steps].some((r) => r._dirty) || capacityDirty;
+
+  return (
+    <ModuleFrame
+      step={STEP} total={GUIDED_STEPS.length} group="Operations" title="Operations"
+      subtitle="Where the work happens, who supplies it, how it flows, and what limits it" mode={mode}
+      areas={[
+        { key: "premises", label: "Premises", count: namedPremises.length },
+        { key: "suppliers", label: "Suppliers", count: namedSuppliers.length },
+        { key: "process", label: "How the work gets done", count: namedSteps.length },
+        { key: "capacity", label: "Capacity", ...(capacityWritten ? { count: capacityWritten } : { tag: "not written" }) },
+      ]}
+      area={area} onArea={(k) => { flush(); setArea(k as AreaKey); }} scope={{ label: "This plan" }}
+      primaryAction={
+        area === "premises" ? <Button size="sm" type="button" onClick={() => add("premises")}>+ Place</Button>
+        : area === "suppliers" ? <Button size="sm" type="button" onClick={() => add("suppliers")}>+ Supplier</Button>
+        : area === "process" ? <Button size="sm" type="button" onClick={() => add("steps")}>+ Step</Button>
+        : undefined}
+      footer={<ModuleFooter planId={planId} moduleId="operations" formId="operations-form" />}
+      help={<>
+        <h3>What good looks like</h3>
+        <p><b>Premises</b> — where the work is done, and on what terms. Mark the main one; that is the address a plan is written from. The monthly cost is recorded here for the reader, and is <b>not</b> added to the forecast: rent is already an overhead on step 9, and counting it twice would overstate your costs.</p>
+        <p><b>Suppliers</b> — the column that matters is <b>dependency</b>. A supplier you could replace next week is worth a line; one you could not is worth a paragraph, and a lender will ask what happens if they stop. Naming the alternative is the answer.</p>
+        <p><b>How the work gets done</b> starts where the <b>sales process</b> on Marketing stops. That one is how a {noun.one} is won; this one is how it is delivered.</p>
+        <p><b>Capacity</b> is what connects all of it to the money. Be specific about what runs out first — one binding constraint, not a list of pressures.</p>
+        <h3>Where this goes</h3>
+        <p>The Operations section of the business plan, which every standard outline asks for. What limits your capacity also explains the shape of the revenue forecast, and a plan whose sales grow past its stated capacity is the first thing a careful reader notices.</p>
+      </>}
+    >
+      <PendingBridge pending={pending} dirty={dirty} error={error ?? rowError} />
+      <form id="operations-form" onSubmit={onSubmit} className="hidden" />
+
+      {area === "premises" && (
+        <>
+          <Toolbar><Meta className="ml-0">
+            {namedPremises.length
+              ? <>{namedPremises.length} {namedPremises.length === 1 ? "place" : "places"}{premises.some((x) => x.is_primary) ? "" : " — mark which one is the main address"}</>
+              : "Where the business operates from. A business with no fixed premises should say so — it is an answer, not a blank."}
+          </Meta></Toolbar>
+          <Grid>
+            <thead><tr>
+              <Th style={{ width: "24%" }}>Place</Th><Th style={{ width: "26%" }}>Address</Th>
+              <Th style={{ width: "16%" }}>Tenure</Th><Th style={{ width: "12%" }}>Size</Th>
+              <Th right style={{ width: 130 }}>Cost a month</Th><Th style={{ width: 92 }}>Main</Th><Th style={{ width: 36 }} />
+            </tr></thead>
+            <tbody>
+              {premises.map((x) => [
+                <tr key={x.id + "a"} data-row={x.id} onBlur={(e) => left(e) && commit("premises", x.id)}
+                  className={cn("[&>td]:border-b-0 [&>td]:pt-2", x._error && "[&>td]:bg-bad-soft")} title={x._error}>
+                  <Td><CellInput value={x.name} placeholder="Yard, office, depot" className="font-semibold" onChange={(e) => edit("premises", x.id, { name: e.target.value })} /></Td>
+                  <Td><CellInput value={x.address ?? ""} placeholder="Street and suburb" onChange={(e) => edit("premises", x.id, { address: e.target.value })} /></Td>
+                  <Td><CellSelect value={x.tenure} options={TENURE} placeholder="Tenure —" onValueChange={(v) => edit("premises", x.id, { tenure: v }, !!x.name.trim())} /></Td>
+                  <Td><CellInput value={x.floor_area ?? ""} placeholder="420 m²" onChange={(e) => edit("premises", x.id, { floor_area: e.target.value })} /></Td>
+                  <Td right><CellInput numeric value={x.monthly_cost === null ? "" : String(x.monthly_cost)} placeholder="0" onChange={(e) => edit("premises", x.id, { monthly_cost: Number(e.target.value) || 0 })} /></Td>
+                  <Td>
+                    <button type="button" onClick={() => makePrimary(x.id)} disabled={!x.name.trim()}
+                      className={cn("rounded border px-2 py-0.5 text-[11.5px] font-semibold",
+                        x.is_primary ? "border-primary bg-primary text-primary-foreground" : "border-input text-muted-foreground hover:bg-secondary disabled:opacity-40")}>
+                      {x.is_primary ? "✓ Main" : "Set main"}
+                    </button>
+                  </Td>
+                  <Td><RemoveButton onClick={() => askRemove("premises", x.id, x.name)} /></Td>
+                </tr>,
+                <tr key={x.id + "b"} data-row={x.id} onBlur={(e) => left(e) && commit("premises", x.id)} className={cn(x._error && "[&>td]:bg-bad-soft")}>
+                  <Td colSpan={7} wrap className="pb-2.5 pt-0">
+                    <div className="rounded-[3px] border-l-2 border-input bg-secondary/60 py-2 pl-3.5 pr-3">
+                      <div className={proseLabel}>What happens here</div>
+                      <CellTextarea value={x.purpose ?? ""} placeholder="e.g. Plant, formwork stock and the two crew utes. Quoting and admin are done from here."
+                        onChange={(e) => edit("premises", x.id, { purpose: e.target.value })} />
+                    </div>
+                  </Td>
+                </tr>,
+              ])}
+            </tbody>
+          </Grid>
+          <Note>
+            The cost a month is here so a reader can see what the premises carry. It is <b>not</b> added to
+            the forecast — rent and outgoings belong on <b>Overheads</b>, and a figure reaching the engine
+            from two places would be counted twice.
+          </Note>
+        </>
+      )}
+
+      {area === "suppliers" && (
+        <>
+          <Toolbar><Meta className="ml-0">
+            {namedSuppliers.length
+              ? <>{namedSuppliers.length} recorded{critical.length ? ` · ${critical.length} you depend on with no alternative named` : ""}</>
+              : "Who the business depends on to deliver. Start with the one it could least afford to lose."}
+          </Meta></Toolbar>
+          <Grid>
+            <thead><tr>
+              <Th style={{ width: "24%" }}>Supplier</Th><Th style={{ width: "26%" }}>What they supply</Th>
+              <Th style={{ width: "20%" }}>Terms</Th><Th style={{ width: "18%" }}>We depend on them</Th><Th style={{ width: 36 }} />
+            </tr></thead>
+            <tbody>
+              {suppliers.map((x) => [
+                <tr key={x.id + "a"} data-row={x.id} onBlur={(e) => left(e) && commit("suppliers", x.id)}
+                  className={cn("[&>td]:border-b-0 [&>td]:pt-2", x._error && "[&>td]:bg-bad-soft")} title={x._error}>
+                  <Td><CellInput value={x.name} placeholder="Name" className="font-semibold" onChange={(e) => edit("suppliers", x.id, { name: e.target.value })} /></Td>
+                  <Td><CellInput value={x.supplies ?? ""} placeholder="Concrete, steel, plant hire" onChange={(e) => edit("suppliers", x.id, { supplies: e.target.value })} /></Td>
+                  <Td><CellInput value={x.terms ?? ""} placeholder="30 days, COD, fixed to Jun 27" onChange={(e) => edit("suppliers", x.id, { terms: e.target.value })} /></Td>
+                  <Td><CellSelect value={x.dependency} options={DEPENDENCY} placeholder="—"
+                    className={cn("font-semibold", x.dependency === "critical" || x.dependency === "high" ? "text-bad" : x.dependency === "medium" ? "text-warn" : "text-good")}
+                    onValueChange={(v) => edit("suppliers", x.id, { dependency: v }, !!x.name.trim())} /></Td>
+                  <Td><RemoveButton onClick={() => askRemove("suppliers", x.id, x.name)} /></Td>
+                </tr>,
+                <tr key={x.id + "b"} data-row={x.id} onBlur={(e) => left(e) && commit("suppliers", x.id)} className={cn(x._error && "[&>td]:bg-bad-soft")}>
+                  <Td colSpan={5} wrap className="pb-2.5 pt-0">
+                    <div className="rounded-[3px] border-l-2 border-input bg-secondary/60 py-2 pl-3.5 pr-3">
+                      <div className={proseLabel}>If they stopped tomorrow</div>
+                      <CellTextarea value={x.alternative ?? ""} placeholder="e.g. Hanson can cover us at about 4% more with two days' notice; we have poured with them before."
+                        onChange={(e) => edit("suppliers", x.id, { alternative: e.target.value })} />
+                    </div>
+                  </Td>
+                </tr>,
+              ])}
+            </tbody>
+          </Grid>
+          {critical.length > 0 && (
+            <Note>
+              <span className="text-warn">
+                {critical.length === 1 ? "One supplier you depend on has" : `${critical.length} suppliers you depend on have`} no
+                alternative named. That is the first question a lender asks about a supply chain, and an
+                honest answer — even &quot;there isn&apos;t one&quot; — reads better than a blank.
+              </span>
+            </Note>
+          )}
+        </>
+      )}
+
+      {area === "process" && (
+        <>
+          <Toolbar><Meta className="ml-0">
+            {namedSteps.length
+              ? <>{namedSteps.length} {namedSteps.length === 1 ? "step" : "steps"}, in order — newest at the top until you reorder</>
+              : `How a ${noun.one} is delivered, step by step. How one is WON is the sales process on Marketing.`}
+          </Meta></Toolbar>
+          <Grid>
+            <thead><tr>
+              <Th style={{ width: "30%" }}>Step</Th><Th style={{ width: "22%" }}>Who owns it</Th><Th style={{ width: "18%" }}>How long</Th><Th style={{ width: 36 }} />
+            </tr></thead>
+            <tbody>
+              {steps.map((x) => [
+                <tr key={x.id + "a"} data-row={x.id} onBlur={(e) => left(e) && commit("steps", x.id)}
+                  className={cn("[&>td]:border-b-0 [&>td]:pt-2", x._error && "[&>td]:bg-bad-soft")} title={x._error}>
+                  <Td><CellInput value={x.title} placeholder="Site measure and set-out" className="font-semibold" onChange={(e) => edit("steps", x.id, { title: e.target.value })} /></Td>
+                  <Td><CellInput value={x.owner ?? ""} placeholder="Name or role" onChange={(e) => edit("steps", x.id, { owner: e.target.value })} /></Td>
+                  <Td><CellInput value={x.duration ?? ""} placeholder="Half a day" onChange={(e) => edit("steps", x.id, { duration: e.target.value })} /></Td>
+                  <Td><RemoveButton onClick={() => askRemove("steps", x.id, x.title)} /></Td>
+                </tr>,
+                <tr key={x.id + "b"} data-row={x.id} onBlur={(e) => left(e) && commit("steps", x.id)} className={cn(x._error && "[&>td]:bg-bad-soft")}>
+                  <Td colSpan={4} wrap className="pb-2.5 pt-0">
+                    <div className="rounded-[3px] border-l-2 border-input bg-secondary/60 py-2 pl-3.5 pr-3">
+                      <div className={proseLabel}>What happens</div>
+                      <CellTextarea value={x.detail ?? ""} placeholder="e.g. Levels taken, boxing set, steel ordered against the measured quantity rather than the quote."
+                        onChange={(e) => edit("steps", x.id, { detail: e.target.value })} />
+                    </div>
+                  </Td>
+                </tr>,
+              ])}
+            </tbody>
+          </Grid>
+        </>
+      )}
+
+      {area === "capacity" && (
+        <div onBlur={(e) => left(e) && commitCapacity()}>
+          <Toolbar><Meta className="ml-0">
+            {capacityWritten} of {CAPACITY_FIELDS.length} written. This is what ties the operation to the revenue forecast.
+          </Meta></Toolbar>
+          <Section title="Capacity and constraints">
+            <FieldGrid>
+              {CAPACITY_FIELDS.map((f) => (
+                <Field key={f.key} label={f.label} span={6} hint={f.hint}>
+                  <FieldTextarea value={capacity[f.key]} placeholder={f.placeholder} className="min-h-[72px]"
+                    onChange={(e) => { setCapacity((c) => ({ ...c, [f.key]: e.target.value })); setCapacityDirty(true); setError(undefined); }} />
+                </Field>
+              ))}
+            </FieldGrid>
+          </Section>
+          <Note>
+            A plan whose sales grow past its own stated capacity is the first thing a careful reader notices.
+            If the forecast on <b>Sales</b> needs more than this says you can deliver, <b>how we lift it</b>
+            {" "}is where that is answered.
+          </Note>
+        </div>
+      )}
+
+      {kill && (
+        <ConfirmDelete
+          title={`Delete ${kill.name.trim() || "this row"}?`}
+          what={<>Everything recorded against it goes too, and it drops out of the Operations section of the plan.</>}
+          onCancel={() => setKill(null)}
+          onConfirm={() => remove(kill.kind, kill.id)}
+        />
+      )}
+    </ModuleFrame>
+  );
+}
+
+function PendingBridge({ pending, dirty, error }: { pending: boolean; dirty: boolean; error?: string }) {
+  const { setPending, setNote } = useModule();
+  useEffect(() => setPending(pending), [pending, setPending]);
+  useEffect(() => setNote(error ? error : pending ? "Saving…" : dirty ? "Unsaved — saves when you leave the field" : undefined), [pending, dirty, error, setNote]);
+  return null;
+}

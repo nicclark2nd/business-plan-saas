@@ -1,4 +1,4 @@
-/** Left-menu model. Guided mode shows the numbered 15-step path plus tools; Advanced shows every module. */
+/** Left-menu model. Guided mode shows the numbered path plus tools; Advanced shows every module. */
 export type NavItem = { id: string; label: string; step?: number; advancedLabel?: string; tag?: string; tool?: boolean; href?: string /* deep link into another module's area */ };
 export type NavGroup = { group: string; items: NavItem[] };
 
@@ -52,11 +52,20 @@ export const NAV: NavGroup[] = [
    * the single place where the topic order and the step order tore.
    */
   { group: "Strengths & Risks", items: [{ id: "swot", label: "SWOT", step: 5 }] },
+  /**
+   * Operations (§6.84) — the section every standard business-plan outline asks for and the app could not
+   * fill a line of. It sits after the strategy and before the money because that is the order the work
+   * happens in: what the business does, then where and how it does it, then what that comes to.
+   *
+   * Inserting a step renumbered everything after it, and that cost one edit to this file. Before §6.81 it
+   * would have meant thirteen hand-written redirects as well, and the odds of getting all thirteen right.
+   */
+  { group: "Operations", items: [{ id: "operations", label: "Operations", step: 6 }] },
   { group: "Financials", items: [
-    { id: "historic", label: "Historic", step: 6 }, { id: "sales", label: "Sales", step: 7 }, { id: "cogs", label: "COGS", step: 8 },
-    { id: "overheads", label: "Overheads", step: 9 }, { id: "funding", label: "Funding", step: 10 },
-    { id: "assets", label: "Fixed Assets", step: 11 },
-    { id: "extraordinary", label: "One-off income & costs", step: 12 },
+    { id: "historic", label: "Historic", step: 7 }, { id: "sales", label: "Sales", step: 8 }, { id: "cogs", label: "COGS", step: 9 },
+    { id: "overheads", label: "Overheads", step: 10 }, { id: "funding", label: "Funding", step: 11 },
+    { id: "assets", label: "Fixed Assets", step: 12 },
+    { id: "extraordinary", label: "One-off income & costs", step: 13 },
     /**
      * An input, filed with the inputs (§6.43.1, §6.79), and it stays where Nic asked for it: directly under
      * item 12. It carries no number, but it is the LAST item in its group rather than a gap in the middle
@@ -67,9 +76,9 @@ export const NAV: NavGroup[] = [
      */
     { id: "assumptions", label: "Assumptions", tool: true },
   ] },
-  { group: "Review", items: [{ id: "forecast", label: "Review forecast", step: 13 }] },
-  { group: "Goals", items: [{ id: "goals", label: "Goals", step: 14, tag: "AI-drafted" }] },
-  { group: "Reports", items: [{ id: "reports", label: "Business plan", step: 15, tool: true }] },
+  { group: "Review", items: [{ id: "forecast", label: "Review forecast", step: 14 }] },
+  { group: "Goals", items: [{ id: "goals", label: "Goals", step: 15, tag: "AI-drafted" }] },
+  { group: "Reports", items: [{ id: "reports", label: "Business plan", step: 16, tool: true }] },
 
   // ---- what the plan produces, and what you do with it -------------------
   /**

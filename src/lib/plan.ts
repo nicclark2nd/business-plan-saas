@@ -45,7 +45,7 @@ export const getCompleteness = cache(async (planId: string) => {
   const planRow = supabase.from("plans").select("business_name").eq("id", planId).maybeSingle().then((r) => r.data ?? null);
   const [framework] = await Promise.all([supabase.from("plan_framework").select("vision,mission,purpose,brand_promise,ai_direction,field_of_play").eq("plan_id", planId).maybeSingle()]);
   const fw = framework.data ? Object.values(framework.data).filter(Boolean).length : 0;
-  const [people, marketing, competitors, swot, annualGoals, historic, products, cogs, overheads, extraordinary, funding, assets, settings] = await Promise.all([
+  const [people, marketing, competitors, swot, annualGoals, historic, products, cogs, overheads, extraordinary, funding, assets, settings, operations] = await Promise.all([
     /**
      * Leadership Team used to tick on `count("plan_people")` — one named person and the menu went green
      * with an empty Roles & Capability list behind it (the §6.57 fault again: a section reporting done
@@ -96,6 +96,10 @@ export const getCompleteness = cache(async (planId: string) => {
     supabase.from("plan_settings")
       .select("has_history, no_funding, no_fixed_assets, no_one_offs, working_capital_schedule, industry, country, legal_structure")
       .eq("plan_id", planId).maybeSingle().then((r) => r.data ?? null),
+    Promise.all([
+      count("plan_outlets"), count("plan_suppliers"), count("plan_operations_steps"),
+      supabase.from("plan_operations").select("capacity_now, capacity_constraint").eq("plan_id", planId).maybeSingle().then((r) => r.data),
+    ]).then(([a, b, c, cap]) => a + b + c + (String(cap?.capacity_now ?? "").trim() ? 1 : 0)),
   ]);
   const said = {
     funding: settings?.no_funding === true,
@@ -128,6 +132,11 @@ export const getCompleteness = cache(async (planId: string) => {
     { id: "marketing", label: "Marketing", done: marketing, total: 4 },
     { id: "competitors", label: "Competitors", done: competitors, total: 2 },
     { id: "swot", label: "SWOT", done: Math.min(swot, 4), total: 4 },
+    /**
+     * Operations (§6.84). One recorded place, supplier or step is the bar — a business with no fixed
+     * premises is a real answer and says so in the capacity fields, so any one of the four counts.
+     */
+    { id: "operations", label: "Operations", done: Math.min(operations, 1), total: 1 },
     { id: "historic", label: "Historic", done: settings?.has_history === false ? 1 : Math.min(historic, 1), total: 1 },
     { id: "sales", label: "Sales", done: Math.min(products, 1), total: 1 },
     { id: "cogs", label: "COGS", done: Math.min(cogs + products, 1), total: 1 },

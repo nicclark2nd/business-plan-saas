@@ -3,6 +3,7 @@
 import { ModuleFrame, ModuleReadOnlyFooter } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row as GridRow, Toolbar, Meta, Note } from "@/components/module/DataGrid";
 import { StatTile, TileRow } from "@/components/chart/core";
+import { GUIDED_STEPS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { walk, type Block, type ReportDoc, type Section } from "@/engine/report/blocks";
 import { COPY } from "@/engine/report/content";
@@ -18,6 +19,12 @@ import { COPY } from "@/engine/report/content";
  * It reads as a DOCUMENT, not as a module: serif-width measure, real headings, tables with rules. A client
  * is checking what a lender will see, so what they see is what a lender will see.
  */
+/**
+ * Derived, never typed (§6.84). Inserting Operations moved this from 15 to 16, and the hard-coded number
+ * that was here would have quietly said "STEP 15 OF 15" on the sixteenth step.
+ */
+const STEP = GUIDED_STEPS.find((s) => s.id === "reports")?.step ?? 16;
+
 export function ReportsModule({ planId, mode, doc, reconciled, missing }: {
   planId: string; mode: "guided" | "advanced"; doc: ReportDoc;
   reconciled: boolean;
@@ -29,7 +36,7 @@ export function ReportsModule({ planId, mode, doc, reconciled, missing }: {
 
   return (
     <ModuleFrame
-      step={15} total={15} group="Reports" title="Business plan"
+      step={STEP} total={GUIDED_STEPS.length} group="Reports" title="Business plan"
       subtitle="What a lender reads, built from everything in this plan" mode={mode}
       areas={[{ key: "plan", label: "The plan", count: flat.length }]}
       area="plan" onArea={() => {}} scope={{ label: "This plan" }}
