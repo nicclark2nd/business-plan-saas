@@ -14,6 +14,7 @@ import type { ServiceProfit } from "../pnl/lines";
 import type { Strength } from "../balance/lines";
 import type { Noun } from "../plan/vocabulary";
 import { marginalCash, ratios } from "./analysis";
+import { barsChart, columnsChart, linesChart, trendChart } from "./charts";
 import { cell, num, numberSections, type Block, type Draft, type Omission, type ReportDoc } from "./blocks";
 import { COPY } from "./content";
 import { goalsAndMilestones, historicAppendix, howWeOperate, marketingAndSales, ourPeople, risksAndMitigation, theBusiness, theCompetition, theMarket, whatWeSell } from "./narrative";
@@ -94,6 +95,10 @@ export const LIFECYCLE: Record<string, string> = {
 };
 export const SOLD_AS: Record<string, string> = { one_off: "One-off job", recurring: "Ongoing client" };
 
+/** Every chart goes into the document the same way, so no section invents its own picture block. */
+const chartBlock = (c: { svg: string; title: string; note?: string; alt: string; height: number }): Block =>
+  ({ kind: "chart", ...c });
+
 const pct = (v: number | null, dp = 1) => (v === null ? "—" : `${v.toFixed(dp)}%`);
 const times = (v: number | null) => (v === null ? "—" : `${v.toFixed(2)}×`);
 const plain = (v: number | null) => (v === null ? "—" : String(v));
@@ -133,6 +138,16 @@ function executiveSummary(i: ReportInput): Draft {
     title: "Revenue and profit highlights",
     blocks: [
       { kind: "para", text: COPY.highlights(i.businessName) },
+      chartBlock(linesChart({
+        title: "Revenue, gross profit and net profit",
+        note: "The gap between the lines is the cost story: revenue that grows while the bottom line flattens shows here before it shows anywhere else.",
+        categories: i.yearEndLabels, money,
+        series: [
+          { name: "Revenue", values: FORECAST_YEARS.map((y) => p[y].revenue) },
+          { name: "Gross profit", values: FORECAST_YEARS.map((y) => p[y].grossProfit) },
+          { name: "Net profit", values: FORECAST_YEARS.map((y) => p[y].netProfit) },
+        ],
+      })),
       { kind: "table",
         columns: [{ label: "Projected year", width: 110 }, { label: "Year ending", width: 120 },
           { label: `Net profit after tax (${i.currency})`, numeric: true }, { label: "% of revenue", numeric: true }],
@@ -162,6 +177,12 @@ function executiveSummary(i: ReportInput): Draft {
         ["Net profit after tax", (y) => p[y].netProfit, "total"],
       ], s),
       { kind: "lead", text: COPY.grossMarginLead },
+      chartBlock(trendChart({
+        title: "Gross margin",
+        note: "What is left of every dollar of revenue after the cost of delivering it.",
+        categories: i.yearEndLabels, values: FORECAST_YEARS.map((y) => p[y].grossMargin ?? 0),
+        money: (v) => `${v.toFixed(0)}%`,
+      })),
       { kind: "table", columns: [{ label: "" }, ...cols],
         rows: [[cell("Gross profit margin"), ...FORECAST_YEARS.map((y) => num(pct(p[y].grossMargin)))]] },
     ],
@@ -185,6 +206,12 @@ function executiveSummary(i: ReportInput): Draft {
         ] as [string, (m: typeof mc[number]) => number, boolean][]).map(([label, get, bold]) => [
           cell(label, { bold }), ...mc.map((m) => num(get(m).toFixed(2), { bold })),
         ]) },
+      chartBlock(trendChart({
+        title: "Net variable cash flow per 100 units of revenue",
+        note: "What is left as cash out of every hundred dollars earned. Below the line at nil, growth is being funded out of the bank.",
+        categories: i.yearEndLabels, values: mc.map((m) => m.netVariableCashFlow),
+        money: (v) => v.toFixed(1),
+      })),
       { kind: "note", text: COPY.marginalCashNote },
     ],
   };
@@ -225,6 +252,11 @@ function executiveSummary(i: ReportInput): Draft {
           num(money(l.averagePrice)), num(money(l.revenue)),
         ]).concat([[cell("Total", { bold: true }), cell(""), cell(""), num(""),
           num(money(i.productLines.reduce((a, l) => a + l.revenue, 0)), { bold: true })]]) },
+      chartBlock(barsChart({
+        title: `Year 1 revenue by ${i.noun.one}`,
+        note: "Where the revenue actually comes from, largest first.",
+        rows: i.productLines.map((l) => ({ label: l.name, value: l.revenue })), money,
+      })),
       { kind: "note", text: COPY.productsNote(i.noun.many.charAt(0).toLowerCase() + i.noun.many.slice(1)) },
     ],
   };
@@ -384,6 +416,16 @@ function financialPlan(i: ReportInput): Draft {
       { title: "Balance sheet projections",
         blocks: [
           { kind: "para", text: COPY.balanceSheet },
+          chartBlock(linesChart({
+            title: "What is owned, what is owed, and what is left",
+            note: "The gap between the first two lines is the third. A widening gap is the plan building something that belongs to the business.",
+            categories: i.yearEndLabels, money,
+            series: [
+              { name: "Total assets", values: FORECAST_YEARS.map((y) => bs[y].totalAssets) },
+              { name: "Total liabilities", values: FORECAST_YEARS.map((y) => bs[y].totalLiabilities) },
+              { name: "Equity", values: FORECAST_YEARS.map((y) => bs[y].equity) },
+            ],
+          })),
           statementTable(cols, [
             ["Cash", (y) => bs[y].cash, "head"],
             ["Debtors", (y) => bs[y].accountsReceivable],
@@ -410,6 +452,11 @@ function financialPlan(i: ReportInput): Draft {
       { title: "Cash flow projections",
         blocks: [
           { kind: "para", text: COPY.cashFlow },
+          chartBlock(columnsChart({
+            title: "Cash at the end of each year",
+            note: "Where the bank balance lands each year. Anything below the line at nil is a year the business cannot fund out of its own account.",
+            categories: i.yearEndLabels, values: FORECAST_YEARS.map((y) => cf[y].closingCash), money,
+          })),
           statementTable(cols, [
             ["Opening cash", (y) => cf[y].openingCash, "head"],
             ["Received from customers", (y) => cf[y].receiptsFromCustomers],
@@ -439,12 +486,26 @@ function financialPlan(i: ReportInput): Draft {
             columns: [{ label: i.noun.head, width: 240 }, { label: `Revenue (${i.currency})`, numeric: true },
               { label: `Cost of sales (${i.currency})`, numeric: true }, { label: `Gross profit (${i.currency})`, numeric: true }, { label: "Margin", numeric: true }],
             rows: i.services.map((x) => [cell(x.name), num(money(x.revenue)), num(money(x.cogs)), num(money(x.grossProfit)), num(pct(x.margin))]) },
+          chartBlock(barsChart({
+            title: `Gross profit by ${i.noun.one}`,
+            note: "What each line earns above the cost of delivering it, largest first.",
+            rows: i.services.map((x) => ({ label: x.name, value: x.grossProfit })), money,
+          })),
           { kind: "note", text: COPY.byServiceNote(i.noun.one) },
         ] },
       overheads, funding, oneOffs,
       { title: "Financial strength",
         blocks: [
           { kind: "para", text: COPY.strength },
+          chartBlock(linesChart({
+            title: "Borrowed against owned",
+            note: "Where equity crosses above the borrowings, the business has become worth more than it owes.",
+            categories: i.yearEndLabels, money,
+            series: [
+              { name: "Borrowings", values: i.strength.map((x) => x.totalDebt) },
+              { name: "Equity", values: i.strength.map((x) => x.equity) },
+            ],
+          })),
           { kind: "table", columns: [{ label: "", width: 220 }, ...cols],
             rows: [
               [cell("Working capital"), ...i.strength.map((x) => num(s(x.netWorkingCapital)))],

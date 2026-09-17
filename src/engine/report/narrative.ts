@@ -11,7 +11,8 @@
  * holds it to that. A promise made on one screen and kept nowhere is worse than one never made.
  */
 import type { Draft } from "./blocks";
-import { cell, num } from "./blocks";
+import { cell, num, type Block } from "./blocks";
+import { barsChart } from "./charts";
 import { LIFECYCLE, SOLD_AS, type ReportInput } from "./build";
 import { COPY } from "./content";
 
@@ -20,6 +21,7 @@ const has = (s: string | null | undefined) => !!s && !!s.trim();
 const para = (text: string) => ({ kind: "para" as const, text });
 /** "Services" is how Settings labels it; "the services we offer" is how a sentence carries it. */
 const lower = (s: string) => (s === s.toUpperCase() ? s : s.charAt(0).toLowerCase() + s.slice(1));
+const chartBlock = (c: { svg: string; title: string; note?: string; alt: string; height: number }): Block => ({ kind: "chart", ...c });
 const pct = (v: number | null) => (v === null ? "—" : `${v.toFixed(1)}%`);
 
 /** A written field becomes a titled subsection; an empty one becomes nothing. */
@@ -147,6 +149,12 @@ export function theMarket(i: ReportInput): Draft {
     title: "Who we sell to",
     blocks: [
       para(COPY.segments(i.businessName)),
+      ...(i.segments.some((x) => (x.share ?? 0) > 0) ? [chartBlock(barsChart({
+        title: "Share of sales by segment",
+        note: "Which kind of buyer the revenue actually comes from.",
+        rows: i.segments.filter((x) => (x.share ?? 0) > 0).map((x) => ({ label: x.name, value: x.share ?? 0 })),
+        money: (v) => `${v}%`,
+      }))] : []),
       { kind: "table",
         columns: [{ label: "Segment", width: 200 }, { label: "Who they are" }, { label: "What they care about" }, { label: "Share of sales", numeric: true }],
         rows: i.segments.map((s) => [
@@ -234,6 +242,11 @@ export function marketingAndSales(i: ReportInput): Draft {
     title: "Where the marketing money goes",
     blocks: [
       para(COPY.spend(i.businessName)),
+      ...(i.spend.some((x) => x.budget > 0) ? [chartBlock(barsChart({
+        title: "Marketing budget by kind",
+        note: "Where the money to be found and chosen actually goes.",
+        rows: i.spend.filter((x) => x.budget > 0).map((x) => ({ label: x.label, value: x.budget })), money: i.money,
+      }))] : []),
       { kind: "table",
         columns: [{ label: "Kind", width: 200 }, { label: "Approach" }, { label: `Year 1 budget (${i.currency})`, numeric: true }],
         rows: i.spend.map((s) => [cell(s.label), cell(s.approach ?? "—", { muted: !s.approach }), num(i.money(s.budget))])

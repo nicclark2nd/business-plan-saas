@@ -10,11 +10,12 @@
  * computation belongs in `build.ts` where the screen gets it too.
  */
 import {
-  AlignmentType, BorderStyle, Document, HeadingLevel, Packer, Paragraph,
+  AlignmentType, BorderStyle, Document, HeadingLevel, ImageRun, Packer, Paragraph,
   Table, TableCell, TableRow, TextRun, WidthType, type ISectionOptions,
 } from "docx";
 import type { Block, ReportDoc, Section } from "./blocks";
 import { walk } from "./blocks";
+import { rasterise } from "./rasterise";
 
 /** The plan's one accent. Everything else is black on white, because a bank prints in mono. */
 const ACCENT = "1F3A5F";
@@ -24,7 +25,29 @@ const RULE = { style: BorderStyle.SINGLE, size: 4, color: "D1D5DB" };
 const text = (s: string, o: { bold?: boolean; italics?: boolean; color?: string; size?: number } = {}) =>
   new TextRun({ text: s, bold: o.bold, italics: o.italics, color: o.color, size: o.size ?? 20 });
 
-function blockToDocx(b: Block): (Paragraph | Table)[] {
+/**
+ * A chart, rasterised (§6.91). Word cannot draw an SVG the way a browser does, so the same SVG the screen
+ * inlines is turned into a PNG here — one drawing, two renderings, never two drawings.
+ *
+ * Rendered at 2× and placed at 1×, so the picture is sharp on paper rather than on a 96dpi screen.
+ */
+function chartToDocx(b: Extract<Block, { kind: "chart" }>, pngs: Map<string, Buffer>): (Paragraph | Table)[] {
+  const png = pngs.get(b.svg) ?? null;
+  const width = 600, height = Math.round((b.height / 960) * 600);
+  return [
+    new Paragraph({ spacing: { before: 200, after: 60 }, children: [text(b.title, { bold: true, color: ACCENT, size: 20 })] }),
+    new Paragraph({
+      spacing: { after: b.note ? 60 : 200 },
+      children: png
+        ? [new ImageRun({ type: "png", data: png, transformation: { width, height }, altText: { name: b.title, title: b.title, description: b.alt } })]
+        /* If the picture cannot be drawn the plan still says what it showed, rather than leaving a hole. */
+        : [text(b.alt, { color: MUTED, size: 18 })],
+    }),
+    ...(b.note ? [new Paragraph({ spacing: { after: 200 }, children: [text(b.note, { color: MUTED, size: 17 })] })] : []),
+  ];
+}
+
+function blockToDocx(b: Block, pngs: Map<string, Buffer>): (Paragraph | Table)[] {
   switch (b.kind) {
     case "para":
       return [new Paragraph({ children: [text(b.text)], spacing: { after: 160, line: 276 } })];
@@ -50,6 +73,8 @@ function blockToDocx(b: Block): (Paragraph | Table)[] {
         ]),
         null,
       )];
+    case "chart":
+      return chartToDocx(b, pngs);
     case "table":
       return [table(
         b.rows.map((row) => row.map((c, i) => ({
@@ -94,7 +119,7 @@ function table(rows: DCell[][], header: { text: string; right?: boolean }[] | nu
   });
 }
 
-function sectionToDocx(s: Section): (Paragraph | Table)[] {
+function sectionToDocx(s: Section, pngs: Map<string, Buffer>): (Paragraph | Table)[] {
   const top = s.number.endsWith(".0");
   return [
     new Paragraph({
@@ -108,13 +133,26 @@ function sectionToDocx(s: Section): (Paragraph | Table)[] {
         text(s.title, { bold: true, color: ACCENT, size: top ? 28 : 22 }),
       ],
     }),
-    ...s.blocks.flatMap(blockToDocx),
-    ...s.children.flatMap(sectionToDocx),
+    ...s.blocks.flatMap((b) => blockToDocx(b, pngs)),
+    ...s.children.flatMap((c) => sectionToDocx(c, pngs)),
   ];
 }
 
 export async function renderDocx(doc: ReportDoc, omitted: { label: string }[]): Promise<Buffer> {
   const flat = walk(doc.sections);
+
+  /**
+   * EVERY CHART IS DRAWN BEFORE THE DOCUMENT IS BUILT (§6.91). Rasterising is asynchronous — it loads a
+   * native binary — and the document tree is built synchronously by design, because a tree-builder that
+   * awaits is a tree-builder that can interleave. So the pictures are made first, keyed by the SVG that
+   * produced them, and the builder only ever looks one up.
+   */
+  const charts = flat.flatMap((s) => s.blocks).filter((b): b is Extract<Block, { kind: "chart" }> => b.kind === "chart");
+  const pngs = new Map<string, Buffer>();
+  for (const c of charts) {
+    const png = await rasterise(c.svg);
+    if (png) pngs.set(c.svg, png);
+  }
 
   const cover: (Paragraph | Table)[] = [
     new Paragraph({ spacing: { before: 2400 }, children: [text(doc.businessName, { bold: true, color: ACCENT, size: 56 })] }),
@@ -148,7 +186,7 @@ export async function renderDocx(doc: ReportDoc, omitted: { label: string }[]): 
   const section: ISectionOptions = {
     properties: { page: { margin: { top: 1134, bottom: 1134, left: 1134, right: 1134 } } },
     footers: undefined,
-    children: [...cover, ...doc.sections.flatMap(sectionToDocx), ...tail],
+    children: [...cover, ...doc.sections.flatMap((s) => sectionToDocx(s, pngs)), ...tail],
   };
 
   const document = new Document({

@@ -138,6 +138,20 @@ function BlockView({ block }: { block: Block }) {
       return <blockquote className="mt-3 border-l-2 border-primary pl-4 text-[14px] italic leading-relaxed">{block.text}</blockquote>;
     case "note":
       return <p className="mt-2.5 text-[12.5px] leading-relaxed text-muted-foreground">{block.text}</p>;
+    case "chart":
+      /*
+       * The SVG is inlined, not rasterised (§6.91). The screen has a browser and should use it — the PNG
+       * exists for Word, which has no other way to draw. `alt` rides along as the accessible name so the
+       * picture says the same thing to a screen reader that it says to an eye.
+       */
+      return (
+        <figure className="mt-4">
+          <figcaption className="text-[13px] font-semibold text-primary">{block.title}</figcaption>
+          <div className="mt-1.5 w-full overflow-hidden" role="img" aria-label={block.alt}
+            dangerouslySetInnerHTML={{ __html: block.svg.replace("<svg ", '<svg style="width:100%;height:auto" ') }} />
+          {block.note && <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">{block.note}</p>}
+        </figure>
+      );
     case "list":
       return (
         <ul className="mt-3 space-y-1.5">

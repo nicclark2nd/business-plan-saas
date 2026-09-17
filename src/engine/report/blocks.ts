@@ -33,7 +33,12 @@ export type Block =
   | { kind: "list"; items: string[] }
   | { kind: "quote"; text: string }
   /** Said in the plan, in the plan's voice: a caveat a reader is entitled to. Not an app warning. */
-  | { kind: "note"; text: string };
+  | { kind: "note"; text: string }
+  /**
+   * A picture (§6.91). It carries a finished SVG string, and `alt` carries the same information in words —
+   * for a screen reader, and because a chart whose meaning cannot be stated is a chart that is decorating.
+   */
+  | { kind: "chart"; svg: string; title: string; note?: string; alt: string; height: number };
 
 export type Section = {
   /** Filled in by `numberSections`, never written by a section builder. */
