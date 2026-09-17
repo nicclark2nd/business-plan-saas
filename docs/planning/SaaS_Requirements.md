@@ -1637,3 +1637,52 @@ Six menu items land here: Business plan, Recommendations, and the four unbuilt A
 **Reports themselves stay deferred, deliberately** (Nic: *"I dont want to do reports yet"*). Nothing here starts building one; this is only what the client reads until there is one.
 
 **The rest of the audit came back clean, which is worth recording**: after §6.68 there are no menu items pointing at routes that do not exist beyond those six, **no route folder without a menu entry**, and **no built module hidden in Guided**.
+
+## 6.71 Every year, month by month (17 Sep 2026)
+
+`assembleMonths` was sliced to Year 1, so a five-year plan carried **twelve months of detail and forty-eight months of nothing**. The overdraft sweep needs monthly cash in every year; this is the floor it stands on.
+
+**It turned out to be mostly windowing rather than rewriting.** Revenue, depreciation, loan schedules, revenue-based finance and grants **already computed sixty months** and the Year 1 wrappers threw four fifths away. The GST assembly already looped over all five years computing exactly the monthly split needed, and **stored Year 1 — because Year 1 was the only year with a monthly cash flow to feed it.**
+
+Genuinely new: a sixty-month variable-cost series (`productCostMonths60`), settled per year to that year's own annual cost the way revenue already was; a sixty-month active-clients series; and a year index through overheads, fixed COGS, capex and depreciation. **`year` is the LAST parameter and defaults to 1**, so every existing caller keeps working untouched — which is why 476 tests passed before a single new one was written.
+
+**One judgement recorded in the code rather than buried:** monthly new clients are typed by hand for Year 1 only. There is no screen asking for month-by-month intake in Year 4, so later years fall evenly rather than inheriting Year 1's shape — **inventing one would put a number in front of a lender that nobody entered.**
+
+Proving it, because "the totals agree" would not have:
+
+- The swap from `planYear1Months` to `planRevenueMonths.slice(0,12)` is only safe if the two agree **month by month** — matching totals would hide a reshuffle, and every existing reconciliation check compares totals. Three shapes tested; all identical.
+- **Each year's twelve months add to that year's own annual cash flow, across 40 generated plans, 16 lines each.** The app's own oracle, run five times instead of once.
+- **An all-zero year would satisfy every invariant vacuously**, so there is a test that the later years carry real movement and are not copies of each other.
+- Years 2–5 open within half a dollar of where the year before closed — **the same tolerance `monthlyInvariants` uses, not a stricter one invented here.** The seam is December absorbing the rounding of a monthly series placed against an annual total.
+
+## 6.72 An overdraft behaves like an overdraft (17 Sep 2026)
+
+`line_of_credit` existed in **exactly two places in the whole codebase** — the `LoanType` union and its dropdown label — and **nowhere in the engine**. So choosing *"Overdraft / line of credit"* gave you a **term loan wearing another name**: the full amount drawn on day one whether the business needed it or not, repaid on a schedule the client invented, interest charged on a figure fixed at the start. A facility is the opposite of all three. It is a **limit**, drawn only when the month would otherwise close short, repaid the moment there is cash to repay it with, and charged on what is actually owed.
+
+**Interest is charged on the balance owed at the START of the month.** Average-balance interest is closer to how a bank really works — but this month's interest would then depend on this month's closing balance, which depends on this month's draw, which depends on this month's interest. **A circular reference needing an iterative solve, for a difference that is small across five years and a test nobody can check by hand.** Opening-balance interest runs strictly forwards, and every figure in the tests was worked out on paper.
+
+**Zero buffer** — the facility covers the shortfall and not a dollar more, and every spare dollar pays it down. It gives the model a property worth relying on, and there is a test for it: **a drawn balance and spare cash never exist in the same month.** If anything is owed, the account is at nil.
+
+**Three of the eleven tests failed first time and all three were the arithmetic, not the engine.** Two were worth keeping once corrected: a deficit the facility could not cover **does not go away** — nothing repays it and the balance keeps costing interest, so every month afterwards is short too, sixty of them rather than the one expected; and a facility that only exists from month 13 **covers the whole accumulated hole when it arrives**, not just that month's. A third records that a balance left outstanding is not idle: 5,201 draws nine more times to pay its own interest and compounds to 5,688.26.
+
+## 6.72.1 The facility reaches the three statements (17 Sep 2026)
+
+**`loanMonths` is the single gate.** `loanByYear`, `debtByYear`, `debtSplitByYear`, `assembleBase` and `assembleMonths` all funnel through it, so **one early return keeps a facility out of every schedule** rather than ten call sites each remembering to ask. A limit is also not money arriving, so the day-one draw skips it in both places that do one.
+
+**The loop.** The sweep is fed the movement **before** the facility acts, so whatever the last pass injected is taken straight back out, month by month. What actually changes between passes is **tax**: the interest lowers taxable profit, which lowers tax paid, which leaves more cash, which means a smaller draw and less interest. It settles in two or three passes.
+
+**If it has not settled in six, the plan is not reported as fine.** It carries a failed invariant and the reconciliation strip says so, the same way every other engine disagreement surfaces. **Silence would have been the easy option and the wrong one.**
+
+**Three of the six new tests failed first time, and every one failed on a GUARD rather than an assertion** — *"this plan never needed the facility, so it proves nothing"*. The seed chosen never runs short of cash, so the facility had nothing to do and all three would have **passed vacuously**. The guards had been written expecting to be decoration; they were the most useful lines in the file.
+
+And the test the whole stage existed for: **at 120 debtor days against 30, the plan pays more interest and earns less profit — and with no facility in the same plan, the same change leaves the bottom line identical to the cent.** That second half is the behaviour §6.66's conversation described: until a facility exists, the working-capital assumptions decide *when* money arrives and never *whether it was earned*. It is now a test that fails if anyone breaks it.
+
+## 6.72.2 The facility says what it did (17 Sep 2026)
+
+**The last place the old lie survived was the dialog.** Choosing *"Overdraft / line of credit"* still asked for a term, a repayment type, how often, and a balloon at the end — **a form describing a term loan, for a thing that is none of those.** And the engine had known everything about the facility since it was wired in **while no screen said a word.**
+
+For a facility the top field is the **facility limit** and writes to `total_facility_amount`, leaving what is drawn at nil — **because on day one it is**. *"Arrives in"* becomes *"Available from"*, since nothing arrives when you open one. Term, repayments, frequency and balloon are gone; interest rate and annual fee stay, **because those are what it actually costs.**
+
+**The strip sits on the cash flow** — the statement it changes, and the screen that already runs the five-year forecast; Funding builds its own Year 1 cash check and has never run it. Name, limit, the deepest point and when, what it costs across five years, and what is owing at each year end. Then one line that answers the only question worth asking: **"The facility is not big enough" — by how much at its worst, in how many months, from which month.** Not *"check your facility"*. Where it is drawn but within the limit, how much room was left at the deepest point; where it was never drawn, that the plan pays its own way — **and the fee is still named if there is one, because an unused facility is not free.**
+
+*Caught on screen:* **"Deepest never drawn" is not a sentence.** A facility that was never used has no deepest point, so that figure is not rendered at all.
