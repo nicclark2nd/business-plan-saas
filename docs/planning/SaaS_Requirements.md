@@ -1732,3 +1732,81 @@ It now counts **a named segment, market size, market trends and positioning** �
 **The migration re-runs the copy before it drops anything**, for any plan with words in those boxes and no segment to hold them: one created between 0035 and today, or one where the boxes were filled after the first copy ran. **A plan that already has a segment is skipped entirely**, so anyone who has since edited their segments keeps exactly what they wrote. Both halves are guarded, so the whole thing runs twice safely.
 
 **It is the first destructive migration in the project**, and it went out with the rule written down: *apply it with the code, not before* — the old completeness query names two of the columns it drops and fails the moment they are gone.
+
+## 6.76 Profit & Loss becomes its own module (17 Sep 2026)
+
+Nic, comparing two screens: Break-Even has tiles, a chart and three tabs; the profit and loss is **hidden under a menu item called "Review forecast"** with a one-line toolbar and a five-year table. "It should have its own menu item like Break-Even."
+
+He was describing the least developed screen in the app, and it is **the statement a lender opens first.**
+
+Three areas, the same shape Break-Even proved: **The year** (revenue, gross margin, operating profit, net profit, three lines across five years, the statement). **Month by month.** **By service.**
+
+**Two of them stop short on purpose, and the reasons are different.** Month by month stops at **operating profit**: tax is charged on a year, loss relief is given against a year, a dividend is declared once — spreading them across twelve months means **inventing twelve figures from one.** By service stops at **gross profit**: overheads cannot be split across lines without a basis nobody agreed to (§6.49). A table that stopped where the data stops explains more than one that runs to the bottom on invented numbers.
+
+**The §6.32.3 question, answered honestly.** That rule said three statements that must agree belong on one screen, and this breaks the adjacency. But **the guarantee was never the adjacency — it was the CHECK.** The reconciliation strip is what tells a client the figures agree before they read one, and it travels to every module that leaves. §6.32.3 keeps what it was actually protecting.
+
+*Shape worth copying:* `Statement`, `TaxNotes` and `StatementRow` were lifted out of ForecastModule into `components/module/`. **The first time two screens need the same rows is the moment to extract them, not the moment to paste them.**
+
+## 6.76.1 A legend takes its height out of the box, not on top of it (17 Sep 2026)
+
+The new multi-line chart added a legend **above** the plot and the SVG kept its full height, so the whole thing ran **20px past its container** and the year labels landed on the table header underneath. Nic sent a screenshot.
+
+`LEGEND_H` is now subtracted from the caller's height before the plot is drawn. **A component given a height honours it** — anything else makes every caller responsible for guessing what the component will add.
+
+## 6.76.2 The monthly chart borrows Break-Even's idiom (17 Sep 2026)
+
+Nic: "you had three lines before and now you only have two. If you only have two lines then why not make it similar to the break even chart."
+
+**Nothing had been dropped** — the browser was left on a different tab after a check, and the tab it was left on has two lines rather than three. **Mine to own: a check that changes what the user sees should put it back.** The instinct behind the question was still right, and the chart became columns with a cost rule, the way Break-Even draws it.
+
+## 6.76.3 One line, not a bar and a line (17 Sep 2026)
+
+Nic, one screen later: "i think the month by month should be a line, its too confusing as a bar and a line."
+
+**He was right and the borrowed idiom did not travel.** Break-Even's form works because it has five bars whose thresholds **genuinely differ.** BNE's revenue is flat at 181,853 in every month of Year 1, so the cost rule sat a hair above every bar and **twelve near-identical pairs read as noise rather than as a comparison.**
+
+One `Trend` of operating profit. The fill runs between the line and nil, so **the shaded area below zero IS the loss.** Every tile on that tab is about one number; the chart says the same one thing. Revenue stays the first row of the table beneath, where reading it against the cost rows is **exact rather than pixel-judged.**
+
+*The rule this leaves:* **a chart form is not portable just because it is good.** It carries an assumption about the data — Break-Even's is that its thresholds differ — and a form used where its assumption fails produces a picture that looks considered and says nothing.
+
+## 6.77 The balance sheet gets its own module (17 Sep 2026)
+
+Same move, same reasons. Three areas: **The years**, **Working capital**, **Strength**.
+
+**The years** draws total assets, total liabilities and equity as three lines, so **the gap between the first two IS the third.** On BNE, equity crosses above the borrowings between Year 2 and Year 3 — the whole story of the plan, and no column of figures says it at a glance.
+
+**Working capital** is the only part of a balance sheet that moves week to week, and it found something: **275,022 of BNE's 539,406 in assets is money other people owe.** One line, month by month, of debtors plus stock less creditors — **one line and not three**, because three series two orders of magnitude apart leaves the small ones lying flat on the floor pretending to be zero (§6.76.3, learned once and applied without being told twice). **The closing column is the year-END balance, not twelve months summed:** a total of balances means nothing and would be the §6.19 footer mistake in a different costume.
+
+**Strength** is current ratio, quick ratio, gearing, net debt, net assets. Every figure is **division on two lines already printed above it**, and the test says so across thirty generated plans — so a ratio can never become a second opinion on the statement it sits under.
+
+**What is deliberately NOT here is a month-by-month balance sheet.** The monthly engine carries cash, debtors, stock and creditors; fixed assets, tax, equity and GST are annual. Twelve columns of a statement that must balance would need most of its rows invented to make them balance, and **a statement that balances because figures were invented to make it balance is worse than no statement** (§6.49). The monthly reading is the part that is genuinely monthly, and it is **labelled working capital rather than a balance sheet** — the label is part of the honesty.
+
+## 6.78 The cash flow gets its own module, and the bridge finally has a screen (17 Sep 2026)
+
+Last of the three to leave. **The years**, **Month by month**, and **Where the cash went**.
+
+The third one had never existed anywhere. **The engine has computed a full profit-to-cash bridge for every year since the forecast was written, an invariant has checked it the whole time, and no screen ever showed a line of it.** A client handed a loss of 136,681 and a bank balance that went **up** has been given both figures and never the sentence joining them. It is the question every client asks about their own cash flow.
+
+**And displaying it found a real gap in a day.** `BridgeYear` did not carry every component of its own total: `operatingCashFlow` was adding the tax credit on capital purchases and **no field held it.** Nothing caught it, because the invariant compares that total against the cash flow's total and **both were computed** — the PARTS were never added up by anything, because nothing ever displayed them. Two of thirty generated plans were out by 251,422 and 67,924.
+
+*The rule this leaves, and it is the second time in two days:* **unshown output does not get checked.** A value the engine computes and no screen renders has only the tests somebody remembered to write for it; the moment a screen adds them up, the gaps appear. §6.79 found the same thing again in a hard-coded tax name.
+
+The chart draws **the adjustments and never the profit it starts from** — on BNE the profit is six times the largest adjustment, so on one scale the start bar takes the whole chart and every line that explains anything becomes a sliver. §6.76.3, a third time.
+
+Review forecast keeps step 13. `?area=cash` redirects, as `?area=pnl` and `?area=balance` already did: **an old link lands where the thing it asked for actually went**, which is not the same as falling back to something plausible.
+
+## 6.79 Assumptions moves to the menu item that was already pointing at it (17 Sep 2026)
+
+Nic: "we have a menu item called Assumptions under item 12, and another one in 13 Review forecast. I prefer the position under item 12."
+
+**§6.43.1 made this argument and then half-acted on it.** The days are an input — a thing the client types — so the NAME moved up to Financials with the rest of the inputs. **The grid stayed behind** as a tab on Review forecast and the menu item became a deep link into it, so **one screen answered to two menu items in two different groups.** Once the three statements left, what remained was a module called "Checks & assumptions": **two unrelated jobs sharing a tab because of where the code happened to live.**
+
+The grid moves to the name. Assumptions still runs the forecast — not to show a statement, but so each day can say **what it is worth**: 46 debtor days against this revenue is 275,022 sitting in debtors, and **that figure is the reason anybody ever changes the number above it.**
+
+**And Review forecast goes back to being one thing.** The check had never been shown. **A hundred and one checks run on BNE** — the balance sheet balancing, profit explaining the cash, cash agreeing with the balance sheet, each year opening where the last closed, sixteen monthly lines adding to their own year, in all five years — and a client saw **one green strip.**
+
+That is the right thing to say **first**. It is not the only thing worth saying: **a check nobody can inspect is a check nobody can trust**, and a lender asking "what did you verify" deserves an answer longer than a tick. Twenty rows, five years across each, a tick where the figures agreed and the distance where they did not.
+
+`Invariant` carries `group` and `row` rather than the screen recovering them by **splitting a sentence on an em dash** — which works right up until somebody edits the sentence. A year with no invariant for a row renders as **nothing, never as a tick**: "not tested" and "tested and fine" are different answers, and a table that draws them the same is telling the reader something it does not know.
+
+**And a fault that existed only because nothing displayed it.** The monthly check row was hard-coded `"GST paid over"`. **An engine has no business knowing it is Australian.** It emits "Sales tax paid over" and the screen substitutes the plan's own name, so a British plan is not shown a check about a tax it does not have. §6.78's rule, confirmed the same day it was written.
