@@ -98,7 +98,7 @@ describe("a grant in the forecast", () => {
       deferredIncomeCurrent: years[y - 1].deferredCurrent, deferredIncomeNonCurrent: years[y - 1].deferredNonCurrent,
     })])),
     opening: { cash: 50_000, accountsReceivable: 0, inventory: 0, accountsPayable: 0, fixedAssets: 0, equity: 50_000,
-      taxPayable: 0, otherCurrentAssets: 0, otherNonCurrentAssets: 0, otherCurrentLiabilities: 0,
+      taxPayable: 0, prepaid: 0, accrued: 0, otherCurrentAssets: 0, otherNonCurrentAssets: 0, otherCurrentLiabilities: 0,
       otherNonCurrentLiabilities: 0, bankLoansCurrent: 0, bankLoansNonCurrent: 0 },
     workingCapital: Object.fromEntries(FORECAST_YEARS.map((y) => [y, { debtorDays: 0, inventoryDays: 0, creditorDays: 0 }])),
     cashTiming: Object.fromEntries(FORECAST_YEARS.map((y) => [y, { taxPaidPct: 100, prepaidClosing: 0, accruedClosing: 0 }])),
@@ -143,7 +143,7 @@ describe("a grant in the forecast", () => {
     const withoutGrant = buildForecast({
       base: Object.fromEntries(FORECAST_YEARS.map((y) => [y, base({ revenue: 400_000, variableCogs: 150_000, overheads: 200_000 })])),
       opening: { cash: 50_000, accountsReceivable: 0, inventory: 0, accountsPayable: 0, fixedAssets: 0, equity: 50_000,
-        taxPayable: 0, otherCurrentAssets: 0, otherNonCurrentAssets: 0, otherCurrentLiabilities: 0,
+        taxPayable: 0, prepaid: 0, accrued: 0, otherCurrentAssets: 0, otherNonCurrentAssets: 0, otherCurrentLiabilities: 0,
         otherNonCurrentLiabilities: 0, bankLoansCurrent: 0, bankLoansNonCurrent: 0 },
       workingCapital: Object.fromEntries(FORECAST_YEARS.map((y) => [y, { debtorDays: 0, inventoryDays: 0, creditorDays: 0 }])),
       cashTiming: Object.fromEntries(FORECAST_YEARS.map((y) => [y, { taxPaidPct: 100, prepaidClosing: 0, accruedClosing: 0 }])),

@@ -14,7 +14,7 @@ const input = (over: Partial<ForecastInput> = {}): ForecastInput => ({
     cash: 50_000, accountsReceivable: 0, inventory: 0, otherCurrentAssets: 0, fixedAssets: 0,
     otherNonCurrentAssets: 0, accountsPayable: 0, bankLoansCurrent: 0, bankLoansNonCurrent: 0,
     otherCurrentLiabilities: 0, otherNonCurrentLiabilities: 0,
-    equity: 50_000, taxPayable: 0,
+    equity: 50_000, taxPayable: 0, prepaid: 0, accrued: 0,
   },
   workingCapital: Object.fromEntries(FORECAST_YEARS.map((y) => [y, { debtorDays: 45, inventoryDays: 20, creditorDays: 30 }])),
   cashTiming: Object.fromEntries(FORECAST_YEARS.map((y) => [y, { taxPaidPct: 100, prepaidClosing: 0, accruedClosing: 0 }])),
@@ -72,7 +72,7 @@ describe("forecast", () => {
       opening: { cash: 0, accountsReceivable: 0, inventory: 0, otherCurrentAssets: 0, fixedAssets: 0,
         otherNonCurrentAssets: 0, accountsPayable: 0, bankLoansCurrent: 0, bankLoansNonCurrent: 0,
     otherCurrentLiabilities: 0, otherNonCurrentLiabilities: 0,
-        equity: 0, taxPayable: 0 },
+        equity: 0, taxPayable: 0, prepaid: 0, accrued: 0 },
     })));
   });
 
@@ -152,7 +152,7 @@ describe("forecast", () => {
       fixedAssets: 129_294, otherNonCurrentAssets: 900,
       accountsPayable: 21_727, bankLoansCurrent: 60_000, bankLoansNonCurrent: 128_823,
       otherCurrentLiabilities: 135_399, otherNonCurrentLiabilities: 635,
-      equity: 0, taxPayable: 0,
+      equity: 0, taxPayable: 0, prepaid: 0, accrued: 0,
     };
     // Assets less liabilities is what equity must be for the opening sheet to balance.
     const assets = opening.cash + opening.accountsReceivable + opening.inventory + opening.otherCurrentAssets

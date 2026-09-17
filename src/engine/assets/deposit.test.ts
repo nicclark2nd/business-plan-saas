@@ -23,7 +23,7 @@ const base = (p: Partial<YearBase> = {}): YearBase => ({
 const run = (y1: Partial<YearBase>, owed: number) => buildForecast({
   base: Object.fromEntries(FORECAST_YEARS.map((y) => [y, y === 1 ? base(y1) : base({ debtNonCurrent: owed, depreciation: 18_000 })])),
   opening: { cash: 200_000, accountsReceivable: 0, inventory: 0, accountsPayable: 0, fixedAssets: 0, equity: 200_000,
-    taxPayable: 0, otherCurrentAssets: 0, otherNonCurrentAssets: 0, otherCurrentLiabilities: 0,
+    taxPayable: 0, prepaid: 0, accrued: 0, otherCurrentAssets: 0, otherNonCurrentAssets: 0, otherCurrentLiabilities: 0,
     otherNonCurrentLiabilities: 0, bankLoansCurrent: 0, bankLoansNonCurrent: 0 },
   workingCapital: Object.fromEntries(FORECAST_YEARS.map((y) => [y, { debtorDays: 0, inventoryDays: 0, creditorDays: 0 }])),
   cashTiming: Object.fromEntries(FORECAST_YEARS.map((y) => [y, { taxPaidPct: 100, prepaidClosing: 0, accruedClosing: 0 }])),

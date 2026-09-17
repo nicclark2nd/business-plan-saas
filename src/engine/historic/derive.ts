@@ -11,8 +11,8 @@
 export const PERIOD_FIELDS = [
   "revenue", "cogs", "gross_margin", "overheads", "depreciation_amortisation", "operating_profit", "extraordinary_income_expenses",
   "interest_paid", "net_profit_before_tax", "tax_paid", "net_profit", "dividends_paid", "retained_profit",
-  "cash", "accounts_receivable", "inventory_wip", "other_current_assets", "current_assets", "fixed_assets", "other_non_current_assets",
-  "non_current_assets", "total_assets", "accounts_payable", "bank_loans_current", "other_current_liabilities", "current_liabilities",
+  "cash", "accounts_receivable", "inventory_wip", "prepayments", "other_current_assets", "current_assets", "fixed_assets", "other_non_current_assets",
+  "non_current_assets", "total_assets", "accounts_payable", "bank_loans_current", "accruals", "other_current_liabilities", "current_liabilities",
   "bank_loans_non_current", "other_non_current_liabilities", "non_current_liabilities", "total_liabilities", "equity",
 ] as const;
 export type PeriodField = (typeof PERIOD_FIELDS)[number];
@@ -25,8 +25,8 @@ const r2 = (v: number) => Math.round(v * 100) / 100;
 /** The lines a user types on the grid. Everything else is calculated from them. */
 export const COMPONENT_INPUTS: PeriodField[] = [
   "revenue", "cogs", "overheads", "depreciation_amortisation", "extraordinary_income_expenses", "interest_paid", "tax_paid", "dividends_paid",
-  "cash", "accounts_receivable", "inventory_wip", "other_current_assets", "fixed_assets", "other_non_current_assets",
-  "accounts_payable", "bank_loans_current", "other_current_liabilities", "bank_loans_non_current", "other_non_current_liabilities",
+  "cash", "accounts_receivable", "inventory_wip", "prepayments", "other_current_assets", "fixed_assets", "other_non_current_assets",
+  "accounts_payable", "bank_loans_current", "accruals", "other_current_liabilities", "bank_loans_non_current", "other_non_current_liabilities",
 ];
 
 /** Components → totals. Equity is the balancing figure (assets − liabilities). */
@@ -38,18 +38,18 @@ export function deriveFromComponents(p: PeriodInput): PeriodValues {
   const net_profit_before_tax = operating_profit + extra - interest;
   const net_profit = net_profit_before_tax - tax;
   const retained_profit = net_profit - div;
-  const cash = n(p.cash), ar = n(p.accounts_receivable), inv = n(p.inventory_wip), oca = n(p.other_current_assets);
+  const cash = n(p.cash), ar = n(p.accounts_receivable), inv = n(p.inventory_wip), pre = n(p.prepayments), oca = n(p.other_current_assets);
   const fa = n(p.fixed_assets), onca = n(p.other_non_current_assets);
-  const ap = n(p.accounts_payable), blc = n(p.bank_loans_current), ocl = n(p.other_current_liabilities), blnc = n(p.bank_loans_non_current), oncl = n(p.other_non_current_liabilities);
-  const current_assets = cash + ar + inv + oca, non_current_assets = fa + onca, total_assets = current_assets + non_current_assets;
-  const current_liabilities = ap + blc + ocl, non_current_liabilities = blnc + oncl, total_liabilities = current_liabilities + non_current_liabilities;
+  const ap = n(p.accounts_payable), blc = n(p.bank_loans_current), acc = n(p.accruals), ocl = n(p.other_current_liabilities), blnc = n(p.bank_loans_non_current), oncl = n(p.other_non_current_liabilities);
+  const current_assets = cash + ar + inv + pre + oca, non_current_assets = fa + onca, total_assets = current_assets + non_current_assets;
+  const current_liabilities = ap + blc + acc + ocl, non_current_liabilities = blnc + oncl, total_liabilities = current_liabilities + non_current_liabilities;
   return {
     revenue, cogs, gross_margin: r2(gross_margin), overheads, depreciation_amortisation: da, operating_profit: r2(operating_profit),
     extraordinary_income_expenses: extra, interest_paid: interest, net_profit_before_tax: r2(net_profit_before_tax), tax_paid: tax,
     net_profit: r2(net_profit), dividends_paid: div, retained_profit: r2(retained_profit),
-    cash, accounts_receivable: ar, inventory_wip: inv, other_current_assets: oca, current_assets: r2(current_assets), fixed_assets: fa,
+    cash, accounts_receivable: ar, inventory_wip: inv, prepayments: pre, other_current_assets: oca, current_assets: r2(current_assets), fixed_assets: fa,
     other_non_current_assets: onca, non_current_assets: r2(non_current_assets), total_assets: r2(total_assets),
-    accounts_payable: ap, bank_loans_current: blc, other_current_liabilities: ocl, current_liabilities: r2(current_liabilities),
+    accounts_payable: ap, bank_loans_current: blc, accruals: acc, other_current_liabilities: ocl, current_liabilities: r2(current_liabilities),
     bank_loans_non_current: blnc, other_non_current_liabilities: oncl, non_current_liabilities: r2(non_current_liabilities),
     total_liabilities: r2(total_liabilities), equity: r2(total_assets - total_liabilities),
   };
@@ -68,21 +68,23 @@ export function deriveFromTotals(p: PeriodInput): PeriodValues {
   const operating_profit = net_profit_before_tax + interest + extra;
   const overheads = gross_margin - operating_profit - da;
   const retained_profit = net_profit - div;
-  const cash = n(p.cash), ar = n(p.accounts_receivable), inv = n(p.inventory_wip), current_assets = n(p.current_assets), fa = n(p.fixed_assets), total_assets = n(p.total_assets);
-  const other_current_assets = current_assets - cash - ar - inv;
+  const cash = n(p.cash), ar = n(p.accounts_receivable), inv = n(p.inventory_wip), pre = n(p.prepayments), current_assets = n(p.current_assets), fa = n(p.fixed_assets), total_assets = n(p.total_assets);
+  // "Other" is the residual, so naming a prepayment MOVES it out of other current assets rather than adding
+  // to the balance sheet twice. Total current assets is the figure off the statements and never changes.
+  const other_current_assets = current_assets - cash - ar - inv - pre;
   const non_current_assets = total_assets - current_assets;
   const other_non_current_assets = non_current_assets - fa;
-  const ap = n(p.accounts_payable), blc = n(p.bank_loans_current), current_liabilities = n(p.current_liabilities), blnc = n(p.bank_loans_non_current), total_liabilities = n(p.total_liabilities);
-  const other_current_liabilities = current_liabilities - ap - blc;
+  const ap = n(p.accounts_payable), blc = n(p.bank_loans_current), acc = n(p.accruals), current_liabilities = n(p.current_liabilities), blnc = n(p.bank_loans_non_current), total_liabilities = n(p.total_liabilities);
+  const other_current_liabilities = current_liabilities - ap - blc - acc;
   const non_current_liabilities = total_liabilities - current_liabilities;
   const other_non_current_liabilities = non_current_liabilities - blnc;
   return {
     revenue, cogs: r2(cogs), gross_margin, overheads: r2(overheads), depreciation_amortisation: da, operating_profit: r2(operating_profit),
     extraordinary_income_expenses: extra, interest_paid: interest, net_profit_before_tax: r2(net_profit_before_tax), tax_paid: tax,
     net_profit, dividends_paid: div, retained_profit: r2(retained_profit),
-    cash, accounts_receivable: ar, inventory_wip: inv, other_current_assets: r2(other_current_assets), current_assets, fixed_assets: fa,
+    cash, accounts_receivable: ar, inventory_wip: inv, prepayments: pre, other_current_assets: r2(other_current_assets), current_assets, fixed_assets: fa,
     other_non_current_assets: r2(other_non_current_assets), non_current_assets: r2(non_current_assets), total_assets,
-    accounts_payable: ap, bank_loans_current: blc, other_current_liabilities: r2(other_current_liabilities), current_liabilities,
+    accounts_payable: ap, bank_loans_current: blc, accruals: acc, other_current_liabilities: r2(other_current_liabilities), current_liabilities,
     bank_loans_non_current: blnc, other_non_current_liabilities: r2(other_non_current_liabilities), non_current_liabilities: r2(non_current_liabilities),
     total_liabilities, equity: r2(total_assets - total_liabilities),
   };
@@ -111,9 +113,9 @@ export const TEMPLATE_ROWS: Record<string, PeriodField> = {
   "Net Profit Before Tax": "net_profit_before_tax", "Tax Paid": "tax_paid", "Net Profit After Tax": "net_profit",
   "Dividends Paid": "dividends_paid", "Retained Profit": "retained_profit",
   "Cash": "cash", "Accounts Receivable": "accounts_receivable", "Inventory_WIP": "inventory_wip",
-  "Other Current Assets": "other_current_assets", "Total Current Assets": "current_assets", "Fixed Assets": "fixed_assets",
+  "Prepayments": "prepayments", "Other Current Assets": "other_current_assets", "Total Current Assets": "current_assets", "Fixed Assets": "fixed_assets",
   "Other Non Current Assets": "other_non_current_assets", "Non Current Assets": "non_current_assets", "Total Assets": "total_assets",
-  "Accounts Payable": "accounts_payable", "Bank Loans - Current": "bank_loans_current", "Other Current Liabilities": "other_current_liabilities",
+  "Accounts Payable": "accounts_payable", "Bank Loans - Current": "bank_loans_current", "Accruals": "accruals", "Other Current Liabilities": "other_current_liabilities",
   "Total Current Liabilities": "current_liabilities", "Bank Loans - Non Current": "bank_loans_non_current",
   "Other Non Current Liabilities": "other_non_current_liabilities", "Non Current Liabilities": "non_current_liabilities",
   "Total Liabilities": "total_liabilities", "Equity": "equity",

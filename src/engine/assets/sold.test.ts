@@ -110,7 +110,7 @@ describe("the forecast, end to end, with a disposal in it", () => {
         cash: 100_000, accountsReceivable: 0, inventory: 0, otherCurrentAssets: 0,
         fixedAssets: 0, otherNonCurrentAssets: 0, accountsPayable: 0,
         bankLoansCurrent: 0, bankLoansNonCurrent: 0, otherCurrentLiabilities: 0, otherNonCurrentLiabilities: 0,
-        equity: 100_000, taxPayable: 0,
+        equity: 100_000, taxPayable: 0, prepaid: 0, accrued: 0,
       },
       workingCapital: Object.fromEntries(FORECAST_YEARS.map((y) => [y, { debtorDays: 0, inventoryDays: 0, creditorDays: 0 }])),
       cashTiming: Object.fromEntries(FORECAST_YEARS.map((y) => [y, { taxPaidPct: 100, prepaidClosing: 0, accruedClosing: 0 }])),

@@ -87,6 +87,13 @@ export type OpeningBalance = {
   accountsReceivable: number;
   inventory: number;
   otherCurrentAssets: number;
+  /**
+   * The working-capital balances the business ALREADY carries (§6.66). Every other one here opens from the
+   * last historic period; these two used to open from nothing, so Year 1 paid again for a prepayment that
+   * had left the bank before the plan started.
+   */
+  prepaid: number;
+  accrued: number;
   fixedAssets: number;
   otherNonCurrentAssets: number;
   accountsPayable: number;
@@ -211,7 +218,7 @@ export function buildForecast(input: ForecastInput): Forecast {
   const bs: Record<number, BalanceSheetYear> = {};
 
   let priorAR = n(o.accountsReceivable), priorInv = n(o.inventory), priorAP = n(o.accountsPayable);
-  let priorPrepaid = 0, priorAccrued = 0, priorTaxPayable = n(o.taxPayable), priorDeferredIncome = 0;
+  let priorPrepaid = n(o.prepaid), priorAccrued = n(o.accrued), priorTaxPayable = n(o.taxPayable), priorDeferredIncome = 0;
   let cash = n(o.cash), fixedAssets = n(o.fixedAssets), equity = n(o.equity);
   let priorGstPayable = Math.max(0, n(input.openingGstPayable));
   let lossPool = Math.max(0, n(input.openingTaxLosses));

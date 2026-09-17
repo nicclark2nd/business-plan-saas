@@ -270,6 +270,10 @@ export function assembleOpening(
     accountsReceivable: h("accounts_receivable"),
     inventory: h("inventory_wip"),
     otherCurrentAssets: h("other_current_assets"),
+    // The two balances the forecast used to start from zero (§6.66). Without them Year 1 pays a second
+    // time for cover the business bought last year, and the accrual hands it money it does not have.
+    prepaid: h("prepayments"),
+    accrued: h("accruals"),
     fixedAssets: h("fixed_assets"),
     otherNonCurrentAssets: h("other_non_current_assets"),
     accountsPayable: h("accounts_payable"),

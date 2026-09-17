@@ -56,3 +56,47 @@ describe("template import", () => {
     expect(p[0].period_end).toBe(2026);
   });
 });
+
+/**
+ * Prepayments and accruals (§6.66) — the two working-capital balances the forecast could not inherit,
+ * because the historic balance sheet had nowhere to put them.
+ */
+describe("prepayments and accruals", () => {
+  it("adds them to the right subtotal on the components path", () => {
+    const d = deriveFromComponents({
+      cash: 100, accounts_receivable: 200, inventory_wip: 50, prepayments: 30, other_current_assets: 20,
+      accounts_payable: 90, bank_loans_current: 40, accruals: 25, other_current_liabilities: 10,
+    });
+    expect(d.current_assets).toBe(400);            // 100 + 200 + 50 + 30 + 20
+    expect(d.current_liabilities).toBe(165);       // 90 + 40 + 25 + 10
+    expect(d.equity).toBe(235);
+    expect(d.total_assets - d.total_liabilities).toBe(d.equity);
+  });
+
+  it("MOVES a prepayment out of other current assets on the totals path, never adds to it", () => {
+    // Total current assets is the figure off the statements. Naming part of it must not change it.
+    const without = deriveFromTotals({ cash: 100, accounts_receivable: 200, inventory_wip: 50, current_assets: 400, total_assets: 400 });
+    const with_ = deriveFromTotals({ cash: 100, accounts_receivable: 200, inventory_wip: 50, prepayments: 30, current_assets: 400, total_assets: 400 });
+    expect(without.other_current_assets).toBe(50);
+    expect(with_.other_current_assets).toBe(20);   // the same 50, with 30 of it now named
+    expect(with_.current_assets).toBe(400);
+    expect(with_.total_assets).toBe(without.total_assets);
+    expect(with_.equity).toBe(without.equity);
+  });
+
+  it("does the same for accruals inside current liabilities", () => {
+    const d = deriveFromTotals({
+      accounts_payable: 90, bank_loans_current: 40, accruals: 25, current_liabilities: 200, total_liabilities: 300, total_assets: 500,
+    });
+    expect(d.other_current_liabilities).toBe(45);  // 200 - 90 - 40 - 25
+    expect(d.current_liabilities).toBe(200);
+    expect(d.equity).toBe(200);
+  });
+
+  it("defaults both to zero, so every period entered before they existed is unchanged", () => {
+    const d = deriveFromComponents({ cash: 100, accounts_receivable: 200, inventory_wip: 50, other_current_assets: 20 });
+    expect(d.prepayments).toBe(0);
+    expect(d.accruals).toBe(0);
+    expect(d.current_assets).toBe(370);
+  });
+});
