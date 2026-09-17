@@ -23,9 +23,16 @@ describe("salary schedule (APeX parity)", () => {
     expect(salaryForYear(90000, {}, 6, 5)).toBe(0);
   });
   it("a salary IS the person's first-year figure, and adjustments compound from the year after", () => {
-    // 120,000 joining in Year 1, rising 3 % a year: Year 1 is what was typed (\u00a76.48).
+    /**
+     * 120,000 joining in Year 1, rising 3 % a year: Year 1 is what was typed (§6.48).
+     *
+     * APeX carried the cents here — 131,127.24 and 135,061.06 — and so did this expectation. §6.73.1 drops
+     * them ON PURPOSE. Nobody is paid twenty-four cents, and carrying the fraction put two directors on
+     * identical salaries above a total a dollar short of their sum. The deviation from APeX is at most
+     * fifty cents a person a year, and it is the deliberate kind.
+     */
     expect(salarySchedule(120000, { "2": 3, "3": 3, "4": 3, "5": 3 }, 1).map((y) => y.value))
-      .toEqual([120000, 123600, 127308, 131127.24, 135061.06]);
+      .toEqual([120000, 123600, 127308, 131127, 135061]);
     // And for someone joining later, their own first year is the figure, not a year to grow through.
     expect(salarySchedule(90000, { "4": 5 }, 3).map((y) => y.value)).toEqual([0, 0, 90000, 94500, 94500]);
   });
@@ -65,5 +72,26 @@ describe("start year derived from the Started date (SaaS §6.11)", () => {
     expect(tenureLabel("2026-05-01", fy, today)).toBe("< 1 yr");
     expect(tenureLabel("2028-08-15", fy, today)).toBe("Joins Y4");
     expect(tenureLabel("2031-01-01", fy, today)).toBe("After Y5");
+  });
+});
+
+/** §6.73.1 — what the rounding is actually for. */
+describe("salaries add up on the screen that shows them", () => {
+  it("makes two identical salaries add to the total a reader would expect", () => {
+    const people = [
+      { annual_salary: 70_700, salary_adjustments: { "2": 1, "3": 1, "4": 1, "5": 1 }, startYear: 1, role: "director" },
+      { annual_salary: 70_700, salary_adjustments: { "2": 1, "3": 1, "4": 1, "5": 1 }, startYear: 1, role: "director" },
+    ];
+    const each = salarySchedule(70_700, { "2": 1, "3": 1, "4": 1, "5": 1 }, 1).map((y) => y.value);
+    const total = totalSalariesByYear(people as never).map((y) => y.value);
+    // Year 5 carried 73,570.70 each: both rows read 73,571 above a total of 147,141, and neither was wrong.
+    expect(each[4]).toBe(73_571);
+    expect(total[4]).toBe(147_142);
+    for (let i = 0; i < 5; i++) expect(total[i]).toBe(each[i] * 2);
+  });
+
+  it("returns whole dollars in every year", () => {
+    const s = salarySchedule(83_333, { "2": 3.7, "3": 2.15, "4": 4.9, "5": 1.05 }, 1).map((y) => y.value);
+    for (const v of s) expect(Number.isInteger(v)).toBe(true);
   });
 });

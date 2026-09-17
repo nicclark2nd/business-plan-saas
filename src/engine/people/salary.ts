@@ -62,7 +62,14 @@ export function salaryForYear(firstYearSalary: number, adjustments: SalaryAdjust
   if (start > 5 || target < start) return 0;
   let salary = Number(firstYearSalary) || 0;
   for (let y = Math.max(1, start) + 1; y <= target; y++) salary *= 1 + (Number(adjustments?.[String(y)]) || 0) / 100;
-  return Number(salary.toFixed(2));
+  /**
+   * WHOLE DOLLARS (§6.73.1). A rise of 1% on 70,700 is 73,570.70 by Year 5, and nobody is paid seventy
+   * cents. Carrying the fraction meant two directors on identical salaries each displayed 73,571 above a
+   * total of 147,141 — both roundings correct, neither adding up, and a lender reading it would see a
+   * typo. Rounding here rather than on the screen keeps the rows, the footer, the Overheads line and the
+   * forecast all quoting the SAME figure, which is the rule this project keeps relearning (§6.19).
+   */
+  return Math.round(salary);
 }
 
 export function salarySchedule(baseSalary: number, adjustments: SalaryAdjustments | null | undefined, startYear: unknown) {

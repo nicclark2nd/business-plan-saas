@@ -20,7 +20,24 @@ export function Note({ children }: { children: React.ReactNode }) {
 }
 
 export function Grid({ children, className, enterMovesDown }: { children: React.ReactNode; className?: string; enterMovesDown?: boolean }) {
-  return <div className="overflow-x-auto"><table onKeyDown={enterMovesDown ? enterDown : undefined} className={cn("w-full table-fixed border-collapse text-[13px]", className)}>{children}</table></div>;
+  /**
+   * `min-w` is what makes `overflow-x-auto` above it mean anything (§6.73.2).
+   *
+   * Every grid in the app is `table-fixed` with percentage column widths, so the table is always exactly
+   * as wide as its container — it never overflows, and the wrapper never scrolls. Squeeze the container and
+   * the columns shrink under their own `whitespace-nowrap` contents until the text of one column is drawn
+   * ON TOP OF the next. On Sales at 575px, "Shed and Tank Concrete Slabs" and "One-off job" were printed
+   * over each other, which reads as a broken page rather than a narrow one.
+   *
+   * A floor turns that back into what the wrapper was always there for: the columns keep their proportions
+   * and the grid scrolls sideways. A module that needs a wider floor says so in `className` and wins.
+   *
+   * 900, not 680. The first floor tried was too low and the page looked exactly as broken: Sales fixes six
+   * of its seven columns at 720px between them, so a 680 floor left the flexible Service column **0 pixels
+   * wide** and its text still landed on top of its neighbour. A floor has to leave room for the column that
+   * has no width of its own, not merely clear the ones that do.
+   */
+  return <div className="overflow-x-auto"><table onKeyDown={enterMovesDown ? enterDown : undefined} className={cn("w-full min-w-[900px] table-fixed border-collapse text-[13px]", className)}>{children}</table></div>;
 }
 /** Enter in a one-line cell moves to the same column in the next row (keying a long price list without the mouse). Simple grids only — rowSpan shifts the index. */
 function enterDown(e: React.KeyboardEvent<HTMLTableElement>) {
@@ -96,7 +113,13 @@ export function sortRows<T>(rows: T[], sort: Sort, value: (r: T, key: string) =>
 
 export function Td({ children, className, right, wrap, colSpan, rowSpan, style, title }: { children?: React.ReactNode; className?: string; right?: boolean; wrap?: boolean; colSpan?: number; rowSpan?: number; style?: React.CSSProperties; title?: string }) {
   return (
-    <td colSpan={colSpan} rowSpan={rowSpan} style={style} title={title} className={cn("h-9 border-b border-border px-3 first:pl-5 last:pr-5", wrap ? "whitespace-normal py-1" : "whitespace-nowrap", right && "text-right", className)}>
+    /**
+     * A cell keeps its contents inside itself (§6.73.2). `table-fixed` will hand a column less room than its
+     * text needs and `whitespace-nowrap` will happily paint the overflow across the next column, which is
+     * how one service name ended up printed on top of another column's value. Clipping to an ellipsis makes
+     * a squeezed cell look squeezed rather than broken, and the `title` below means nothing is lost.
+     */
+    <td colSpan={colSpan} rowSpan={rowSpan} style={style} title={title} className={cn("h-9 border-b border-border px-3 first:pl-5 last:pr-5", wrap ? "whitespace-normal py-1" : "overflow-hidden text-ellipsis whitespace-nowrap", right && "text-right", className)}>
       {children}
     </td>
   );

@@ -83,7 +83,12 @@ export function ModuleFrame({
         <div className="border-b border-border px-5 pt-2.5">
           <div className="flex min-h-9 items-center gap-3.5">
             <div>
-              <span className="eyebrow">{step ? `Step ${step} of ${total} · ${group}` : group}</span>
+              {/*
+                * The step number belongs to the GUIDED PATH (§6.73). Advanced mode has no steps — it is
+                * "every module and assumption", in the sidebar's own words — so "STEP 7 OF 15" there is a
+                * count of a journey the client is not on.
+                */}
+              <span className="eyebrow">{step && mode === "guided" ? `Step ${step} of ${total} · ${group}` : group}</span>
               <h1 className="text-lg font-semibold leading-tight">{title}{subtitle && <span className="ml-2 text-[13px] font-normal text-muted-foreground">{subtitle}</span>}</h1>
             </div>
             <div className="ml-auto flex items-center gap-2">
