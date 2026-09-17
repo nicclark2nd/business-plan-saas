@@ -88,8 +88,16 @@ export function QuarterlyGoalDialog({ area, goal, from, people, quarters, pendin
               options={STATUSES.map((s) => ({ value: s.key, label: s.label }))} />
           </label>
           <label className="block">
-            <span className="eyebrow">Milestone date</span>
+            {/*
+              * "Milestone date" told a client nothing (§6.89). Nic, on his own screen: "I have no idea how
+              * to set the due date." The field was right there — the LABEL was the problem, naming an
+              * internal concept instead of the question it asks, and nothing said it was optional.
+              */}
+            <span className="eyebrow">Due date</span>
             <Input type="date" className="mt-1 h-8" value={milestone} onChange={(e) => setMilestone(e.target.value)} />
+            <span className="mt-1 block text-[11px] text-muted-foreground">
+              {milestone ? "Shown in the plan beside this goal." : "Optional — the quarter alone is fine."}
+            </span>
           </label>
         </div>
         <DialogFooter>

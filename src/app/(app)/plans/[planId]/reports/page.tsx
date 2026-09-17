@@ -117,7 +117,7 @@ export default async function ReportsPage({ params }: { params: Promise<{ planId
       residual: n(a.residual_value), financed: !!a.funding_debt_id,
     })).filter((a) => a.amount > 0),
     overheads: (sources.overheads as unknown as Record<string, unknown>[]).map((o) => ({
-      name: String(o.name ?? "Expense"), category: text(o.category), amount: n(o.current_value),
+      name: String(o.name ?? "Expense"), amount: n(o.current_value),
     })).filter((o) => o.amount > 0),
     funding: (sources.funding as unknown as Record<string, unknown>[]).map((x) => {
       const loan = raw(x.loan);

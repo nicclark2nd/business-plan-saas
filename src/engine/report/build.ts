@@ -37,7 +37,7 @@ export type ReportInput = {
   framework: { vision: string | null; mission: string | null; purpose: string | null; brandPromise: string | null; fieldOfPlay: string | null };
   goals: { area: string; title: string }[];
   capital: { name: string; amount: number; year: number; category: string | null; usefulLifeMonths: number | null; residual: number; financed: boolean }[];
-  overheads: { name: string; category: string | null; amount: number }[];
+  overheads: { name: string; amount: number }[];
   /**
    * The TERMS, not just the amount (§6.88). A funding section that says "Bank loan 250,000" and stops has
    * left out everything a lender reads it for: the rate, the term, how it is repaid and when it starts.
@@ -313,26 +313,17 @@ function financialPlan(i: ReportInput): Draft {
     title: "Overheads",
     blocks: [
       { kind: "para", text: COPY.overheads(i.businessName) },
-      /* Grouped, because twenty ungrouped expense lines is a list and five groups is an argument (§6.88). */
+      /*
+       * NO GROUPING (§6.89). §6.88 grouped these by `plan_overheads.category` — and there is no category
+       * field on the Overheads screen. Nobody can set it, so every plan grouped under one heading called
+       * "Other": structure invented from a column a client cannot reach.
+       *
+       * That is the §6.87 rule inverted and it is just as wrong. A field with no editor is not data, and
+       * the plan must not be built on one. The column is dead until Overheads grows a way to set it.
+       */
       { kind: "table", columns: [{ label: "Expense", width: 300 }, { label: `Year 1 (${i.currency})`, numeric: true }],
-        rows: (() => {
-          const groups = new Map<string, typeof i.overheads>();
-          for (const o of i.overheads) {
-            const k = o.category?.trim() || "Other";
-            groups.set(k, [...(groups.get(k) ?? []), o]);
-          }
-          /*
-           * Group only when grouping SAYS something. A plan whose expenses are all uncategorised gets one
-           * heading called "Other" above every row, which is a label pretending to be structure.
-           */
-          const out = groups.size > 1
-            ? [...groups.entries()].flatMap(([group, rows]) => [
-                [cell(group, { bold: true }), num(money(rows.reduce((a, r) => a + r.amount, 0)), { bold: true })],
-                ...rows.map((o) => [cell(`   ${o.name}`, { muted: true }), num(money(o.amount))]),
-              ])
-            : i.overheads.map((o) => [cell(o.name, { muted: true }), num(money(o.amount))]);
-          return [...out, [cell("Total overheads", { bold: true }), num(money(p[1].overheads), { bold: true })]];
-        })() },
+        rows: i.overheads.map((o) => [cell(o.name), num(money(o.amount))])
+          .concat([[cell("Total overheads", { bold: true }), num(money(p[1].overheads), { bold: true })]]) },
     ],
   };
 

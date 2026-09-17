@@ -505,7 +505,16 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
 
   return (
     <Dialog open onOpenChange={onCancel}>
-      <DialogContent className="max-w-[620px]">
+      {/*
+        * The dialog must never be wider than the window (§6.89). It was a fixed 620px holding a four-column
+        * grid whose columns are `minmax(auto, 1fr)` — they cannot shrink below their content, so four
+        * inputs plus gaps came to more than 620 and the whole dialog overflowed, clipping its own text at
+        * BOTH edges. Nic sent a screenshot of a modal with no readable left or right side.
+        *
+        * `w-[min(680px,calc(100vw-2rem))]` caps it to the window, and the grids below fall to two columns
+        * before they are forced to overflow.
+        */}
+      <DialogContent className="w-[min(680px,calc(100vw-2rem))] max-w-none">
         <DialogHeader>
           <DialogTitle>{d.name.trim() || "New asset"}</DialogTitle>
           <DialogDescription>
@@ -516,7 +525,7 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
         </DialogHeader>
 
         <div className="grid gap-3">
-          <div className="grid grid-cols-[1fr_180px] gap-3">
+          <div className="grid grid-cols-[1fr_180px] gap-3 [&>div]:min-w-0">
             <div>
               <span className={label}>Name</span>
               <Input autoFocus value={d.name} onChange={(e) => set({ name: e.target.value })}
@@ -530,7 +539,7 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
           </div>
 
           {isNew && !ownedNow && (
-            <div className="grid grid-cols-[220px_1fr] items-end gap-3">
+            <div className="grid grid-cols-[220px_minmax(0,1fr)] items-end gap-3">
               <div>
                 <span className={label}>Paid with</span>
                 <FieldSelect value={paidWith} onValueChange={(v) => setPaidWith(v as "cash" | "finance")}
@@ -547,7 +556,7 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
             </div>
           )}
 
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 gap-3 min-[560px]:grid-cols-4 [&>div]:min-w-0">
             <div>
               <span className={label}>{ownedNow ? "What it is worth now" : "What it cost"}</span>
               <Input inputMode="decimal" disabled={locked} defaultValue={d.purchase_price ? String(d.purchase_price) : ""}
@@ -576,7 +585,7 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
           </div>
 
           {financing && (
-            <div className="grid grid-cols-4 gap-3 rounded border border-input bg-muted/40 p-3">
+            <div className="grid grid-cols-2 gap-3 rounded border border-input bg-muted/40 p-3 min-[560px]:grid-cols-4 [&>div]:min-w-0">
               <div>
                 <span className={label}>Lender</span>
                 <Input value={fin.lender} onChange={(e) => setFin((f) => ({ ...f, lender: e.target.value }))}
@@ -597,7 +606,7 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
                 <Input inputMode="numeric" defaultValue={String(fin.term)}
                   onBlur={(e) => setFin((f) => ({ ...f, term: parseNum(e.target.value) || 60 }))} placeholder="60" className={cn(box, "num text-right")} />
               </div>
-              <div className="col-span-4 text-[12px] text-muted-foreground">
+              <div className="col-span-2 text-[12px] text-muted-foreground min-[560px]:col-span-4">
                 Borrowing <b>{num(borrowed)}</b> of the {num(d.purchase_price)} it costs
                 {fin.deposit ? <>, with {num(fin.deposit)} of your own money down</> : null}. Monthly, principal and interest.
               </div>
@@ -617,8 +626,15 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
 
           <div className="rounded border border-input bg-muted/40 p-3">
             <div className="text-[11.5px] font-semibold text-muted-foreground">What that gives</div>
-            <Grid className="mt-2">
-              <thead><tr><Th /> {YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}</tr></thead>
+            {/*
+              * `min-w-0` overrides the shared 900px floor (§6.89). That floor exists for a full-width data
+              * grid on a page; a six-column preview inside a 680px dialog is not that, and inheriting it
+              * made a table wider than the window it sits in.
+              */}
+            <Grid className="mt-2 min-w-0">
+              {/* `table-fixed` shares width evenly unless told otherwise, which clipped the row names to
+                  "Depr…" and "Still …" once the table stopped being 900px wide. */}
+              <thead><tr><Th style={{ width: 112 }} /> {YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}</tr></thead>
               <tbody>
                 <GridRow><Td>Depreciation</Td>{dep.map((v, i) => <Td key={i} right className="num">{v ? num(v) : "—"}</Td>)}</GridRow>
                 <GridRow><Td>Still worth</Td>{book.map((v, i) => <Td key={i} right className="num">{num(v)}</Td>)}</GridRow>

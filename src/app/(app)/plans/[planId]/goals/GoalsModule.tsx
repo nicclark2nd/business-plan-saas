@@ -229,7 +229,12 @@ export function GoalsModule({ planId, mode, initial, people, quarters, thisQuart
                   <button type="button" className="min-w-0 flex-1 truncate text-left hover:text-primary hover:underline"
                     onClick={() => setEditing({ area: g.area, goal: g })}>{g.title}</button>
                   <span className="w-[110px] flex-none truncate text-[11.5px] text-muted-foreground">{ownerName(g.owner_person_id) || "No owner"}</span>
-                  <span className="w-[86px] flex-none tabular-nums text-[11.5px] text-muted-foreground">{g.milestone_date ?? ""}</span>
+                  {/* An ISO date is a storage format, not something a person reads in a list (§6.89). */}
+                  <span className="w-[86px] flex-none tabular-nums text-[11.5px] text-muted-foreground">
+                    {g.milestone_date
+                      ? new Date(g.milestone_date).toLocaleDateString("en-AU", { day: "2-digit", month: "short" })
+                      : ""}
+                  </span>
                   <span className={cn("rounded-full px-2 py-[2px] text-[11px] font-semibold", TONE[g.status])}>{STATUS_LABEL[g.status]}</span>
                 </div>
               ))}
