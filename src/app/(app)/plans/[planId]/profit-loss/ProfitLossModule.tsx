@@ -5,7 +5,7 @@ import { ModuleFrame, ModuleStatusFooter } from "@/components/module/ModuleFrame
 import { Grid, Th, Td, Row as GridRow, TOTAL_ROW, Toolbar, Meta, Note } from "@/components/module/DataGrid";
 import { Statement, TaxNotes } from "@/components/module/Statement";
 import { ChartBox, Meter, StatTile, TileRow, type Severity } from "@/components/chart/core";
-import { BarRows, Columns, Lines } from "@/components/chart/plots";
+import { BarRows, Lines, Trend } from "@/components/chart/plots";
 import { useMoney } from "@/components/MoneyProvider";
 import { cn } from "@/lib/utils";
 import { FORECAST_YEARS, type PnlYear } from "@/engine/forecast/model";
@@ -15,7 +15,6 @@ import type { Noun } from "@/engine/plan/vocabulary";
 type AreaKey = "year" | "months" | "service";
 
 const pct = (v: number | null) => (v === null ? "\u2014" : `${v.toFixed(1)}%`);
-const r2 = (v: number) => Math.round(v * 100) / 100;
 /** A margin is not a status, but a loss is. Only the sign earns a colour. */
 const tone = (v: number): Severity | undefined => (v < 0 ? "bad" : undefined);
 
@@ -139,21 +138,23 @@ export function ProfitLossModule({
           </TileRow>
 
           {/*
-            * Break-Even's idiom, because the question is the same shape (§6.76.2). Two lines said "here is
-            * revenue, here is profit" and left the reader to measure the gap. A bar with a rule across it
-            * says what the month sold, what it had to sell to cover itself, and — in the colour — whether
-            * it did. On a plan where no month covers its costs, that is one glance rather than a squint.
+            * ONE line, and the zero baseline does the rest (§6.76.3).
             *
-            * Months are discrete periods, which is what a column is and what a line is not.
+            * This has now been three shapes. Two lines made the reader measure the gap themselves. Bars
+            * with a cost rule borrowed Break-Even's form, and it did not travel: that chart has five bars
+            * whose thresholds genuinely differ, this one has twelve near-identical pairs — on a plan with
+            * an even monthly split the rule sits a hair above every bar and the whole thing reads as noise.
+            *
+            * The tab is about one number. Every tile above says so: months in profit, worst month, the
+            * year's operating profit. So the chart says the same one thing, and `Trend` fills between the
+            * line and nil — which on a profit line means the shaded area below zero IS the loss. Revenue is
+            * the first row of the table directly beneath and does not need drawing twice.
             */}
-          <ChartBox title="Revenue against what the month costs" height={216}
-            note="The bar is what you sell that month; the rule across it is what that month costs to run. The gap between them is the operating profit.">
+          <ChartBox title="Operating profit by month" height={216}
+            note="Revenue less the cost of sales, overheads and depreciation, in the month each falls. Anything below the line at nil is a month that cost more than it earned.">
             {(w) => (
-              <Columns width={w} height={216} categories={monthNames.map((m) => m.slice(0, 3))}
-                values={months.map((m) => m.revenue)}
-                threshold={months.map((m) => r2(m.cogs + m.overheads + m.depreciation))}
-                thresholdLabel="costs" format={money}
-                tone={(i) => (months[i].operatingProfit >= 0 ? "good" : "warn")} />
+              <Trend width={w} height={216} categories={monthNames.map((m) => m.slice(0, 3))}
+                values={months.map((m) => m.operatingProfit)} cross={null} format={money} />
             )}
           </ChartBox>
 
