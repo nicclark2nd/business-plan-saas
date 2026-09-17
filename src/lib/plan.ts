@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { PROFILE_REQUIRED } from "@/app/(app)/plans/[planId]/settings/model";
 
 export type Mode = "guided" | "advanced";
 
@@ -34,6 +35,14 @@ export const getCompleteness = cache(async (planId: string) => {
     const { count: c } = opts?.annualOnly ? await base.is("parent_id", null).neq("title", "") : await base;
     return c ?? 0;
   };
+  /**
+   * The business name lives on `plans`, not `plan_settings` — the other three profile fields are on the
+   * settings row. Selecting a column a table does not have makes the whole query error, and this query
+   * swallows its error into `null`, which silently zeroed FOUR unrelated sections (§6.82). Caught on Nic's
+   * own plan: Review forecast fell to 0/1 the moment the select was wrong, because `assumptionsSet` reads
+   * the same row.
+   */
+  const planRow = supabase.from("plans").select("business_name").eq("id", planId).maybeSingle().then((r) => r.data ?? null);
   const [framework] = await Promise.all([supabase.from("plan_framework").select("vision,mission,purpose,brand_promise,ai_direction,field_of_play").eq("plan_id", planId).maybeSingle()]);
   const fw = framework.data ? Object.values(framework.data).filter(Boolean).length : 0;
   const [people, marketing, competitors, swot, annualGoals, historic, products, cogs, overheads, extraordinary, funding, assets, settings] = await Promise.all([
@@ -85,7 +94,7 @@ export const getCompleteness = cache(async (planId: string) => {
      * table meant before there was anything to say it with.
      */
     supabase.from("plan_settings")
-      .select("has_history, no_funding, no_fixed_assets, no_one_offs, working_capital_schedule")
+      .select("has_history, no_funding, no_fixed_assets, no_one_offs, working_capital_schedule, industry, country, legal_structure")
       .eq("plan_id", planId).maybeSingle().then((r) => r.data ?? null),
   ]);
   const said = {
@@ -93,9 +102,27 @@ export const getCompleteness = cache(async (planId: string) => {
     assets: settings?.no_fixed_assets === true,
     oneOffs: settings?.no_one_offs === true,
   };
+  const profile = { ...(await planRow), ...(settings ?? {}) } as Record<string, unknown>;
+  const profileDone = PROFILE_REQUIRED.filter((k) => String(profile[k] ?? "").trim()).length;
   const wc = settings?.working_capital_schedule as Record<string, unknown> | null | undefined;
   const assumptionsSet = !!wc && Object.keys(wc).length > 0;
   const sections = [
+    /**
+     * PLAN SETTINGS COUNTS (§6.82). Nic: "it seems that Plan settings is critical, and being right at the
+     * bottom of the left-hand menu it is sure to never be seen. They can do all the numbers, print the
+     * plan, and never see it."
+     *
+     * He was right, and it was worse than buried. These four are the app's own definition of what a report
+     * CANNOT OPEN WITHOUT (`PROFILE_REQUIRED`), and none of them were counted — so a plan could read 94%
+     * complete on the dashboard while the thing the whole exercise produces could not be printed. §6.57,
+     * one more time: a section reporting done while the substance is missing.
+     *
+     * And it is upstream of everything, not beside it. Country decides the sales tax and its name; the
+     * financial year end decides every month column in the product. Unset, they default to 30 June and 25%
+     * with no GST — defaults that are PLAUSIBLE, which is what makes them dangerous. A client in Britain
+     * gets an Australian financial year and a tax rate nobody chose, silently.
+     */
+    { id: "settings", label: "Plan settings", total: PROFILE_REQUIRED.length, done: profileDone },
     { id: "vision", label: "Vision & Purpose", done: fw, total: 6 },
     { id: "people", label: "Leadership Team", done: people.n > 0 && people.covered === people.n ? 1 : 0, total: 1 },
     { id: "marketing", label: "Marketing", done: marketing, total: 4 },

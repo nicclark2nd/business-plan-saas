@@ -26,6 +26,22 @@ export type NavGroup = { group: string; items: NavItem[] };
 export const NAV: NavGroup[] = [
   { group: "", items: [{ id: "dashboard", label: "Dashboard", tool: true }] },
 
+  /**
+   * FIRST, not last (§6.82). Nic: "Plan settings is critical, and being right at the bottom it is sure to
+   * never be seen. Most people start at the top. They can do all the numbers and then print the plan and
+   * never see it."
+   *
+   * It carries no number and should not — it is not a step in the story a plan tells. But it sits UPSTREAM
+   * of every step: the country decides the sales tax and what it is called, the financial year end decides
+   * every month column in the product, and the customer and product words change the labels on Sales, COGS,
+   * Break-Even and the profit and loss. Four of its fields are the ones a report cannot open without.
+   *
+   * At the bottom it read as an afterthought for somebody tidying up. Directly under Dashboard and above
+   * step 1, it reads as the thing you set before you start — which is what it is. The §6.80 rule still
+   * holds: it is unnumbered, and it is in a group of its own with no numbers in it.
+   */
+  { group: "Set up", items: [{ id: "settings", label: "Plan settings", tool: true }] },
+
   // ---- the guided path, 1 to 15, in order -------------------------------
   { group: "Strategy & Direction", items: [{ id: "vision", label: "Vision & Purpose", step: 1 }] },
   { group: "People", items: [{ id: "people", label: "Leadership Team", step: 2 }] },
@@ -85,7 +101,6 @@ export const NAV: NavGroup[] = [
     { id: "ip", label: "Intellectual Property" },
   ] },
   { group: "Strategy (AI)", items: [{ id: "strategy", label: "Recommendations", tag: "soon" }] },
-  { group: "Plan", items: [{ id: "settings", label: "Plan settings", tool: true }] },
 ];
 
 export const GUIDED_STEPS = NAV.flatMap((g) => g.items).filter((i) => i.step).sort((a, b) => a.step! - b.step!);
