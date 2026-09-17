@@ -1954,3 +1954,47 @@ A route rather than a server action, because the thing returned is a **file**. `
 Typography is deliberately plain: one accent, no shading, no banding, no vertical rules. *A five-year statement is read down its columns, and every line drawn across it is one more thing between the reader and the figure.*
 
 *A near-miss worth keeping:* the test imported `jszip`, which was present only **through `docx`'s own dependency tree**. A test that depends on another package's dependency breaks the day that package reorganises, for a reason having nothing to do with the code under test. Declared before it shipped.
+
+## 6.91 Charts, in the app's own colours, in both renderings (17 Sep 2026)
+
+Nic: *"clients love graphs, charts, visuals. The plan is full of words and for most people its a heavy task to even open the plan and even harder to read one. Dont skimp on graphics."*
+
+He is right, and **a business plan nobody opens is a business plan that did nothing.** Ten charts, full width, each sitting directly above the table of the figures it draws.
+
+**The colours are the app's own, and they were VALIDATED rather than chosen.** `--chart-1` to `--chart-5` went through the palette validator: lightness band, chroma floor, CVD separation (worst adjacent pair ΔE 9.2 deutan, 27.6 normal) and contrast all pass. Two of the five fall under 3:1 against white, which requires *"visible labels or a table view"* as relief — and every chart here sits above the table of its own figures, so **that relief is structural rather than remembered.**
+
+Charts are **SVG strings, not React.** The screen inlines the SVG; the Word file rasterises the same string to PNG. One drawing, two uses (§6.83, §6.90) — *a chart drawn twice is a chart that will one day disagree with itself.* Each carries `alt`: the same information in words, because **a chart whose meaning cannot be stated is a chart that is decorating.**
+
+**THREE THINGS WENT WRONG AND TWO WERE INVISIBLE.**
+
+*Fonts.* A serverless runtime has no fonts installed, and resvg with `loadSystemFonts` renders text locally and a blank 268-byte image in production — **the worst kind of difference, because it works on the machine it was built on.** Open Sans bundled, system fonts off: 9,801 bytes with, 268 without.
+
+*Bundling.* A native binary cannot be inlined. Statically imported the route failed to build; lazily `require`d it silently returned null and the plan fell back to text. It needs **both** a dynamic import and `serverExternalPackages` — and one of those failures is silent.
+
+*Platform.* The binary installed was linux-arm64, because the install was run from the Linux side of this setup while the dev server runs on macOS. The lockfile records all twelve variants so Vercel and a fresh clone resolve correctly; only the local tree was wrong. **Install a native package where the runtime actually runs.**
+
+And the test that would have caught all three: it renders a real chart through the real rasteriser and asserts the PNG is over 5KB. **Every earlier check on the Word file was structural** — is it a zip, does it contain document.xml — *and none of them noticed a document coming out the same size with ten charts as without them.*
+
+## 6.92 A document table is not a data grid (17 Sep 2026)
+
+Nic, on his own plan: *"a number of tables are not built correctly ... they have active sliders as the table width is cut so it fits. The right column is not fully shown."*
+
+The report rendered its tables with the shared `Grid`, which carries `min-w-[900px]` — a floor that exists so a full-width page grid's flexible column never collapses to nothing (§6.73.2). **The document's own measure is 900px.** So every table was a hair wider than the page holding it: each grew its own horizontal scrollbar and clipped its right-hand column.
+
+**THE SAME LESSON AS §6.89, IN A THIRD PLACE: a constraint written for one context is not a fact about every context.** That floor was right for a data grid on a page, wrong in a dialog, and wrong in a document. **A document table has no scrollbar — it fits the measure or it wraps.**
+
+So the report has its own table: `w-full`, no floor, text wraps, and only the figures are held back from wrapping — *a broken number is unreadable, a broken sentence is not.* A px width in the block model is read as a **proportion** of the measure rather than a hard size. 34 tables, none overflowing.
+
+*Caught while looking:* the report printed `0` where every statement in the product prints a dash. A five-year profit and loss with a column of zeros reads as twelve measured nils rather than "this does not apply".
+
+## 6.92.1 The chart that was never added, and the count that found it (17 Sep 2026)
+
+The first check after the fix read **nine charts on screen and nine images in the Word file** — a perfect match, and wrong. Eleven chart calls had been written; one was missing from the code entirely, because a search-and-replace had targeted a line of text that did not exist. **It matched nothing, changed nothing, and reported nothing.**
+
+**Nine equalling nine proved only that the renderer was faithful to a build that was already short a chart.**
+
+> **COMPARING AN OUTPUT TO ANOTHER COPY OF ITSELF IS NOT VERIFICATION.** Both sides came from the same source, so they agreed on the omission. What caught it was going back to what was INTENDED — eleven written, ten present.
+
+The other absent chart is correct: share of sales by segment is suppressed because no segment on this plan has a share, which is §6.83's rule working rather than a second bug.
+
+*An operational note worth keeping:* every git command run through the device shell left an `index.lock` it could not delete, which would have blocked the next commit. Deleting inside `.git` needs a permission grant of its own. Ask for it before it strands somebody mid-commit.
