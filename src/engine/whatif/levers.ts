@@ -30,13 +30,13 @@
  *     to their year (§6.21.1) — and leaves `opening_clients` alone. Clients already on the books were not won
  *     by a decision taken today.
  */
-import { assembleBase, assembleMonths, type PlanSources } from "../forecast/assemble";
-import { assembleGst, type GstPlanSources } from "../forecast/gst_assemble";
+import { type PlanSources } from "../forecast/assemble";
 import {
-  FORECAST_YEARS, buildForecast,
+  FORECAST_YEARS,
   type CashTiming, type Forecast, type Invariant, type OpeningBalance, type WorkingCapitalDays,
 } from "../forecast/model";
-import { buildMonthlyCashFlow, monthlyInvariants, type MonthlyCashFlow } from "../forecast/monthly";
+import { type MonthlyCashFlow } from "../forecast/monthly";
+import { runForecast } from "../forecast/run";
 import { NOT_REGISTERED, type GstSettings } from "../plan/gst";
 import { unitsByYear, type AnyProduct } from "../sales/product";
 import type { CostProduct } from "../cogs/direct";
@@ -351,41 +351,17 @@ export function runPlan(plan: WhatIfPlan, levers: Levers, dayScope: DayScope = "
   const components = plan.components?.length ? plan.components : [NOT_REGISTERED];
   const openingGstPayable = n(plan.openingGstPayable);
 
-  const gst = assembleGst(sources as unknown as GstPlanSources, components, openingGstPayable);
-  const base = assembleBase(sources);
-  for (const y of FORECAST_YEARS) base[y].gst = gst.byYear[y];
-
-  const forecast = buildForecast({
-    base,
-    opening: plan.opening,
-    workingCapital,
-    cashTiming: plan.cashTiming,
-    taxRate: plan.taxRate,
-    dividendRate: plan.dividendRate,
-    openingTaxLosses: plan.openingTaxLosses,
-    openingRetainedEarnings: plan.openingRetainedEarnings,
-    openingGstPayable,
+  /**
+   * The same pipeline every screen runs (§6.67). What-If used to keep its own copy of it, which is how it
+   * ended up as the only caller threading `openingGstPayable` through — a difference nobody chose.
+   */
+  const { forecast, monthly, checked } = runForecast({
+    sources, opening: plan.opening, workingCapital, cashTiming: plan.cashTiming,
+    taxRate: plan.taxRate, dividendRate: plan.dividendRate,
+    openingTaxLosses: plan.openingTaxLosses, openingRetainedEarnings: plan.openingRetainedEarnings,
+    openingGstPayable, components,
   });
-
-  const monthly = buildMonthlyCashFlow({
-    openingCash: forecast.cashFlow[1].openingCash,
-    opening: {
-      accountsReceivable: plan.opening.accountsReceivable, inventory: plan.opening.inventory,
-      accountsPayable: plan.opening.accountsPayable, prepaid: plan.opening.prepaid, accrued: plan.opening.accrued,
-    },
-    closing: {
-      accountsReceivable: forecast.workingCapital[1].accountsReceivable,
-      inventory: forecast.workingCapital[1].inventory,
-      accountsPayable: forecast.workingCapital[1].accountsPayable,
-      prepaid: forecast.workingCapital[1].prepaid,
-      accrued: forecast.workingCapital[1].accrued,
-    },
-    taxPaid: forecast.cashFlow[1].taxPaid,
-    dividends: forecast.cashFlow[1].dividendsPaid,
-    shapes: assembleMonths(sources, components, openingGstPayable),
-  });
-
-  const invariants = [...forecast.invariants, ...monthlyInvariants(monthly, forecast.cashFlow[1])];
+  const invariants = checked.invariants;
   const p = forecast.pnl[1], c = forecast.cashFlow[1], w = forecast.workingCapital[1];
   const outcome: Outcome = {
     revenue: p.revenue,

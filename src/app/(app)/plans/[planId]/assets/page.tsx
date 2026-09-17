@@ -1,10 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { loadPlan } from "@/lib/planLoad";
-import { assembleBase, assembleMonths } from "@/engine/forecast/assemble";
-import { buildForecast, FORECAST_YEARS } from "@/engine/forecast/model";
-import { buildMonthlyCashFlow } from "@/engine/forecast/monthly";
-import { assembleGst, type GstPlanSources } from "@/engine/forecast/gst_assemble";
+import { FORECAST_YEARS } from "@/engine/forecast/model";
+import { runForecast } from "@/engine/forecast/run";
 import { AssetsModule } from "./AssetsModule";
 import { soldMonthByAsset, type ExtraordinaryItem } from "@/engine/extraordinary/items";
 import type { AssetRow } from "./model";
@@ -48,33 +46,9 @@ export default async function AssetsPage({ params }: { params: Promise<{ planId:
   // A financed asset carries the name of the loan that bought it, so the chain can say where to look.
   const lenders = Object.fromEntries((debts.data ?? []).map((d) => [d.id, d.lender_name as string]));
 
-  const { plan, components } = loaded;
-  const { sources, opening, workingCapital, cashTiming } = plan;
-  const gstParts = assembleGst(sources as unknown as GstPlanSources, components);
-  const base = assembleBase(sources);
-  for (const y of FORECAST_YEARS) base[y].gst = gstParts.byYear[y];
-  const forecast = buildForecast({
-    base, opening, workingCapital, cashTiming,
-    taxRate: plan.taxRate, dividendRate: plan.dividendRate,
-    openingTaxLosses: plan.openingTaxLosses, openingRetainedEarnings: plan.openingRetainedEarnings,
-  });
-  const monthly = buildMonthlyCashFlow({
-    openingCash: forecast.cashFlow[1].openingCash,
-    opening: {
-      accountsReceivable: opening.accountsReceivable, inventory: opening.inventory,
-      accountsPayable: opening.accountsPayable, prepaid: opening.prepaid, accrued: opening.accrued,
-    },
-    closing: {
-      accountsReceivable: forecast.workingCapital[1].accountsReceivable,
-      inventory: forecast.workingCapital[1].inventory,
-      accountsPayable: forecast.workingCapital[1].accountsPayable,
-      prepaid: forecast.workingCapital[1].prepaid,
-      accrued: forecast.workingCapital[1].accrued,
-    },
-    taxPaid: forecast.cashFlow[1].taxPaid,
-    dividends: forecast.cashFlow[1].dividendsPaid,
-    shapes: assembleMonths(sources, components),
-  });
+  const { plan } = loaded;
+  const { opening } = plan;
+  const { forecast, monthly } = runForecast(plan);   // §6.67
 
   const cash = {
     /** What the last balance sheet said the business's plant was worth — the total these items sit inside. */
