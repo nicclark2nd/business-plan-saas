@@ -298,6 +298,29 @@ function CapabilityArea({ people, caps, onScope, onAdd, onEdit, onCommit, onRemo
 }) {
   const [kind, setKind] = useState<string>("all");
   const kinds = CAPABILITY_KINDS.map((k) => ({ value: k, label: KIND_LABEL[k] }));
+  /**
+   * What is missing from ONE person's bio (§6.63) — said once, beside the + Add that fixes it.
+   *
+   * This list is easy to leave half-done, because every row you have written looks fine and nothing tells
+   * you what you have not written. So the group row names the gap, and only while there is one.
+   *
+   * It is not "you have not filled in all seven types". Strength is colour and Development area never
+   * leaves the building, so demanding them would be busywork on a page a lender reads. The pair that
+   * carries a bio is what the person owns, and the evidence they can be trusted with it — a lender
+   * reading two directors who each list three skills and no licence has been told the job but not the
+   * qualification.
+   *
+   * Computed from ALL of a person's rows, never the filtered ones: picking "Skill" in the type filter
+   * must not make everybody look as though they have no responsibility.
+   */
+  const gapFor = (personId: string, mine: Cap[]) => {
+    if (!personId) return null;
+    const has = (...ks: CapabilityKind[]) => mine.some((c) => ks.includes(c.kind) && c.description.trim());
+    if (!mine.some((c) => c.description.trim())) return "nothing yet \u2014 what they own, and why they can be trusted with it";
+    if (!has("responsibility")) return "no responsibility yet \u2014 what does this person own?";
+    if (!has("expertise", "licence", "education")) return "no expertise, licence or education yet \u2014 the evidence a lender reads";
+    return null;
+  };
   return (
     <>
       <Toolbar>
@@ -308,12 +331,15 @@ function CapabilityArea({ people, caps, onScope, onAdd, onEdit, onCommit, onRemo
         <thead><tr><Th style={{ width: 200 }}>Type</Th><Th>Description</Th><Th style={{ width: 36 }} /></tr></thead>
         <tbody>
           {people.map((p) => {
-            const rows = caps.filter((c) => c.person_id === p.id && (kind === "all" || c.kind === kind));
+            const mine = caps.filter((c) => c.person_id === p.id);
+            const rows = kind === "all" ? mine : mine.filter((c) => c.kind === kind);
+            const gap = gapFor(p.id, mine);
             return [
               <GroupRow key={p._key} colSpan={3}>
                 <NameLink onClick={() => onScope(p._key)}>{p.name || p.first_name || "New person"}</NameLink>
                 <span className="font-normal text-muted-foreground">{[p.position, ROLE_LABEL[p.role]].filter(Boolean).join(" · ")}</span>
-                <span className="ml-auto">{p.id ? <LinkButton onClick={() => onAdd(p)}>+ Add</LinkButton> : <span className="text-xs font-normal text-muted-foreground">save the person first</span>}</span>
+                {gap && <span className="ml-auto text-xs font-normal text-muted-foreground">{gap}</span>}
+                <span className={cn(gap ? "ml-4" : "ml-auto")}>{p.id ? <LinkButton onClick={() => onAdd(p)}>+ Add</LinkButton> : <span className="text-xs font-normal text-muted-foreground">save the person first</span>}</span>
               </GroupRow>,
               ...rows.map((c) => (
                 <Row key={c._key} data-cap={c._key} onBlur={(e) => left(e) && onCommit(c._key)} className={cn(c.internal && "[&>td]:bg-[repeating-linear-gradient(135deg,transparent_0_6px,rgba(0,0,0,.025)_6px_8px)] [&_input]:italic [&_input]:text-muted-foreground")}>

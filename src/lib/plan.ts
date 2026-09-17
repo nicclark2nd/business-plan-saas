@@ -37,7 +37,21 @@ export const getCompleteness = cache(async (planId: string) => {
   const [framework] = await Promise.all([supabase.from("plan_framework").select("vision,mission,purpose,brand_promise,ai_direction,field_of_play").eq("plan_id", planId).maybeSingle()]);
   const fw = framework.data ? Object.values(framework.data).filter(Boolean).length : 0;
   const [people, marketing, competitors, swot, annualGoals, historic, products, cogs, overheads, extraordinary, funding, assets, settings] = await Promise.all([
-    count("plan_people"),
+    /**
+     * Leadership Team used to tick on `count("plan_people")` — one named person and the menu went green
+     * with an empty Roles & Capability list behind it (the §6.57 fault again: a section reporting done
+     * while the substance is missing). A person with a name and nothing else is not a bio, and Roles &
+     * Capability is the half of this step a lender actually reads. One written row each is the bar; which
+     * kind of row it is stays the client's call.
+     */
+    Promise.all([
+      supabase.from("plan_people").select("id").eq("plan_id", planId),
+      supabase.from("plan_people_capabilities").select("person_id, description").eq("plan_id", planId),
+    ]).then(([pp, cc]) => {
+      const written = new Set((cc.data ?? []).filter((c) => (c.description ?? "").trim()).map((c) => c.person_id));
+      const ids = (pp.data ?? []).map((x) => x.id);
+      return { n: ids.length, covered: ids.filter((id) => written.has(id)).length };
+    }),
     supabase.from("plan_marketing").select("target_market,market_size,market_trends,customer_needs").eq("plan_id", planId).maybeSingle().then((r) => (r.data ? Object.values(r.data).filter(Boolean).length : 0)),
     Promise.all([count("plan_competitors"), supabase.from("plan_marketing").select("our_advantage").eq("plan_id", planId).maybeSingle().then((r) => (r.data?.our_advantage ? 1 : 0))]).then(([c, a]) => Math.min(c, 1) + a),
     count("plan_swot_items"),
@@ -68,7 +82,7 @@ export const getCompleteness = cache(async (planId: string) => {
   const assumptionsSet = !!wc && Object.keys(wc).length > 0;
   const sections = [
     { id: "vision", label: "Vision & Purpose", done: fw, total: 6 },
-    { id: "people", label: "Leadership Team", done: Math.min(people, 1), total: 1 },
+    { id: "people", label: "Leadership Team", done: people.n > 0 && people.covered === people.n ? 1 : 0, total: 1 },
     { id: "marketing", label: "Marketing", done: marketing, total: 4 },
     { id: "competitors", label: "Competitors", done: competitors, total: 2 },
     { id: "swot", label: "SWOT", done: Math.min(swot, 4), total: 4 },
