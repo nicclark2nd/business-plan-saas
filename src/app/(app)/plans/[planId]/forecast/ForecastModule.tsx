@@ -277,7 +277,7 @@ export function ForecastModule({
                 value={(y) => wc[y].creditorDays} onChange={(y, v) => setDays(y, "creditorDays", v)} onBlur={() => save()}
                 worth={(y) => creditorBalance(cogs[y - 1], wc[y].creditorDays)} num={num} pending={pending} />
               <GridRow>
-                <Td><b>Tax paid in year</b><span className="ml-2 text-[11.5px] text-muted-foreground">What is left is owed at year end.</span></Td>
+                <AssumptionLabel label="Tax paid in year" hint="What is left is owed at year end." />
                 {FORECAST_YEARS.map((y) => (
                   <Td key={y} right>
                     <span className="relative block">
@@ -433,13 +433,32 @@ function Statement({ rows, num }: { rows: StatementRow[]; num: (v: number) => st
 }
 
 /** A number of days, with what that many days is actually worth underneath it. */
+/**
+ * An assumption's name and what it means (§6.65).
+ *
+ * This was one nowrap line in a 28% column, so every hint ran straight on under the Year 1 input: "How long
+ * clients take to pay. Each day holds this much in debtor" with a number box sitting on top of the rest of
+ * the sentence. Three rows wrote the same markup by hand, so the fault was in the grid three times over.
+ *
+ * The hint goes on its own line and is allowed to wrap. Nothing is truncated — the sentence explains what
+ * the number does to the cash flow, which is the one thing somebody typing into this screen needs to read.
+ */
+function AssumptionLabel({ label, hint }: { label: string; hint: string }) {
+  return (
+    <Td wrap>
+      <b>{label}</b>
+      <div className="mt-px max-w-[46ch] text-[11.5px] leading-snug text-muted-foreground">{hint}</div>
+    </Td>
+  );
+}
+
 function DaysRow({ label, hint, value, onChange, onBlur, worth, num, pending }: {
   label: string; hint: string; value: (y: number) => number; onChange: (y: number, v: string) => void;
   onBlur: () => void; worth: (y: number) => number; num: (v: number) => string; pending: boolean;
 }) {
   return (
     <GridRow>
-      <Td><b>{label}</b><span className="ml-2 text-[11.5px] text-muted-foreground">{hint}</span></Td>
+      <AssumptionLabel label={label} hint={hint} />
       {FORECAST_YEARS.map((y) => (
         <Td key={y} right>
           <Input inputMode="numeric" disabled={pending} className={cn(box, "num text-right")}
@@ -457,7 +476,7 @@ function MoneyRow({ label, hint, value, onChange, onBlur, pending }: {
 }) {
   return (
     <GridRow>
-      <Td><b>{label}</b><span className="ml-2 text-[11.5px] text-muted-foreground">{hint}</span></Td>
+      <AssumptionLabel label={label} hint={hint} />
       {FORECAST_YEARS.map((y) => (
         <Td key={y} right>
           <Input inputMode="decimal" disabled={pending} className={cn(box, "num text-right")}
