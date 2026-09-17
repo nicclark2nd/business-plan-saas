@@ -131,7 +131,7 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
               { key: "monthly", label: "Monthly projections" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: `All ${many}` }}
       primaryAction={area === "fixed" ? <Button size="sm" type="button" onClick={addItem}>+ Fixed cost</Button> : undefined}
-      footer={<ModuleFooter planId={planId} prevId="sales" formId="cogs-form" />}
+      footer={<ModuleFooter planId={planId} moduleId="cogs" formId="cogs-form" />}
       help={<>
         <h3>What good looks like</h3>
         <p><b>By {noun.one}</b> — the cost of delivering one sale, and nothing else. Materials, subcontractors, freight, merchant fees: anything you would not spend if you did not make the sale. A cost follows the way the line is sold — a one-off job costs per job, an ongoing client costs for every month they stay. A line with no direct cost at all, like a royalty, is left at zero and says so.</p>

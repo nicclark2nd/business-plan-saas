@@ -145,7 +145,7 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
       areas={[{ key: "sources", label: "Sources", count: lines.length }, { key: "monthly", label: "Monthly projections" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "This plan" }}
       primaryAction={area === "sources" ? <Button size="sm" type="button" onClick={() => setDlg({ kind: "picker" })}>+ Funding</Button> : undefined}
-      footer={<ModuleFooter planId={planId} prevId="overheads" formId="funding-form" />}
+      footer={<ModuleFooter planId={planId} moduleId="funding" formId="funding-form" />}
       help={<>
         <h3>What good looks like</h3>
         <p>Every source of money the business brings in: what you put in yourself, loans, investors, grants, revenue-based finance. A lender wants to see the whole picture on one page — so it is one list, not five tabs.</p>

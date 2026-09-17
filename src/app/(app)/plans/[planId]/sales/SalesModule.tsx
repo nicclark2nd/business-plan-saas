@@ -157,7 +157,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
       areas={[{ key: "products", label: noun.many, count: named.length }, { key: "annual", label: "Annual projections" }, { key: "monthly", label: "Monthly projections" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: `All ${many}` }}
       primaryAction={<Button size="sm" type="button" onClick={add}>+ {noun.head}</Button>}
-      footer={<ModuleFooter planId={planId} prevId="historic" formId="sales-form" />}
+      footer={<ModuleFooter planId={planId} moduleId="sales" formId="sales-form" />}
       help={<>
         <h3>What good looks like</h3>
         <p><b>{noun.many}</b> — one line for each thing you sell that a customer would recognise on a quote. Open a {noun.one} to describe it and set what it sells for and how many you sell{startup ? " in Year 1" : " this year"}; annual sales calculates. Check the total against your accounts before you go further.</p>

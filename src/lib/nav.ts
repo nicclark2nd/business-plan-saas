@@ -90,3 +90,33 @@ export const NAV: NavGroup[] = [
 
 export const GUIDED_STEPS = NAV.flatMap((g) => g.items).filter((i) => i.step).sort((a, b) => a.step! - b.step!);
 export function navLabel(id: string) { return NAV.flatMap((g) => g.items).find((i) => i.id === id)?.label ?? id; }
+
+/**
+ * THE GUIDED PATH, DEFINED ONCE (§6.81).
+ *
+ * The order lived in two places: these step numbers, and a hard-coded redirect inside each module's "Save
+ * and continue". Twelve of them, each a string literal naming the next module, and nothing compared the
+ * two. They had already drifted — Marketing (step 3) sent a client straight to SWOT (step 5), skipping
+ * Competitors entirely, and had been doing it silently.
+ *
+ * That is the fault this project keeps finding in new costumes (§6.41): one fact written down twice. So the
+ * number is the fact and everything else asks it.
+ */
+const STEP_IDS = GUIDED_STEPS.map((i) => i.id);
+
+/** The module a client reaches by finishing this one, or null at the end of the path. */
+export function stepAfter(id: string): string | null {
+  const at = STEP_IDS.indexOf(id);
+  return at === -1 || at === STEP_IDS.length - 1 ? null : STEP_IDS[at + 1];
+}
+
+/** The module behind this one. Null before the first step — the caller sends those back to the dashboard. */
+export function stepBefore(id: string): string | null {
+  const at = STEP_IDS.indexOf(id);
+  return at <= 0 ? null : STEP_IDS[at - 1];
+}
+
+/** Where "Save and continue" goes. The end of the path returns to the dashboard rather than nowhere. */
+export const nextHref = (planId: string, id: string) => `/plans/${planId}/${stepAfter(id) ?? "dashboard"}`;
+/** Where "Back" goes, with the same rule at the other end. */
+export const backHref = (planId: string, id: string) => `/plans/${planId}/${stepBefore(id) ?? "dashboard"}`;

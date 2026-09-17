@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NAV, GUIDED_STEPS } from "./nav";
+import { NAV, GUIDED_STEPS, stepAfter, stepBefore, nextHref, backHref } from "./nav";
 
 /** What Guided mode actually renders: a numbered step, or something flagged a tool. Nothing else. */
 const guided = NAV.map((g) => ({ ...g, items: g.items.filter((i) => i.step || i.tool) })).filter((g) => g.items.length);
@@ -43,6 +43,38 @@ describe("the left menu", () => {
   it("gives every guided item either a route of its own or a declared deep link", () => {
     const linked = flat.filter((i) => i.href).map((i) => i.href!);
     for (const h of linked) expect(h).toMatch(/^[a-z-]+\?area=[a-z]+$/);
+  });
+
+  /**
+   * THE ONE THAT WOULD HAVE CAUGHT IT (§6.81). Before the path was defined once, "Save and continue" was a
+   * hard-coded module name in each of thirteen action files. Marketing's said `swot` — so a client
+   * finishing step 3 was carried past Competitors to step 5, and had been for as long as it existed,
+   * silently, because nothing ever compared the redirect to the number.
+   */
+  it("walks the whole path forwards and backwards without skipping a step", () => {
+    const ids = GUIDED_STEPS.map((i) => i.id);
+    const walked: string[] = [ids[0]];
+    for (let at = ids[0]; stepAfter(at); ) { at = stepAfter(at)!; walked.push(at); }
+    expect(walked).toEqual(ids);
+    for (let i = 1; i < ids.length; i++) expect(stepBefore(ids[i])).toBe(ids[i - 1]);
+  });
+
+  it("stops at both ends rather than wrapping round", () => {
+    const ids = GUIDED_STEPS.map((i) => i.id);
+    expect(stepBefore(ids[0])).toBeNull();
+    expect(stepAfter(ids[ids.length - 1])).toBeNull();
+  });
+
+  /** A module that is not on the path has no next and no previous, and must not borrow somebody else's. */
+  it("gives a non-step module no place on the path", () => {
+    expect(stepAfter("break-even")).toBeNull();
+    expect(stepBefore("what-if")).toBeNull();
+  });
+
+  it("sends both ends of the path to the dashboard rather than nowhere", () => {
+    const ids = GUIDED_STEPS.map((i) => i.id);
+    expect(nextHref("p1", ids[ids.length - 1])).toBe("/plans/p1/dashboard");
+    expect(backHref("p1", ids[0])).toBe("/plans/p1/dashboard");
   });
 
   it("has no duplicate ids", () => {

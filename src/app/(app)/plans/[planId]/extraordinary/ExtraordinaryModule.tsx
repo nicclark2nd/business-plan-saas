@@ -122,7 +122,7 @@ export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth,
       areas={[{ key: "items", label: "One-offs", count: named.length }, { key: "monthly", label: "Monthly projections" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "This plan" }}
       primaryAction={area === "items" ? <Button size="sm" type="button" onClick={add}>+ One-off</Button> : undefined}
-      footer={<ModuleFooter planId={planId} prevId="assets" formId="extraordinary-form" />}
+      footer={<ModuleFooter planId={planId} moduleId="extraordinary" formId="extraordinary-form" />}
       help={<>
         <h3>What good looks like</h3>
         <p>Anything that hits the bank once and will not happen again next year: an insurance settlement, money from selling a vehicle or machine, a fit-out, the legal cost of setting up a new site, a feasibility study, a redundancy payout.</p>

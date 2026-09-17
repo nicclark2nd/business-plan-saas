@@ -134,7 +134,7 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
       areas={areas} area={area} onArea={(k) => setArea(k as AreaKey)}
       scope={{ label: scoped ? scoped.name || `${scoped.first_name} ${scoped.last_name ?? ""}`.trim() || "New person" : "All people", onClear: scope ? () => setScope(null) : undefined }}
       primaryAction={<Button size="sm" type="button" onClick={addPerson}>+ New person</Button>}
-      footer={<ModuleFooter planId={planId} prevId="vision" formId="people-form" />}
+      footer={<ModuleFooter planId={planId} moduleId="people" formId="people-form" />}
       help={<>
         <h3>What good looks like</h3>
         <p>Three to six people. Start with the owner; add anyone whose absence would change the plan — including hires you&apos;re planning (give them a future Started date). Tenure is worked out from Started against the plan&apos;s first year, {formatMonth(fyStart.toISOString())}.</p>

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
 import { PERSON_ROLES, CAPABILITY_KINDS, parseMonth, type Person, type Capability, type CapabilityKind } from "./model";
+import { nextHref } from "@/lib/nav";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const fail = (e: { message: string }, what: string): Result<never> => { console.error(what, e); return { ok: false, error: `Couldn't save ${what}: ${e.message}` }; };
@@ -66,5 +67,5 @@ export async function deleteCapability(planId: string, id: string): Promise<Resu
 }
 
 export async function continueFromPeople(planId: string, intent: "next" | "later") {
-  redirect(intent === "next" ? `/plans/${planId}/marketing` : `/plans/${planId}/dashboard`);
+  redirect(intent === "next" ? nextHref(planId, "people") : `/plans/${planId}/dashboard`);
 }

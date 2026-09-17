@@ -187,7 +187,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
         : area === "research" ? <Button size="sm" type="button" onClick={() => add("evidence", { source: "", method: "", finding: "", decision: "", occurred_on: null, when_text: "" })}>+ Research</Button>
         : area === "actions" ? <Button size="sm" type="button" onClick={() => setEditing({})}>+ Action</Button>
         : undefined}
-      footer={<ModuleFooter planId={planId} prevId="people" formId="marketing-form" />}
+      footer={<ModuleFooter planId={planId} moduleId="marketing" formId="marketing-form" />}
       help={<>
         <h3>What good looks like</h3>
         <p>Specific beats big. &quot;Builders within 90 minutes of Wollongong&quot; is a market; &quot;the construction industry&quot; is not. Name the {customerWord}, the area and roughly how many.</p>
@@ -210,7 +210,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
             a commercial arm and a residential one stops describing both in one paragraph.
           */}
           <Toolbar><Meta className="ml-0">
-            One row for each kind of buyer. Most businesses have one or two \u2014 if you catch yourself writing
+            One row for each kind of buyer. Most businesses have one or two — if you catch yourself writing
             &quot;and also&quot; in a row, that is a second segment.
           </Meta></Toolbar>
           <Grid>
@@ -225,9 +225,9 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
               {rows.segments.map((sg) => (
                 <Row key={sg.id} data-row={sg.id} onBlur={(e) => left(e) && commit("segments", sg.id)} className={cn(sg._error && "[&>td]:bg-bad-soft")} title={sg._error}>
                   <Td wrap><CellTextarea value={sg.name} placeholder="e.g. Residential builders" onChange={(e) => edit("segments", sg.id, { name: e.target.value })} /></Td>
-                  <Td wrap><CellTextarea value={sg.profile ?? ""} placeholder="e.g. Licensed, 3\u201325 staff, $2\u201312M turnover, within 90 minutes" onChange={(e) => edit("segments", sg.id, { profile: e.target.value })} /></Td>
+                  <Td wrap><CellTextarea value={sg.profile ?? ""} placeholder="e.g. Licensed, 3–25 staff, $2–12M turnover, within 90 minutes" onChange={(e) => edit("segments", sg.id, { profile: e.target.value })} /></Td>
                   <Td wrap><CellTextarea value={sg.cares_about ?? ""} placeholder="e.g. Never holding up their other trades. Pays more to avoid a callback." onChange={(e) => edit("segments", sg.id, { cares_about: e.target.value })} /></Td>
-                  <Td right><CellInput numeric suffix="%" value={sg.revenue_share === null ? "" : String(sg.revenue_share)} placeholder="\u2014"
+                  <Td right><CellInput numeric suffix="%" value={sg.revenue_share === null ? "" : String(sg.revenue_share)} placeholder="—"
                     onChange={(e) => edit("segments", sg.id, { revenue_share: e.target.value.trim() === "" ? null : Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} /></Td>
                   <Td><RemoveButton onClick={() => remove("segments", sg.id)} /></Td>
                 </Row>
@@ -241,7 +241,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
               </FootRow>
             )}
           </Grid>
-          <Note>Share of sales is optional \u2014 it is a rough split, not a forecast. The forecast comes from your Sales lines.</Note>
+          <Note>Share of sales is optional — it is a rough split, not a forecast. The forecast comes from your Sales lines.</Note>
 
           <div onBlur={(e) => left(e) && commitMarket()} className="mt-4">
             <Section title="The market">{narrative(MARKET_FIELDS)}</Section>
@@ -389,9 +389,9 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
             <tbody>
               {rows.evidence.map((ev) => (
                 <Row key={ev.id} data-row={ev.id} onBlur={(e) => left(e) && commit("evidence", ev.id)} className={cn(ev._error && "[&>td]:bg-bad-soft")} title={ev._error}>
-                  <Td wrap><CellTextarea value={ev.source} placeholder="e.g. How long do builders wait for a slab \u2014 and would they pay to wait less?" onChange={(e) => edit("evidence", ev.id, { source: e.target.value })} /></Td>
+                  <Td wrap><CellTextarea value={ev.source} placeholder="e.g. How long do builders wait for a slab — and would they pay to wait less?" onChange={(e) => edit("evidence", ev.id, { source: e.target.value })} /></Td>
                   <Td wrap><CellTextarea value={ev.method ?? ""} placeholder="e.g. Phone survey of 40 builders, over two weeks" onChange={(e) => edit("evidence", ev.id, { method: e.target.value })} /></Td>
-                  <Td wrap><CellTextarea value={ev.finding ?? ""} placeholder="e.g. 31 of 40 had waited >3 weeks in the last year; 26 would pay 5\u20138% more for a guaranteed date" onChange={(e) => edit("evidence", ev.id, { finding: e.target.value })} /></Td>
+                  <Td wrap><CellTextarea value={ev.finding ?? ""} placeholder="e.g. 31 of 40 had waited >3 weeks in the last year; 26 would pay 5–8% more for a guaranteed date" onChange={(e) => edit("evidence", ev.id, { finding: e.target.value })} /></Td>
                   <Td wrap><CellTextarea value={ev.decision ?? ""} placeholder="e.g. Guarantee a 10-day pour and charge 6% for it" onChange={(e) => edit("evidence", ev.id, { decision: e.target.value })} /></Td>
                   <Td><CellInput value={ev.when_text} placeholder="month year" onChange={(e) => edit("evidence", ev.id, { when_text: e.target.value })} /></Td>
                   <Td><RemoveButton onClick={() => remove("evidence", ev.id)} /></Td>

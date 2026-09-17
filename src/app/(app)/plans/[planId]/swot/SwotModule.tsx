@@ -75,7 +75,7 @@ export function SwotModule({ planId, initial, suggestions, goals, mode }: {
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group="Goals" title="SWOT" subtitle="Four honest lists — half of it is already in your plan" mode={mode}
       areas={[{ key: "swot", label: "SWOT", count: real.length }]} area="swot" onArea={() => {}} scope={{ label: "This plan" }}
-      footer={<ModuleFooter planId={planId} prevId="competitors" formId="swot-form" />}
+      footer={<ModuleFooter planId={planId} moduleId="swot" formId="swot-form" />}
       help={<>
         <h3>What good looks like</h3>
         <p>Three to five lines a quadrant, each one specific enough that a stranger could check it. &quot;Good team&quot; is not a strength; &quot;11-year builder relationships and the only QBCC open licence in the postcode&quot; is.</p>

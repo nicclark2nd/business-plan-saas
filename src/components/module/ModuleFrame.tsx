@@ -4,6 +4,7 @@ import Link from "next/link";
 import { createContext, useContext, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { backHref, nextHref } from "@/lib/nav";
 
 /**
  * The one layout for a data module (SaaS §6.11, mockup docs/mockup/record-pattern.html):
@@ -115,18 +116,45 @@ export function ModuleFrame({
   );
 }
 
-/** Pinned footer: Back / Save and finish later / Save and continue. `formId` is the module's form. */
-export function ModuleFooter({ planId, prevId = "dashboard", formId, nextLabel = "Save and continue →" }: {
-  planId: string; prevId?: string; formId: string; nextLabel?: string;
+/**
+ * Pinned footer: Back / Save and finish later / Save and continue.
+ *
+ * `moduleId` is this module's own id and BACK IS DERIVED FROM IT (§6.81). It used to be a `prevId` prop
+ * written out at each call site — thirteen hand-copied answers to a question the step numbers already
+ * answer, and the forward half of the same arrangement had already drifted.
+ */
+export function ModuleFooter({ planId, moduleId, formId, nextLabel = "Save and continue →" }: {
+  planId: string; moduleId: string; formId: string; nextLabel?: string;
 }) {
   const { pending, note } = useModule();
   return (
     <div className="flex items-center justify-between border-t border-border bg-card px-5 py-2.5">
-      <Button variant="outline" render={<Link href={`/plans/${planId}/${prevId}`} />}>← Back</Button>
+      <Button variant="outline" render={<Link href={backHref(planId, moduleId)} />}>← Back</Button>
       <span className="text-xs text-muted-foreground">{note ?? "All changes saved"}</span>
       <div className="flex gap-2">
         <Button variant="outline" type="submit" form={formId} name="intent" value="later" disabled={pending}>Save and finish later</Button>
         <Button type="submit" form={formId} name="intent" value="next" disabled={pending}>{pending ? "Saving…" : nextLabel}</Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Footer for a step with nothing to save (§6.81). Review forecast reads a forecast and writes nothing, so
+ * "Save and continue" submitted an empty form and the guided path DEAD-ENDED at step 13 — a client could
+ * not reach Goals from the screen that precedes it. Same three positions, but forward is a link.
+ */
+export function ModuleReadOnlyFooter({ planId, moduleId, nextLabel = "Continue →" }: {
+  planId: string; moduleId: string; nextLabel?: string;
+}) {
+  const { note } = useModule();
+  return (
+    <div className="flex items-center justify-between border-t border-border bg-card px-5 py-2.5">
+      <Button variant="outline" render={<Link href={backHref(planId, moduleId)} />}>← Back</Button>
+      <span className="text-xs text-muted-foreground">{note ?? "Nothing to save on this screen"}</span>
+      <div className="flex gap-2">
+        <Button variant="outline" render={<Link href={`/plans/${planId}/dashboard`} />}>Back to dashboard</Button>
+        <Button render={<Link href={nextHref(planId, moduleId)} />}>{nextLabel}</Button>
       </div>
     </div>
   );

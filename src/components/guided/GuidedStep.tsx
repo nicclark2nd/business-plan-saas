@@ -7,16 +7,16 @@ import { StepFrame, StepFooter } from "./StepFrame";
  * optional help (coach panels, shown in a toggleable right column), and the id of the form the footer submits.
  */
 export async function GuidedStep({
-  planId, step, group, title, subtitle, children, help, formId, prevId, nextLabel,
+  planId, step, group, title, subtitle, children, help, formId, moduleId, nextLabel,
 }: {
   planId: string; step: number; group: string; title: string; subtitle?: string;
-  children: React.ReactNode; help?: React.ReactNode; formId: string; prevId?: string; nextLabel?: string;
+  children: React.ReactNode; help?: React.ReactNode; formId: string; moduleId: string; nextLabel?: string;
 }) {
   const session = await getSession();
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
   return (
     <StepFrame step={step} total={GUIDED_STEPS.length} group={group} title={title} subtitle={subtitle} mode={mode} help={help}
-      footer={<StepFooter planId={planId} prevId={prevId} formId={formId} nextLabel={nextLabel} />}>
+      footer={<StepFooter planId={planId} moduleId={moduleId} formId={formId} nextLabel={nextLabel} />}>
       {children}
     </StepFrame>
   );

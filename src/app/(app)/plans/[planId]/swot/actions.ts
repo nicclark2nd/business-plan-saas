@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { QUADRANTS, type Quadrant } from "./model";
+import { nextHref } from "@/lib/nav";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
@@ -33,5 +34,5 @@ export async function deleteSwot(planId: string, id: string): Promise<Result> {
 }
 
 export async function continueFromSwot(planId: string, intent: "next" | "later") {
-  redirect(intent === "next" ? `/plans/${planId}/historic` : `/plans/${planId}/dashboard`);
+  redirect(intent === "next" ? nextHref(planId, "swot") : `/plans/${planId}/dashboard`);
 }

@@ -77,7 +77,7 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
       areas={[{ key: "pnl", label: "Profit & loss", count: presentCount }, { key: "bs", label: "Balance sheet", count: presentCount }, { key: "import", label: "Import" }]}
       area={area} onArea={(k) => { flush(); setArea(k as AreaKey); }} scope={{ label: "This plan" }}
       primaryAction={<Button size="sm" type="button" variant={newBusiness ? "secondary" : "outline"} aria-pressed={newBusiness} onClick={toggleNewBusiness}>{newBusiness ? "✓ New business — no accounts yet" : "New business — no accounts yet"}</Button>}
-      footer={<ModuleFooter planId={planId} prevId="swot" formId="historic-form" />}
+      footer={<ModuleFooter planId={planId} moduleId="historic" formId="historic-form" />}
       help={<>
         <h3>What to enter</h3>
         <p>Type the lines on your accountant&apos;s statements; the bold lines calculate. Period 1 is your most recent year — it becomes the opening position every forecast starts from. Older years are optional but show a lender the trend.</p>

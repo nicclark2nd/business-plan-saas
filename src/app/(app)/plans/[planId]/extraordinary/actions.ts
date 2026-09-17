@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { ExtraordinaryCategory } from "@/engine/extraordinary/items";
+import { nextHref } from "@/lib/nav";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
@@ -50,5 +51,5 @@ export async function deleteExtraordinary(planId: string, id: string): Promise<R
 }
 
 export async function continueFromExtraordinary(planId: string, intent: "next" | "later") {
-  redirect(intent === "next" ? `/plans/${planId}/forecast` : `/plans/${planId}/dashboard`);
+  redirect(intent === "next" ? nextHref(planId, "extraordinary") : `/plans/${planId}/dashboard`);
 }

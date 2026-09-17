@@ -1,6 +1,6 @@
 "use client";
 
-import { ModuleFrame, ModuleFooter } from "@/components/module/ModuleFrame";
+import { ModuleFrame, ModuleReadOnlyFooter } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row as GridRow, Toolbar, Meta, Note } from "@/components/module/DataGrid";
 import { StatTile, TileRow } from "@/components/chart/core";
 import { useMoney } from "@/components/MoneyProvider";
@@ -63,7 +63,7 @@ export function ForecastModule({ planId, mode, forecast, gstLabel }: {
       subtitle="Every check the plan is judged on, and whether it passed" mode={mode}
       areas={[{ key: "checks", label: "Checks", count: rows, ...(failed ? { tag: `${failed} failing` } : {}) }]}
       area="checks" onArea={() => {}} scope={{ label: "Five years" }}
-      footer={<ModuleFooter planId={planId} prevId="extraordinary" formId="forecast-form" />}
+      footer={<ModuleReadOnlyFooter planId={planId} moduleId="forecast" />}
       help={<>
         <h3>What this screen is for</h3>
         <p>A forecast is not one calculation, it is three statements that have to agree with each other and with themselves. These checks are how the plan proves it — and they run on the same figures the statements show, not on a second copy of them.</p>
@@ -74,7 +74,6 @@ export function ForecastModule({ planId, mode, forecast, gstLabel }: {
         <p>The figure shown is how far out it is, in the year it is out. Nothing on the three statements can be relied on until it passes, and every one of them says so at the top when it does not.</p>
       </>}
     >
-      <form id="forecast-form" className="hidden" />
 
       <TileRow>
         <StatTile label="Checks run" value={String(total)} sub={`${rows} tests, across ${FORECAST_YEARS.length} years`} />

@@ -113,7 +113,7 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
       areas={[{ key: "expenses", label: "Expenses", count: lines.length }, { key: "monthly", label: "Monthly projections" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "This plan" }}
       primaryAction={area === "expenses" ? <Button size="sm" type="button" onClick={add}>+ Expense</Button> : undefined}
-      footer={<ModuleFooter planId={planId} prevId="cogs" formId="overheads-form" />}
+      footer={<ModuleFooter planId={planId} moduleId="overheads" formId="overheads-form" />}
       help={<>
         <h3>What good looks like</h3>
         <p>Everything the business spends that is not the direct cost of a sale: rent, insurance, fuel, phones, accounting, admin wages. If it would still be there in a month where you sold nothing, it belongs here rather than in COGS.</p>

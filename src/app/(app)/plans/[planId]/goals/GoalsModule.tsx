@@ -109,7 +109,7 @@ export function GoalsModule({ planId, mode, initial, people, quarters, thisQuart
       ]}
       area={area} onArea={(k) => setArea(k as AreaKey)}
       scope={{ label: "This plan" }}
-      footer={<ModuleFooter planId={planId} prevId="forecast" formId="goals-form" />}
+      footer={<ModuleFooter planId={planId} moduleId="goals" formId="goals-form" />}
       help={<>
         <h3>Two levels, on purpose</h3>
         <p>The <b>annual goal</b> is one or two sentences about where this part of the business is going. It heads its section of the report, so a lender reads all six as the plan&apos;s intent.</p>

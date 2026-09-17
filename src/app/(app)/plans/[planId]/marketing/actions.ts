@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseMonth } from "../people/model";
 import { MARKET_FIELDS, NARRATIVE_FIELDS, POSITION_FIELDS, SPEND_KINDS, type Market, type Position } from "./model";
+import { nextHref } from "@/lib/nav";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const fail = (e: { message: string }, what: string): Result<never> => { console.error(what, e); return { ok: false, error: `Couldn't save ${what}: ${e.message}` }; };
@@ -63,5 +64,5 @@ export async function deleteRow(planId: string, kind: RowKind, id: string): Prom
 }
 
 export async function continueFromMarketing(planId: string, intent: "next" | "later") {
-  redirect(intent === "next" ? `/plans/${planId}/swot` : `/plans/${planId}/dashboard`);
+  redirect(intent === "next" ? nextHref(planId, "marketing") : `/plans/${planId}/dashboard`);
 }

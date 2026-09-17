@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { DepreciationMethod } from "@/engine/assets/depreciation";
+import { nextHref } from "@/lib/nav";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
@@ -68,5 +69,5 @@ export async function saveFinancedShape(planId: string, id: string, m: { name?: 
 }
 
 export async function continueFromAssets(planId: string, intent: "next" | "later") {
-  redirect(intent === "next" ? `/plans/${planId}/extraordinary` : `/plans/${planId}/dashboard`);
+  redirect(intent === "next" ? nextHref(planId, "assets") : `/plans/${planId}/dashboard`);
 }

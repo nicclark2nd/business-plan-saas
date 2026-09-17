@@ -11,7 +11,7 @@ export default async function VisionPage({ params }: { params: Promise<{ planId:
 
   return (
     <GuidedStep
-      planId={planId} formId="vision-form" prevId="dashboard" step={1} group="Strategy & Direction · Vision & Purpose"
+      planId={planId} formId="vision-form" moduleId="vision" step={1} group="Strategy & Direction · Vision & Purpose"
       title="What is this business for?" subtitle="Six short statements that open your plan"
       help={<>
         <CoachPanel title="Why this matters">

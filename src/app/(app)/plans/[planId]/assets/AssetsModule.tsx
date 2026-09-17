@@ -168,7 +168,7 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth,
       areas={[{ key: "assets", label: "Assets", count: lines.length }, { key: "monthly", label: "Monthly projections" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "This plan" }}
       primaryAction={area === "assets" ? <Button size="sm" type="button" onClick={add}>+ Asset</Button> : undefined}
-      footer={<ModuleFooter planId={planId} prevId="funding" formId="assets-form" />}
+      footer={<ModuleFooter planId={planId} moduleId="assets" formId="assets-form" />}
       help={<>
         <h3>What good looks like</h3>
         <p>Anything the business buys and keeps — a vehicle, machinery, a fit-out, computers. Not stock, and not something used up within the year; those are COGS and Overheads.</p>

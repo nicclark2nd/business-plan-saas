@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { createContext, useContext, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { backHref } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 /**
@@ -62,13 +63,13 @@ export function StepFrame({
 }
 
 /** Pinned footer: Back / Save and finish later / Save and continue. `formId` is the step's form. */
-export function StepFooter({ planId, prevId = "dashboard", formId, nextLabel = "Save and continue →" }: {
-  planId: string; prevId?: string; formId: string; nextLabel?: string;
+export function StepFooter({ planId, moduleId, formId, nextLabel = "Save and continue →" }: {
+  planId: string; moduleId: string; formId: string; nextLabel?: string;
 }) {
   const { pending, note } = useStep();
   return (
     <div className="sticky bottom-0 z-10 -mx-7 flex items-center justify-between border-t border-border bg-background px-7 py-3">
-      <Button variant="outline" render={<Link href={`/plans/${planId}/${prevId}`} />}>← Back</Button>
+      <Button variant="outline" render={<Link href={backHref(planId, moduleId)} />}>← Back</Button>
       {note && <span className="text-xs text-muted-foreground">{note}</span>}
       <div className="flex gap-2">
         <Button variant="outline" type="submit" form={formId} name="intent" value="later" disabled={pending}>Save and finish later</Button>

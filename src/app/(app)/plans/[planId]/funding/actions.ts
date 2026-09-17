@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { FundingKind } from "@/engine/funding/sources";
 import type { FundingRow, LoanType } from "./model";
+import { nextHref } from "@/lib/nav";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
@@ -144,5 +145,5 @@ export async function saveOpeningCash(planId: string, value: number): Promise<Re
 }
 
 export async function continueFromFunding(planId: string, intent: "next" | "later") {
-  redirect(intent === "next" ? `/plans/${planId}/assets` : `/plans/${planId}/dashboard`);
+  redirect(intent === "next" ? nextHref(planId, "funding") : `/plans/${planId}/dashboard`);
 }

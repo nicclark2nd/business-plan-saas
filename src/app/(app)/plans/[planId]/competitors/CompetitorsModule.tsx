@@ -87,7 +87,7 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
       area={area} onArea={(k) => { flush(); setArea(k as AreaKey); }}
       scope={{ label: "This plan" }}
       primaryAction={area === "competitors" ? <Button size="sm" type="button" onClick={add}>+ Competitor</Button> : undefined}
-      footer={<ModuleFooter planId={planId} prevId="marketing" formId="competitors-form" />}
+      footer={<ModuleFooter planId={planId} moduleId="competitors" formId="competitors-form" />}
       help={<>
         <h3>What good looks like</h3>
         <p>Three or four <b>direct</b> rivals — the ones a {customerWord} actually rings for a second quote — and at least one <b>indirect</b> one that solves the same problem a different way. Honest strengths: a lender trusts &quot;cheaper and faster than us&quot; more than a list of flaws.</p>

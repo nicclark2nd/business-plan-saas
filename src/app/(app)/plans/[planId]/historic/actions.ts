@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { deriveFromComponents, deriveFromTotals, type PeriodInput, type PeriodValues } from "@/engine/historic/derive";
 import { parseMonth } from "../people/model";
+import { nextHref } from "@/lib/nav";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
@@ -75,6 +76,6 @@ export async function setHasHistory(planId: string, has: boolean | null): Promis
 }
 
 export async function continueFromHistoric(planId: string, intent: "next" | "later") {
-  redirect(intent === "next" ? `/plans/${planId}/sales` : `/plans/${planId}/dashboard`);
+  redirect(intent === "next" ? nextHref(planId, "historic") : `/plans/${planId}/dashboard`);
 }
 
