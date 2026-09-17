@@ -5,7 +5,7 @@ import { ModuleFrame, ModuleStatusFooter } from "@/components/module/ModuleFrame
 import { Grid, Th, Td, Row as GridRow, TOTAL_ROW, Toolbar, Meta, Note } from "@/components/module/DataGrid";
 import { Statement, TaxNotes } from "@/components/module/Statement";
 import { ChartBox, Meter, StatTile, TileRow, type Severity } from "@/components/chart/core";
-import { BarRows, Lines } from "@/components/chart/plots";
+import { BarRows, Columns, Lines } from "@/components/chart/plots";
 import { useMoney } from "@/components/MoneyProvider";
 import { cn } from "@/lib/utils";
 import { FORECAST_YEARS, type PnlYear } from "@/engine/forecast/model";
@@ -15,6 +15,7 @@ import type { Noun } from "@/engine/plan/vocabulary";
 type AreaKey = "year" | "months" | "service";
 
 const pct = (v: number | null) => (v === null ? "\u2014" : `${v.toFixed(1)}%`);
+const r2 = (v: number) => Math.round(v * 100) / 100;
 /** A margin is not a status, but a loss is. Only the sign earns a colour. */
 const tone = (v: number): Severity | undefined => (v < 0 ? "bad" : undefined);
 
@@ -137,14 +138,22 @@ export function ProfitLossModule({
               sub="Trading only — tax and one-offs are annual" />
           </TileRow>
 
-          <ChartBox title="Operating profit by month" height={216}
-            note="Revenue less the cost of sales, overheads and depreciation, in the month each falls.">
+          {/*
+            * Break-Even's idiom, because the question is the same shape (§6.76.2). Two lines said "here is
+            * revenue, here is profit" and left the reader to measure the gap. A bar with a rule across it
+            * says what the month sold, what it had to sell to cover itself, and — in the colour — whether
+            * it did. On a plan where no month covers its costs, that is one glance rather than a squint.
+            *
+            * Months are discrete periods, which is what a column is and what a line is not.
+            */}
+          <ChartBox title="Revenue against what the month costs" height={216}
+            note="The bar is what you sell that month; the rule across it is what that month costs to run. The gap between them is the operating profit.">
             {(w) => (
-              <Lines width={w} height={216} categories={monthNames.map((m) => m.slice(0, 3))} format={money}
-                series={[
-                  { label: "Revenue", values: months.map((m) => m.revenue) },
-                  { label: "Operating profit", values: months.map((m) => m.operatingProfit) },
-                ]} />
+              <Columns width={w} height={216} categories={monthNames.map((m) => m.slice(0, 3))}
+                values={months.map((m) => m.revenue)}
+                threshold={months.map((m) => r2(m.cogs + m.overheads + m.depreciation))}
+                thresholdLabel="costs" format={money}
+                tone={(i) => (months[i].operatingProfit >= 0 ? "good" : "warn")} />
             )}
           </ChartBox>
 
