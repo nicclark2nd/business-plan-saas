@@ -36,9 +36,17 @@ export type ReportInput = {
   profile: { established: string | null; industry: string | null; country: string | null; legalStructure: string | null; customerType: string | null; productType: string | null };
   framework: { vision: string | null; mission: string | null; purpose: string | null; brandPromise: string | null; fieldOfPlay: string | null };
   goals: { area: string; title: string }[];
-  capital: { name: string; amount: number; year: number }[];
-  overheads: { name: string; amount: number }[];
-  funding: { name: string; kind: string; amount: number }[];
+  capital: { name: string; amount: number; year: number; category: string | null; usefulLifeMonths: number | null; residual: number; financed: boolean }[];
+  overheads: { name: string; category: string | null; amount: number }[];
+  /**
+   * The TERMS, not just the amount (§6.88). A funding section that says "Bank loan 250,000" and stops has
+   * left out everything a lender reads it for: the rate, the term, how it is repaid and when it starts.
+   */
+  funding: {
+    name: string; kind: string; amount: number;
+    rate: number | null; termMonths: number | null; repayment: string | null; frequency: string | null;
+    startsYear: number | null; taxable: boolean | null;
+  }[];
   extraordinary: { name: string; amount: number; year: number; income: boolean }[];
   owners: { name: string; share: number | null; role: string | null }[];
   licences: { name: string; number: string | null; issuer: string | null; expires: string | null }[];
@@ -62,7 +70,7 @@ export type ReportInput = {
   capabilities: { personId: string; kind: string; description: string }[];
   swot: { quadrant: string; text: string; response: string | null }[];
   goalsAnnual: { area: string; title: string; detail: string | null }[];
-  goalsQuarterly: { area: string; title: string; when: string | null; owner: string | null; status: string }[];
+  goalsQuarterly: { area: string; title: string; when: string | null; owner: string | null; status: string; due: string | null }[];
   operations: {
     premises: { name: string; address: string | null; tenure: string | null; isPrimary: boolean; floorArea: string | null; purpose: string | null }[];
     suppliers: { name: string; supplies: string | null; terms: string | null; dependency: string | null; alternative: string | null }[];
@@ -249,9 +257,16 @@ function executiveSummary(i: ReportInput): Draft {
     title: "Capital requirements",
     blocks: [
       { kind: "para", text: COPY.capital(i.businessName) },
-      { kind: "table", columns: [{ label: "Item", width: 300 }, { label: "Year", numeric: true }, { label: `Value (${i.currency})`, numeric: true }],
-        rows: i.capital.map((c) => [cell(c.name), num(`Year ${c.year}`), num(money(c.amount))])
-          .concat([[cell("Total", { bold: true }), num(""), num(money(i.capital.reduce((a, c) => a + c.amount, 0)), { bold: true })]]) },
+      { kind: "table",
+        columns: [{ label: "Item", width: 220 }, { label: "Category" }, { label: "Year", numeric: true },
+          { label: `Cost (${i.currency})`, numeric: true }, { label: "Written off over", numeric: true }, { label: "Funded by" }],
+        rows: i.capital.map((c) => [
+          cell(c.name), cell(c.category ?? "—", { muted: !c.category }), num(`Year ${c.year}`), num(money(c.amount)),
+          num(c.usefulLifeMonths ? `${Math.round(c.usefulLifeMonths / 12)} yr` : "—"),
+          cell(c.financed ? "Finance" : "Cash", { muted: !c.financed }),
+        ]).concat([[cell("Total", { bold: true }), cell(""), num(""),
+          num(money(i.capital.reduce((a, c) => a + c.amount, 0)), { bold: true }), num(""), cell("")]]) },
+      { kind: "note", text: COPY.capitalNote },
     ],
   };
 
@@ -298,9 +313,26 @@ function financialPlan(i: ReportInput): Draft {
     title: "Overheads",
     blocks: [
       { kind: "para", text: COPY.overheads(i.businessName) },
+      /* Grouped, because twenty ungrouped expense lines is a list and five groups is an argument (§6.88). */
       { kind: "table", columns: [{ label: "Expense", width: 300 }, { label: `Year 1 (${i.currency})`, numeric: true }],
-        rows: i.overheads.map((o) => [cell(o.name), num(money(o.amount))])
-          .concat([[cell("Total overheads", { bold: true }), num(money(p[1].overheads), { bold: true })]]) },
+        rows: (() => {
+          const groups = new Map<string, typeof i.overheads>();
+          for (const o of i.overheads) {
+            const k = o.category?.trim() || "Other";
+            groups.set(k, [...(groups.get(k) ?? []), o]);
+          }
+          /*
+           * Group only when grouping SAYS something. A plan whose expenses are all uncategorised gets one
+           * heading called "Other" above every row, which is a label pretending to be structure.
+           */
+          const out = groups.size > 1
+            ? [...groups.entries()].flatMap(([group, rows]) => [
+                [cell(group, { bold: true }), num(money(rows.reduce((a, r) => a + r.amount, 0)), { bold: true })],
+                ...rows.map((o) => [cell(`   ${o.name}`, { muted: true }), num(money(o.amount))]),
+              ])
+            : i.overheads.map((o) => [cell(o.name, { muted: true }), num(money(o.amount))]);
+          return [...out, [cell("Total overheads", { bold: true }), num(money(p[1].overheads), { bold: true })]];
+        })() },
     ],
   };
 
@@ -308,8 +340,18 @@ function financialPlan(i: ReportInput): Draft {
     title: "Funding",
     blocks: [
       { kind: "para", text: COPY.funding(i.businessName) },
-      { kind: "table", columns: [{ label: "Source", width: 300 }, { label: "Type" }, { label: `Amount (${i.currency})`, numeric: true }],
-        rows: i.funding.map((x) => [cell(x.name), cell(x.kind, { muted: true }), num(money(x.amount))]) },
+      { kind: "table",
+        columns: [{ label: "Source", width: 200 }, { label: "Type" }, { label: `Amount (${i.currency})`, numeric: true },
+          { label: "Rate", numeric: true }, { label: "Term", numeric: true }, { label: "Repaid" }, { label: "Starts" }],
+        rows: i.funding.map((x) => [
+          cell(x.name), cell(x.kind, { muted: true }), num(money(x.amount)),
+          num(x.rate === null ? "—" : `${x.rate}%`),
+          num(x.termMonths ? `${x.termMonths} mo` : "—"),
+          cell(x.repayment ? `${x.repayment}${x.frequency ? `, ${x.frequency.toLowerCase()}` : ""}` : "—", { muted: !x.repayment }),
+          cell(x.startsYear ? `Year ${x.startsYear}` : "—", { muted: !x.startsYear }),
+        ]).concat([[cell("Total", { bold: true }), cell(""), num(money(i.funding.reduce((a, x) => a + x.amount, 0)), { bold: true }),
+          num(""), num(""), cell(""), cell("")]]) },
+      { kind: "note", text: COPY.fundingNote },
     ],
   };
 

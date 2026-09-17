@@ -90,6 +90,11 @@ export const COPY = {
   funding: (name: string) =>
     `The money behind ${name}, and where it comes from. Repayments and interest on any borrowing are in the projections above.`,
 
+  fundingNote:
+    "Interest and repayments on everything above are already in the projections: the interest in the profit and loss, the repayments in the cash flow, and the balance outstanding on the balance sheet.",
+  capitalNote:
+    "Each item is written off over its useful life, and that depreciation is in the profit and loss. Anything shown as funded by finance carries its own repayments, which are in the funding table.",
+
   oneOffs:
     "Income and costs that belong to a single year rather than to ordinary trading. They are shown separately so the trading performance can be read without them.",
 

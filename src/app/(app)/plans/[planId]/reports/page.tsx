@@ -13,6 +13,7 @@ import { AREA_LABEL } from "@/engine/whatif/goals";
 import { SPEND_LABEL } from "../marketing/model";
 import { ROLE_LABEL } from "../people/model";
 import { BS_LINES, PNL_LINES } from "../historic/model";
+import { FREQUENCIES, LOAN_TYPES, REPAYMENT_TYPES } from "../funding/model";
 import { ReportsModule } from "./ReportsModule";
 
 const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : Number(v) || 0);
@@ -20,6 +21,10 @@ const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : Num
 const AREA: Record<string, string> = AREA_LABEL;
 const ROLE: Record<string, string> = ROLE_LABEL;
 const SPEND: Record<string, string> = SPEND_LABEL;
+const LOAN_TYPE: Record<string, string> = Object.fromEntries(LOAN_TYPES.map((x) => [x.value, x.label]));
+const REPAYMENT: Record<string, string> = Object.fromEntries(REPAYMENT_TYPES.map((x) => [x.value, x.label]));
+const FREQ: Record<string, string> = Object.fromEntries(FREQUENCIES.map((x) => [x.value, x.label]));
+const KIND: Record<string, string> = { debt: "Borrowing", equity: "Equity", grant: "Grant", owner: "Owner funds", revenue_linked: "Revenue-linked" };
 
 const raw = (v: unknown) => v as Record<string, unknown>;
 const text = (v: unknown) => { const s = String(v ?? "").trim(); return s || null; };
@@ -108,13 +113,26 @@ export default async function ReportsPage({ params }: { params: Promise<{ planId
     goals: goals.filter((g) => !g.parent_id).map((g) => ({ area: AREA[String(g.area)] ?? String(g.area ?? ""), title: String(g.title ?? "") })),
     capital: (sources.assets as unknown as Record<string, unknown>[]).map((a) => ({
       name: String(a.name ?? "Asset"), amount: n(a.purchase_price), year: n(a.start_year) || 1,
+      category: text(a.category), usefulLifeMonths: n(a.useful_life_months) || null,
+      residual: n(a.residual_value), financed: !!a.funding_debt_id,
     })).filter((a) => a.amount > 0),
     overheads: (sources.overheads as unknown as Record<string, unknown>[]).map((o) => ({
-      name: String(o.name ?? "Expense"), amount: n(o.current_value),
+      name: String(o.name ?? "Expense"), category: text(o.category), amount: n(o.current_value),
     })).filter((o) => o.amount > 0),
-    funding: (sources.funding as unknown as Record<string, unknown>[]).map((x) => ({
-      name: String(x.name ?? "Source"), kind: String(x.kind ?? ""), amount: n(x.amount),
-    })).filter((x) => x.amount > 0),
+    funding: (sources.funding as unknown as Record<string, unknown>[]).map((x) => {
+      const loan = raw(x.loan);
+      return {
+        name: String(x.name ?? "Source"),
+        kind: LOAN_TYPE[String(loan?.loan_type)] ?? KIND[String(x.kind)] ?? String(x.kind ?? ""),
+        amount: n(x.amount),
+        rate: loan && loan.interest_rate !== null && loan.interest_rate !== undefined ? n(loan.interest_rate) : null,
+        termMonths: loan ? n(loan.term_months) || null : null,
+        repayment: loan ? REPAYMENT[String(loan.repayment_type)] ?? null : null,
+        frequency: loan ? FREQ[String(loan.payment_frequency)] ?? null : null,
+        startsYear: n(x.start_year) || null,
+        taxable: null,
+      };
+    }).filter((x) => x.amount > 0),
     extraordinary: (sources.extraordinary as unknown as Record<string, unknown>[]).map((x) => ({
       name: String(x.name ?? "Item"), amount: Math.abs(n(x.amount)), year: n(x.year) || 1,
       income: String(x.kind ?? "") === "income",
@@ -173,6 +191,7 @@ export default async function ReportsPage({ params }: { params: Promise<{ planId
     goalsQuarterly: goals.filter((g) => g.parent_id).map((g) => ({
       area: AREA[String(g.area)] ?? String(g.area ?? ""), title: String(g.title ?? ""),
       when: g.quarter ? `Q${n(g.quarter)}${g.year ? ` FY${n(g.year)}` : ""}` : null,
+      due: g.milestone_date ? new Date(String(g.milestone_date)).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) : null,
       owner: text(people.find((p) => p.id === g.owner_person_id)?.name),
       status: String(g.status ?? "not_started"),
     })),

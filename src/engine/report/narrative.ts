@@ -431,10 +431,12 @@ export function goalsAndMilestones(i: ReportInput): Draft {
         blocks: [
           para(COPY.quarters),
           { kind: "table",
-            columns: [{ label: "Quarter", width: 110 }, { label: "Goal" }, { label: "Area" }, { label: "Owner" }, { label: "Status" }],
+            columns: [{ label: "Quarter", width: 100 }, { label: "Goal" }, { label: "Area" }, { label: "Owner" }, { label: "Due" }, { label: "Status" }],
             rows: i.goalsQuarterly.map((g) => [
               cell(g.when ?? "—", { muted: !g.when }), cell(g.title.trim()),
               cell(g.area, { muted: true }), cell(g.owner ?? "—", { muted: !g.owner }),
+              /* The date a commitment is due is the difference between a goal and a wish (§6.88). */
+              cell(g.due ?? "—", { muted: !g.due }),
               cell(STATUS[g.status] ?? g.status, { muted: g.status === "not_started" }),
             ]) },
         ] },
