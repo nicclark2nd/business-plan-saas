@@ -8,7 +8,7 @@ const doc = (): ReportDoc => ({
   date: "September 2026",
   omitted: [],
   cover: {
-    tagline: "CONCRETING & CIVIL WORKS",
+    tagline: "Concreting & civil works",
     year: "2027",
     contact: "hello@bne.example \u00b7 bne.example",
     address: "25 Deta Street, Suite 1, Geebung QLD 4004",
@@ -106,7 +106,7 @@ describe("the cover", () => {
     const xml = await documentXml(await renderDocx(doc(), []));
     expect(xml).toContain("BNE Concreting");
     expect(xml).toContain("Business Plan");
-    expect(xml).toContain("CONCRETING &amp; CIVIL WORKS");
+    expect(xml).toContain("Concreting &amp; civil works");
     expect(xml).toContain("2027");
     expect(xml).toContain("bne.example");
     expect(xml).toContain("Geebung QLD 4004");
@@ -117,7 +117,7 @@ describe("the cover", () => {
     const xml = await documentXml(await renderDocx(bare, []));
     expect(xml).toContain("BNE Concreting");
     expect(xml).toContain("Business Plan");
-    expect(xml).not.toContain("CONCRETING &amp; CIVIL WORKS");
+    expect(xml).not.toContain("Concreting &amp; civil works");
     expect(xml).not.toContain("2027");
     expect(xml).not.toContain("Geebung");
   });

@@ -2317,3 +2317,26 @@ off-centre on the other.
 **Confirmed in passing:** the logo built in §6.94 works end to end. Nic uploaded a real one and it renders
 centred on the cover — the one thing this session could not test itself, because there is no way to put a
 file through an operating system's file picker from here.
+
+## 6.96.1 The tagline prints as typed (18 Sep 2026)
+
+The cover upper-cased the tagline and tracked it wide, because the supplied example's was two words —
+CONCRETING & CIVIL WORKS — and small caps looked right against it.
+
+The first real one was a sentence: *"Quality Work, Honest Value, and a Partnership You Can Trust."* In
+forced caps at that tracking it shouted, wrapped to two lines, and lost the rhythm of its own punctuation.
+
+> **DECIDING THE CASE OF SOMEBODY'S OWN STRAPLINE IS THE APP HAVING AN OPINION ABOUT THEIR WORDS.** A client
+> who wants capitals can type capitals. What they typed is what prints (§6.87).
+
+Tracking came down with it, in both renderers.
+
+The general shape, because this will happen again: **a style inferred from one example is a guess about the
+whole range of that field.** Two words and a sentence are the same field, and a treatment that flatters one
+can wreck the other. The safe default for anything a client types in their own voice is to print it and stay
+out of the way.
+
+*Also recorded:* the JSX comment for this change was placed inside a `{cond && ( … )}` expression, where a
+brace opens an object rather than a comment, and broke the build. The tests were run and passed, because
+`vitest` does not compile the page. **Run `tsc` after touching a component, not just the tests** — the suite
+proved the engine and said nothing about whether the screen would render.

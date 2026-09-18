@@ -111,8 +111,9 @@ export function ReportsModule({ planId, mode, doc, reconciled, missing, pageSize
             className="mx-auto mb-7 max-h-[96px] w-auto object-contain" />}
 
           <div className="text-[22px] font-semibold leading-tight text-primary">{doc.businessName}</div>
+          {/* As typed, not upper-cased (§6.96.1) — a strapline is the client's sentence, not the app's. */}
           {doc.cover.tagline && (
-            <div className="mt-1.5 text-[11.5px] uppercase tracking-[.22em] text-muted-foreground">{doc.cover.tagline}</div>
+            <div className="mx-auto mt-2 max-w-[34em] text-[12.5px] tracking-[.04em] text-muted-foreground">{doc.cover.tagline}</div>
           )}
 
           <div className="mx-auto mt-10 h-px w-16 bg-primary" />

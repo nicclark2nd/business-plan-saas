@@ -211,8 +211,16 @@ export async function renderDocx(
     })] : []),
     middle([text(doc.businessName, { bold: true, color: ACCENT, size: 40 })], { before: logo ? 0 : 2200 }),
     ...(c.tagline
-      /* Letter-spaced small caps, as in the example. `characterSpacing` is in twips, not points. */
-      ? [middle([new TextRun({ text: c.tagline.toUpperCase(), size: 17, color: MUTED, characterSpacing: 60 })], { before: 120 })]
+      /*
+       * PRINTED AS TYPED (§6.96.1). This upper-cased it, because the example's tagline was two words —
+       * "CONCRETING & CIVIL WORKS" — and small caps looked right. The first real one was a sentence:
+       * "Quality Work, Honest Value, and a Partnership You Can Trust." In forced caps at that tracking it
+       * shouted, wrapped to two lines and lost its own punctuation's rhythm.
+       *
+       * A client who wants caps can type caps. Deciding the case of somebody's own strapline is the app
+       * having an opinion about their words (§6.87), and the tracking came down with it.
+       */
+      ? [middle([new TextRun({ text: c.tagline, size: 18, color: MUTED, characterSpacing: 16 })], { before: 140 })]
       : []),
 
     goldRule(760, 520),
