@@ -7,6 +7,12 @@ const doc = (): ReportDoc => ({
   subtitle: "Business Plan",
   date: "September 2026",
   omitted: [],
+  cover: {
+    tagline: "CONCRETING & CIVIL WORKS",
+    year: "2027",
+    contact: "hello@bne.example \u00b7 bne.example",
+    address: "25 Deta Street, Suite 1, Geebung QLD 4004",
+  },
   disclaimer: {
     title: "Confidentiality Statement & Legal Disclaimer",
     parts: [{ heading: "Confidentiality & Intellectual Property", body: "Strictly confidential to BNE Concreting." }],
@@ -91,6 +97,37 @@ async function zipNames(buf: Buffer) {
  * Page two (§6.95). The point of every assertion here is that a legal notice which names the WRONG company,
  * or lands in the middle of the contents, is worse than not having one.
  */
+/**
+ * The cover (§6.96). Every field but the name and the title is optional, and the assertions that matter are
+ * the ones about absence: a cover that prints a blank line where a website should be looks like a fault.
+ */
+describe("the cover", () => {
+  it("carries the name, the title, the tagline, the year and the contact block", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    expect(xml).toContain("BNE Concreting");
+    expect(xml).toContain("Business Plan");
+    expect(xml).toContain("CONCRETING &amp; CIVIL WORKS");
+    expect(xml).toContain("2027");
+    expect(xml).toContain("bne.example");
+    expect(xml).toContain("Geebung QLD 4004");
+  });
+
+  it("drops each optional line rather than printing a blank one", async () => {
+    const bare = { ...doc(), cover: { tagline: null, year: null, contact: null, address: null } };
+    const xml = await documentXml(await renderDocx(bare, []));
+    expect(xml).toContain("BNE Concreting");
+    expect(xml).toContain("Business Plan");
+    expect(xml).not.toContain("CONCRETING &amp; CIVIL WORKS");
+    expect(xml).not.toContain("2027");
+    expect(xml).not.toContain("Geebung");
+  });
+
+  it("is centred", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    expect(xml).toContain('w:val="center"');
+  });
+});
+
 describe("the confidentiality statement", () => {
   it("is in the document, under its own heading", async () => {
     const xml = await documentXml(await renderDocx(doc(), []));

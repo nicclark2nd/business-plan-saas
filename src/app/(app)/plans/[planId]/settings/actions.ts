@@ -6,6 +6,7 @@ import { parseMonth } from "../people/model";
 import type { Profile, Financial, Printing, Licence } from "./model";
 import { serializeComponents } from "@/engine/plan/gst";
 import { checkLogo, logoObjectPath, LOGO_BUCKET } from "@/engine/plan/logo";
+import { checkEmail, checkWebsite } from "@/engine/plan/contact";
 
 type Result = { ok: true; data?: { date_established: string | null } } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
@@ -22,6 +23,12 @@ export async function saveProfile(planId: string, p: Partial<Profile> & { establ
     return { ok: false, error: "The plan year should be a four-digit year, e.g. 2026." };
   }
   const planYear = p.plan_year === undefined ? null : year;
+
+  /* Refused with a sentence rather than stored and printed wrong on a cover (§6.96). */
+  const email = checkEmail(p.contact_email);
+  if (!email.ok) return { ok: false, error: email.error };
+  const website = checkWebsite(p.website);
+  if (!website.ok) return { ok: false, error: website.error };
 
   /**
    * Moving country takes the old country's taxes with it (§6.39.1). A plan switched from British Columbia
@@ -45,6 +52,10 @@ export async function saveProfile(planId: string, p: Partial<Profile> & { establ
       legal_structure: p.legal_structure?.trim() || null,
       customer_type: p.customer_type?.trim() || null,
       product_type: p.product_type?.trim() || null,
+      tagline: p.tagline?.trim() || null,
+      /* Stored as typed, tidied only for printing — what the client wrote is theirs (§6.96). */
+      contact_email: email.value,
+      website: website.value,
     }, { onConflict: "plan_id" }),
   ]);
   const error = plans.error ?? settings.error;

@@ -62,10 +62,29 @@ export type Omission = { title: string; why: string };
  */
 export type Disclaimer = { title: string; parts: { heading: string; body: string }[] };
 
+/**
+ * The front cover (§6.96), assembled once and rendered twice.
+ *
+ * Every field but the name and the title is optional, and the renderers drop the line rather than leaving a
+ * gap: a cover with a blank where a website should be looks like a fault, and a cover with one line fewer
+ * looks like a decision.
+ */
+export type Cover = {
+  /** The line under the name — what the business does, in its own words. */
+  tagline: string | null;
+  /** The year on the front, from the plan rather than the calendar. */
+  year: string | null;
+  /** Email · website, already joined, or null when neither is set. */
+  contact: string | null;
+  /** The primary premise, where one has been marked. */
+  address: string | null;
+};
+
 export type ReportDoc = {
   businessName: string;
   subtitle: string;
   date: string;
+  cover: Cover;
   disclaimer: Disclaimer;
   sections: Section[];
   /** Sections left out, and the reason for each. Printed at the end rather than silently dropped. */

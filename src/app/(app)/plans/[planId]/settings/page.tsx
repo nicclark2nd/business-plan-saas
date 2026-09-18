@@ -36,6 +36,7 @@ export default async function SettingsPage({ params, searchParams }: { params: P
     plan_year: plan.data?.plan_year ?? new Date().getFullYear(),
     date_established: s.date_established ?? null, industry: s.industry ?? null, country: s.country ?? null, legal_structure: s.legal_structure ?? null,
     customer_type: s.customer_type ?? null, product_type: s.product_type ?? null, products_services_statement: s.products_services_statement ?? null,
+    tagline: s.tagline ?? null, contact_email: s.contact_email ?? null, website: s.website ?? null,
     financial_year_end_month: s.financial_year_end_month ?? 6, first_projected_year: s.first_projected_year ?? null,
     tax_rate: Number(s.tax_rate ?? 25), dividend_rate: Number(s.dividend_rate ?? 0),
     opening_tax_losses: Number(s.opening_tax_losses ?? 0), opening_retained_earnings: Number(s.opening_retained_earnings ?? 0),

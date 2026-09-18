@@ -124,9 +124,44 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
                   : "Also decides the sales tax, the paper the Word file prints on, and the legal notice on page two."}>
                 <FieldSelect value={s.country} options={opts(COUNTRIES)} placeholder="Choose" onValueChange={(v) => edit({ country: v }, "profile", true)} />
               </Field>
+              {/*
+                ONE FIELD, NOT TWO (§6.96). This writes `tax_region` — the column that has always held a
+                state or province — rather than a new "main state of operation" beside it. Two fields
+                meaning one thing would give a Texas plan two answers, with the legal notice reading one
+                and the tax rates the other (§6.41).
+
+                It saves through the FINANCIAL saver even though it is rendered here, because that is what
+                owns the column; and where the country's tax depends on the state, choosing one replaces
+                the tax rates exactly as it did when this control lived in the tax section.
+              */}
+              <Field label="Main state of operation"
+                hint={needsRegion(s.country) ? "Also sets the sales tax rates on the next tab." : "Optional. Printed in the plan's legal notice."}>
+                {regionsFor(s.country).length
+                  ? <FieldSelect value={s.tax_region ?? ""} placeholder={`Choose a ${regionLabel(s.country).toLowerCase()}`}
+                      options={regionsFor(s.country).map((r) => ({ value: r, label: r }))}
+                      onValueChange={(v) => edit({ tax_region: v, tax_components: regimeFor(s.country, v).components }, "financial", true)} />
+                  : <FieldInput value={s.tax_region ?? ""} placeholder="e.g. Queensland"
+                      onChange={(e) => edit({ tax_region: e.target.value }, "financial")}
+                      onBlur={() => commit("financial")} />}
+              </Field>
               <Field label="Legal structure" span={2} hint="Grouped by liability; your country's names come first."><FieldSelect value={s.legal_structure} groups={legalStructuresFor(s.country)} placeholder="Choose" onValueChange={(v) => edit({ legal_structure: v }, "profile", true)} /></Field>
               <Field label="Type of customer" span={2} hint="Changes the word the app uses for the people you sell to."><FieldSelect value={s.customer_type} options={opts(CUSTOMER_TYPES)} placeholder="Choose" onValueChange={(v) => edit({ customer_type: v }, "profile", true)} /></Field>
               <Field label="Type of product sold" span={2}><FieldSelect value={s.product_type} options={PRODUCT_TYPES} placeholder="Choose" onValueChange={(v) => edit({ product_type: v }, "profile", true)} /></Field>
+            </FieldGrid>
+          </Section>
+
+          {/* Everything here is optional, and every line disappears from the cover when it is empty (§6.96). */}
+          <Section title="On the cover">
+            <FieldGrid>
+              <Field label="Tagline" span={4} hint="The line under your name on the cover. What the business does, in its own words — not the industry.">
+                <FieldInput value={s.tagline ?? ""} placeholder="e.g. Concreting &amp; civil works" onChange={(e) => edit({ tagline: e.target.value }, "profile")} />
+              </Field>
+              <Field label="Contact email" span={2} hint="Printed at the foot of the cover. Not your sign-in address.">
+                <FieldInput value={s.contact_email ?? ""} placeholder="e.g. hello@example.com" onChange={(e) => edit({ contact_email: e.target.value }, "profile")} />
+              </Field>
+              <Field label="Main website" span={2} hint="Printed without the https:// and the www.">
+                <FieldInput value={s.website ?? ""} placeholder="e.g. example.com" onChange={(e) => edit({ website: e.target.value }, "profile")} />
+              </Field>
             </FieldGrid>
           </Section>
           <LicenceSection planId={planId} initial={licences} onPending={onLicPending} />
@@ -267,11 +302,21 @@ function TaxSection({ s, edit }: {
             options={[{ value: "no", label: "Not registered" }, { value: "yes", label: `Registered for ${heading}` }]}
             onValueChange={(v) => edit({ gst_registered: v === "yes" }, "financial", true)} />
         </Field>
+        {/*
+          THE STATE IS EDITED ON BUSINESS PROFILE, NOT HERE (§6.96). It used to be typed in this section,
+          because tax was the only thing that needed it — and it therefore only existed for the United
+          States and Canada, and only once a client had switched registration on. It is now a fact about
+          the business rather than a detail of its tax, so it is asked once, up there, for every plan.
+          This says where it came from, because the rates below depend on it; it does not offer a second
+          place to change it (§6.41).
+        */}
         {s.gst_registered && wantsRegion && (
-          <Field label={regionLabel(s.country)} hint="The tax depends on it. Changing this replaces the rates below.">
-            <FieldSelect value={s.tax_region ?? ""} placeholder={`Choose a ${regionLabel(s.country).toLowerCase()}`}
-              options={regionsFor(s.country).map((r) => ({ value: r, label: r }))}
-              onValueChange={(v) => edit({ tax_region: v, tax_components: regimeFor(s.country, v).components }, "financial", true)} />
+          <Field label={regionLabel(s.country)} hint="Set on Business profile. The rates below follow it.">
+            <div className="flex h-8 items-center text-[13px]">
+              {s.tax_region
+                ? <span className="font-semibold">{s.tax_region}</span>
+                : <span className="text-warn">Not set — choose it on Business profile and the rates will follow.</span>}
+            </div>
           </Field>
         )}
       </FieldGrid>

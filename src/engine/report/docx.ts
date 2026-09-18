@@ -22,6 +22,8 @@ import { imageSize } from "./imageSize";
 /** The plan's one accent. Everything else is black on white, because a bank prints in mono. */
 const ACCENT = "1F3A5F";
 const MUTED = "6B7280";
+/** The title on the cover is near-black, not the accent — the example's weight comes from size, not colour. */
+const INK = "111827";
 const RULE = { style: BorderStyle.SINGLE, size: 4, color: "D1D5DB" };
 
 const text = (s: string, o: { bold?: boolean; italics?: boolean; color?: string; size?: number } = {}) =>
@@ -176,18 +178,53 @@ export async function renderDocx(
   const shape = logo ? imageSize(logo) : null;
   const scaled = (h: number) => ({ height: h, width: Math.round(h * (shape ? shape.width / shape.height : 3)) });
 
+  /*
+   * THE COVER (§6.96), to the placement Nic supplied, in the app's own type rather than the example's
+   * display serif — his call: "the attached example was more for the placement".
+   *
+   * CENTRED, and every line optional but the name and the title. A cover that prints a blank where a
+   * website should be looks like a fault; one line fewer looks like a decision.
+   *
+   * The rule under the tagline and the one above the contact block are a paragraph border rather than a
+   * drawn line, because a border scales with the page and a fixed-width line does not — Letter is wider
+   * than A4 (§6.93) and a hard-coded rule would sit off-centre on one of them.
+   */
+  const middle = (children: TextRun[], o: { before?: number; after?: number } = {}) =>
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: o.before ?? 0, after: o.after ?? 0 }, children });
+  const goldRule = (before: number, after: number) =>
+    new Paragraph({
+      alignment: AlignmentType.CENTER, spacing: { before, after },
+      border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: ACCENT, space: 6 } },
+      children: [text("\u00a0", { size: 2 })],
+    });
+
+  const c = doc.cover;
   const cover: (Paragraph | Table)[] = [
     ...(logo ? [new Paragraph({
-      spacing: { before: 1600, after: 400 },
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 1400, after: 360 },
       children: [new ImageRun({
         type: logo.type === "jpg" ? "jpg" : "png", data: logo.data,
         transformation: scaled(110),
         altText: { name: "Logo", title: "Logo", description: `${doc.businessName} logo` },
       })],
     })] : []),
-    new Paragraph({ spacing: { before: logo ? 0 : 2400 }, children: [text(doc.businessName, { bold: true, color: ACCENT, size: 56 })] }),
-    new Paragraph({ spacing: { before: 120 }, children: [text(doc.subtitle, { size: 32, color: MUTED })] }),
-    new Paragraph({ spacing: { before: 80, after: 2400 }, children: [text(doc.date, { size: 22, color: MUTED })] }),
+    middle([text(doc.businessName, { bold: true, color: ACCENT, size: 40 })], { before: logo ? 0 : 2200 }),
+    ...(c.tagline
+      /* Letter-spaced small caps, as in the example. `characterSpacing` is in twips, not points. */
+      ? [middle([new TextRun({ text: c.tagline.toUpperCase(), size: 17, color: MUTED, characterSpacing: 60 })], { before: 120 })]
+      : []),
+
+    goldRule(760, 520),
+    middle([text(doc.subtitle, { size: 72, color: INK })]),
+    ...(c.year
+      ? [middle([new TextRun({ text: c.year, size: 26, color: ACCENT, characterSpacing: 80 })], { before: 260 })]
+      : []),
+    middle([text(doc.date, { size: 20, color: MUTED })], { before: 240 }),
+
+    goldRule(2600, 300),
+    ...(c.contact ? [middle([text(c.contact, { size: 18, color: MUTED })])] : []),
+    ...(c.address ? [middle([text(c.address, { size: 18, color: MUTED })], { before: 60 })] : []),
 
     /*
      * PAGE TWO (§6.95): the confidentiality statement, between the cover and the contents.
@@ -198,7 +235,7 @@ export async function renderDocx(
      * Executive Summary to 2.0.
      */
     new Paragraph({
-      spacing: { after: 240 }, pageBreakBefore: true,
+      spacing: { before: 240, after: 240 }, pageBreakBefore: true,
       children: [text(doc.disclaimer.title.toUpperCase(), { bold: true, color: ACCENT, size: 24 })],
     }),
     ...doc.disclaimer.parts.flatMap((part) => [

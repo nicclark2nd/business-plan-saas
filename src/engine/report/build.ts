@@ -19,6 +19,7 @@ import { cell, num, numberSections, type Block, type Cell, type Draft, type Omis
 import { COPY } from "./content";
 import { groupByCategory } from "../overheads/categories";
 import { governingLaw } from "../plan/jurisdiction";
+import { contactLine } from "../plan/contact";
 import { goalsAndMilestones, historicAppendix, howWeOperate, marketingAndSales, ourPeople, risksAndMitigation, theBusiness, theCompetition, theMarket, whatWeSell } from "./narrative";
 
 export type ReportInput = {
@@ -40,12 +41,17 @@ export type ReportInput = {
     established: string | null; industry: string | null; country: string | null;
     legalStructure: string | null; customerType: string | null; productType: string | null;
     /**
-     * The state or province, where one is on record (§6.95.1). It exists only for the United States and
-     * Canada, because that is where sales tax needs it (§6.39) — every other country has none, and this is
-     * NOT a second field meaning "main state of operation" (§6.41).
+     * The main state of operation (§6.96). Held in `tax_region`, which is the column that has always meant
+     * a state or province — asked of every plan now, rather than only where sales tax needed it (§6.39).
      */
     taxRegion: string | null;
+    /** The cover's three optional fields (§6.96). Each drops its line when empty rather than leaving a gap. */
+    tagline: string | null;
+    contactEmail: string | null;
+    website: string | null;
   };
+  /** The year on the front cover — the PLAN's year, never the clock's (§6.33.2). */
+  planYear: number | null;
   framework: { vision: string | null; mission: string | null; purpose: string | null; brandPromise: string | null; fieldOfPlay: string | null };
   goals: { area: string; title: string }[];
   capital: { name: string; amount: number; year: number; category: string | null; usefulLifeMonths: number | null; residual: number; financed: boolean }[];
@@ -630,6 +636,20 @@ export function buildReport(i: ReportInput): ReportDoc {
     businessName: i.businessName,
     subtitle: COPY.subtitle,
     date: i.date,
+    /*
+     * The cover (§6.96), following the placement Nic supplied: name, tagline, title, year, then the contact
+     * line and the address at the foot. Every one of those but the name is allowed to be absent.
+     *
+     * The address is the PRIMARY premise, falling back to the first — Operations already asks which one is
+     * the business's own address (§6.84), so the cover does not ask a second time.
+     */
+    cover: {
+      tagline: i.profile.tagline,
+      year: i.planYear ? String(i.planYear) : null,
+      contact: contactLine(i.profile.contactEmail, i.profile.website),
+      address: i.operations.premises.find((p) => p.isPrimary)?.address
+        ?? i.operations.premises[0]?.address ?? null,
+    },
     /* Page two, with this plan's own name in it and never another's (§6.95), governed by the laws of the
        place the client actually named (§6.95.1). */
     disclaimer: COPY.disclaimer(i.businessName, governingLaw(i.profile.country, i.profile.taxRegion)),

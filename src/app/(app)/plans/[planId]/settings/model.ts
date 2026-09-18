@@ -87,6 +87,13 @@ export type Profile = {
   customer_type: string | null;
   product_type: string | null;
   products_services_statement: string | null;
+  /**
+   * What the cover says about the business (§6.96). All three optional, and each disappears from the cover
+   * when it is empty rather than leaving a gap where a line should be.
+   */
+  tagline: string | null;
+  contact_email: string | null;
+  website: string | null;
 };
 export type Financial = {
   financial_year_end_month: number;

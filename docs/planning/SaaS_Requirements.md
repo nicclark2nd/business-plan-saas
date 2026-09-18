@@ -2259,3 +2259,61 @@ made on its own rather than smuggled in behind a legal notice.
 notice will say it is governed by the laws of Australia."* A field whose consequence a client cannot see is
 how a plan ends up governed by the laws of somewhere they picked in passing eighteen months ago — the same
 argument as §6.93's salary toggle showing its state on the Reports screen.
+
+## 6.96 The cover, and the field that already existed — again (18 Sep 2026)
+
+Nic supplied a cover design as a PDF. It could not be read from the link he first sent — a `/design/p/…`
+URL is not an artifact URL, and a claude.ai link is not something to go and fetch by other means — so the
+PDF was the answer, and asking for it cost one message.
+
+His direction on seeing the questions: *"You can use the standard text used throughout the plan for the
+front cover. The attached example was more for the placement of logo, headings, and sub text."*
+
+> **A DESIGN HANDED OVER IS NOT AUTOMATICALLY A DESIGN TO COPY.** The example was a high-contrast display
+> serif with gold rules; the app is flat, blue and Open Sans. Asking which of the two levels — arrangement,
+> or arrangement AND typography — was the point turned a week of restyling into an afternoon of layout.
+
+### What the cover needed that did not exist
+
+Reading the example against the schema, four of its eight elements had nowhere to come from. Three became
+fields (0043): **tagline**, **contact email**, **website**. The address did not: Operations already asks
+which premise is the business's own (§6.84), so the cover takes the primary one and asks nothing.
+
+Every added line is optional and **drops rather than blanks**. A cover printing an empty line where a
+website should be looks like a fault; one line fewer looks like a decision. There is a test for the absence
+of each, which is the assertion that actually matters here.
+
+### The state of operation, and not adding it
+
+Nic: *"I also believe we should have a 'Main state of operation'."* Agreed — and no column was added.
+
+`plan_settings.tax_region` has held a state or province since §6.39. It was only ever ASKED for in the
+United States and Canada, because that is where sales tax depends on it, and only once a client switched
+registration on — but the column itself was never restricted to them.
+
+> **WIDEN THE QUESTION BEFORE ADDING THE COLUMN.** A "main state of operation" beside `tax_region` would
+> have given a Texas plan two answers to one question, with the legal notice reading one and the tax rates
+> the other, and which one won would depend on where the client happened to type (§6.41).
+
+So the FIELD widened: it is asked of every plan, on Business profile, as a picker where the app has a list
+of states and free text where it does not. It still writes `tax_region`, still replaces the tax rates where
+the country's tax depends on it, and the tax section now shows which state is set **without offering a
+second place to change it** — the first §6.41 fault this file ever recorded was two editors for one figure.
+
+This is the second time in two days that the answer to "we need a new field" was "you have it, under
+another name" (§6.95.1). Both times the existing column was named for the first thing that needed it rather
+than for what it holds.
+
+### Two smaller things worth keeping
+
+**Stored as typed, tidied for print.** A client writes `https://www.actioncoach.com/`; the cover prints
+`actioncoach.com`; the database keeps what they wrote. Storing the tidied version would quietly discard a
+path somebody meant to include.
+
+**The rules are paragraph borders, not drawn lines.** A border follows the page width; a fixed-width line
+does not — and Letter is wider than A4 (§6.93), so a hard-coded rule would sit centred on one paper and
+off-centre on the other.
+
+**Confirmed in passing:** the logo built in §6.94 works end to end. Nic uploaded a real one and it renders
+centred on the cover — the one thing this session could not test itself, because there is no way to put a
+file through an operating system's file picker from here.

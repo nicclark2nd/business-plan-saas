@@ -97,13 +97,38 @@ export function ReportsModule({ planId, mode, doc, reconciled, missing, pageSize
 
       {/* A document measure, not a module measure: a line of prose stops being readable past about 90 characters. */}
       <div className="mx-auto max-w-[900px] px-5 py-6">
-        <div className="mb-8 border-b border-border pb-6">
-          {/* The cover carries it at the size the Word file does, so the screen is not a nicer lie. */}
+        {/*
+          THE COVER (§6.96), to the placement Nic supplied and in the app's own type. Centred, and every
+          line but the name and the title disappears when its field is empty — a blank line where a website
+          should be reads as a fault; one line fewer reads as a decision.
+
+          It is the same arrangement the .docx lays out, because the screen is what a client checks before
+          they send the file (§6.90).
+        */}
+        <div className="mb-10 border-b border-border pb-10 text-center">
           {/* `unoptimized`: the URL is signed and short-lived, so there is nothing for an image CDN to cache. */}
-          {logoUrl && <Image src={logoUrl} alt={`${doc.businessName} logo`} width={240} height={72} unoptimized
-            className="mb-5 max-h-[72px] w-auto object-contain" />}
-          <div className="text-[28px] font-semibold leading-tight">{doc.businessName}</div>
-          <div className="mt-1 text-[15px] text-muted-foreground">{doc.subtitle} · {doc.date}</div>
+          {logoUrl && <Image src={logoUrl} alt={`${doc.businessName} logo`} width={240} height={96} unoptimized
+            className="mx-auto mb-7 max-h-[96px] w-auto object-contain" />}
+
+          <div className="text-[22px] font-semibold leading-tight text-primary">{doc.businessName}</div>
+          {doc.cover.tagline && (
+            <div className="mt-1.5 text-[11.5px] uppercase tracking-[.22em] text-muted-foreground">{doc.cover.tagline}</div>
+          )}
+
+          <div className="mx-auto mt-10 h-px w-16 bg-primary" />
+          <div className="mt-6 text-[44px] font-light leading-none tracking-tight">{doc.subtitle}</div>
+          {doc.cover.year && (
+            <div className="mt-4 text-[17px] font-semibold tracking-[.3em] text-primary">{doc.cover.year}</div>
+          )}
+          <div className="mt-3 text-[13px] text-muted-foreground">{doc.date}</div>
+
+          {(doc.cover.contact || doc.cover.address) && (
+            <>
+              <div className="mx-auto mt-12 h-px w-10 bg-primary" />
+              {doc.cover.contact && <div className="mt-4 text-[12.5px] text-muted-foreground">{doc.cover.contact}</div>}
+              {doc.cover.address && <div className="mt-1 text-[12.5px] text-muted-foreground">{doc.cover.address}</div>}
+            </>
+          )}
         </div>
 
         {/*
