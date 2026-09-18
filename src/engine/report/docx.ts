@@ -18,13 +18,9 @@ import { walk } from "./blocks";
 import { rasterise } from "./rasterise";
 import { PAGE_DIMENSIONS, type PageSize } from "./pageSize";
 import { imageSize } from "./imageSize";
+import { PLAN_STYLES, S, ACCENT, MUTED, HAIRLINE } from "./docxStyles";
 
-/** The plan's one accent. Everything else is black on white, because a bank prints in mono. */
-const ACCENT = "1F3A5F";
-const MUTED = "6B7280";
-/** The title on the cover is near-black, not the accent — the example's weight comes from size, not colour. */
-const INK = "111827";
-const RULE = { style: BorderStyle.SINGLE, size: 4, color: "D1D5DB" };
+const RULE = { style: BorderStyle.SINGLE, size: 4, color: HAIRLINE };
 
 const text = (s: string, o: { bold?: boolean; italics?: boolean; color?: string; size?: number } = {}) =>
   new TextRun({ text: s, bold: o.bold, italics: o.italics, color: o.color, size: o.size ?? 20 });
@@ -38,37 +34,43 @@ const text = (s: string, o: { bold?: boolean; italics?: boolean; color?: string;
 function chartToDocx(b: Extract<Block, { kind: "chart" }>, pngs: Map<string, Buffer>): (Paragraph | Table)[] {
   const png = pngs.get(b.svg) ?? null;
   const width = 600, height = Math.round((b.height / 960) * 600);
+  /*
+   * TITLE, PICTURE, NOTE — one thing, and now held together as one (§6.97). Each carries a named style
+   * whose `keepNext` binds it to the next, so Word can no longer leave "Margin by service" alone at the
+   * foot of a page with its chart overleaf.
+   */
   return [
-    new Paragraph({ spacing: { before: 200, after: 60 }, children: [text(b.title, { bold: true, color: ACCENT, size: 20 })] }),
+    new Paragraph({ style: S.figureTitle, children: [text(b.title)] }),
     new Paragraph({
-      spacing: { after: b.note ? 60 : 200 },
+      style: S.figure,
       children: png
         ? [new ImageRun({ type: "png", data: png, transformation: { width, height }, altText: { name: b.title, title: b.title, description: b.alt } })]
         /* If the picture cannot be drawn the plan still says what it showed, rather than leaving a hole. */
         : [text(b.alt, { color: MUTED, size: 18 })],
     }),
-    ...(b.note ? [new Paragraph({ spacing: { after: 200 }, children: [text(b.note, { color: MUTED, size: 17 })] })] : []),
+    ...(b.note ? [new Paragraph({ style: S.figureNote, children: [text(b.note)] })] : []),
   ];
 }
 
-function blockToDocx(b: Block, pngs: Map<string, Buffer>): (Paragraph | Table)[] {
+/**
+ * `holdNext` is set when the NEXT block is a table, a chart or a facts grid (§6.97).
+ *
+ * A style cannot know this: "keep with what follows" is right for a sentence introducing a table and wrong
+ * for the last sentence of a section, and the difference is not in the paragraph, it is in what comes after
+ * it. So the look-ahead happens where the blocks are in order, and nowhere else.
+ */
+function blockToDocx(b: Block, pngs: Map<string, Buffer>, holdNext = false): (Paragraph | Table)[] {
   switch (b.kind) {
     case "para":
-      return [new Paragraph({ children: [text(b.text)], spacing: { after: 160, line: 276 } })];
+      return [new Paragraph({ style: S.body, children: [text(b.text)], keepNext: holdNext, keepLines: holdNext })];
     case "lead":
-      return [new Paragraph({ children: [text(b.text, { bold: true, color: ACCENT })], spacing: { before: 120, after: 80 } })];
+      return [new Paragraph({ style: S.lead, children: [text(b.text)] })];
     case "quote":
-      return [new Paragraph({
-        children: [text(b.text, { italics: true })],
-        indent: { left: 340 }, border: { left: { ...RULE, size: 12, color: ACCENT, space: 12 } },
-        spacing: { before: 120, after: 160, line: 276 },
-      })];
+      return [new Paragraph({ style: S.quote, children: [text(b.text)] })];
     case "note":
-      return [new Paragraph({ children: [text(b.text, { color: MUTED, size: 18 })], spacing: { after: 160, line: 264 } })];
+      return [new Paragraph({ style: S.note, children: [text(b.text)], keepNext: holdNext })];
     case "list":
-      return b.items.map((t) => new Paragraph({
-        children: [text(t)], bullet: { level: 0 }, spacing: { after: 60, line: 264 },
-      }));
+      return b.items.map((t) => new Paragraph({ style: S.bullet, children: [text(t)], bullet: { level: 0 } }));
     case "facts":
       return [table(
         b.rows.map(([k, v]) => [
@@ -109,35 +111,52 @@ function table(rows: DCell[][], header: { text: string; right?: boolean }[] | nu
       right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
     },
     children: [new Paragraph({
+      style: isHeader ? S.tableHeading : S.tableCell,
       alignment: c.right ? AlignmentType.RIGHT : AlignmentType.LEFT,
-      spacing: { after: 0, line: 252 },
       children: [text(c.text, { bold: c.bold || isHeader, color: c.muted && !isHeader ? MUTED : undefined, size: 18 })],
     })],
   });
+  /*
+   * `cantSplit` on every row (§6.97). A five-year figure and its label torn across a page break is the same
+   * fault as a stranded heading, one row further down, and it is the one the reader is most likely to
+   * misread — the numbers are still there, but not beside the thing they measure.
+   *
+   * `tableHeader` was already set: it repeats the column headings at the top of each continued page.
+   */
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     rows: [
-      ...(header ? [new TableRow({ tableHeader: true, children: header.map((h) => cell({ text: h.text, right: h.right }, true)) })] : []),
-      ...rows.map((r) => new TableRow({ children: r.map((c) => cell(c)) })),
+      ...(header ? [new TableRow({ tableHeader: true, cantSplit: true, children: header.map((h) => cell({ text: h.text, right: h.right }, true)) })] : []),
+      ...rows.map((r) => new TableRow({ cantSplit: true, children: r.map((c) => cell(c)) })),
     ],
   });
 }
 
+/** What a paragraph must not be separated from: anything a reader has to see WITH it (§6.97). */
+const HOLDS_ON = new Set<Block["kind"]>(["table", "chart", "facts"]);
+
 function sectionToDocx(s: Section, pngs: Map<string, Buffer>): (Paragraph | Table)[] {
   const top = s.number.endsWith(".0");
+  const newPage = top && s.number !== "1.0";
   return [
     new Paragraph({
+      /*
+       * A NAMED STYLE, not bold-and-blue (§6.97). `heading` alone made it look like a heading; the style is
+       * what makes Word treat it as one — keep-with-next, keep-lines-together and a place in the navigation
+       * pane, all set once in `docxStyles.ts` rather than on 1,613 paragraphs.
+       *
+       * `pageBreakBefore` stays on the paragraph because this library will not take it on a style; the
+       * separate `PlanSectionNewPage` style records the intent regardless.
+       */
+      style: newPage ? S.sectionNewPage : top ? S.section : S.subsection,
       heading: top ? HeadingLevel.HEADING_1 : HeadingLevel.HEADING_2,
-      /* A top-level section starts a page. A business plan a reader can flick through is worth the paper. */
-      pageBreakBefore: top && s.number !== "1.0",
-      spacing: { before: top ? 0 : 280, after: top ? 200 : 120 },
-      border: top ? { bottom: { ...RULE, space: 6 } } : undefined,
+      pageBreakBefore: newPage,
       children: [
         text(`${s.number}  `, { bold: true, color: MUTED, size: top ? 28 : 22 }),
         text(s.title, { bold: true, color: ACCENT, size: top ? 28 : 22 }),
       ],
     }),
-    ...s.blocks.flatMap((b) => blockToDocx(b, pngs)),
+    ...s.blocks.flatMap((b, i) => blockToDocx(b, pngs, HOLDS_ON.has(s.blocks[i + 1]?.kind))),
     ...s.children.flatMap((c) => sectionToDocx(c, pngs)),
   ];
 }
@@ -189,14 +208,10 @@ export async function renderDocx(
    * drawn line, because a border scales with the page and a fixed-width line does not — Letter is wider
    * than A4 (§6.93) and a hard-coded rule would sit off-centre on one of them.
    */
-  const middle = (children: TextRun[], o: { before?: number; after?: number } = {}) =>
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: o.before ?? 0, after: o.after ?? 0 }, children });
+  const styled = (style: string, children: TextRun[], o: { before?: number; after?: number } = {}) =>
+    new Paragraph({ style, spacing: { before: o.before, after: o.after }, children });
   const goldRule = (before: number, after: number) =>
-    new Paragraph({
-      alignment: AlignmentType.CENTER, spacing: { before, after },
-      border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: ACCENT, space: 6 } },
-      children: [text("\u00a0", { size: 2 })],
-    });
+    new Paragraph({ style: S.coverRule, spacing: { before, after }, children: [text("\u00a0")] });
 
   const c = doc.cover;
   const cover: (Paragraph | Table)[] = [
@@ -209,7 +224,7 @@ export async function renderDocx(
         altText: { name: "Logo", title: "Logo", description: `${doc.businessName} logo` },
       })],
     })] : []),
-    middle([text(doc.businessName, { bold: true, color: ACCENT, size: 40 })], { before: logo ? 0 : 2200 }),
+    styled(S.coverName, [text(doc.businessName)], { before: logo ? 0 : 2200 }),
     ...(c.tagline
       /*
        * PRINTED AS TYPED (§6.96.1). This upper-cased it, because the example's tagline was two words —
@@ -220,19 +235,19 @@ export async function renderDocx(
        * A client who wants caps can type caps. Deciding the case of somebody's own strapline is the app
        * having an opinion about their words (§6.87), and the tracking came down with it.
        */
-      ? [middle([new TextRun({ text: c.tagline, size: 18, color: MUTED, characterSpacing: 16 })], { before: 140 })]
+      ? [new Paragraph({ style: S.coverTagline, children: [new TextRun({ text: c.tagline, characterSpacing: 16 })] })]
       : []),
 
     goldRule(760, 520),
-    middle([text(doc.subtitle, { size: 72, color: INK })]),
+    styled(S.coverTitle, [text(doc.subtitle)]),
     ...(c.year
-      ? [middle([new TextRun({ text: c.year, size: 26, color: ACCENT, characterSpacing: 80 })], { before: 260 })]
+      ? [new Paragraph({ style: S.coverYear, children: [new TextRun({ text: c.year, characterSpacing: 80 })] })]
       : []),
-    middle([text(doc.date, { size: 20, color: MUTED })], { before: 240 }),
+    styled(S.coverMeta, [text(doc.date)], { before: 240 }),
 
     goldRule(2600, 300),
-    ...(c.contact ? [middle([text(c.contact, { size: 18, color: MUTED })])] : []),
-    ...(c.address ? [middle([text(c.address, { size: 18, color: MUTED })], { before: 60 })] : []),
+    ...(c.contact ? [styled(S.coverMeta, [text(c.contact)])] : []),
+    ...(c.address ? [styled(S.coverMeta, [text(c.address)])] : []),
 
     /*
      * PAGE TWO (§6.95): the confidentiality statement, between the cover and the contents.
@@ -243,21 +258,21 @@ export async function renderDocx(
      * Executive Summary to 2.0.
      */
     new Paragraph({
-      spacing: { before: 240, after: 240 }, pageBreakBefore: true,
-      children: [text(doc.disclaimer.title.toUpperCase(), { bold: true, color: ACCENT, size: 24 })],
+      style: S.noticeTitle, pageBreakBefore: true,
+      children: [text(doc.disclaimer.title.toUpperCase())],
     }),
     ...doc.disclaimer.parts.flatMap((part) => [
-      new Paragraph({ spacing: { before: 200, after: 60 }, children: [text(part.heading, { bold: true, size: 20 })] }),
+      new Paragraph({ style: S.noticeHeading, children: [text(part.heading)] }),
       /* Smaller than body text and a touch grey: it is a notice to be read once, not the plan itself. */
-      new Paragraph({ spacing: { after: 100, line: 264 }, children: [text(part.body, { size: 17, color: MUTED })] }),
+      new Paragraph({ style: S.noticeBody, children: [text(part.body)] }),
     ]),
 
     new Paragraph({
-      spacing: { after: 160 }, pageBreakBefore: true,
-      children: [text("Contents", { bold: true, color: ACCENT, size: 28 })],
+      style: S.contentsTitle, pageBreakBefore: true,
+      children: [text("Contents")],
     }),
     ...flat.map((s) => new Paragraph({
-      spacing: { after: 40 },
+      style: S.contentsEntry,
       indent: { left: s.number.endsWith(".0") ? 0 : 340 },
       children: [
         text(`${s.number}`.padEnd(8, " "), { color: MUTED, size: 18 }),
@@ -268,12 +283,12 @@ export async function renderDocx(
 
   const tail: Paragraph[] = omitted.length === 0 ? [] : [
     new Paragraph({
-      pageBreakBefore: true, spacing: { after: 160 },
-      children: [text("What is not in this plan", { bold: true, color: ACCENT, size: 26 })],
+      style: S.contentsTitle, pageBreakBefore: true,
+      children: [text("What is not in this plan", { size: 26 })],
     }),
     ...omitted.map((o) => new Paragraph({
-      bullet: { level: 0 }, spacing: { after: 60 },
-      children: [text(o.label, { bold: true }), text(" — nothing recorded yet.", { color: MUTED })],
+      style: S.bullet, bullet: { level: 0 },
+      children: [text(o.label, { bold: true }), text(" \u2014 nothing recorded yet.", { color: MUTED })],
     })),
   ];
 
@@ -315,11 +330,8 @@ export async function renderDocx(
     creator: doc.businessName,
     title: `${doc.businessName} — ${doc.subtitle}`,
     description: `${doc.subtitle} for ${doc.businessName}, ${doc.date}`,
-    styles: {
-      default: {
-        document: { run: { font: "Calibri", size: 20, color: "111827" }, paragraph: { spacing: { line: 276 } } },
-      },
-    },
+    /* Every named style the plan uses, and the pagination rules that hang off them (§6.97). */
+    styles: PLAN_STYLES,
     sections: [section],
   });
   return Packer.toBuffer(document);

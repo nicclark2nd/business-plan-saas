@@ -47,6 +47,21 @@ async function documentXml(buf: Buffer) {
   return zip.file("word/document.xml")!.async("string");
 }
 
+/** The stylesheet, which is where the pagination rules live once they are properties of a style (§6.97). */
+async function stylesXml(buf: Buffer) {
+  const { default: JSZip } = await import("jszip");
+  const zip = await JSZip.loadAsync(buf);
+  return zip.file("word/styles.xml")!.async("string");
+}
+
+/** One style's definition, so an assertion can say what that style promises rather than what the file contains. */
+function styleBlock(xml: string, id: string): string {
+  const at = xml.indexOf(`w:styleId="${id}"`);
+  if (at === -1) return "";
+  const end = xml.indexOf("</w:style>", at);
+  return xml.slice(at, end === -1 ? undefined : end);
+}
+
 /**
  * THE PAGE SIZE, READ BACK OUT OF THE FILE (§6.93).
  *
@@ -101,6 +116,60 @@ async function zipNames(buf: Buffer) {
  * The cover (§6.96). Every field but the name and the title is optional, and the assertions that matter are
  * the ones about absence: a cover that prints a blank line where a website should be looks like a fault.
  */
+/**
+ * THE FAULT NIC FOUND IN WORD (§6.97): a bold line reading "Margin by service" alone at the foot of a page
+ * and its chart overleaf. These assertions read the STYLESHEET, because that is where the rule that stops it
+ * now lives — checking the paragraphs would only prove they were formatted, which they always were.
+ */
+describe("what must not be split across a page", () => {
+  it("defines the styles the plan's paragraphs actually use", async () => {
+    const styles = await stylesXml(await renderDocx(doc(), []));
+    for (const id of ["PlanSection", "PlanSubsection", "PlanBody", "PlanFigureTitle", "PlanFigure", "PlanFigureNote"]) {
+      expect(styleBlock(styles, id), `missing style ${id}`).not.toBe("");
+    }
+  });
+
+  it("keeps a heading with what follows it", async () => {
+    const styles = await stylesXml(await renderDocx(doc(), []));
+    for (const id of ["PlanSection", "PlanSubsection", "PlanLead", "PlanNoticeHeading"]) {
+      expect(styleBlock(styles, id), id).toContain("<w:keepNext");
+      expect(styleBlock(styles, id), id).toContain("<w:keepLines");
+    }
+  });
+
+  it("keeps a figure's title, picture and note together", async () => {
+    const styles = await stylesXml(await renderDocx(doc(), []));
+    expect(styleBlock(styles, "PlanFigureTitle")).toContain("<w:keepNext");
+    expect(styleBlock(styles, "PlanFigure")).toContain("<w:keepNext");
+    expect(styleBlock(styles, "PlanFigureNote")).toContain("<w:keepLines");
+  });
+
+  it("holds a paragraph to the table or chart it introduces", async () => {
+    /* The look-ahead is per-paragraph, because whether to keep depends on what comes NEXT, not on the style. */
+    const xml = await documentXml(await renderDocx(doc(), []));
+    expect(xml).toContain("<w:keepNext");
+  });
+
+  it("never breaks a table row in half", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    expect(xml).toContain("<w:cantSplit");
+  });
+
+  it("repeats a table's headings on a continued page", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    expect(xml).toContain("<w:tblHeader");
+  });
+
+  /** Direct formatting is what had nowhere to put a rule — so most paragraphs must now carry a style. */
+  it("styles the body of the document rather than formatting it by hand", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    const paragraphs = (xml.match(/<w:p[ >]/g) ?? []).length;
+    const styled = (xml.match(/<w:pStyle /g) ?? []).length;
+    expect(paragraphs).toBeGreaterThan(0);
+    expect(styled / paragraphs).toBeGreaterThan(0.6);
+  });
+});
+
 describe("the cover", () => {
   it("carries the name, the title, the tagline, the year and the contact block", async () => {
     const xml = await documentXml(await renderDocx(doc(), []));
@@ -122,9 +191,14 @@ describe("the cover", () => {
     expect(xml).not.toContain("Geebung");
   });
 
-  it("is centred", async () => {
+  /* Centring moved onto the cover styles, so it is asserted where it now lives (§6.97). */
+  it("is centred, by style rather than by paragraph", async () => {
+    const styles = await stylesXml(await renderDocx(doc(), []));
+    for (const id of ["PlanCoverName", "PlanCoverTitle", "PlanCoverYear", "PlanCoverMeta"]) {
+      expect(styleBlock(styles, id), id).toContain('w:val="center"');
+    }
     const xml = await documentXml(await renderDocx(doc(), []));
-    expect(xml).toContain('w:val="center"');
+    expect(xml).toContain('w:pStyle w:val="PlanCoverTitle"');
   });
 });
 

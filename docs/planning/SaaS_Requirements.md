@@ -2340,3 +2340,68 @@ out of the way.
 brace opens an object rather than a comment, and broke the build. The tests were run and passed, because
 `vitest` does not compile the page. **Run `tsc` after touching a component, not just the tests** — the suite
 proved the engine and said nothing about whether the screen would render.
+
+## 6.97 Styles, and the rules that have nowhere to live without them (18 Sep 2026)
+
+Nic opened the .docx in Word and diagnosed it better than the renderer had:
+
+> *"It seems the most common problem is the headings being separated from their data or graph... This could
+> be a style problem as you are using 'normal' style e.g. the bolded heading for 'Margin by service' is
+> normal + bold + other formatting rather than a set style. If you more effectively use styles, you can tell
+> that style to Keep with next and Page break before."*
+
+Unzipping the file he sent settled it in one command. **1,613 paragraphs; 91 carried a style.** The other
+~1,520 were Normal wearing make-up. `keepNext`: **zero occurrences**. `keepLines`: **zero**. `cantSplit`:
+**zero**.
+
+> **DIRECT FORMATTING HAS NOWHERE TO PUT A RULE.** Bold-and-blue makes a paragraph LOOK like a heading; only
+> a style makes Word TREAT it as one. Keep-with-next and keep-lines-together are properties of a style, and
+> a document with no styles has nowhere to hang them. The renderer had been describing appearance and
+> calling it structure.
+
+### What was built
+
+`docxStyles.ts`: twenty-three named styles, each with the pagination its job requires. Headings and lead-ins
+keep with what follows and never split their own lines. A figure is three paragraphs — title, picture, note
+— and each keeps with the next, so the trio moves as one. Table headings keep with their first row, every
+row is `cantSplit`, and header rows already repeated on a continued page.
+
+Sizes and colours moved here too, so a heading cannot be 22 half-points in one branch of the renderer and 20
+in another (§6.19).
+
+**The second reason is the one Nic actually asked for, and it is the better one.** A client who opens this
+file can select "Plan Figure Title" in Word's Styles pane and change every chart title in the plan at once.
+Direct formatting makes that a find-and-replace through ninety pages. The names say the job rather than the
+appearance — "Plan Figure Title", not "Blue Bold 11" — because the name is what a client reads.
+
+### The one thing a style could not take
+
+This version of `docx` accepts `keepNext`, `keepLines` and `outlineLevel` on a paragraph style, and refuses
+`pageBreakBefore` and `widowControl` — paragraph-only. So "each section starts a new page" is still set per
+paragraph, and cannot be switched off by editing one style. `PlanSectionNewPage` exists regardless, so the
+intent is legible and the property has somewhere to move the day the library allows it. Said plainly rather
+than quietly dropped.
+
+### What a style cannot know
+
+"Keep with what follows" is right for a sentence introducing a table and wrong for the last sentence of a
+section — and the difference is not in the paragraph, it is in **what comes after it**. So that one stays a
+look-ahead in the renderer, where the blocks are in order: a `para` or a `note` immediately before a table,
+chart or facts grid gets `keepNext`; everywhere else it does not.
+
+> **A RULE BELONGS ON THE STYLE WHEN IT FOLLOWS FROM WHAT THE PARAGRAPH IS, AND IN THE RENDERER WHEN IT
+> FOLLOWS FROM WHERE THE PARAGRAPH SITS.**
+
+### The cost, stated rather than discovered
+
+Keeping a figure together means that where the trio will not fit in what is left of a page, Word moves the
+whole trio down and leaves white space behind. Those gaps are the price of never splitting, and they are the
+right trade: a reader forgives a short page and does not forgive a heading with nothing under it.
+
+### On the tests
+
+The old assertion `expect(xml).toContain('w:val="center"')` failed the moment centring moved onto the cover
+styles, and it was right to. The suite now reads `word/styles.xml` and asserts what each style PROMISES —
+that PlanFigureTitle keeps with next, that PlanSection keeps its lines — rather than that some paragraph
+somewhere was formatted, which was always true and never the point. One test asserts the ratio directly:
+more than 60% of paragraphs must carry a `pStyle`, which is the number that was 5.6%.
