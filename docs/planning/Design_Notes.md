@@ -208,3 +208,153 @@ qualification rate — tells them almost nothing extra and costs a question. Tha
 
 It is the same test that condemned the Assets stubs and the succession column: things that sit on a screen
 without doing anything.
+
+---
+
+# Note 4 — AI drafting
+
+**Status:** designed, not built. The provider account exists; nothing is wired up.
+
+## What is there today
+
+**One** stub, in `vision/VisionForm.tsx`, rendered six times — a disabled button reading *✦ Suggest a draft*
+with the caption *"Will use your industry, products and goals"*. No AI code anywhere in the repository.
+The goals model already carries `source: "manual" | "ai" | "whatif"`, so the shape was anticipated.
+
+Six buttons promising a capability that does not exist is §6.87. Either it ships or the caption goes.
+
+## The prompt is built from the field, never written per field
+
+Every field already carries a label, a sub-line, a hint and a placeholder, and they are sharp. Brand
+promise, for instance: *what you guarantee every customer, every time* — *"A commitment you would honour at
+your own cost. Not what makes you better than the competition — that is Our advantage, on the Competitors
+step."*
+
+That is better field-specific guidance than a hand-written prompt would be, and it is already on the screen
+in front of the client.
+
+> **FORTY HAND-WRITTEN PROMPTS ARE FORTY COPIES OF GUIDANCE THAT ALREADY EXISTS, AND THEY WILL DRIFT FROM
+> IT (§6.41). ONE DRAFTING FUNCTION READS THE FIELD DEFINITION.**
+
+A new field then gets drafting for free, and a hint edited on the screen changes what the AI is told in the
+same commit.
+
+## Grounded fields and fields only the owner knows
+
+Two kinds, declared in the field definition:
+
+- **Grounded** — the plan can answer it. "Mission: what you do, for whom" comes from products and segments.
+  Press the button, get a draft.
+- **Ask first** — only the owner knows. "Purpose: why the business exists beyond profit" is not in a
+  products table, and drafting it from one is the app putting words in a client's mouth that they will then
+  sign and send to a bank. One or two questions, then draft from the answer.
+
+> **A GENERATED SENTENCE THE OWNER DID NOT MEAN IS WORSE THAN A BLANK FIELD.**
+
+## Context comes from the loader, and only what the field asks for
+
+`gatherReport(planId)` already assembles the whole plan — every module, the forecast, the figures — into one
+object. The AI context is a projection of that. **It is not a second reading** (§6.41, §6.67): writing a
+"fetch plan data for AI" function would recreate the fault this codebase has spent its life fixing.
+
+Each field declares what it needs — `context: ["products", "segments", "positioning"]`. Sending forty pages
+to draft one sentence is expensive and makes the model worse, not better.
+
+## The protection that actually works is sending less
+
+Nic's correction, which reframed this: **the confidentiality statement on page 2 is the client's notice to
+whoever they hand the plan to. It is not our notice to them.** The two had been conflated.
+
+So the disclosure question is answered honestly, in the right place — and separately, the app simply does
+not send most of what would worry anyone:
+
+> **ONLY THE CONTEXT A FIELD DECLARES IS SENT. PEOPLE'S NAMES, SALARIES AND FUNDING SOURCES ARE IN NO
+> FIELD'S CONTEXT.**
+
+Drafting a vision statement needs the industry, the products and the segments. It does not need what the
+operations manager is paid or which bank holds the loan. This is enforceable in code and testable, which a
+consent paragraph is not.
+
+## The toggle
+
+Per plan, in Plan settings, beside the print settings — and per plan for the reason already written into
+migration 0041: these decisions *differ between two plans the same consultant writes in the same week*. A
+café and a defence subcontractor are not the same answer.
+
+**DEFAULT OFF**, which is the opposite of `print_key_people_salaries` and for a reason worth stating:
+
+> **A DEFAULT THAT ADDS IS NOT A DEFAULT THAT DISCLOSES.** Salaries default to printing because otherwise a
+> client types every figure and never sees them — the app failing to deliver what they entered. Sending a
+> client's strategy to a third party is something they turn on, not something they fail to turn off.
+
+**Three columns, not one:** `ai_enabled`, `ai_enabled_at`, `ai_enabled_by`. A lone boolean cannot answer
+"did they agree, and when" six months later. That is the difference between a preference and a consent.
+
+**With the toggle off the draft buttons are absent**, with one line offering to turn it on — not greyed out
+with a tooltip. A disabled button is a locked door; a missing one with a note is an invitation.
+
+## The consent wording
+
+A first cut. Every sentence has to be one the code actually keeps:
+
+> **Use AI to help draft this plan**
+>
+> When this is on, you can ask for a draft of any written section. To do that, we send the relevant parts of
+> this plan — your industry, products, market and goals — to an AI service, which returns suggested wording.
+>
+> We never send names, salaries, or funding details. Nothing is sent unless you press a draft button. Every
+> suggestion is yours to edit or discard, and nothing is saved to your plan until you accept it.
+>
+> The AI models are provided by third parties and may change over time.
+
+Terms at purchase are the proper home for the general version. This toggle is not a substitute for that —
+it is what puts the disclosure where the decision is actually being made.
+
+## The provider
+
+**Checked, September 2026, rather than remembered:**
+
+- **OpenAI direct** does not train on API data by default, but retains abuse-monitoring logs up to 30 days
+  as standard; zero data retention requires approval by their sales team.
+- **OpenRouter** retains nothing unless prompt logging is opted into, offers ZDR toggles per model group in
+  account settings, and — the part that matters — a **per-request** parameter: `provider: { zdr: true }`.
+
+OpenRouter wins on the strength of that last point. **A guarantee that travels with every request lives in
+the code and can be tested. A guarantee that lives in a dashboard toggle depends on nobody changing it in
+eighteen months.**
+
+It also keeps model choice, which matters here: drafting a vision statement and drafting an operations
+narrative may want different models, and cost and quality will want comparing per field.
+
+**Keep the distinction straight in the wording:** OpenRouter separates retention from training. Some
+providers do not train but do retain. `zdr` addresses retention; training is a separate control. The consent
+statement must describe what is actually configured.
+
+**Build so the choice does not matter.** `engine/ai/` with a provider interface; model and provider in
+config; the key server-side and never `NEXT_PUBLIC_`. Swapping vendor becomes configuration rather than a
+rewrite, which is the right posture for a field moving this fast. Coupling to one vendor is the mistake, not
+picking the wrong one today.
+
+Two caveats held lightly: confirm what the OpenRouter account's privacy settings actually say before the
+wording is written, and remember that a vendor toggle is a policy rather than a contract — a client who
+needs a contractual guarantee is a procurement conversation, not a setting.
+
+## Security: the model never touches the database
+
+> **THE AI IS HANDED TEXT AND RETURNS TEXT. IT GETS NO CONNECTION, NO TOKEN, AND NO TOOL THAT CAN QUERY.**
+
+The server loads the plan through the same Supabase client with RLS that every page uses, under the signed-in
+user's own session. The model only ever sees what that loader returned.
+
+So the guarantee is not "we instructed it not to read other plans" — there is nothing for it to read from.
+If "ask the AI about my plan" is ever built, it goes through the same loader. **Never give the model a tool
+that runs a query.**
+
+## Open questions
+
+1. Which fields are grounded and which must ask first — a pass over every written field in the app.
+2. Rate limiting and a per-plan cap, so a stuck button cannot spend a fortune.
+3. Does an accepted draft record that it came from AI? The goals model already has `source: "ai"`; written
+   fields do not. Worth it for honesty, and worth asking whether a client wants that visible.
+4. What happens when the provider is down or slow — this app has no spinners (§ house rule), and a draft
+   takes seconds rather than milliseconds. That needs its own answer before the first button works.
