@@ -42,7 +42,7 @@ export const NAV: NavGroup[] = [
    */
   { group: "Set up", items: [{ id: "settings", label: "Plan settings", tool: true }] },
 
-  // ---- the guided path, 1 to 15, in order -------------------------------
+  // ---- the guided path, 1 to 17, in order -------------------------------
   { group: "Strategy & Direction", items: [{ id: "vision", label: "Vision & Purpose", step: 1 }] },
   { group: "People", items: [{ id: "people", label: "Leadership Team", step: 2 }] },
   { group: "Market", items: [{ id: "marketing", label: "Marketing", step: 3 }, { id: "competitors", label: "Competitors", step: 4 }] },
@@ -67,18 +67,23 @@ export const NAV: NavGroup[] = [
     { id: "assets", label: "Fixed Assets", step: 12 },
     { id: "extraordinary", label: "One-off income & costs", step: 13 },
     /**
-     * An input, filed with the inputs (§6.43.1, §6.79), and it stays where Nic asked for it: directly under
-     * item 12. It carries no number, but it is the LAST item in its group rather than a gap in the middle
-     * of a run — 13 starts a new heading underneath. An unnumbered item at the end of a group reads as
-     * "and also this"; the same item between 12 and 13 reads as a step you have somehow missed.
+     * A NUMBERED STEP (§6.94), which it was not until now.
      *
-     * That the guided path never forces a client through it is a real gap, and a separate one.
+     * §6.79 filed it with the inputs and left it unnumbered, and named the consequence in this comment
+     * without fixing it: "the guided path never forces a client through it is a real gap". It was worse
+     * than a gap. A client walking 1 → 16 went 13 One-off costs → 14 Review forecast and never saw this
+     * screen, so debtor, stock and creditor days fell back to thirty in, thirty out, nothing in stock —
+     * or to whatever last year's accounts implied. Reasonable figures. Nobody agreed to them, and they
+     * went into a document a bank reads.
+     *
+     * Numbering it costs nothing structurally: it was already the last item in Financials, so 14 here and
+     * Review at 15 leaves the whole menu still running top to bottom (§6.80).
      */
-    { id: "assumptions", label: "Assumptions", tool: true },
+    { id: "assumptions", label: "Assumptions", step: 14 },
   ] },
-  { group: "Review", items: [{ id: "forecast", label: "Review forecast", step: 14 }] },
-  { group: "Goals", items: [{ id: "goals", label: "Goals", step: 15, tag: "AI-drafted" }] },
-  { group: "Reports", items: [{ id: "reports", label: "Business plan", step: 16, tool: true }] },
+  { group: "Review", items: [{ id: "forecast", label: "Review forecast", step: 15 }] },
+  { group: "Goals", items: [{ id: "goals", label: "Goals", step: 16, tag: "AI-drafted" }] },
+  { group: "Reports", items: [{ id: "reports", label: "Business plan", step: 17, tool: true }] },
 
   // ---- what the plan produces, and what you do with it -------------------
   /**
@@ -105,9 +110,22 @@ export const NAV: NavGroup[] = [
   { group: "Tools", items: [{ id: "what-if", label: "What-If Planner", tool: true }] },
 
   // ---- not built yet, and the settings -----------------------------------
+  /**
+   * TAGGED, AND ONE OF THEM DELETED (§6.94).
+   *
+   * These four rendered as ordinary menu items with nothing to mark them, and every one of them landed on
+   * "Not built yet". Four things that look available and are not, in a menu whose whole job is telling a
+   * client where to go next. Strategy below has always carried a `soon` tag; these did not, and there was
+   * no reason for the difference beyond nobody having looked.
+   *
+   * OUTLETS IS GONE ALTOGETHER, because it was not unbuilt — it was BUILT SOMEWHERE ELSE. `plan_outlets`
+   * has a full editor on Operations (§6.84, "Where the work happens") and prints in section 8.1 of the
+   * plan. A client who clicked Outlets was sent to a coming-soon page for a screen they had already
+   * filled in. A second door to a furnished room is worse than no door: it makes a client doubt the room.
+   */
   { group: "Assets", items: [
-    { id: "outlets", label: "Outlets" }, { id: "social", label: "Social Media" }, { id: "memberships", label: "Membership" },
-    { id: "ip", label: "Intellectual Property" },
+    { id: "social", label: "Social Media", tag: "soon" }, { id: "memberships", label: "Membership", tag: "soon" },
+    { id: "ip", label: "Intellectual Property", tag: "soon" },
   ] },
   { group: "Strategy (AI)", items: [{ id: "strategy", label: "Recommendations", tag: "soon" }] },
 ];

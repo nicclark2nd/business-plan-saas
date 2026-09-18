@@ -1,6 +1,7 @@
 "use client";
 
 import { ModuleFrame, ModuleReadOnlyFooter } from "@/components/module/ModuleFrame";
+import Image from "next/image";
 import { Toolbar, Meta, Note } from "@/components/module/DataGrid";
 import { PAGE_SIZE_LABEL, type PageSize } from "@/engine/report/pageSize";
 import { StatTile, TileRow } from "@/components/chart/core";
@@ -27,7 +28,7 @@ import { COPY } from "@/engine/report/content";
  */
 const STEP = GUIDED_STEPS.find((s) => s.id === "reports")?.step ?? 16;
 
-export function ReportsModule({ planId, mode, doc, reconciled, missing, pageSize, printSalaries }: {
+export function ReportsModule({ planId, mode, doc, reconciled, missing, pageSize, printSalaries, logoUrl }: {
   planId: string; mode: "guided" | "advanced"; doc: ReportDoc;
   reconciled: boolean;
   /** Steps with nothing in them yet — named so a client can go and fix them (§6.57). */
@@ -40,6 +41,8 @@ export function ReportsModule({ planId, mode, doc, reconciled, missing, pageSize
    * see that from here is a client who does not know what is in the file they are about to email a bank.
    */
   pageSize: PageSize; printSalaries: boolean;
+  /** A signed URL for the plan's logo, or null (§6.94). The screen shows what the Word file will carry. */
+  logoUrl: string | null;
 }) {
   const flat = walk(doc.sections);
   const tables = flat.reduce((a, s) => a + s.blocks.filter((b) => b.kind === "table").length, 0);
@@ -95,6 +98,10 @@ export function ReportsModule({ planId, mode, doc, reconciled, missing, pageSize
       {/* A document measure, not a module measure: a line of prose stops being readable past about 90 characters. */}
       <div className="mx-auto max-w-[900px] px-5 py-6">
         <div className="mb-8 border-b border-border pb-6">
+          {/* The cover carries it at the size the Word file does, so the screen is not a nicer lie. */}
+          {/* `unoptimized`: the URL is signed and short-lived, so there is nothing for an image CDN to cache. */}
+          {logoUrl && <Image src={logoUrl} alt={`${doc.businessName} logo`} width={240} height={72} unoptimized
+            className="mb-5 max-h-[72px] w-auto object-contain" />}
           <div className="text-[28px] font-semibold leading-tight">{doc.businessName}</div>
           <div className="mt-1 text-[15px] text-muted-foreground">{doc.subtitle} · {doc.date}</div>
         </div>

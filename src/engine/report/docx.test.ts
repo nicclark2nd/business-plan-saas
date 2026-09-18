@@ -66,6 +66,55 @@ describe("the page it prints on", () => {
   });
 });
 
+/**
+ * The logo on the cover and in the page header (§6.94), checked by unzipping the document and looking at
+ * what is inside it — not by trusting that the code that put it there ran.
+ */
+const pngFixture = (w: number, h: number) => {
+  const head = Buffer.alloc(24);
+  head.writeUInt32BE(0x89504e47, 0); head.writeUInt32BE(0x0d0a1a0a, 4);
+  head.writeUInt32BE(13, 8); head.write("IHDR", 12, "ascii");
+  head.writeUInt32BE(w, 16); head.writeUInt32BE(h, 20);
+  return Buffer.concat([head, Buffer.alloc(64)]);
+};
+
+async function zipNames(buf: Buffer) {
+  const { default: JSZip } = await import("jszip");
+  return Object.keys((await JSZip.loadAsync(buf)).files);
+}
+
+describe("the logo", () => {
+  it("is absent from a plan that has none, and the file is still valid", async () => {
+    const buf = await renderDocx(doc(), []);
+    const names = await zipNames(buf);
+    expect(names.some((n) => n.startsWith("word/media/"))).toBe(false);
+    expect(names.some((n) => n.includes("header"))).toBe(false);
+  });
+
+  it("puts an image in the file and a header on the pages after the cover", async () => {
+    const buf = await renderDocx(doc(), [], "a4", { data: pngFixture(600, 200), type: "png" });
+    const names = await zipNames(buf);
+    expect(names.some((n) => n.startsWith("word/media/"))).toBe(true);
+    expect(names.some((n) => /header\d*\.xml$/.test(n))).toBe(true);
+    // titlePage, so the cover does not carry the header copy as well as the big one.
+    expect(await documentXml(buf)).toContain("w:titlePg");
+  });
+
+  /**
+   * THE ONE THAT MATTERS FOR HOW IT LOOKS. A logo is placed at a fixed height with the width derived from
+   * its own aspect ratio, so a 3:1 wordmark and a square roundel sit on the page as the same weight of
+   * mark. Fixing the width instead is what makes one client's logo enormous and another's a postage stamp.
+   */
+  it("keeps the logo's own proportions", async () => {
+    const xml = await documentXml(await renderDocx(doc(), [], "a4", { data: pngFixture(600, 200), type: "png" }));
+    // Cover at height 110 → width 330; header at height 26 → width 78. Both 3:1, as the file is.
+    expect(xml).toMatch(/cx="[0-9]+" cy="[0-9]+"/);
+    const pairs = [...xml.matchAll(/cx="(\d+)" cy="(\d+)"/g)].map((m) => [Number(m[1]), Number(m[2])]);
+    expect(pairs.length).toBeGreaterThan(0);
+    for (const [cx, cy] of pairs) expect(cx / cy).toBeCloseTo(3, 1);
+  });
+});
+
 describe("the Word renderer", () => {
   it("produces a real Word file", async () => {
     const buf = await renderDocx(doc(), []);

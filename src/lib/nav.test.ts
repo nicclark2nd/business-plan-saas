@@ -59,6 +59,37 @@ describe("the left menu", () => {
     for (let i = 1; i < ids.length; i++) expect(stepBefore(ids[i])).toBe(ids[i - 1]);
   });
 
+  /**
+   * THE PATH, WRITTEN OUT (§6.94).
+   *
+   * The walk test above compares `stepAfter` against `GUIDED_STEPS` — and both come from the same array,
+   * so it passes whatever that array happens to say. It passed happily for as long as Assumptions was
+   * missing from it: a test that guaranteed the gap rather than catching it. That is §6.92.1 in a test
+   * file — an output compared to another copy of itself proves only that the copy was faithful.
+   *
+   * This one states the intended journey independently. Adding or moving a step SHOULD fail it, and the
+   * person moving the step should have to say so here, out loud, in order.
+   */
+  it("is the seventeen steps, in this order", () => {
+    expect(GUIDED_STEPS.map((i) => i.id)).toEqual([
+      "vision", "people", "marketing", "competitors", "swot", "operations",
+      "historic", "sales", "cogs", "overheads", "funding", "assets", "extraordinary",
+      "assumptions", "forecast", "goals", "reports",
+    ]);
+  });
+
+  /**
+   * Named on its own because of what it costs when it is wrong. A client who never reaches this screen
+   * forecasts on days nobody agreed to — thirty in, thirty out, or whatever last year implied — and those
+   * days set every figure on the cash flow in a document a bank reads.
+   */
+  it("walks a client through Assumptions, between the one-off costs and the review", () => {
+    expect(stepAfter("extraordinary")).toBe("assumptions");
+    expect(stepAfter("assumptions")).toBe("forecast");
+    expect(stepBefore("forecast")).toBe("assumptions");
+    expect(nextHref("p1", "extraordinary")).toBe("/plans/p1/assumptions");
+  });
+
   it("stops at both ends rather than wrapping round", () => {
     const ids = GUIDED_STEPS.map((i) => i.id);
     expect(stepBefore(ids[0])).toBeNull();

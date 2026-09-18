@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { SettingsModule } from "./SettingsModule";
 import type { Settings, Licence } from "./model";
+import { LOGO_BUCKET, LOGO_URL_TTL_SECONDS } from "@/engine/plan/logo";
 
 export default async function SettingsPage({ params, searchParams }: { params: Promise<{ planId: string }>; searchParams: Promise<{ area?: string }> }) {
   const { planId } = await params;
@@ -48,9 +49,18 @@ export default async function SettingsPage({ params, searchParams }: { params: P
     print_key_people_salaries: s.print_key_people_salaries ?? true,
     page_size: (s.page_size === "a4" || s.page_size === "letter" ? s.page_size : null),
   };
+  /**
+   * A SIGNED URL, minted per request (§6.94). The bucket is private, so there is no permanent address to
+   * store — and storing one would be a second record of where the file is, which is the fault this project
+   * keeps relearning (§6.41). If signing fails the screen shows "no logo yet" rather than a broken image.
+   */
+  const logoPath = s.logo_path as string | null | undefined;
+  const logoUrl = logoPath
+    ? (await supabase.storage.from(LOGO_BUCKET).createSignedUrl(logoPath, LOGO_URL_TTL_SECONDS)).data?.signedUrl ?? null
+    : null;
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
   const initialArea = area === "financial" || area === "printing" || area === "branding" || area === "lifecycle" ? area : "profile";
   return <SettingsModule planId={planId} initial={initial} mode={mode} initialArea={initialArea}
-    licences={(licences.data ?? []) as Licence[]}
+    licences={(licences.data ?? []) as Licence[]} logoUrl={logoUrl}
     archivedAt={plan.data?.archived_at ?? null} inventory={inventory} />;
 }

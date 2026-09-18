@@ -28,7 +28,6 @@ const BLURB: Record<string, { what: string; meanwhile?: string }> = {
     what: "Observations drawn from your own figures — where the margin is thin, which costs move fastest, where the cash gets tight.",
     meanwhile: "Nothing here is guesswork you need to supply. It reads what you have already entered.",
   },
-  outlets: { what: "Sites, depots and yards the business trades from, and what each one costs to run." },
   social: { what: "The accounts and audiences the business reaches people through." },
   memberships: { what: "Industry bodies, accreditations and subscriptions the business holds." },
   ip: { what: "Trade marks, designs, registered names and anything else the business owns that is not physical." },

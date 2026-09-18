@@ -10,13 +10,14 @@
  * computation belongs in `build.ts` where the screen gets it too.
  */
 import {
-  AlignmentType, BorderStyle, Document, HeadingLevel, ImageRun, Packer, Paragraph,
+  AlignmentType, BorderStyle, Document, Header, HeadingLevel, ImageRun, Packer, Paragraph,
   Table, TableCell, TableRow, TextRun, WidthType, type ISectionOptions,
 } from "docx";
 import type { Block, ReportDoc, Section } from "./blocks";
 import { walk } from "./blocks";
 import { rasterise } from "./rasterise";
 import { PAGE_DIMENSIONS, type PageSize } from "./pageSize";
+import { imageSize } from "./imageSize";
 
 /** The plan's one accent. Everything else is black on white, because a bank prints in mono. */
 const ACCENT = "1F3A5F";
@@ -139,7 +140,16 @@ function sectionToDocx(s: Section, pngs: Map<string, Buffer>): (Paragraph | Tabl
   ];
 }
 
-export async function renderDocx(doc: ReportDoc, omitted: { label: string }[], pageSize: PageSize = "a4"): Promise<Buffer> {
+/**
+ * The plan's logo, already fetched (§6.94). The renderer takes BYTES rather than a path or a URL: it is a
+ * pure function of what it is handed, and a document builder that goes and fetches things is a document
+ * builder that can fail halfway through writing a file.
+ */
+export type DocxLogo = { data: Buffer; type: "png" | "jpg" };
+
+export async function renderDocx(
+  doc: ReportDoc, omitted: { label: string }[], pageSize: PageSize = "a4", logo?: DocxLogo | null,
+): Promise<Buffer> {
   const flat = walk(doc.sections);
 
   /**
@@ -155,8 +165,27 @@ export async function renderDocx(doc: ReportDoc, omitted: { label: string }[], p
     if (png) pngs.set(c.svg, png);
   }
 
+  /*
+   * THE LOGO IS DRAWN TO A FIXED HEIGHT, NOT A FIXED WIDTH (§6.94).
+   *
+   * Logos are not one shape: a wordmark is wide and short, a roundel is square. Fixing the width makes a
+   * tall logo enormous and a wide one tiny. Fixing the height and deriving the width from the file's own
+   * aspect ratio makes every client's logo sit on the page as the same weight of mark, which is what a
+   * letterhead is. `pngSize` reads the dimensions out of the file itself rather than trusting an upload.
+   */
+  const shape = logo ? imageSize(logo) : null;
+  const scaled = (h: number) => ({ height: h, width: Math.round(h * (shape ? shape.width / shape.height : 3)) });
+
   const cover: (Paragraph | Table)[] = [
-    new Paragraph({ spacing: { before: 2400 }, children: [text(doc.businessName, { bold: true, color: ACCENT, size: 56 })] }),
+    ...(logo ? [new Paragraph({
+      spacing: { before: 1600, after: 400 },
+      children: [new ImageRun({
+        type: logo.type === "jpg" ? "jpg" : "png", data: logo.data,
+        transformation: scaled(110),
+        altText: { name: "Logo", title: "Logo", description: `${doc.businessName} logo` },
+      })],
+    })] : []),
+    new Paragraph({ spacing: { before: logo ? 0 : 2400 }, children: [text(doc.businessName, { bold: true, color: ACCENT, size: 56 })] }),
     new Paragraph({ spacing: { before: 120 }, children: [text(doc.subtitle, { size: 32, color: MUTED })] }),
     new Paragraph({ spacing: { before: 80, after: 2400 }, children: [text(doc.date, { size: 22, color: MUTED })] }),
     new Paragraph({
@@ -192,8 +221,28 @@ export async function renderDocx(doc: ReportDoc, omitted: { label: string }[], p
    * Dallas printed 210mm paper because of a dependency's default value. The margins stay 1134 twips (2cm) on
    * both papers; Letter is wider and shorter, and the tables are laid out in percentages, so they reflow.
    */
+  /*
+   * A HEADER ON EVERY PAGE BUT THE COVER. `titlePage` gives the section a separate first-page header, which
+   * is left empty — the cover already carries the logo at full size, and a second copy of it an inch above
+   * is what makes a document look automated.
+   */
+  const header = logo
+    ? new Header({ children: [new Paragraph({
+        alignment: AlignmentType.RIGHT, spacing: { after: 120 },
+        children: [new ImageRun({
+          type: logo.type === "jpg" ? "jpg" : "png", data: logo.data,
+          transformation: scaled(26),
+          altText: { name: "Logo", title: "Logo", description: `${doc.businessName} logo` },
+        })],
+      })] })
+    : undefined;
+
   const section: ISectionOptions = {
-    properties: { page: { size: PAGE_DIMENSIONS[pageSize], margin: { top: 1134, bottom: 1134, left: 1134, right: 1134 } } },
+    properties: {
+      page: { size: PAGE_DIMENSIONS[pageSize], margin: { top: 1134, bottom: 1134, left: 1134, right: 1134 } },
+      ...(header ? { titlePage: true } : {}),
+    },
+    ...(header ? { headers: { default: header, first: new Header({ children: [new Paragraph({ children: [] })] }) } } : {}),
     footers: undefined,
     children: [...cover, ...doc.sections.flatMap((s) => sectionToDocx(s, pngs)), ...tail],
   };

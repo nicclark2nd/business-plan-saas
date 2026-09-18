@@ -319,5 +319,13 @@ export async function gatherReport(planId: string) {
   const missing = completeness.sections.filter((s) => s.done === 0).map((s) => ({ label: s.label, id: s.id }));
   /* The .docx needs the paper; the screen does not (§6.93), so it rides beside the doc rather than inside it. */
   const pageSize = resolvePageSize(settings?.page_size as string | null, settings?.country as string | null);
-  return { doc, missing, mode, reconciled: checked.reconciled, pageSize, printSalaries: input.printSalaries };
+  /*
+   * The PATH, not a URL and not the bytes (§6.94). The screen needs a signed URL and the Word file needs
+   * the bytes, and making every page render download an image so the one caller that wants it can have it
+   * is the kind of cost that never shows up until a plan is slow. Each caller resolves what it needs.
+   */
+  return {
+    doc, missing, mode, reconciled: checked.reconciled, pageSize,
+    printSalaries: input.printSalaries, logoPath: (settings?.logo_path as string | null) ?? null,
+  };
 }

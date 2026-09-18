@@ -2101,3 +2101,91 @@ that pointed at something turned a silent omission into a visible broken promise
 The general form, for the next section that prints a list beside a total: *a list is not the same object as
 the total it sits under, and nothing but adding it up proves they agree.* Print them from one calculation, or
 expect them to drift.
+
+## 6.94 Four things the app said and did not do (18 Sep 2026)
+
+An audit of every table in the schema against the code that touches it. The question was narrow — *which
+tables can a client actually write to?* — and it found four separate versions of the same fault: the app
+saying something and not doing it.
+
+### The step nobody was walked through
+
+`assumptions` was in the menu and not in `GUIDED_STEPS`. A client walking the path went 13 One-off costs →
+14 Review forecast and never saw it. §6.79's own comment named the gap — *"that the guided path never forces
+a client through it is a real gap, and a separate one"* — and left it, which is how a known gap becomes a
+shipped one.
+
+What it costs is not nothing and not catastrophe, and the difference matters. Untouched, the days fall back
+to what last year's accounts imply, or to thirty in, thirty out, nothing in stock. Reasonable figures.
+**Nobody agreed to them**, and they set every line of the cash flow in a document a bank reads. A plan whose
+working capital was chosen by a default is a plan whose author cannot answer the first question about it.
+
+Numbering it cost one line, because §6.81 had already made the path derive from the numbers. It was already
+the last item in Financials, so 14 there and Review at 15 leaves the menu still running top to bottom.
+
+> **A TEST THAT COMPARES THE PATH TO ITSELF GUARANTEES THE GAP RATHER THAN CATCHING IT.**
+
+`nav.test.ts` walked `stepAfter` and compared the result to `GUIDED_STEPS` — both from the same array, so it
+passed happily for as long as Assumptions was missing. That is §6.92.1 in a test file. It now also asserts
+the seventeen ids **written out in order**, which is a statement of intent rather than a derivation: moving a
+step has to fail it, and whoever moves the step has to say so out loud.
+
+### The door to a room that was already furnished
+
+The Assets group offered Outlets, Social Media, Membership and Intellectual Property as ordinary menu items,
+untagged, all four landing on "Not built yet" — while Strategy, right below them, had carried a `soon` tag
+all along. No reason for the difference beyond nobody having looked. They are tagged now.
+
+Outlets was deleted outright, because it was not unbuilt. `plan_outlets` has a full editor on **Operations**
+and prints in section 8.1 of the plan. A client who clicked Outlets was sent to a coming-soon page for a
+screen they had already filled in.
+
+> **A SECOND DOOR TO A FURNISHED ROOM IS WORSE THAN NO DOOR. It makes a client doubt the room.**
+
+Worth recording for accuracy: in Guided mode these never rendered at all — the sidebar shows only numbered
+steps and tools — so this was an Advanced-mode fault. Smaller than it first looked, and still wrong.
+
+### The suggestion that could never fire
+
+`swot/suggest.ts` read `plan_people_succession` to raise *"the business depends heavily on X and no successor
+is identified"*. That table has a SELECT and **no INSERT anywhere in the app**. The loop ran on every SWOT,
+found nothing, and always had. And it cited its source as "Leadership Team · Risk & Succession" — a screen
+area that does not exist, so had it ever fired it would have sent a client somewhere to go and look, and
+there is nowhere.
+
+§6.89 again: a field with no editor is not data, and nothing may be built on one. Deleted, with the table
+left in place — 0007 calls it "phase 2, UI later" and that is still true. It comes back with the editor.
+
+### The logo the Branding tab promised
+
+`plan_settings.logo_path` had existed since 0002 with nothing ever writing it. The tab said "Logo upload
+arrives with the Reports step" while the help text beside it already told clients "your logo goes on the
+report cover and page headers" — a promise in the present tense for a thing that did not exist (§6.87).
+
+Built: a **private** bucket (0042) whose policies read the plan id out of the object path and answer with the
+same `can_read_plan` / `can_write_plan` every table uses, an upload action, and the logo on the screen cover,
+the Word cover and the header of every page after it.
+
+Three decisions worth keeping.
+
+**PNG and JPEG only, and the refusal says why.** Not about what a browser can draw — about what Word can
+place. A WebP in a `.docx` is a grey box in the document a client sends to a bank. SVG is refused separately
+and permanently: it is a document, not an image, it can carry script, and it would be rendered by whatever
+opened it. A logo is not worth that. The check is one function called on both sides: on the client so a bad
+file is refused instantly, on the server so a client who never saw that screen is refused too. One rule,
+two callers, not two rules (§6.19).
+
+**Fixed height, derived width.** Logos are not one shape — a wordmark is wide and short, a roundel is square.
+Fixing the width makes a tall logo enormous and a wide one a postage stamp. Height is fixed and width comes
+from the file's own aspect ratio, read out of the PNG's IHDR chunk or the JPEG's start-of-frame marker with
+no dependency. That reader returns **null rather than guessing**, and a null falls back to a sane ratio: the
+alternative is a stretched logo, which looks worse than a plain cover.
+
+**The renderer takes bytes.** Not a path, not a URL. A document builder that goes and fetches things is a
+document builder that can fail halfway through writing a file — and a client waiting on a business plan would
+rather have it without the letterhead than not at all. The fetch happens in the download route, wrapped, and
+a logo that cannot be fetched lays the cover out as it was before there was one.
+
+> **THE SHAPE OF THE STORED PATH IS LOAD-BEARING, NOT COSMETIC.** `<plan_id>/logo.<ext>` is what the storage
+> policy reads to decide who may touch the object. A path that stopped starting with the plan id would not
+> fail loudly — it would quietly stop being protected. There is a test on that string for exactly that reason.

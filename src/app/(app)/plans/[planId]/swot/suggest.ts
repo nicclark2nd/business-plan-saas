@@ -9,14 +9,13 @@ type Competitor = { id: string; name: string; threat: string; weaknesses: string
 type Position = { our_advantage: string | null; barriers_to_entry: string | null; future_threats: string | null; market_trends: string | null };
 type Person = { id: string; name: string; role: string };
 type Capability = { person_id: string; kind: string; description: string };
-type Succession = { person_id: string; dependency: string; successor_person_id: string | null; successor_external: boolean };
 type Licence = { id: string; name: string; issuer: string | null; expires_on: string | null };
 
 const sentences = (t: string | null | undefined) => (t ?? "").split(/(?<=[.;!?])\s+|\n+/).map((s) => s.trim()).filter((s) => s.length > 3);
 
 export function buildSuggestions(p: {
   competitors: Competitor[]; position: Position; people: Person[]; capabilities: Capability[];
-  succession: Succession[]; licences?: Licence[];
+  licences?: Licence[];
   /** Passed in rather than read from the clock, so the same plan classifies the same way in a test. */
   today?: string | Date;
 }): Suggestion[] {
@@ -45,10 +44,18 @@ export function buildSuggestions(p: {
     const who = p.people.find((x) => x.id === cap.person_id)?.name ?? "A key person";
     out.push({ key: `capability:${cap.person_id}:${cap.description.slice(0, 40)}`, quadrant: "weakness", text: `${who}: ${cap.description}`, from: "Leadership Team · Roles & Capability" });
   }
-  for (const s of p.succession) if (s.dependency === "high" && !s.successor_person_id && !s.successor_external) {
-    const who = p.people.find((x) => x.id === s.person_id)?.name ?? "A key person";
-    out.push({ key: `succession:${s.person_id}`, quadrant: "weakness", text: `The business depends heavily on ${who} and no successor is identified`, from: "Leadership Team · Risk & Succession" });
-  }
+  /*
+   * REMOVED: the succession weakness (§6.94).
+   *
+   * It read `plan_people_succession` — a table with a SELECT and no INSERT anywhere in the app. Nobody can
+   * enter succession data, so the loop ran on every SWOT, found nothing, and had done since it was written.
+   * Worse, it cited its source as "Leadership Team · Risk & Succession", a screen area that does not exist:
+   * had it ever fired, it would have sent a client somewhere to go and look, and there is nowhere.
+   *
+   * That is §6.89 exactly — a field with no editor is not data, and nothing may be built on one. The table
+   * stays; migration 0007 calls it "phase 2, UI later" and that is still the plan. This comes back with the
+   * editor, not before it.
+   */
   if (p.people.length === 1) out.push({ key: "people:solo", quadrant: "weakness", text: "One-person leadership team — the plan rests on a single individual", from: "Leadership Team" });
 
   // Opportunities: competitors' weaknesses, market trends

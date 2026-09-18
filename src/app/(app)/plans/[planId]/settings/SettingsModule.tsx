@@ -13,16 +13,19 @@ import { saveProfile, saveFinancial, savePrinting } from "./actions";
 import { PAGE_SIZE_LABEL, defaultPageSizeFor } from "@/engine/report/pageSize";
 import { DangerArea, type PlanInventory } from "./DangerArea";
 import { LicenceSection } from "./LicenceSection";
+import { LogoSection } from "./LogoSection";
 import { legalStructuresFor, CUSTOMER_TYPES, PRODUCT_TYPES, COUNTRIES, CURRENCIES, MONTHS, profileMissing, type Settings, type Profile, type Financial, type Licence } from "./model";
 import { navGroup } from "@/lib/nav";
 
 type AreaKey = "profile" | "financial" | "printing" | "branding" | "lifecycle";
 const opts = (xs: string[]) => xs.map((x) => ({ value: x, label: x }));
 
-export function SettingsModule({ planId, initial, mode, initialArea, licences, archivedAt, inventory }: {
+export function SettingsModule({ planId, initial, mode, initialArea, licences, logoUrl, archivedAt, inventory }: {
   planId: string; initial: Settings; mode: "guided" | "advanced"; initialArea: AreaKey;
   /** What the business itself is licensed, registered or insured to do (§6.64). */
   licences: Licence[];
+  /** A signed URL for the plan's logo, minted on the server for this request (§6.94). */
+  logoUrl: string | null;
   /** When the plan was put away, or null (§6.58). */
   archivedAt: string | null;
   /** What the plan holds, so deleting it can say so rather than asking "are you sure?". */
@@ -79,7 +82,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, a
         { key: "profile", label: "Business profile", ...(missing.length ? { count: missing.length } : {}) },
         { key: "financial", label: "Financial year & tax" },
         { key: "printing", label: "How the plan prints" },
-        { key: "branding", label: "Branding", tag: "Soon" },
+        { key: "branding", label: "Branding" },
         { key: "lifecycle", label: "Archive & delete" },
       ]}
       area={area} onArea={(k) => { commit(dirty); setArea(k as AreaKey); }}
@@ -207,10 +210,8 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, a
 
       {area === "branding" && (
         <>
-          <Toolbar><Meta className="ml-0">Your logo goes on the report cover and page headers.</Meta></Toolbar>
-          <Section title="Logo">
-            <p className="text-[13px] text-muted-foreground">Logo upload arrives with the Reports step, so it lands where you can see it used.</p>
-          </Section>
+          <Toolbar><Meta className="ml-0">Your logo goes on the business plan&apos;s cover and the header of every page after it.</Meta></Toolbar>
+          <LogoSection planId={planId} path={s.logo_path} url={logoUrl} onPending={onLicPending} />
         </>
       )}
     </ModuleFrame>

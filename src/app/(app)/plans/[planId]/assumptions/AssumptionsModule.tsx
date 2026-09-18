@@ -5,16 +5,17 @@ import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ModuleFrame, ModuleStatusFooter } from "@/components/module/ModuleFrame";
+import { ModuleFrame, ModuleFooter } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row as GridRow, Toolbar, Meta, Note } from "@/components/module/DataGrid";
 import { useMoney } from "@/components/MoneyProvider";
 import { cn } from "@/lib/utils";
 import { FORECAST_YEARS, type CashTiming, type WorkingCapitalDays } from "@/engine/forecast/model";
 import { creditorBalance, debtorBalance, inventoryBalance } from "@/engine/forecast/assumptions";
-import { revertToHistoricDays, saveAssumptions } from "./actions";
-import { navGroup } from "@/lib/nav";
+import { continueFromAssumptions, revertToHistoricDays, saveAssumptions } from "./actions";
+import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 
 const box = "h-8";
+const STEP = GUIDED_STEPS.find((s) => s.id === "assumptions")?.step ?? 14;
 
 /**
  * Assumptions, its own module under Financials (§6.79).
@@ -64,12 +65,20 @@ export function AssumptionsModule({
     setCt({ ...ct, [year]: { ...ct[year], [key]: key === "taxPaidPct" ? Math.min(100, Math.max(0, v)) : Math.max(0, v) } });
   };
 
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const intent = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value === "later" ? "later" : "next";
+    /* The grid has already saved itself on blur (§6.10); this only moves the client along the path. */
+    start(async () => { await continueFromAssumptions(planId, intent); });
+  };
+
   return (
     <ModuleFrame
+      step={STEP} total={GUIDED_STEPS.length}
       group={navGroup("assumptions")} title="Assumptions" subtitle="How fast money comes in and goes out" mode={mode}
       areas={[{ key: "days", label: "Days & timing", tag: assumptionsSet ? undefined : "not set" }]}
       area="days" onArea={() => {}} scope={{ label: "Five years" }}
-      footer={<ModuleStatusFooter planId={planId} />}
+      footer={<ModuleFooter planId={planId} moduleId="assumptions" formId="assumptions-form" />}
       help={<>
         <h3>What good looks like</h3>
         <p><b>Debtor days</b> is how long your clients actually take to pay, not what your invoice says. The figure under each box is what that many days holds in debtors — money earned, counted as profit, and not in the bank.</p>
@@ -81,6 +90,8 @@ export function AssumptionsModule({
     >
       {err && <Note><span className="text-bad">{err}</span></Note>}
         <>
+          {/* The footer's buttons submit this; the grid itself saves on blur. */}
+          <form id="assumptions-form" onSubmit={onSubmit} className="hidden" />
           <Toolbar><Meta className="ml-0">
             {assumptionsSet
               ? <>How fast money comes in and goes out. Every figure on the cash flow moves with these.</>

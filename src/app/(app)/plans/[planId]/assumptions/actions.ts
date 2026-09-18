@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { nextHref } from "@/lib/nav";
 import {
   serializeCashTiming, serializeWorkingCapital, cashTimingSchedule, workingCapitalSchedule,
 } from "@/engine/forecast/assumptions";
@@ -54,6 +55,11 @@ export async function revertToHistoricDays(planId: string): Promise<Result> {
   return { ok: true };
 }
 
-export async function continueFromForecast(planId: string) {
-  redirect(`/plans/${planId}/goals`);
+/**
+ * Forward along the path (§6.81, §6.94). This was `continueFromForecast`, hard-coded to `/goals`, and
+ * NOTHING IMPORTED IT — the screen had a status-only footer, so there was no button to call it. A dead
+ * function with a hand-written destination is how the forward chain drifted before §6.81 derived it.
+ */
+export async function continueFromAssumptions(planId: string, intent: "next" | "later") {
+  redirect(intent === "next" ? nextHref(planId, "assumptions") : `/plans/${planId}/dashboard`);
 }

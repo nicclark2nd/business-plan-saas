@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { parseMonth } from "../people/model";
 import type { Profile, Financial, Printing, Licence } from "./model";
 import { serializeComponents } from "@/engine/plan/gst";
+import { checkLogo, logoObjectPath, LOGO_BUCKET } from "@/engine/plan/logo";
 
 type Result = { ok: true; data?: { date_established: string | null } } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
@@ -94,6 +95,56 @@ export async function savePrinting(planId: string, p: Partial<Printing>): Promis
     page_size: size,
   }, { onConflict: "plan_id" });
   if (error) { console.error("printing", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }
+  touch(planId);
+  return { ok: true };
+}
+
+/**
+ * The plan's logo (§6.94).
+ *
+ * Uploaded through a server action rather than straight from the browser, so the file is checked ONCE, by
+ * code the client cannot skip: a picker's `accept` attribute is a hint a drag-and-drop ignores, and the
+ * bucket's own mime list (0042) returns an error a client cannot read.
+ *
+ * `upsert: true` and one object per plan (`<planId>/logo.<ext>`) so changing a logo replaces it rather than
+ * leaving the old one behind. The ONE case that needs care is a change of format: png → jpg writes a new
+ * object and the old `logo.png` would sit there forever, still readable by anyone with the old signed URL,
+ * so the previous object is removed when the extension changes.
+ */
+export async function uploadLogo(planId: string, form: FormData): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
+  const file = form.get("logo");
+  if (!(file instanceof File)) return { ok: false, error: "No file arrived — try choosing it again." };
+  const check = checkLogo({ type: file.type, size: file.size, name: file.name });
+  if (!check.ok) return { ok: false, error: check.error };
+
+  const supabase = await createClient();
+  const path = logoObjectPath(planId, check.ext);
+  const { error: upload } = await supabase.storage.from(LOGO_BUCKET)
+    .upload(path, file, { upsert: true, contentType: file.type, cacheControl: "3600" });
+  if (upload) {
+    console.error("logo upload", upload);
+    return { ok: false, error: `That logo could not be saved: ${upload.message}` };
+  }
+
+  const { data: was } = await supabase.from("plan_settings").select("logo_path").eq("plan_id", planId).maybeSingle();
+  const previous = was?.logo_path as string | null | undefined;
+  if (previous && previous !== path) await supabase.storage.from(LOGO_BUCKET).remove([previous]);
+
+  const { error } = await supabase.from("plan_settings").upsert({ plan_id: planId, logo_path: path }, { onConflict: "plan_id" });
+  if (error) { console.error("logo path", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }
+  touch(planId);
+  return { ok: true, path };
+}
+
+/** Taking the logo off the plan removes the FILE too — a client who deletes it means it, and a row pointing
+ *  at nothing while the object stays readable is not deletion, it is hiding. */
+export async function removeLogo(planId: string): Promise<Result> {
+  const supabase = await createClient();
+  const { data: was } = await supabase.from("plan_settings").select("logo_path").eq("plan_id", planId).maybeSingle();
+  const previous = was?.logo_path as string | null | undefined;
+  if (previous) await supabase.storage.from(LOGO_BUCKET).remove([previous]);
+  const { error } = await supabase.from("plan_settings").update({ logo_path: null }).eq("plan_id", planId);
+  if (error) { console.error("logo remove", error); return { ok: false, error: error.message }; }
   touch(planId);
   return { ok: true };
 }
