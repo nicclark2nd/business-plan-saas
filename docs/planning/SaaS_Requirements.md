@@ -2938,3 +2938,56 @@ first rule is *never invent a place*.
 It is also the argument for the whole shape of this feature: a suggestion the client reads, edits and
 accepts, never text written into a plan on their behalf. **The last check is a person, and the design has to
 keep assuming it.** Whether the screen should say so out loud is the open question this leaves.
+
+---
+
+## §6.106.2 — Some answers are never in the plan
+
+§6.105.1 replaced a static "grounded or ask-first" flag with a check made at the moment of the press:
+whatever the plan holds becomes context, whatever it does not becomes the questions. That was right about
+one thing and wrong about another, and the wrong half shipped.
+
+**It treated "the plan has data" as "the plan can answer this field".** On a complete plan — SEQ Concreting,
+ten services, a market, segments — every slice Vision asked for was present, so it asked **nothing** and
+wrote a vision out of a products table.
+
+Nic, seeing it: *"I do not know how the AI can come up with any vision without asking me some simple
+questions… I might want to be the biggest fucking concreting business in the world."*
+
+He is right, and the fault is worse than a gap: it is the exact failure this feature was designed around,
+written down in the design notes and then built anyway.
+
+> **A PRODUCTS LIST SAYS WHAT A BUSINESS DOES TODAY. IT SAYS NOTHING ABOUT WHERE ITS OWNER WANTS TO BE IN
+> TEN YEARS, AND NO AMOUNT OF COMPLETENESS WILL EVER MAKE IT SAY SO.**
+
+So a field now declares two different things:
+
+- **`wants`** — slices of the plan. Present becomes context; absent becomes a question. A gap the plan has
+  not filled **yet**.
+- **`asks`** — questions put every single time, however complete the plan is. What the plan will **never**
+  hold.
+
+Vision asks where the owner wants to be in five to ten years, and what mark they want to leave. Purpose asks
+why the business exists beyond money, and what would be lost if it closed. Brand promise asks what they
+would put right at their own cost. Two at most, so there is room inside the cap of three for a real gap.
+
+**The owner's questions come first and are never dropped for a plan gap.** A missing product list is
+something the app can work around; a missing ambition is not.
+
+**The caption says both halves, in the order they happen** — *"Will ask you 2 short questions, then use
+business profile, what you sell, your products and your customers"*. A button that names only the data on a
+field about to ask two questions has misdescribed itself before it is pressed.
+
+**Verified live.** Asked where the business should be in ten years, the answer given was *"the biggest
+concreting business in Queensland, and then the country… our own batching plant… a name builders ask for by
+default."* The draft came back as *"We aim to become the largest concreting business in Australia, operating
+ten crews supported by our own batching plant and serving as the default choice for builders nationwide."*
+The owner's ambition, in the plan's voice — not an inference from a price list.
+
+**And the warning line went in**, on the evidence of §6.106.1's invented region: *"Read it before you use
+it. AI sometimes adds a detail that is not in your plan."* Shown beside the draft at the moment of the
+decision rather than as a preamble nobody reads.
+
+**Still open:** the second answer — the one about a labourer finishing with a trade — did not reach the
+sentence. Defensible for a field that asks for one sentence, and worth watching on fields that ask for
+three.

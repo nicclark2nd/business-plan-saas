@@ -14,6 +14,39 @@ import { VISION_FIELDS } from "@/app/(app)/plans/[planId]/vision/fields";
  * in, and the first missing ones become the questions.
  */
 
+/**
+ * WHAT ONLY THE OWNER CAN ANSWER (§6.106.2).
+ *
+ * These are asked every time, however complete the plan is, because no table in this app holds the answer.
+ * A products list says what a business does today; it says nothing about where its owner wants to be in ten
+ * years, or what they would want left behind.
+ *
+ * Kept short and concrete, in the second person, and answerable in a sentence. Two at most, so there is room
+ * inside the cap of three for a genuine gap in the plan.
+ */
+const VISION_ASKS: Record<string, readonly string[]> = {
+  vision: [
+    "Where do you want this business to be in five to ten years? Be as ambitious as you actually are.",
+    "Is there a mark you want to leave — on your area, your industry, or the people who work for you?",
+  ],
+  mission: [
+    "What do you want this business to be known for doing better than anyone else nearby?",
+  ],
+  purpose: [
+    "Beyond making money, why does this business exist?",
+    "If it closed tomorrow, what would be lost that nobody else would replace?",
+  ],
+  brand_promise: [
+    "What would you put right at your own cost rather than let a customer down?",
+  ],
+  ai_direction: [
+    "Where would you most want software or AI to take work off your hands? \"Nowhere yet, and here is why\" is a real answer.",
+  ],
+  field_of_play: [
+    "What work will you never take on, however good the money?",
+  ],
+};
+
 /** What each Vision field would like to know. Nothing else about these fields is duplicated. */
 const VISION_WANTS: Record<string, DraftableField["wants"]> = {
   /* Where the business is going. Needs to know what it does today and who for; the rest is noise. */
@@ -36,6 +69,7 @@ const fromVision = (): DraftableField[] =>
     hint: "hint" in f ? f.hint : undefined,
     placeholder: f.placeholder,
     wants: VISION_WANTS[f.key] ?? ["profile", "overview"],
+    asks: VISION_ASKS[f.key] ?? [],
   }));
 
 /** Keyed by the field's own key, so a route can look one up from a request without a second list. */

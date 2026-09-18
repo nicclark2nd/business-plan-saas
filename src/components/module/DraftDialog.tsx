@@ -138,8 +138,7 @@ export function DraftDialog({
         {state === "asking" && (
           <div className="space-y-3">
             <p className="text-[12.5px] text-muted-foreground">
-              The plan does not cover {questions.length === 1 ? "this yet" : "these yet"}, so a short answer
-              is all it needs. Leave one blank and it will be left out.
+              A sentence each is plenty. Leave one blank and it will be left out.
             </p>
             {questions.map((q) => (
               <div key={q.slice} className="space-y-1">
@@ -162,9 +161,21 @@ export function DraftDialog({
             )}
             {error && <p className="text-[12.5px] font-semibold text-bad" role="alert">{error}</p>}
             {state === "done" && (
-              <p className="text-[11.5px] text-muted-foreground">
-                Yours to edit once it is in the box. Nothing is saved until you leave the field.
-              </p>
+              <>
+                {/*
+                  SAID AT THE MOMENT OF THE DECISION, NOT IN A PREAMBLE (§6.106.2).
+                  The very first draft this feature ever produced put the business in "South East and
+                  Central Queensland" when the plan says South East. The instruction not to invent is a
+                  request, not a constraint, so the last check is the person reading it — and the screen
+                  should say so where they are actually looking.
+                */}
+                <p className="text-[12px] font-semibold text-warn">
+                  Read it before you use it. AI sometimes adds a detail that is not in your plan.
+                </p>
+                <p className="text-[11.5px] text-muted-foreground">
+                  Yours to edit once it is in the box. Nothing is saved until you leave the field.
+                </p>
+              </>
             )}
           </div>
         )}

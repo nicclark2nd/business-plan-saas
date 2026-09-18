@@ -66,6 +66,17 @@ export type DraftableField = {
   placeholder?: string;
   /** In order of how much each would change the draft — the first missing ones become the questions. */
   wants: readonly SliceKey[];
+  /**
+   * QUESTIONS THAT ARE ALWAYS ASKED, BECAUSE THE ANSWER IS NEVER IN THE PLAN (§6.106.2).
+   *
+   * `wants` covers a gap the plan has not filled YET. This covers what the plan will never hold however
+   * complete it is. No amount of knowing that a business pours driveways tells anyone where its owner wants
+   * to be in ten years, or what they would want left behind if it closed.
+   *
+   * The first build had only `wants`, so a full plan asked nothing and wrote a vision out of a products
+   * table — which is the exact fault this feature was designed to avoid, shipped.
+   */
+  asks?: readonly string[];
 };
 
 export type DraftPlan = {
@@ -73,7 +84,7 @@ export type DraftPlan = {
   context: string;
   present: SliceKey[];
   /** At most three, for what is missing and worth asking. */
-  questions: { slice: SliceKey; question: string }[];
+  questions: { slice: string; question: string }[];
   /** The line under the button. Never names something the plan does not have. */
   caption: string;
 };
@@ -92,21 +103,34 @@ export function planDraft(i: ReportInput, field: DraftableField): DraftPlan {
   const present = wants.filter((k) => hasSlice(i, k));
   const missing = wants.filter((k) => !hasSlice(i, k));
 
-  const questions = missing
-    .map((slice) => ({ slice, question: SLICE_QUESTION[slice] }))
-    .filter((q): q is { slice: SliceKey; question: string } => q.question !== null)
-    .slice(0, MAX_QUESTIONS);
+  /*
+   * The owner's own questions come FIRST and are never dropped for a plan gap: a missing product list is
+   * something the app can work around, and a missing ambition is not.
+   */
+  const owner = (field.asks ?? []).map((question, i) => ({ slice: `ask:${i}`, question }));
+  const gaps = missing
+    .map((slice) => ({ slice: slice as string, question: SLICE_QUESTION[slice] }))
+    .filter((q): q is { slice: string; question: string } => q.question !== null);
+  const questions = [...owner, ...gaps].slice(0, MAX_QUESTIONS);
 
   /*
    * The caption states what will be used, and says plainly when that is nothing rather than dressing it up.
    * A client at step 1 who is told the app will use products it has never been given learns that the app's
    * sentences are decoration.
    */
-  const caption = present.length
-    ? `Will use ${sentence(present.map((k) => SLICE_LABEL[k]))}`
-    : questions.length
-      ? "Will ask you a couple of questions first"
-      : "Will draft from what you have written so far";
+  /*
+   * The caption says BOTH halves, and says the asking first, because that is what happens first. A button
+   * captioned only "Will use your products" on a field that is about to ask two questions has misdescribed
+   * itself before it is even pressed.
+   */
+  const asking = questions.length
+    ? `Will ask you ${questions.length === 1 ? "one question" : `${questions.length} short questions`}`
+    : null;
+  const using = present.length ? `use ${sentence(present.map((k) => SLICE_LABEL[k]))}` : null;
+  const caption = asking && using ? `${asking}, then ${using}`
+    : asking ? asking
+      : using ? `Will ${using}`
+        : "Will draft from what you have written so far";
 
   return { context: contextFor(i, present), present, questions, caption };
 }
