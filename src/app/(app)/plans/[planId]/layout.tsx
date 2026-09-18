@@ -36,7 +36,7 @@ export default async function PlanLayout({ children, params }: { children: React
     <div className="grid h-screen min-h-[640px] grid-cols-[240px_1fr] grid-rows-[48px_1fr]">
       <header className="col-span-2 flex items-center gap-4 border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground">
         <Link href="/setup" className="flex w-[224px] items-center gap-2.5 font-bold text-white">
-          <span className="grid size-[26px] place-items-center rounded-[5px] bg-sidebar-primary text-xs text-sidebar-primary-foreground">▲</span>PlanWell
+          <span className="grid size-[26px] place-items-center rounded-[5px] bg-sidebar-primary text-xs text-sidebar-primary-foreground">▲</span>BizPlanHQ
         </Link>
         <div className="text-[13px] text-sidebar-muted">Plan: <b className="font-semibold text-sidebar-foreground">{plan.business_name}</b> · FY{plan.plan_year}</div>
         <div className="flex-1" />

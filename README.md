@@ -1,4 +1,4 @@
-# Business planning platform
+# BizPlanHQ
 
 SaaS business-planning application: guided plan build, five-year forecast, What-If planner,
 AI-drafted goals, and audience-specific business plan reports. Multi-tenant with an advisor workspace.
@@ -6,7 +6,7 @@ AI-drafted goals, and audience-specific business plan reports. Multi-tenant with
 - Requirements and decisions: `docs/planning/SaaS_Requirements.md`
 - What the previous (APeX) build did: `docs/planning/ABoS_APeX_Menu_Inventory.md`
 - What is ported from APeX and what is not: `docs/planning/APeX_Code_Audit.md`
-- Clickable mockup: `docs/mockup/planwell-mockup.html`
+- Clickable mockup: `docs/mockup/bizplanhq-mockup.html`
 
 ## Stack
 Next.js (App Router, TypeScript) · Tailwind · shadcn/ui · Supabase · Vitest · OpenRouter (server-side only) · Vercel

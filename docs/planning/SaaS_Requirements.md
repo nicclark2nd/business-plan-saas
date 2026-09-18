@@ -2622,3 +2622,25 @@ that immediately, by failing on it.
 The **Business plan** step has no section either, so the guided path can never read 17 of 17 — a client never
 sees the plan as finished. Making it "done when everything else is" would be well-defined and slightly
 circular. That is a judgement about what the last step means, and it is Nic's, not this pass's.
+
+## 6.100 The app is called BizPlanHQ (18 Sep 2026)
+
+Nic has the domain, so the working name goes. Renamed everywhere a client meets it:
+
+- the brand in the sidebar, which is on every screen
+- the browser tab, which said **"Business planning platform"** — a category, not a product, so this was a
+  gain as well as a rename
+- the Historic spreadsheet template, which a client downloads and keeps on their own disk as
+  `BizPlanHQ_Historic_Template.xlsx`
+- the mockups and the README, including the mockup's own filename
+
+**One line was deliberately left alone.** §6.29's currency table has a column headed "PlanWell showed",
+recording what the app displayed when four of the thirteen currencies were formatted as Australian.
+
+> **A DECISIONS LOG RECORDS WHAT HAPPENED, SO THE NAME THAT WAS WRONG AT THE TIME IS PART OF THE RECORD.**
+> Renaming it retrospectively would make the document say the fault was found in an app that did not yet
+> exist under that name. The entry here is what explains it to a reader who meets the old name.
+
+Not renamed, because they are not the brand: the GitHub repository (`business-plan-saas`), the npm package
+name, the Supabase project, and the folder on Nic's own disk. Each is an address rather than a name, and
+changing an address breaks the things pointing at it for no gain a client can see.

@@ -5,7 +5,7 @@ import "./globals.css";
 const openSans = Open_Sans({ subsets: ["latin"], weight: ["400", "600", "700"], variable: "--font-open-sans", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Business planning platform",
+  title: "BizPlanHQ",
   description: "Build an accurate business plan and the document that goes with it.",
 };
 

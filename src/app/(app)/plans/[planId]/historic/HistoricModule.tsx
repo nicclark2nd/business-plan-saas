@@ -215,7 +215,7 @@ function ImportArea({ planId, onLoaded }: { planId: string; onLoaded: () => void
     const labels = ["Period End", "Period Length", "Profit & Loss", "Revenue", "Gross Margin", "Net Profit After Tax", "Other Information", "Depreciation & Amortisation", "Interest Paid", "Tax Paid", "Extraordinary Income_Expenses", "Dividends Paid", "Balance Sheet", "Total Assets", "Cash", "Accounts Receivable", "Inventory_WIP", "Total Current Assets", "Fixed Assets", "Liabilities", "Total Liabilities", "Accounts Payable", "Total Current Liabilities", "Funding", "Bank Loans - Current", "Bank Loans - Non Current"];
     const aoa = [["Category", "Period 1", "Period 2", "Period 3", "Period 4"], ...labels.map((l) => [l, ...(l === "Period Length" ? [12, 12, 12, 12] : ["", "", "", ""])])];
     const ws = XLSX.utils.aoa_to_sheet(aoa); ws["!cols"] = [{ wch: 30 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
-    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Historic"); XLSX.writeFile(wb, "PlanWell_Historic_Template.xlsx");
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Historic"); XLSX.writeFile(wb, "BizPlanHQ_Historic_Template.xlsx");
   };
 
   const show: { label: string; field: PeriodField }[] = [{ label: "Revenue", field: "revenue" }, { label: "Gross margin", field: "gross_margin" }, { label: "Overheads (derived)", field: "overheads" }, { label: "Net profit after tax", field: "net_profit" }, { label: "Cash", field: "cash" }, { label: "Total assets", field: "total_assets" }, { label: "Total liabilities", field: "total_liabilities" }, { label: "Equity (derived)", field: "equity" }];
