@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
+import { useSaveErrors } from "@/components/module/saveErrors";
 import { Toolbar, Meta, Note, CellInput, RemoveButton } from "@/components/module/DataGrid";
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { MONTH_SHORT } from "@/engine/plan/calendar";
@@ -17,7 +18,7 @@ const moneyWith = (num: Num) => (v: number) => (v < 0 ? `(${num(-v)})` : num(v))
 const parseNum = (s: string) => { const t = s.replace(/[,\s]/g, "").replace(/^\((.*)\)$/, "-$1"); const n = Number(t); return Number.isFinite(n) ? n : 0; };
 const PERIODS = [1, 2, 3, 4] as const;
 type AreaKey = "pnl" | "bs" | "import";
-type Col = { n: number; present: boolean; period_end_text: string; period_length: number; input: PeriodInput; _dirty?: boolean; _error?: string; source: string | null };
+type Col = { n: number; present: boolean; period_end_text: string; period_length: number; input: PeriodInput; _dirty?: boolean; source: string | null };
 const STEP = GUIDED_STEPS.find((s) => s.id === "historic")?.step ?? 6;
 
 const endText = (iso: string | null, fyEnd: number) => {
@@ -36,12 +37,15 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
     return { n, present: !!p, period_end_text: endText(p?.period_end ?? null, fyEndMonth), period_length: p?.period_length ?? 12, input, source: p?.source ?? null };
   }));
   const [newBusiness, setNewBusiness] = useState(hasHistory === false);
+  /** Keyed by year, so two bad columns are two messages rather than whichever `.find()` reached first (§6.98). */
+  const errors = useSaveErrors();
   const [pending, start] = useTransition();
   const ref = useRef(cols); useEffect(() => { ref.current = cols; }, [cols]);
   const derived = useMemo(() => cols.map((c) => deriveFromComponents(c.input)), [cols]);
 
-  const edit = (n: number, changes: Partial<Col>) => setCols((cs) => cs.map((c) => (c.n === n ? { ...c, ...changes, _dirty: true, _error: undefined } : c)));
-  const editValue = (n: number, f: PeriodField, raw: string) => setCols((cs) => cs.map((c) => (c.n === n ? { ...c, input: { ...c.input, [f]: parseNum(raw) }, _dirty: true, _error: undefined } : c)));
+  /* Typing no longer erases the reason a column would not save (§6.98). */
+  const edit = (n: number, changes: Partial<Col>) => setCols((cs) => cs.map((c) => (c.n === n ? { ...c, ...changes, _dirty: true } : c)));
+  const editValue = (n: number, f: PeriodField, raw: string) => setCols((cs) => cs.map((c) => (c.n === n ? { ...c, input: { ...c.input, [f]: parseNum(raw) }, _dirty: true } : c)));
   const commit = (n: number) => {
     const c = ref.current.find((x) => x.n === n);
     if (!c || !c._dirty) return;
@@ -50,7 +54,13 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
     setCols((cs) => cs.map((x) => (x.n === n ? { ...x, _dirty: false } : x)));
     start(async () => {
       const r = await savePeriod(planId, n, { ...c.input, period_end_text: c.period_end_text, period_length: c.period_length });
-      setCols((cs) => cs.map((x) => (x.n === n ? (r.ok ? { ...x, present: true, source: "manual", period_end_text: endText(r.data!.period_end, fyEndMonth) } : { ...x, _dirty: true, _error: r.error }) : x)));
+      if (r.ok) {
+        errors.clear(`year:${n}`);
+        setCols((cs) => cs.map((x) => (x.n === n ? { ...x, present: true, source: "manual", period_end_text: endText(r.data!.period_end, fyEndMonth) } : x)));
+      } else {
+        errors.raise({ key: `year:${n}`, message: r.error, label: `Year ${n}` });
+        setCols((cs) => cs.map((x) => (x.n === n ? { ...x, _dirty: true } : x)));
+      }
     });
   };
   /** Focus left this column entirely (moved to another column, or off the grid). */
@@ -68,12 +78,12 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
   const toggleNewBusiness = () => { const v = !newBusiness; setNewBusiness(v); start(async () => { await setHasHistory(planId, v ? false : (ref.current.some((c) => c.present) ? true : null)); }); };
 
   const presentCount = cols.filter((c) => c.present).length;
-  const err = cols.find((c) => c._error)?._error;
   const latest = derived[0];
 
   return (
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group={navGroup("historic")} title="Historic" subtitle="Up to four years of accounts, newest first — the latest is where the forecast starts" mode={mode}
+      errors={errors}
       areas={[{ key: "pnl", label: "Profit & loss", count: presentCount }, { key: "bs", label: "Balance sheet", count: presentCount }, { key: "import", label: "Import" }]}
       area={area} onArea={(k) => { flush(); setArea(k as AreaKey); }} scope={{ label: "This plan" }}
       primaryAction={<Button size="sm" type="button" variant={newBusiness ? "secondary" : "outline"} aria-pressed={newBusiness} onClick={toggleNewBusiness}>{newBusiness ? "✓ New business — no accounts yet" : "New business — no accounts yet"}</Button>}
@@ -87,7 +97,7 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
         <p>Opening balance sheet for the forecast; debtor, stock and creditor days become the working-capital defaults; the four-year trend appears in every report and on the dashboard.</p>
       </>}
     >
-      <PendingBridge pending={pending} dirty={cols.some((c) => c._dirty)} error={err} />
+      <PendingBridge pending={pending} dirty={cols.some((c) => c._dirty)} />
       <form id="historic-form" onSubmit={onSubmit} className="hidden" />
 
       {loadError && <div className="border-b border-border bg-bad-soft px-5 py-2 text-[13px] text-bad">Couldn&apos;t read this plan&apos;s history: {loadError}</div>}
@@ -113,7 +123,7 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
                   <td className="py-1 pl-5 text-muted-foreground">Period length <span className="text-[11px]">(months)</span></td>
                   {cols.map((c) => <td key={c.n} data-col={c.n} className="px-3 py-1" onBlur={(e) => leftCol(e, c.n) && commit(c.n)}><CellInput numeric inputMode="numeric" value={String(c.period_length)} onChange={(e) => edit(c.n, { period_length: Math.max(1, Math.min(24, Number(e.target.value.replace(/\D/g, "")) || 12)) })} /></td>)}
                 </tr>
-                {(area === "pnl" ? PNL_LINES : BS_LINES).map((line) => <LineRow key={line.field} line={line} cols={cols} derived={derived} onEdit={editValue} onCommit={commit} leftCol={leftCol} />)}
+                {(area === "pnl" ? PNL_LINES : BS_LINES).map((line) => <LineRow key={line.field} line={line} cols={cols} derived={derived} onEdit={editValue} onCommit={commit} leftCol={leftCol} colError={(n) => errors.forKey(`year:${n}`)} />)}
               </tbody>
               <tfoot>
                 {(area === "pnl"
@@ -141,9 +151,11 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
   );
 }
 
-function LineRow({ line, cols, derived, onEdit, onCommit, leftCol }: {
+function LineRow({ line, cols, derived, onEdit, onCommit, leftCol, colError }: {
   line: LineDef; cols: Col[]; derived: ReturnType<typeof deriveFromComponents>[];
   onEdit: (n: number, f: PeriodField, raw: string) => void; onCommit: (n: number) => void; leftCol: (e: React.FocusEvent<HTMLElement>, n: number) => boolean;
+  /** What did not save in this column, from the module's error channel (§6.98). */
+  colError: (n: number) => string | undefined;
 }) {
   const num = useMoney();
   const money = moneyWith(num);
@@ -151,7 +163,7 @@ function LineRow({ line, cols, derived, onEdit, onCommit, leftCol }: {
     <tr className={cn("border-b border-border", line.calc && "bg-secondary/60")} title={line.help}>
       <td className={cn("py-0 pl-5 pr-3 h-8", line.indent && "pl-8", line.strong && "font-semibold", line.calc && "text-foreground")}>{line.label}</td>
       {cols.map((c, i) => (
-        <td key={c.n} data-col={c.n} className={cn("px-3 py-0 text-right", c._error && "bg-bad-soft")} title={c._error} onBlur={(e) => leftCol(e, c.n) && onCommit(c.n)}>
+        <td key={c.n} data-col={c.n} className={cn("px-3 py-0 text-right", colError(c.n) && "bg-bad-soft")} title={colError(c.n)} onBlur={(e) => leftCol(e, c.n) && onCommit(c.n)}>
           {line.calc
             ? <span className={cn("num inline-block h-7 leading-7 pr-1.5", line.strong && "font-semibold", derived[i][line.field] < 0 && "text-bad")}>{money(derived[i][line.field])}</span>
             : <CellInput numeric value={c.input[line.field] ? money(c.input[line.field] as number) : ""} placeholder="0" onChange={(e) => onEdit(c.n, line.field, e.target.value)} />}
@@ -234,9 +246,10 @@ function ImportArea({ planId, onLoaded }: { planId: string; onLoaded: () => void
   );
 }
 
-function PendingBridge({ pending, dirty, error }: { pending: boolean; dirty: boolean; error?: string }) {
+/** STATUS ONLY (§6.98) — a failed save travels on its own channel and is shown in red, not in this grey. */
+function PendingBridge({ pending, dirty }: { pending: boolean; dirty: boolean }) {
   const { setPending, setNote } = useModule();
   useEffect(() => setPending(pending), [pending, setPending]);
-  useEffect(() => setNote(error ? error : pending ? "Saving…" : dirty ? "Unsaved — saves when you leave the column" : undefined), [pending, dirty, error, setNote]);
+  useEffect(() => setNote(pending ? "Saving…" : dirty ? "Unsaved — saves when you leave the column" : undefined), [pending, dirty, setNote]);
   return null;
 }

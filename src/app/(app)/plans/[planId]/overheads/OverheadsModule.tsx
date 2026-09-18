@@ -9,6 +9,7 @@ import { GstToggle, GstFreeTag } from "@/components/module/GstToggle";
 import { useGst } from "@/components/GstProvider";
 
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
+import { useSaveErrors } from "@/components/module/saveErrors";
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
@@ -33,7 +34,7 @@ const pct = (v: number | undefined) => v === undefined || v === null ? "" : Stri
 
 type AreaKey = "expenses" | "monthly";
 type Dlg = { kind: "expense" | "split"; key: string } | null;
-type Row = OverheadRow & { _key: string; _error?: string };
+type Row = OverheadRow & { _key: string };
 const STEP = GUIDED_STEPS.find((s) => s.id === "overheads")?.step ?? 9;
 const isNew = (r: Row) => r.id.startsWith("tmp-");
 const CATEGORY_HINT: Record<string, string> = Object.fromEntries(OVERHEAD_CATEGORIES.map((c) => [c.value, c.hint]));
@@ -57,7 +58,8 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
   const [area, setArea] = useState<AreaKey>("expenses");
   const [dlg, setDlg] = useState<Dlg>(null);
   const [draftNew, setDraftNew] = useState<Row | null>(null);
-  const [error, setErr] = useState<string | undefined>();
+  /** Keyed failures that survive a keystroke and clear only on a save that works (§6.98). */
+  const errors = useSaveErrors();
   const [pending, start] = useTransition();
 
   /** The two synced lines always show, whether or not a row exists yet to hold their monthly shape. */
@@ -81,8 +83,9 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
       const res = r.source === "entered"
         ? await upsertOverhead(planId, { ...r, id: isNew(r) ? undefined : r.id })
         : await saveSyncedShape(planId, r.source as "people" | "marketing", r.monthly_distribution);
-      if (!res.ok) setErr(res.error);
-      else if (r.source !== "entered") router.refresh();
+      if (!res.ok) { errors.raise({ key: `overhead:${key}`, message: res.error, label: r.name || "Expense" }); return; }
+      errors.clear(`overhead:${key}`);
+      if (r.source !== "entered") router.refresh();
       else setRows((xs) => xs.map((x) => (x._key === key && res.data ? { ...x, id: res.data.id } : x)));
     });
   };
@@ -98,7 +101,7 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
   const commitOnCost = () => {
     setOnCostText(null);
     if (onCost === onCostPct) return;
-    start(async () => { const res = await saveOnCostPct(planId, onCost); if (!res.ok) setErr(res.error); });
+    start(async () => { const res = await saveOnCostPct(planId, onCost); if (!res.ok) errors.raise({ key: "on-costs", message: res.error, label: "On-costs" }); else errors.clear("on-costs"); });
   };
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -115,6 +118,7 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
   return (
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group={navGroup("overheads")} title="Overheads" subtitle="What the business costs to run whether or not it sells anything" mode={mode}
+      errors={errors}
       areas={[{ key: "expenses", label: "Expenses", count: lines.length }, { key: "monthly", label: "Monthly projections" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "This plan" }}
       primaryAction={area === "expenses" ? <Button size="sm" type="button" onClick={add}>+ Expense</Button> : undefined}
@@ -129,7 +133,7 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
         <p>Overheads sit below gross profit in the forecast&apos;s profit and loss, and drive your break-even. Year 1 by month → the twelve-month cash flow.</p>
       </>}
     >
-      <PendingBridge pending={pending} error={error ?? rows.find((r) => r._error)?._error} />
+      <PendingBridge pending={pending} />
       <form id="overheads-form" onSubmit={onSubmit} className="hidden" />
 
       {area === "expenses" && (<>
@@ -155,7 +159,7 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
             const synced = r.source !== "entered";
             const v = valuesFor(r);
             return (
-              <GridRow key={r._key} className={cn(r._error && "[&>td]:bg-bad-soft")} title={r._error}>
+              <GridRow key={r._key} className={cn(errors.forKey(`overhead:${r._key}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`overhead:${r._key}`)}>
                 <Td>
                   {synced
                     ? <><span className="font-semibold">{r.name}</span>
@@ -373,9 +377,10 @@ function SplitDialog({ r, year1, fyEndMonth, onSave, onClose }: { r: Row; year1:
   );
 }
 
-function PendingBridge({ pending, error }: { pending: boolean; error?: string }) {
+/** STATUS ONLY (§6.98) — a failed save travels on its own channel and is shown in red, not in this grey. */
+function PendingBridge({ pending }: { pending: boolean }) {
   const { setPending, setNote } = useModule();
   useEffect(() => setPending(pending), [pending, setPending]);
-  useEffect(() => setNote(error ? error : pending ? "Saving…" : undefined), [pending, error, setNote]);
+  useEffect(() => setNote(pending ? "Saving…" : undefined), [pending, setNote]);
   return null;
 }

@@ -45,7 +45,8 @@ export function LicenceSection({ planId, initial, onPending }: {
 
   const left = (e: React.FocusEvent<HTMLElement>) => !e.currentTarget.contains(e.relatedTarget as Node);
   const edit = (id: string, changes: Partial<Licence>) =>
-    setRows((xs) => xs.map((x) => (x.id === id ? { ...x, ...changes, _dirty: true, _error: undefined } : x)));
+    /* Typing no longer erases the reason a licence would not save (§6.98). */
+    setRows((xs) => xs.map((x) => (x.id === id ? { ...x, ...changes, _dirty: true } : x)));
 
   const commit = (id: string) => {
     const row = rowsRef.current.find((x) => x.id === id);

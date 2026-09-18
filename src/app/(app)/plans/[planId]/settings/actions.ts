@@ -8,7 +8,13 @@ import { serializeComponents } from "@/engine/plan/gst";
 import { checkLogo, logoObjectPath, LOGO_BUCKET } from "@/engine/plan/logo";
 import { checkEmail, checkWebsite } from "@/engine/plan/contact";
 
-type Result = { ok: true; data?: { date_established: string | null } } | { ok: false; error: string };
+/**
+ * `field` names the control the message belongs beside (§6.98). A save that says "that does not look like an
+ * email address" and does not say WHICH box is a message the client has to go hunting with.
+ */
+type Result =
+  | { ok: true; data?: { date_established: string | null } }
+  | { ok: false; error: string; field?: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
 
 export async function saveProfile(planId: string, p: Partial<Profile> & { established_text?: string }): Promise<Result> {
@@ -16,7 +22,7 @@ export async function saveProfile(planId: string, p: Partial<Profile> & { establ
   const established = p.established_text !== undefined ? parseMonth(p.established_text) : p.date_established;
   if (established === undefined) return { ok: false, error: "Date established should be a month and year, e.g. Jun 1975." };
   const name = (p.business_name ?? "").trim();
-  if (!name) return { ok: false, error: "The business needs a name." };
+  if (!name) return { ok: false, error: "The business needs a name.", field: "business_name" };
   // The cover year. A plan revised and reissued next March should be able to say so (§6.33.2).
   const year = Math.trunc(Number(p.plan_year));
   if (p.plan_year !== undefined && (!Number.isFinite(year) || year < 1900 || year > 2200)) {
@@ -26,9 +32,9 @@ export async function saveProfile(planId: string, p: Partial<Profile> & { establ
 
   /* Refused with a sentence rather than stored and printed wrong on a cover (§6.96). */
   const email = checkEmail(p.contact_email);
-  if (!email.ok) return { ok: false, error: email.error };
+  if (!email.ok) return { ok: false, error: email.error, field: "contact_email" };
   const website = checkWebsite(p.website);
-  if (!website.ok) return { ok: false, error: website.error };
+  if (!website.ok) return { ok: false, error: website.error, field: "website" };
 
   /**
    * Moving country takes the old country's taxes with it (§6.39.1). A plan switched from British Columbia

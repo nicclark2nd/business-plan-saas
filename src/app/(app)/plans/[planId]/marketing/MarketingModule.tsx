@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
+import { useSaveErrors } from "@/components/module/saveErrors";
 import { Grid, Th, Td, Row, FootRow, Toolbar, Meta, Note, RemoveButton, CellInput, CellSelect, CellTextarea, focusRow } from "@/components/module/DataGrid";
 import { Section, FieldGrid, Field, FieldTextarea } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
@@ -29,7 +30,7 @@ const TONE: Record<GoalStatus, string> = {
 };
 
 type AreaKey = "market" | "spend" | "research" | "brand" | "sales" | "actions";
-type WithMeta<T> = T & { _dirty?: boolean; _error?: string };
+type WithMeta<T> = T & { _dirty?: boolean };
 
 export function MarketingModule({ planId, initial, mode, initialArea, customerWord, productWord, actions, people, quarters, thisQuarter, products }: {
   planId: string; initial: MarketingData; mode: "guided" | "advanced"; initialArea: AreaKey; customerWord: string;
@@ -68,7 +69,8 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
     evidence: initial.evidence.length ? initial.evidence.map((e) => ({ ...e, when_text: formatMonth(e.occurred_on) })) : [blankEvidence()],
     segments: initial.segments.length ? initial.segments : [blankSegment()],
   });
-  const [error, setError] = useState<string | undefined>();
+  /** Keyed per row and per area, so several failures are several messages (§6.98). */
+  const errors = useSaveErrors();
   const [pending, start] = useTransition();
   const marketRef = useRef(market); useEffect(() => { marketRef.current = market; }, [market]);
   const rowsRef = useRef(rows); useEffect(() => { rowsRef.current = rows; }, [rows]);
@@ -78,16 +80,20 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
   const commitMarket = () => {
     if (!marketDirty) return;
     setMarketDirty(false);
-    start(async () => { const r = await saveMarket(planId, marketRef.current); if (!r.ok) { setError(r.error); setMarketDirty(true); } });
+    start(async () => {
+      const r = await saveMarket(planId, marketRef.current);
+      if (!r.ok) { errors.raise({ key: "market", message: r.error, label: "The market" }); setMarketDirty(true); }
+      else errors.clear("market");
+    });
   };
 
   // ----- row grids: one request per row, when focus leaves it; selects save at once -----
-  type AnyRow = { id: string; _dirty?: boolean; _error?: string } & Record<string, unknown>;
+  type AnyRow = { id: string; _dirty?: boolean } & Record<string, unknown>;
   type GridKind = Exclude<RowKind, "competitors">;
   const list = (k: GridKind) => rowsRef.current[k] as unknown as AnyRow[];
   const setList = (k: GridKind, fn: (xs: AnyRow[]) => AnyRow[]) => setRows((r) => ({ ...r, [k]: fn(r[k] as unknown as AnyRow[]) }));
   const edit = (k: GridKind, id: string, changes: Record<string, unknown>, immediate = false) => {
-    setList(k, (xs) => xs.map((x) => (x.id === id ? { ...x, ...changes, _dirty: true, _error: undefined } : x)));
+    setList(k, (xs) => xs.map((x) => (x.id === id ? { ...x, ...changes, _dirty: true } : x)));
     if (immediate) queueMicrotask(() => commit(k, id));
   };
   const commit = (k: GridKind, id: string) => {
@@ -98,7 +104,12 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
     if (k === "evidence") payload.occurred_on = row.when_text;      // the action parses "Mar 2026"
     start(async () => {
       const r = await upsertRow(planId, k, payload);
-      if (!r.ok) { setList(k, (xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: true, _error: r.error } : x))); return; }
+      if (!r.ok) {
+        errors.raise({ key: `${k}:${id}`, message: r.error, label: k === "spend" ? "Marketing spend" : k === "evidence" ? "Evidence" : "Segment" });
+        setList(k, (xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: true } : x)));
+        return;
+      }
+      errors.clear(`${k}:${id}`);
       setList(k, (xs) => xs.map((x) => (x.id === id ? { ...x, id: r.data!.id, ...(k === "evidence" && r.data!.occurred_on !== undefined ? { occurred_on: r.data!.occurred_on, when_text: formatMonth(r.data!.occurred_on) } : {}) } : x)));
     });
   };
@@ -148,7 +159,6 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
   const spendTotal = rows.spend.reduce((a, s) => a + (Number(s.annual_budget) || 0), 0);
   const acquisition = acquisitionByYear(products, Array(5).fill(spendTotal));
   const anyDirty = marketDirty || (["spend", "evidence"] as GridKind[]).some((k) => (rows[k] as AnyRow[]).some((r) => r._dirty));
-  const rowError = (["spend", "evidence", "segments"] as GridKind[]).flatMap((k) => rows[k] as AnyRow[]).find((r) => r._error)?._error;
   const plural = customerNoun(customerWord).many.toLowerCase();
   /** What this plan calls one sale (§6.31.1): a job, a treatment, a client. Nobody wins a "job" in software. */
   const one = productNoun(productWord).one.toLowerCase();
@@ -161,7 +171,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
       {fields.map((f) => (
         <Field key={f.key} label={f.label} span={3} hint={f.hint}>
           <FieldTextarea value={market[f.key as keyof Market] ?? ""} placeholder={f.placeholder} className="min-h-[84px]"
-            onChange={(e) => { setMarket((m) => ({ ...m, [f.key]: e.target.value })); setMarketDirty(true); setError(undefined); }} />
+            onChange={(e) => { setMarket((m) => ({ ...m, [f.key]: e.target.value })); setMarketDirty(true); }} />
         </Field>
       ))}
     </FieldGrid>
@@ -170,6 +180,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
   return (
     <ModuleFrame
       step={3} total={GUIDED_STEPS.length} group={navGroup("marketing")} title="Marketing" subtitle={`Who your ${plural} are and what you will spend to win them`} mode={mode}
+      errors={errors}
       areas={[
         { key: "market", label: "Market", count: written },
         { key: "spend", label: "Channels & spend", count: rows.spend.filter((r) => r.approach.trim()).length,
@@ -200,7 +211,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
         <p>Status saves on the spot, because that is the one field a review meeting changes.</p>
       </>}
     >
-      <PendingBridge pending={pending} dirty={anyDirty} error={error ?? rowError} />
+      <PendingBridge pending={pending} dirty={anyDirty} />
       <form id="marketing-form" onSubmit={onSubmit} className="hidden" />
 
       {area === "market" && (
@@ -223,7 +234,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
             </tr></thead>
             <tbody>
               {rows.segments.map((sg) => (
-                <Row key={sg.id} data-row={sg.id} onBlur={(e) => left(e) && commit("segments", sg.id)} className={cn(sg._error && "[&>td]:bg-bad-soft")} title={sg._error}>
+                <Row key={sg.id} data-row={sg.id} onBlur={(e) => left(e) && commit("segments", sg.id)} className={cn(errors.forKey(`segments:${sg.id}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`segments:${sg.id}`)}>
                   <Td wrap><CellTextarea value={sg.name} placeholder="e.g. Residential builders" onChange={(e) => edit("segments", sg.id, { name: e.target.value })} /></Td>
                   <Td wrap><CellTextarea value={sg.profile ?? ""} placeholder="e.g. Licensed, 3–25 staff, $2–12M turnover, within 90 minutes" onChange={(e) => edit("segments", sg.id, { profile: e.target.value })} /></Td>
                   <Td wrap><CellTextarea value={sg.cares_about ?? ""} placeholder="e.g. Never holding up their other trades. Pays more to avoid a callback." onChange={(e) => edit("segments", sg.id, { cares_about: e.target.value })} /></Td>
@@ -272,7 +283,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
             <thead><tr><Th style={{ width: 248 }}>Type</Th><Th>Approach</Th><Th right style={{ width: 140 }}>Annual budget</Th><Th style={{ width: 36 }} /></tr></thead>
             <tbody>
               {rows.spend.map((s) => (
-                <Row key={s.id} data-row={s.id} onBlur={(e) => left(e) && commit("spend", s.id)} className={cn(s._error && "[&>td]:bg-bad-soft")} title={s._error}>
+                <Row key={s.id} data-row={s.id} onBlur={(e) => left(e) && commit("spend", s.id)} className={cn(errors.forKey(`spend:${s.id}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`spend:${s.id}`)}>
                   <Td><CellSelect value={s.kind} options={SPEND_KINDS.map((k) => ({ value: k, label: SPEND_LABEL[k] }))} onValueChange={(v) => edit("spend", s.id, { kind: v as SpendKind }, !!s.approach.trim())} /></Td>
                   <Td wrap><CellTextarea value={s.approach} placeholder="e.g. Google Ads on 'concreter Wollongong'; referral fee to builders" onChange={(e) => edit("spend", s.id, { approach: e.target.value })} /></Td>
                   <Td right><CellInput numeric value={s.annual_budget ? num(s.annual_budget) : ""} placeholder="0" onChange={(e) => edit("spend", s.id, { annual_budget: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} /></Td>
@@ -388,7 +399,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
             <thead><tr><Th style={{ width: "22%" }}>What you wanted to know</Th><Th style={{ width: "20%" }}>How you looked</Th><Th>What it showed</Th><Th style={{ width: "22%" }}>What you&apos;ll do</Th><Th style={{ width: 110 }}>When</Th><Th style={{ width: 36 }} /></tr></thead>
             <tbody>
               {rows.evidence.map((ev) => (
-                <Row key={ev.id} data-row={ev.id} onBlur={(e) => left(e) && commit("evidence", ev.id)} className={cn(ev._error && "[&>td]:bg-bad-soft")} title={ev._error}>
+                <Row key={ev.id} data-row={ev.id} onBlur={(e) => left(e) && commit("evidence", ev.id)} className={cn(errors.forKey(`evidence:${ev.id}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`evidence:${ev.id}`)}>
                   <Td wrap><CellTextarea value={ev.source} placeholder="e.g. How long do builders wait for a slab — and would they pay to wait less?" onChange={(e) => edit("evidence", ev.id, { source: e.target.value })} /></Td>
                   <Td wrap><CellTextarea value={ev.method ?? ""} placeholder="e.g. Phone survey of 40 builders, over two weeks" onChange={(e) => edit("evidence", ev.id, { method: e.target.value })} /></Td>
                   <Td wrap><CellTextarea value={ev.finding ?? ""} placeholder="e.g. 31 of 40 had waited >3 weeks in the last year; 26 would pay 5–8% more for a guaranteed date" onChange={(e) => edit("evidence", ev.id, { finding: e.target.value })} /></Td>
@@ -417,8 +428,8 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
           onClose={() => setEditing(null)}
           onSave={(input) => start(once(async () => {
             const r = await saveQuarterlyGoal(planId, { ...input, id: editing.goal?.id, area: "marketing" });
-            if (!r.ok) { setError(r.error); return; }
-            setError(undefined); setEditing(null); router.refresh();
+            if (!r.ok) { errors.raise({ key: "goal", message: r.error, label: "Quarterly goal" }); return; }
+            errors.clear("goal"); setEditing(null); router.refresh();
           }))}
         />
       )}
@@ -430,7 +441,8 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
           onCancel={() => setKillAction(null)}
           onConfirm={() => start(once(async () => {
             const r = await deleteGoal(planId, killAction.id);
-            if (!r.ok) { setError(r.error); return; }
+            if (!r.ok) { errors.raise({ key: "goal", message: r.error, label: "Quarterly goal" }); return; }
+            errors.clear("goal");
             setActs((xs) => xs.filter((x) => x.id !== killAction.id));
             setKillAction(null); router.refresh();
           }))}
@@ -440,9 +452,10 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
   );
 }
 
-function PendingBridge({ pending, dirty, error }: { pending: boolean; dirty: boolean; error?: string }) {
+/** STATUS ONLY (§6.98) — a failed save travels on its own channel and is shown in red, not in this grey. */
+function PendingBridge({ pending, dirty }: { pending: boolean; dirty: boolean }) {
   const { setPending, setNote } = useModule();
   useEffect(() => setPending(pending), [pending, setPending]);
-  useEffect(() => setNote(error ? error : pending ? "Saving…" : dirty ? "Unsaved — saves when you leave the field" : undefined), [pending, dirty, error, setNote]);
+  useEffect(() => setNote(pending ? "Saving…" : dirty ? "Unsaved — saves when you leave the field" : undefined), [pending, dirty, setNote]);
   return null;
 }

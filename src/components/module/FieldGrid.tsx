@@ -21,13 +21,27 @@ export function Section({ title, children, tail }: { title: string; children: Re
 export function FieldGrid({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-6 gap-x-4 gap-y-3 max-[1280px]:grid-cols-3 max-[900px]:grid-cols-2">{children}</div>;
 }
-export function Field({ label, span = 1, hint, children }: { label: string; span?: 1 | 2 | 3 | 4 | 6; hint?: string; children: React.ReactNode }) {
+/**
+ * `error` is what did not save, printed BESIDE THE CONTROL (§6.98).
+ *
+ * It replaces the hint while it is there rather than sitting under it: two lines of small print below one
+ * input, one grey and one red, is a paragraph — and the hint explains a field that is working, which is not
+ * the client's problem at that moment.
+ *
+ * The label goes red with it, because a client scanning a long form for what is wrong reads labels, not
+ * captions. That is the whole complaint being answered: the message has to be where the eye already is.
+ */
+export function Field({ label, span = 1, hint, error, children }: {
+  label: string; span?: 1 | 2 | 3 | 4 | 6; hint?: string; error?: string; children: React.ReactNode;
+}) {
   const cols = { 1: "col-span-1", 2: "col-span-2", 3: "col-span-3", 4: "col-span-4", 6: "col-span-6 max-[1280px]:col-span-3 max-[900px]:col-span-2" }[span];
   return (
     <div className={cn(cols, span === 2 && "max-[900px]:col-span-2", span >= 3 && span < 6 && "max-[1280px]:col-span-3 max-[900px]:col-span-2")}>
-      <label className="mb-[3px] block text-[11.5px] font-semibold text-muted-foreground">{label}</label>
-      {children}
-      {hint && <p className="mt-1 text-[11.5px] text-muted-foreground">{hint}</p>}
+      <label className={cn("mb-[3px] block text-[11.5px] font-semibold", error ? "text-bad" : "text-muted-foreground")}>{label}</label>
+      <div className={cn(error && "rounded-[3px] ring-1 ring-bad")}>{children}</div>
+      {error
+        ? <p role="alert" className="mt-1 text-[11.5px] font-semibold text-bad">{error}</p>
+        : hint && <p className="mt-1 text-[11.5px] text-muted-foreground">{hint}</p>}
     </div>
   );
 }

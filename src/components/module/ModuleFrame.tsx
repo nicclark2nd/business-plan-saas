@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { backHref, nextHref } from "@/lib/nav";
+import { useSaveErrors, errorSummary, type SaveErrors } from "./saveErrors";
+import { SaveErrorBanner } from "./SaveErrorBanner";
 
 /**
  * The one layout for a data module (SaaS §6.11, mockup docs/mockup/record-pattern.html):
@@ -20,7 +22,16 @@ import { backHref, nextHref } from "@/lib/nav";
 export type ModuleArea = { key: string; label: string; count?: number; tag?: string };
 export type ModuleScope = { label: string; onClear?: () => void };
 
-type Ctx = { pending: boolean; setPending: (p: boolean) => void; note?: string; setNote: (n?: string) => void };
+/**
+ * `note` is STATUS — saving, unsaved, saved. `errors` is FAILURE, and they are separate channels on purpose
+ * (§6.98): they shared one slot, so an error was written in the same grey as "All changes saved" and any
+ * later status wrote over it.
+ */
+type Ctx = {
+  pending: boolean; setPending: (p: boolean) => void;
+  note?: string; setNote: (n?: string) => void;
+  errors: SaveErrors;
+};
 const ModuleCtx = createContext<Ctx | null>(null);
 export const useModule = () => {
   const c = useContext(ModuleCtx);
@@ -30,13 +41,25 @@ export const useModule = () => {
 
 export function ModuleFrame({
   step, total, group, title, subtitle, mode, help, areas, area, onArea, scope, primaryAction, footer, children,
+  errors: ownErrors,
 }: {
   step?: number; total?: number; group: string; title: string; subtitle?: string; mode: "guided" | "advanced";
   help?: React.ReactNode; areas: ModuleArea[]; area: string; onArea: (key: string) => void; scope: ModuleScope;
   primaryAction?: React.ReactNode; footer: React.ReactNode; children: React.ReactNode;
+  /**
+   * The module's own error channel (§6.98).
+   *
+   * Passed IN rather than created here, because a module renders this frame and therefore sits outside its
+   * context — the save handlers that need `raise` and `clear` are in the module body, not under the
+   * provider. A module that has not been converted yet passes nothing and gets an empty channel, so the
+   * frame behaves exactly as it did.
+   */
+  errors?: SaveErrors;
 }) {
   const [pending, setPending] = useState(false);
   const [note, setNote] = useState<string | undefined>();
+  const fallback = useSaveErrors();
+  const errors = ownErrors ?? fallback;
   const [helpOpen, setHelpOpen] = useState<boolean>(mode === "guided");
   useEffect(() => {
     const id = requestAnimationFrame(() => {
@@ -53,7 +76,7 @@ export function ModuleFrame({
   const toggleHelp = () => setHelpOpen((h) => { try { localStorage.setItem(`step-help:${step ?? group}`, h ? "0" : "1"); } catch {} return !h; });
 
   return (
-    <ModuleCtx.Provider value={{ pending, setPending, note, setNote }}>
+    <ModuleCtx.Provider value={useMemo(() => ({ pending, setPending, note, setNote, errors }), [pending, note, errors])}>
       {/* The single column is minmax(0,1fr) on purpose: without it the implicit column is max-content, so a
           grid wider than the screen — the twelve-month cash flow, Funding's cash row — stretches the whole
           module bar and header sideways instead of scrolling inside its own frame (§6.36). */}
@@ -106,7 +129,15 @@ export function ModuleFrame({
 
         {/* body */}
         <div className={cn("grid min-h-0 grid-cols-[minmax(0,1fr)]", help && helpOpen && "grid-cols-[minmax(0,1fr)_300px]")}>
-          <div className="min-w-0 overflow-auto">{children}</div>
+          {/*
+            THE BANNER SITS AT THE TOP OF THE SCROLLING AREA, not in the footer (§6.98). It is inside the
+            scroll container and sticky, so a client who has scrolled to the bottom of Plan settings still
+            has it in view — which is precisely where the old footer message was not.
+          */}
+          <div className="min-w-0 overflow-auto">
+            <SaveErrorBanner errors={errors.list} />
+            {children}
+          </div>
           {help && helpOpen && <aside className="overflow-auto border-l border-border bg-secondary px-[18px] py-4 [&_h3]:eyebrow [&_h3]:mb-2 [&_p]:mb-2 [&_p]:text-[12.5px]">{help}</aside>}
         </div>
 
@@ -126,11 +157,11 @@ export function ModuleFrame({
 export function ModuleFooter({ planId, moduleId, formId, nextLabel = "Save and continue →" }: {
   planId: string; moduleId: string; formId: string; nextLabel?: string;
 }) {
-  const { pending, note } = useModule();
+  const { pending, note, errors } = useModule();
   return (
     <div className="flex items-center justify-between border-t border-border bg-card px-5 py-2.5">
       <Button variant="outline" render={<Link href={backHref(planId, moduleId)} />}>← Back</Button>
-      <span className="text-xs text-muted-foreground">{note ?? "All changes saved"}</span>
+      <FooterStatus note={note} errors={errors} idle="All changes saved" />
       <div className="flex gap-2">
         <Button variant="outline" type="submit" form={formId} name="intent" value="later" disabled={pending}>Save and finish later</Button>
         <Button type="submit" form={formId} name="intent" value="next" disabled={pending}>{pending ? "Saving…" : nextLabel}</Button>
@@ -147,11 +178,11 @@ export function ModuleFooter({ planId, moduleId, formId, nextLabel = "Save and c
 export function ModuleReadOnlyFooter({ planId, moduleId, nextLabel = "Continue →" }: {
   planId: string; moduleId: string; nextLabel?: string;
 }) {
-  const { note } = useModule();
+  const { note, errors } = useModule();
   return (
     <div className="flex items-center justify-between border-t border-border bg-card px-5 py-2.5">
       <Button variant="outline" render={<Link href={backHref(planId, moduleId)} />}>← Back</Button>
-      <span className="text-xs text-muted-foreground">{note ?? "Nothing to save on this screen"}</span>
+      <FooterStatus note={note} errors={errors} idle="Nothing to save on this screen" />
       <div className="flex gap-2">
         <Button variant="outline" render={<Link href={`/plans/${planId}/dashboard`} />}>Back to dashboard</Button>
         <Button render={<Link href={nextHref(planId, moduleId)} />}>{nextLabel}</Button>
@@ -162,12 +193,25 @@ export function ModuleReadOnlyFooter({ planId, moduleId, nextLabel = "Continue �
 
 /** Footer for a module that is not a Guided step (e.g. Plan settings): status only, plus a way back. */
 export function ModuleStatusFooter({ planId }: { planId: string }) {
-  const { note } = useModule();
+  const { note, errors } = useModule();
   return (
     <div className="flex items-center justify-between border-t border-border bg-card px-5 py-2.5">
       <Button variant="outline" render={<Link href={`/plans/${planId}/dashboard`} />}>← Dashboard</Button>
-      <span className="text-xs text-muted-foreground">{note ?? "All changes saved"}</span>
+      <FooterStatus note={note} errors={errors} idle="All changes saved" />
       <span />
     </div>
   );
+}
+
+/**
+ * The footer's middle, which is a SUMMARY and no longer the only place a failure appears (§6.98).
+ *
+ * An outstanding failure beats every status: a client must not read "All changes saved" while something has
+ * not. And it is red — the old footer wrote the error in the same muted grey as the reassurance, which is
+ * how a message can be on screen and still not be seen.
+ */
+function FooterStatus({ note, errors, idle }: { note?: string; errors: SaveErrors; idle: string }) {
+  const failed = errorSummary(errors.list);
+  if (failed) return <span className="text-xs font-semibold text-bad" role="status">{failed}</span>;
+  return <span className="text-xs text-muted-foreground">{note ?? idle}</span>;
 }

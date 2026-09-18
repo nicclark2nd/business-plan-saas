@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
+import { useSaveErrors } from "@/components/module/saveErrors";
 import { Grid, Th, Td, Toolbar, Meta, RemoveButton, CellInput, CellSelect, CellTextarea, focusRow } from "@/components/module/DataGrid";
 import { Section, FieldGrid, Field, FieldTextarea } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
@@ -13,7 +14,7 @@ import { POSITION_FIELDS, COMPETITOR_KIND, COMPETITOR_REACH, COMPETITOR_PRICING,
 import { continueFromCompetitors } from "./actions";
 
 type AreaKey = "competitors" | "position";
-type Row_ = Competitor & { _dirty?: boolean; _error?: string };
+type Row_ = Competitor & { _dirty?: boolean };
 const STEP = GUIDED_STEPS.find((s) => s.id === "competitors")?.step ?? 4;
 
 const proseLabel = "mb-0.5 pl-1.5 text-[10.5px] font-semibold uppercase tracking-[.05em] text-muted-foreground";
@@ -27,7 +28,8 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
   const [positionDirty, setPositionDirty] = useState(false);
   const blank = (id = "tmp-new-competitor"): Row_ => ({ id, name: "", kind: "direct", reach: null, pricing: null, threat: "medium", strengths: "", weaknesses: "", how_we_win: "", sort_order: 0 });
   const [rows, setRows] = useState<Row_[]>(initialCompetitors.length ? initialCompetitors : [blank()]);   // empty grid starts with a blank row
-  const [error, setError] = useState<string | undefined>();
+  /** Keyed per competitor and for the positioning prose, so neither can erase the other (§6.98). */
+  const errors = useSaveErrors();
   const [pending, start] = useTransition();
   const posRef = useRef(position); useEffect(() => { posRef.current = position; }, [position]);
   const rowsRef = useRef(rows); useEffect(() => { rowsRef.current = rows; }, [rows]);
@@ -36,10 +38,14 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
   const commitPosition = () => {
     if (!positionDirty) return;
     setPositionDirty(false);
-    start(async () => { const r = await saveMarket(planId, posRef.current); if (!r.ok) { setError(r.error); setPositionDirty(true); } });
+    start(async () => {
+      const r = await saveMarket(planId, posRef.current);
+      if (!r.ok) { errors.raise({ key: "position", message: r.error, label: "Our position" }); setPositionDirty(true); }
+      else errors.clear("position");
+    });
   };
   const edit = (id: string, changes: Partial<Competitor>, immediate = false) => {
-    setRows((xs) => xs.map((x) => (x.id === id ? { ...x, ...changes, _dirty: true, _error: undefined } : x)));
+    setRows((xs) => xs.map((x) => (x.id === id ? { ...x, ...changes, _dirty: true } : x)));
     if (immediate) queueMicrotask(() => commit(id));
   };
   const commit = (id: string) => {
@@ -48,7 +54,12 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
     setRows((xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: false } : x)));
     start(async () => {
       const r = await upsertRow(planId, "competitors", { ...row, id: id.startsWith("tmp-") ? undefined : id });
-      if (!r.ok) { setRows((xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: true, _error: r.error } : x))); return; }
+      if (!r.ok) {
+        errors.raise({ key: `competitor:${id}`, message: r.error, label: rows.find((x) => x.id === id)?.name || "Competitor" });
+        setRows((xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: true } : x)));
+        return;
+      }
+      errors.clear(`competitor:${id}`);
       setRows((xs) => xs.map((x) => (x.id === id ? { ...x, id: r.data!.id } : x)));
     });
   };
@@ -78,11 +89,11 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
   const positioned = POSITION_FIELDS.filter((f) => position[f.key].trim()).length;
   const named = rows.filter((r) => r.name.trim());
   const direct = named.filter((r) => r.kind === "direct").length, indirect = named.length - direct;
-  const rowError = rows.find((r) => r._error)?._error;
 
   return (
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group={navGroup("competitors")} title="Competitors" subtitle={`Who else a ${customerWord} would consider, how they compare, and why they choose you`} mode={mode}
+      errors={errors}
       areas={[{ key: "competitors", label: "Competitors", count: rows.filter((r) => r.name.trim()).length }, { key: "position", label: "Our position", count: positioned }]}
       area={area} onArea={(k) => { flush(); setArea(k as AreaKey); }}
       scope={{ label: "This plan" }}
@@ -97,7 +108,7 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
         <p>Competitive analysis section of every report; the comparison matrix in bank, SBA and investor templates. &quot;What could change&quot; pre-fills the Threats quadrant in SWOT.</p>
       </>}
     >
-      <PendingBridge pending={pending} dirty={positionDirty || rows.some((r) => r._dirty)} error={error ?? rowError} />
+      <PendingBridge pending={pending} dirty={positionDirty || rows.some((r) => r._dirty)} />
       <form id="competitors-form" onSubmit={onSubmit} className="hidden" />
 
       {area === "competitors" && (
@@ -109,7 +120,7 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
             </tr></thead>
             <tbody>
               {rows.map((c) => [
-                <tr key={c.id + "a"} data-row={c.id} onBlur={(e) => left(e) && commit(c.id)} className={cn("[&>td]:border-b-0 [&>td]:pt-2", c._error && "[&>td]:bg-bad-soft")} title={c._error}>
+                <tr key={c.id + "a"} data-row={c.id} onBlur={(e) => left(e) && commit(c.id)} className={cn("[&>td]:border-b-0 [&>td]:pt-2", errors.forKey(`competitor:${c.id}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`competitor:${c.id}`)}>
                   <Td><CellInput value={c.name} placeholder="Name" className="font-semibold" onChange={(e) => edit(c.id, { name: e.target.value })} /></Td>
                   <Td><CellSelect value={c.kind} options={COMPETITOR_KIND} onValueChange={(v) => edit(c.id, { kind: v as Competitor["kind"] }, !!c.name.trim())} /></Td>
                   <Td><CellSelect value={c.reach} options={COMPETITOR_REACH} placeholder="Reach —" onValueChange={(v) => edit(c.id, { reach: v }, !!c.name.trim())} /></Td>
@@ -131,7 +142,7 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
                  * the thirds. It spans the fact columns deliberately instead of accidentally, and it
                  * stacks below 1180px rather than becoming three unreadable ribbons.
                  */
-                <tr key={c.id + "b"} data-row={c.id} onBlur={(e) => left(e) && commit(c.id)} className={cn(c._error && "[&>td]:bg-bad-soft")}>
+                <tr key={c.id + "b"} data-row={c.id} onBlur={(e) => left(e) && commit(c.id)} className={cn(errors.forKey(`competitor:${c.id}`) && "[&>td]:bg-bad-soft")}>
                   <Td colSpan={6} wrap className="pb-2.5 pt-0">
                     <div className="grid grid-cols-3 gap-x-0 gap-y-3 rounded-[3px] border-l-2 border-input bg-secondary/60 py-2 pl-3.5 pr-3 max-[1180px]:grid-cols-1">
                       <div className="min-w-0 pr-5">
@@ -164,9 +175,9 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
           <Section title="Our position">
             <FieldGrid>
               {POSITION_FIELDS.map((f) => (
-                <Field key={f.key} label={f.label} span={6} hint={f.hint}>
+                <Field key={f.key} label={f.label} span={6} hint={f.hint} error={errors.forKey("position")}>
                   <FieldTextarea value={position[f.key]} placeholder={f.placeholder} className="min-h-[72px]"
-                    onChange={(e) => { setPosition((p) => ({ ...p, [f.key]: e.target.value })); setPositionDirty(true); setError(undefined); }} />
+                    onChange={(e) => { setPosition((p) => ({ ...p, [f.key]: e.target.value })); setPositionDirty(true); }} />
                 </Field>
               ))}
             </FieldGrid>
@@ -185,9 +196,10 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
   );
 }
 
-function PendingBridge({ pending, dirty, error }: { pending: boolean; dirty: boolean; error?: string }) {
+/** STATUS ONLY (§6.98) — a failed save travels on its own channel and is shown in red, not in this grey. */
+function PendingBridge({ pending, dirty }: { pending: boolean; dirty: boolean }) {
   const { setPending, setNote } = useModule();
   useEffect(() => setPending(pending), [pending, setPending]);
-  useEffect(() => setNote(error ? error : pending ? "Saving…" : dirty ? "Unsaved — saves when you leave the field" : undefined), [pending, dirty, error, setNote]);
+  useEffect(() => setNote(pending ? "Saving…" : dirty ? "Unsaved — saves when you leave the field" : undefined), [pending, dirty, setNote]);
   return null;
 }

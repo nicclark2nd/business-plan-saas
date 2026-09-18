@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
+import { useSaveErrors } from "@/components/module/saveErrors";
 import { Grid, Th, Td, Toolbar, Meta, Note, RemoveButton, CellInput, CellSelect, CellTextarea, focusRow } from "@/components/module/DataGrid";
 import { Section, FieldGrid, Field, FieldTextarea } from "@/components/module/FieldGrid";
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
@@ -12,7 +13,7 @@ import { CAPACITY_FIELDS, DEPENDENCY, TENURE, type Capacity, type OpStep, type P
 import { continueFromOperations, deleteRow, saveCapacity, setPrimaryPremise, upsertRow, type RowKind } from "./actions";
 
 type AreaKey = "premises" | "suppliers" | "process" | "capacity";
-type Dirty = { _dirty?: boolean; _error?: string };
+type Dirty = { _dirty?: boolean };
 const STEP = GUIDED_STEPS.find((s) => s.id === "operations")?.step ?? 6;
 const proseLabel = "mb-0.5 pl-1.5 text-[10.5px] font-semibold uppercase tracking-[.05em] text-muted-foreground";
 
@@ -40,7 +41,8 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
   noun: { one: string; many: string };
 }) {
   const [area, setArea] = useState<AreaKey>(initialArea);
-  const [error, setError] = useState<string>();
+  /** Keyed per row and per area, so several failures are several messages (§6.98). */
+  const errors = useSaveErrors();
   const [pending, start] = useTransition();
   const [kill, setKill] = useState<{ kind: RowKind; id: string; name: string } | null>(null);
 
@@ -64,8 +66,8 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
   const listOf = (kind: RowKind) => (kind === "premises" ? pRef.current : kind === "suppliers" ? sRef.current : oRef.current) as (Record<string, unknown> & Dirty & { id: string })[];
 
   const edit = (kind: RowKind, id: string, changes: Record<string, unknown>, immediate = false) => {
-    setter(kind)((xs) => xs.map((x) => (x.id === id ? { ...x, ...changes, _dirty: true, _error: undefined } : x)));
-    setError(undefined);
+    /* Typing no longer erases the reason a row would not save (§6.98). */
+    setter(kind)((xs) => xs.map((x) => (x.id === id ? { ...x, ...changes, _dirty: true } : x)));
     if (immediate) queueMicrotask(() => commit(kind, id));
   };
   const commit = (kind: RowKind, id: string) => {
@@ -74,7 +76,12 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
     setter(kind)((xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: false } : x)));
     start(async () => {
       const r = await upsertRow(planId, kind, { ...row, id: id.startsWith("tmp-") ? undefined : id });
-      if (!r.ok) { setter(kind)((xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: true, _error: r.error } : x))); return; }
+      if (!r.ok) {
+        errors.raise({ key: `${kind}:${id}`, message: r.error, label: kind === "premises" ? "Premises" : kind === "suppliers" ? "Supplier" : "Process step" });
+        setter(kind)((xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: true } : x)));
+        return;
+      }
+      errors.clear(`${kind}:${id}`);
       setter(kind)((xs) => xs.map((x) => (x.id === id ? { ...x, id: r.data!.id } : x)));
     });
   };
@@ -97,11 +104,18 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
   const commitCapacity = () => {
     if (!capacityDirty) return;
     setCapacityDirty(false);
-    start(async () => { const r = await saveCapacity(planId, cRef.current); if (!r.ok) { setError(r.error); setCapacityDirty(true); } });
+    start(async () => {
+      const r = await saveCapacity(planId, cRef.current);
+      if (!r.ok) { errors.raise({ key: "capacity", message: r.error, label: "Capacity" }); setCapacityDirty(true); }
+      else errors.clear("capacity");
+    });
   };
   const makePrimary = (id: string) => {
     setPremises((xs) => xs.map((x) => ({ ...x, is_primary: x.id === id })));
-    if (!id.startsWith("tmp-")) start(async () => { const r = await setPrimaryPremise(planId, id); if (!r.ok) setError(r.error); });
+    if (!id.startsWith("tmp-")) start(async () => {
+      const r = await setPrimaryPremise(planId, id);
+      if (!r.ok) errors.raise({ key: "primary", message: r.error, label: "Main premises" }); else errors.clear("primary");
+    });
   };
   const flush = () => {
     commitCapacity();
@@ -118,13 +132,13 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
   const namedSteps = steps.filter((x) => x.title.trim());
   const capacityWritten = CAPACITY_FIELDS.filter((f) => capacity[f.key].trim()).length;
   const critical = namedSuppliers.filter((x) => (x.dependency === "critical" || x.dependency === "high") && !x.alternative?.trim());
-  const rowError = [...premises, ...suppliers, ...steps].find((r) => r._error)?._error;
   const dirty = [...premises, ...suppliers, ...steps].some((r) => r._dirty) || capacityDirty;
 
   return (
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group={navGroup("operations")} title="Operations"
       subtitle="Where the work happens, who supplies it, how it flows, and what limits it" mode={mode}
+      errors={errors}
       areas={[
         { key: "premises", label: "Premises", count: namedPremises.length },
         { key: "suppliers", label: "Suppliers", count: namedSuppliers.length },
@@ -148,7 +162,7 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
         <p>The Operations section of the business plan, which every standard outline asks for. What limits your capacity also explains the shape of the revenue forecast, and a plan whose sales grow past its stated capacity is the first thing a careful reader notices.</p>
       </>}
     >
-      <PendingBridge pending={pending} dirty={dirty} error={error ?? rowError} />
+      <PendingBridge pending={pending} dirty={dirty} />
       <form id="operations-form" onSubmit={onSubmit} className="hidden" />
 
       {area === "premises" && (
@@ -167,7 +181,7 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
             <tbody>
               {premises.map((x) => [
                 <tr key={x.id + "a"} data-row={x.id} onBlur={(e) => left(e) && commit("premises", x.id)}
-                  className={cn("[&>td]:border-b-0 [&>td]:pt-2", x._error && "[&>td]:bg-bad-soft")} title={x._error}>
+                  className={cn("[&>td]:border-b-0 [&>td]:pt-2", errors.forKey(`premises:${x.id}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`premises:${x.id}`)}>
                   <Td><CellInput value={x.name} placeholder="Yard, office, depot" className="font-semibold" onChange={(e) => edit("premises", x.id, { name: e.target.value })} /></Td>
                   <Td><CellInput value={x.address ?? ""} placeholder="Street and suburb" onChange={(e) => edit("premises", x.id, { address: e.target.value })} /></Td>
                   <Td><CellSelect value={x.tenure} options={TENURE} placeholder="Tenure —" onValueChange={(v) => edit("premises", x.id, { tenure: v }, !!x.name.trim())} /></Td>
@@ -182,7 +196,7 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
                   </Td>
                   <Td><RemoveButton onClick={() => askRemove("premises", x.id, x.name)} /></Td>
                 </tr>,
-                <tr key={x.id + "b"} data-row={x.id} onBlur={(e) => left(e) && commit("premises", x.id)} className={cn(x._error && "[&>td]:bg-bad-soft")}>
+                <tr key={x.id + "b"} data-row={x.id} onBlur={(e) => left(e) && commit("premises", x.id)} className={cn(errors.forKey(`premises:${x.id}`) && "[&>td]:bg-bad-soft")}>
                   <Td colSpan={7} wrap className="pb-2.5 pt-0">
                     <div className="rounded-[3px] border-l-2 border-input bg-secondary/60 py-2 pl-3.5 pr-3">
                       <div className={proseLabel}>What happens here</div>
@@ -217,7 +231,7 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
             <tbody>
               {suppliers.map((x) => [
                 <tr key={x.id + "a"} data-row={x.id} onBlur={(e) => left(e) && commit("suppliers", x.id)}
-                  className={cn("[&>td]:border-b-0 [&>td]:pt-2", x._error && "[&>td]:bg-bad-soft")} title={x._error}>
+                  className={cn("[&>td]:border-b-0 [&>td]:pt-2", errors.forKey(`suppliers:${x.id}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`suppliers:${x.id}`)}>
                   <Td><CellInput value={x.name} placeholder="Name" className="font-semibold" onChange={(e) => edit("suppliers", x.id, { name: e.target.value })} /></Td>
                   <Td><CellInput value={x.supplies ?? ""} placeholder="Concrete, steel, plant hire" onChange={(e) => edit("suppliers", x.id, { supplies: e.target.value })} /></Td>
                   <Td><CellInput value={x.terms ?? ""} placeholder="30 days, COD, fixed to Jun 27" onChange={(e) => edit("suppliers", x.id, { terms: e.target.value })} /></Td>
@@ -226,7 +240,7 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
                     onValueChange={(v) => edit("suppliers", x.id, { dependency: v }, !!x.name.trim())} /></Td>
                   <Td><RemoveButton onClick={() => askRemove("suppliers", x.id, x.name)} /></Td>
                 </tr>,
-                <tr key={x.id + "b"} data-row={x.id} onBlur={(e) => left(e) && commit("suppliers", x.id)} className={cn(x._error && "[&>td]:bg-bad-soft")}>
+                <tr key={x.id + "b"} data-row={x.id} onBlur={(e) => left(e) && commit("suppliers", x.id)} className={cn(errors.forKey(`suppliers:${x.id}`) && "[&>td]:bg-bad-soft")}>
                   <Td colSpan={5} wrap className="pb-2.5 pt-0">
                     <div className="rounded-[3px] border-l-2 border-input bg-secondary/60 py-2 pl-3.5 pr-3">
                       <div className={proseLabel}>If they stopped tomorrow</div>
@@ -264,13 +278,13 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
             <tbody>
               {steps.map((x) => [
                 <tr key={x.id + "a"} data-row={x.id} onBlur={(e) => left(e) && commit("steps", x.id)}
-                  className={cn("[&>td]:border-b-0 [&>td]:pt-2", x._error && "[&>td]:bg-bad-soft")} title={x._error}>
+                  className={cn("[&>td]:border-b-0 [&>td]:pt-2", errors.forKey(`steps:${x.id}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`steps:${x.id}`)}>
                   <Td><CellInput value={x.title} placeholder="Site measure and set-out" className="font-semibold" onChange={(e) => edit("steps", x.id, { title: e.target.value })} /></Td>
                   <Td><CellInput value={x.owner ?? ""} placeholder="Name or role" onChange={(e) => edit("steps", x.id, { owner: e.target.value })} /></Td>
                   <Td><CellInput value={x.duration ?? ""} placeholder="Half a day" onChange={(e) => edit("steps", x.id, { duration: e.target.value })} /></Td>
                   <Td><RemoveButton onClick={() => askRemove("steps", x.id, x.title)} /></Td>
                 </tr>,
-                <tr key={x.id + "b"} data-row={x.id} onBlur={(e) => left(e) && commit("steps", x.id)} className={cn(x._error && "[&>td]:bg-bad-soft")}>
+                <tr key={x.id + "b"} data-row={x.id} onBlur={(e) => left(e) && commit("steps", x.id)} className={cn(errors.forKey(`steps:${x.id}`) && "[&>td]:bg-bad-soft")}>
                   <Td colSpan={4} wrap className="pb-2.5 pt-0">
                     <div className="rounded-[3px] border-l-2 border-input bg-secondary/60 py-2 pl-3.5 pr-3">
                       <div className={proseLabel}>What happens</div>
@@ -295,7 +309,7 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
               {CAPACITY_FIELDS.map((f) => (
                 <Field key={f.key} label={f.label} span={6} hint={f.hint}>
                   <FieldTextarea value={capacity[f.key]} placeholder={f.placeholder} className="min-h-[72px]"
-                    onChange={(e) => { setCapacity((c) => ({ ...c, [f.key]: e.target.value })); setCapacityDirty(true); setError(undefined); }} />
+                    onChange={(e) => { setCapacity((c) => ({ ...c, [f.key]: e.target.value })); setCapacityDirty(true); }} />
                 </Field>
               ))}
             </FieldGrid>
@@ -320,9 +334,10 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
   );
 }
 
-function PendingBridge({ pending, dirty, error }: { pending: boolean; dirty: boolean; error?: string }) {
+/** STATUS ONLY (§6.98) — a failed save travels on its own channel and is shown in red, not in this grey. */
+function PendingBridge({ pending, dirty }: { pending: boolean; dirty: boolean }) {
   const { setPending, setNote } = useModule();
   useEffect(() => setPending(pending), [pending, setPending]);
-  useEffect(() => setNote(error ? error : pending ? "Saving…" : dirty ? "Unsaved — saves when you leave the field" : undefined), [pending, dirty, error, setNote]);
+  useEffect(() => setNote(pending ? "Saving…" : dirty ? "Unsaved — saves when you leave the field" : undefined), [pending, dirty, setNote]);
   return null;
 }

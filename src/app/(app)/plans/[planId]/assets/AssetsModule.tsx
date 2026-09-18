@@ -9,6 +9,7 @@ import { GstToggle, GstFreeTag } from "@/components/module/GstToggle";
 import { useGst } from "@/components/GstProvider";
 
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
+import { useSaveErrors } from "@/components/module/saveErrors";
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
@@ -33,7 +34,7 @@ import { METHODS, CATEGORIES, LIVES, lifeLabel, type AssetRow } from "./model";
 const parseNum = (s: string) => { const n = Number(s.replace(/[,\s$]/g, "")); return Number.isFinite(n) ? n : 0; };
 
 type AreaKey = "assets" | "monthly";
-type Row = AssetRow & { _key: string; _error?: string };
+type Row = AssetRow & { _key: string };
 const STEP = GUIDED_STEPS.find((s) => s.id === "assets")?.step ?? 11;
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
 const box = "h-8";
@@ -78,7 +79,8 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth,
   const [dlg, setDlg] = useState<{ key: string } | null>(null);
   const [confirmKey, setConfirm] = useState<string | null>(null);
   const [draft, setDraft] = useState<Row | null>(null);
-  const [error, setErr] = useState<string | undefined>();
+  /** Keyed failures that survive a keystroke and clear only on a save that works (§6.98). */
+  const errors = useSaveErrors();
   const [pending, start] = useTransition();
   const once = useSaveOnce();
 
@@ -99,15 +101,14 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth,
   };
 
   const save = (next: Row) => {
-    setErr(undefined);
-    start(once(async () => {
+        start(once(async () => {
       if (next.source === "finance") {
         const res = await saveFinancedShape(planId, next.id, { name: next.name, method: next.method, useful_life_months: next.useful_life_months });
-        if (!res.ok) { setErr(res.error); return; }
+        if (!res.ok) { errors.raise({ key: "assets", message: res.error, label: "Fixed Assets" }); return; }
         setRows((rs) => rs.map((r) => (r._key === next._key ? next : r)));
       } else {
         const res = await upsertAsset(planId, next);
-        if (!res.ok) { setErr(res.error); return; }
+        if (!res.ok) { errors.raise({ key: "assets", message: res.error, label: "Fixed Assets" }); return; }
         const saved = { ...next, id: res.data!.id };
         setRows((rs) => (rs.some((r) => r._key === next._key) ? rs.map((r) => (r._key === next._key ? saved : r)) : [...rs, saved]));
         setDraft(null);
@@ -124,8 +125,7 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth,
    * describe one purchase twice.
    */
   const buyOnFinance = (a: Row, f: Finance) => {
-    setErr(undefined);
-    start(once(async () => {
+        start(once(async () => {
       const res = await upsertFunding(planId, {
         kind: "debt",
         name: f.lender.trim() || a.name.trim(),
@@ -140,7 +140,7 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth,
         start_year: a.start_year,
         start_month: a.start_month,
       }, { assetName: a.name.trim() });
-      if (!res.ok) { setErr(res.error); return; }
+      if (!res.ok) { errors.raise({ key: "assets", message: res.error, label: "Fixed Assets" }); return; }
       setDraft(null); setDlg(null);
       router.refresh();
     }));
@@ -152,7 +152,7 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth,
     if (!row) { setDraft(null); return; }
     start(async () => {
       const res = await deleteAsset(planId, row.id);
-      if (!res.ok) { setErr(res.error); return; }
+      if (!res.ok) { errors.raise({ key: "assets", message: res.error, label: "Fixed Assets" }); return; }
       setRows((rs) => rs.filter((r) => r._key !== key));
       router.refresh();
     });
@@ -165,6 +165,7 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth,
   return (
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group={navGroup("assets")} title="Fixed assets" subtitle="What the business owns, and what it writes off each year" mode={mode}
+      errors={errors}
       areas={[{ key: "assets", label: "Assets", count: lines.length }, { key: "monthly", label: "Monthly projections" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "This plan" }}
       primaryAction={area === "assets" ? <Button size="sm" type="button" onClick={add}>+ Asset</Button> : undefined}
@@ -179,7 +180,7 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth,
         <p>Depreciation is an expense in the profit and loss. What the assets are still worth is on the balance sheet. Neither of them touches the cash flow.</p>
       </>}
     >
-      <PendingBridge pending={pending} error={error} />
+      <PendingBridge pending={pending} />
       <form id="assets-form" onSubmit={onSubmit} className="hidden" />
 
       {area === "assets" && (<>
@@ -221,7 +222,7 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth,
               const book = bookValueByYear(r as FixedAsset);
               const locked = r.source === "finance";
               return (
-                <GridRow key={r._key} className={cn(r._error && "[&>td]:bg-bad-soft")} title={r._error}>
+                <GridRow key={r._key} className={cn(errors.forKey(`asset:${r._key}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`asset:${r._key}`)}>
                   <Td>
                     <span className="inline-flex items-center gap-1">
                       <NameLink onClick={() => setDlg({ key: r._key })}>{r.name || <span className="text-muted-foreground">Untitled asset</span>}</NameLink>
@@ -371,10 +372,11 @@ function IconButton({ title, onClick, children }: { title: string; onClick: () =
   return <button type="button" title={title} aria-label={title} onClick={onClick} className="px-1.5 text-[14px] leading-none text-muted-foreground hover:text-primary">{children}</button>;
 }
 
-function PendingBridge({ pending, error }: { pending: boolean; error?: string }) {
+/** STATUS ONLY (§6.98) — a failed save travels on its own channel and is shown in red, not in this grey. */
+function PendingBridge({ pending }: { pending: boolean }) {
   const { setPending, setNote } = useModule();
   useEffect(() => setPending(pending), [pending, setPending]);
-  useEffect(() => setNote(error ? error : pending ? "Saving…" : undefined), [pending, error, setNote]);
+  useEffect(() => setNote(pending ? "Saving…" : undefined), [pending, setNote]);
   return null;
 }
 

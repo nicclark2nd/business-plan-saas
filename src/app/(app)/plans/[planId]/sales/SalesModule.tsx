@@ -10,6 +10,7 @@ import { GstToggle, GstFreeTag } from "@/components/module/GstToggle";
 import { useGst } from "@/components/GstProvider";
 
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
+import { useSaveErrors } from "@/components/module/saveErrors";
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton, SortTh, sortRows, type Sort } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
@@ -39,7 +40,7 @@ const parseSigned = (s: string) => { const t = s.replace(/[,\s%]/g, ""); if (t =
  * the rounded figure taught people to type it back, and twelve of those add to 99.96 %, not 100.
  */
 
-type Row = Product & { _key: string; _error?: string };
+type Row = Product & { _key: string };
 type AreaKey = "products" | "annual" | "monthly";
 type Dlg = { kind: "product" | "growth" | "monthly"; key: string } | null;
 const STEP = GUIDED_STEPS.find((s) => s.id === "sales")?.step ?? 7;
@@ -73,7 +74,8 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
   const [dlg, setDlg] = useState<Dlg>(null);
   const [draftNew, setDraftNew] = useState<Row | null>(null);
   const [confirm, setConfirm] = useState<{ row: Row; fed: Row[] } | null>(null);
-  const [serverErr, setServerErr] = useState<string | undefined>();
+  /** Keyed per row, so four broken lines are four messages rather than whichever `.find()` hit first (§6.98). */
+  const errors = useSaveErrors();
   const [sort, setSort] = useState<Sort>(null);
   const [pending, start] = useTransition();
   const ref = useRef(rows); useEffect(() => { ref.current = rows; }, [rows]);
@@ -81,11 +83,12 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
   /** Save one row (from a dialog's Save). New rows are appended first so the list shows them straight away. */
   const save = (r: Row) => {
     const key = r._key || r.id;
-    const row = { ...r, _key: key, _error: undefined };
+    const row = { ...r, _key: key };
     setRows((xs) => (xs.some((x) => x._key === key) ? xs.map((x) => (x._key === key ? row : x)) : [...xs, row]));
     start(async () => {
       const res = await upsertProduct(planId, { ...row, id: isNew(row) ? undefined : row.id });
-      setRows((xs) => xs.map((x) => (x._key === key ? (res.ok ? { ...x, id: res.data!.id } : { ...x, _error: res.error }) : x)));
+      if (res.ok) { errors.clear(`product:${key}`); setRows((xs) => xs.map((x) => (x._key === key ? { ...x, id: res.data!.id } : x))); }
+      else errors.raise({ key: `product:${key}`, message: res.error, label: r.name || noun.one });
     });
   };
   /**
@@ -99,13 +102,12 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
   };
   const remove = (r: Row) => {
     setConfirm(null);
-    setServerErr(undefined);
     setRows((xs) => xs.filter((x) => x._key !== r._key));
     if (!isNew(r)) start(async () => {
       const res = await deleteProduct(planId, r.id);
       // The server is the gate, not the screen. If it refuses, say why and take the list back from the
       // database rather than trusting whatever the client happened to be holding.
-      if (!res.ok) { setServerErr(res.error); router.refresh(); }
+      if (!res.ok) { errors.raise({ key: "remove", message: res.error, label: "Deleting" }); router.refresh(); } else errors.clear("remove");
     });
   };
   const add = () => { const b = blank(); setDraftNew({ ...b, _key: b.id }); setDlg({ kind: "product", key: b.id }); };
@@ -129,7 +131,6 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
     if (fed.length) return <LinkMark feeds title={`Feeds ${fed.map((f) => f.name).join(", ")} — every one sold becomes a client there. Click to open it.`} onClick={() => setDlg({ kind: "product", key: fed[0]._key })} />;
     return null;
   };
-  const err = serverErr ?? rows.find((r) => r._error)?._error;
   /** "This year" reconciles against Historic — only lines already earning, and for an ongoing line that is its book. */
   const current = named.reduce((a, r) => recurring(r) ? a + bookNow(r) : (firstYear(r) === 1 ? a + r.average_price * r.units_sold : a), 0);
   const gap = historicRevenue ? ((current - historicRevenue) / historicRevenue) * 100 : null;
@@ -154,6 +155,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
   return (
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group={navGroup("sales")} title="Sales" subtitle="What you sell, what each line earns and how it grows — this is where the forecast's revenue comes from" mode={mode}
+      errors={errors}
       areas={[{ key: "products", label: noun.many, count: named.length }, { key: "annual", label: "Annual projections" }, { key: "monthly", label: "Monthly projections" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: `All ${many}` }}
       primaryAction={<Button size="sm" type="button" onClick={add}>+ {noun.head}</Button>}
@@ -167,7 +169,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
         <p>Sales by year → the forecast&apos;s top line, break-even and What-If. Year 1 by month → the twelve-month cash flow. Descriptions → the {many} section of the report.</p>
       </>}
     >
-      <PendingBridge pending={pending} error={err} />
+      <PendingBridge pending={pending} />
       <form id="sales-form" onSubmit={onSubmit} className="hidden" />
 
       {area === "products" && (
@@ -191,7 +193,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
             </tr></thead>
             <tbody>
               {view.map((r) => (
-                <GridRow key={r._key} className={cn(r._error && "[&>td]:bg-bad-soft")} title={r._error}>
+                <GridRow key={r._key} className={cn(errors.forKey(`product:${r._key}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`product:${r._key}`)}>
                   <Td><NameLink onClick={() => setDlg({ kind: "product", key: r._key })}>{r.name}</NameLink>{mark(r)}<GstFreeTag registered={gst.registered} label={gst.label} applies={r.gst_applies !== false} />{firstYear(r) > 1 && <span className="ml-2 text-xs text-muted-foreground">from Year {firstYear(r)}</span>}</Td>
                   <Td className="text-muted-foreground">{recurring(r) ? "Ongoing client" : "One-off job"}</Td>
                   <Td className="text-muted-foreground">{LIFECYCLE.find((l) => l.value === r.lifecycle)?.label ?? "—"}</Td>
@@ -843,9 +845,10 @@ function MonthlyDialog({ r, fyEndMonth, currency, others, onSave, onClose }: {
   );
 }
 
-function PendingBridge({ pending, error }: { pending: boolean; error?: string }) {
+/** STATUS ONLY (§6.98) — a failed save travels on its own channel and is shown in red, not in this grey. */
+function PendingBridge({ pending }: { pending: boolean }) {
   const { setPending, setNote } = useModule();
   useEffect(() => setPending(pending), [pending, setPending]);
-  useEffect(() => setNote(error ? error : pending ? "Saving…" : undefined), [pending, error, setNote]);
+  useEffect(() => setNote(pending ? "Saving…" : undefined), [pending, setNote]);
   return null;
 }

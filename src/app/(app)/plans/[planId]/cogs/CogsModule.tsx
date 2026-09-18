@@ -9,6 +9,7 @@ import { GstToggle, GstFreeTag } from "@/components/module/GstToggle";
 import { useGst } from "@/components/GstProvider";
 
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
+import { useSaveErrors } from "@/components/module/saveErrors";
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
@@ -41,7 +42,7 @@ const pctText = (v: number | null | undefined) => v === null || v === undefined 
 
 type AreaKey = "products" | "fixed" | "monthly";
 type Dlg = { kind: "cost"; key: string } | { kind: "item" | "split"; key: string } | null;
-type FixRow = FixedCogs & { _key: string; _error?: string };
+type FixRow = FixedCogs & { _key: string };
 const STEP = GUIDED_STEPS.find((s) => s.id === "cogs")?.step ?? 8;
 const isNew = (r: FixRow) => r.id.startsWith("tmp-");
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
@@ -83,7 +84,8 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
     setRows((xs) => xs.map((x) => (x.id === p.id ? p : x)));
     start(async () => {
       const res = await saveProductCost(planId, { id: p.id, cost_per_unit: p.cost_per_unit, yearly_cost_increase: p.yearly_cost_increase });
-      if (!res.ok) setErr(res.error);
+      if (!res.ok) errors.raise({ key: `cost:${p.id}`, message: res.error, label: p.name || noun.one });
+      else errors.clear(`cost:${p.id}`);
     });
   };
   const saveItem = (f: FixRow) => {
@@ -91,7 +93,8 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
     setItems((xs) => (xs.some((x) => x._key === key) ? xs.map((x) => (x._key === key ? { ...f, _key: key } : x)) : [...xs, { ...f, _key: key }]));
     start(async () => {
       const res = await upsertFixedCogs(planId, { ...f, id: isNew(f) ? undefined : f.id });
-      setItems((xs) => xs.map((x) => (x._key === key ? (res.ok ? { ...x, id: res.data!.id, _error: undefined } : { ...x, _error: res.error }) : x)));
+      if (res.ok) { errors.clear(`fixed:${key}`); setItems((xs) => xs.map((x) => (x._key === key ? { ...x, id: res.data!.id } : x))); }
+      else errors.raise({ key: `fixed:${key}`, message: res.error, label: f.item_name || "Fixed cost" });
     });
   };
   const removeItem = (f: FixRow) => {
@@ -109,7 +112,8 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
     setDraftNew({ id, _key: id, item_name: "", annual_cost: 0, yearly_growth_rates: null, monthly_distribution: null, gst_applies: true, sort_order: 0 });
     setDlg({ kind: "item", key: id });
   };
-  const [error, setErr] = useState<string | undefined>();
+  /** Keyed per line (§6.98). `setErr` here was never cleared, so one old failure masked every later success. */
+  const errors = useSaveErrors();
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const intent = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value === "later" ? "later" : "next";
@@ -126,6 +130,7 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
   return (
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group={navGroup("cogs")} title="COGS" subtitle="What each sale costs you to deliver — the gap between this and your prices is your gross profit" mode={mode}
+      errors={errors}
       areas={[{ key: "products", label: `By ${noun.one}`, count: priced.length, tag: priced.length - costed > 0 ? `${priced.length - costed} without a cost` : undefined },
               { key: "fixed", label: "Fixed costs", count: items.filter((i) => i.item_name.trim()).length },
               { key: "monthly", label: "Monthly projections" }]}
@@ -141,7 +146,7 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
         <p>Gross profit → the forecast&apos;s profit and loss and your break-even. Year 1 by month → the twelve-month cash flow. Margin by {noun.one} → the report, where a lender looks first.</p>
       </>}
     >
-      <PendingBridge pending={pending} error={error ?? items.find((i) => i._error)?._error} />
+      <PendingBridge pending={pending} />
       <form id="cogs-form" onSubmit={onSubmit} className="hidden" />
 
       {area === "products" && (
@@ -200,7 +205,7 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
               {items.filter((f) => f.item_name.trim()).map((f) => {
                 const y = fixedCostByYear(f);
                 return (
-                  <GridRow key={f._key} className={cn(f._error && "[&>td]:bg-bad-soft")} title={f._error}>
+                  <GridRow key={f._key} className={cn(errors.forKey(`fixed:${f._key}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`fixed:${f._key}`)}>
                     <Td><NameLink onClick={() => setDlg({ kind: "item", key: f._key })}>{f.item_name}</NameLink><GstFreeTag registered={gst.registered} label={gst.label} applies={f.gst_applies !== false} /></Td>
                     {y.map((v, i) => <Td key={i} right className="num">{num(v)}</Td>)}
                     <Td className="whitespace-nowrap text-right">
@@ -461,9 +466,10 @@ function SplitDialog({ f, fyEndMonth, onSave, onClose }: { f: FixRow; fyEndMonth
   );
 }
 
-function PendingBridge({ pending, error }: { pending: boolean; error?: string }) {
+/** STATUS ONLY (§6.98) — a failed save travels on its own channel and is shown in red, not in this grey. */
+function PendingBridge({ pending }: { pending: boolean }) {
   const { setPending, setNote } = useModule();
   useEffect(() => setPending(pending), [pending, setPending]);
-  useEffect(() => setNote(error ? error : pending ? "Saving…" : undefined), [pending, error, setNote]);
+  useEffect(() => setNote(pending ? "Saving…" : undefined), [pending, setNote]);
   return null;
 }

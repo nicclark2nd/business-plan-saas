@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
+import { useSaveErrors } from "@/components/module/saveErrors";
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
@@ -72,7 +73,8 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
   const [dlg, setDlg] = useState<Dlg>(null);
   const [draft, setDraft] = useState<Row | null>(null);
   const [confirmKey, setConfirm] = useState<string | null>(null);
-  const [error, setErr] = useState<string | undefined>();
+  /** Keyed failures that survive a keystroke and clear only on a save that works (§6.98). */
+  const errors = useSaveErrors();
   const [pending, start] = useTransition();
   const once = useSaveOnce();
 
@@ -106,10 +108,9 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
   };
 
   const save = (next: Row, buys = "") => {
-    setErr(undefined);
-    start(once(async () => {
+        start(once(async () => {
       const res = await upsertFunding(planId, next, { assetName: buys });
-      if (!res.ok) { setErr(res.error); return; }
+      if (!res.ok) { errors.raise({ key: "funding", message: res.error, label: "Funding" }); return; }
       const saved = { ...next, id: res.data!.id };
       setRows((rs) => (rs.some((r) => r._key === next._key) ? rs.map((r) => (r._key === next._key ? saved : r)) : [...rs, saved]));
       setDraft(null); setDlg(null);
@@ -123,7 +124,7 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
     if (!row) { setDraft(null); return; }
     start(async () => {
       const res = await deleteFunding(planId, row.kind, row.id);
-      if (!res.ok) { setErr(res.error); return; }
+      if (!res.ok) { errors.raise({ key: "funding", message: res.error, label: "Funding" }); return; }
       setRows((rs) => rs.filter((r) => r._key !== key));
       router.refresh();
     });
@@ -132,7 +133,7 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
   const commitOpening = () => {
     setOpeningText(null);
     if (opening === openingCash) return;
-    start(async () => { const res = await saveOpeningCash(planId, opening); if (!res.ok) setErr(res.error); });
+    start(async () => { const res = await saveOpeningCash(planId, opening); if (!res.ok) errors.raise({ key: "funding", message: res.error, label: "Funding" }); else errors.clear("funding"); });
   };
 
   const onSubmit = (e: React.FormEvent) => { e.preventDefault(); start(async () => { await continueFromFunding(planId, "next"); }); };
@@ -142,6 +143,7 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
   return (
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group={navGroup("funding")} title="Funding" subtitle="Where the money comes from, and whether it is enough" mode={mode}
+      errors={errors}
       areas={[{ key: "sources", label: "Sources", count: lines.length }, { key: "monthly", label: "Monthly projections" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "This plan" }}
       primaryAction={area === "sources" ? <Button size="sm" type="button" onClick={() => setDlg({ kind: "picker" })}>+ Funding</Button> : undefined}
@@ -156,7 +158,7 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
         <p>Interest is a cost in the profit and loss. The principal is not — it only moves cash. What is still owed at each year end sits on the balance sheet, and equipment or vehicle finance carries its asset through to Fixed Assets.</p>
       </>}
     >
-      <PendingBridge pending={pending} error={error} />
+      <PendingBridge pending={pending} />
       <form id="funding-form" onSubmit={onSubmit} className="hidden" />
 
       {area === "sources" && (<>
@@ -457,10 +459,11 @@ function IconButton({ title, onClick, children }: { title: string; onClick: () =
   return <button type="button" title={title} aria-label={title} onClick={onClick} className="px-1.5 text-[14px] leading-none text-muted-foreground hover:text-primary">{children}</button>;
 }
 
-function PendingBridge({ pending, error }: { pending: boolean; error?: string }) {
+/** STATUS ONLY (§6.98) — a failed save travels on its own channel and is shown in red, not in this grey. */
+function PendingBridge({ pending }: { pending: boolean }) {
   const { setPending, setNote } = useModule();
   useEffect(() => setPending(pending), [pending, setPending]);
-  useEffect(() => setNote(error ? error : pending ? "Saving…" : undefined), [pending, error, setNote]);
+  useEffect(() => setNote(pending ? "Saving…" : undefined), [pending, setNote]);
   return null;
 }
 

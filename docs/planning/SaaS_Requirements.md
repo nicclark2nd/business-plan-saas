@@ -2486,3 +2486,83 @@ TRUNCATES before evaluating the argument, so the exception left `docx.test.ts` a
 and came back with one command, which is the only reason it was a footnote rather than an afternoon. **Build
 the whole string first, then open the file** — and the reason the loss was cheap is that the work had been
 committed ten minutes earlier.
+
+## 6.98 A failed save is the one message a client cannot afford to miss (18 Sep 2026)
+
+§6.96 shipped three cover fields. Nic typed all three, the app said **"All changes saved"**, and none of them
+saved — migration 0043 had not been applied, so the columns did not exist. He found out when the cover came
+back empty.
+
+His diagnosis, and the brief for this:
+
+> *"A failed save reports itself in the footer of a long form, far from where you're typing... I'd put the
+> message next to the field that failed, keep the footer as the summary, and make an error persist until
+> it's resolved rather than being replaced by 'All changes saved' on the next keystroke."*
+
+The audit found five faults, not one.
+
+**1. The error was styled as reassurance.** All three footers rendered it `text-muted-foreground` — the same
+grey as "All changes saved". No colour, no icon, no `role="alert"`.
+
+**2. Eleven `edit()` handlers cleared it on every keystroke.** `setS(...); setDirty(which); setError(undefined);`
+— one more character and the reason was gone.
+
+**3. Five more cleared it at the top of the next save**, so retrying erased the explanation before the retry's
+own result was known.
+
+**4. Overheads and COGS never cleared it at all** — `setErr` was only ever called with a value, so one old
+failure masked every later success.
+
+**5. Every multi-row module collapsed N errors to one** with `.find()`, and Plan settings had three sources —
+profile, licences, logo — racing into a single slot and overwriting each other.
+
+> **THE APP WHISPERED THE ONE THING IT HAD TO SAY OUT LOUD.** Everything else on these screens can be
+> discovered later. Data that did not save cannot: the client leaves, and what they typed is gone with no
+> record that it ever existed.
+
+### What replaces it
+
+A keyed channel, `useSaveErrors`, owned by the module and handed to the frame — passed IN rather than created
+by `ModuleFrame`, because a module renders the frame and therefore sits outside its context, while the save
+handlers that need `raise` and `clear` are in the module body.
+
+**Keyed, so nothing overwrites anything.** A key is whatever failed — `profile`, `logo`, `overhead:<row>`,
+`year:3`. Two failures are two entries. A retry replaces its own.
+
+**Cleared only by a successful save of the same key.** Not a keystroke, not a different row, not the start of
+another attempt.
+
+> **THE CLIENT'S EDIT IS WHAT IS BEING DEFENDED. NOTHING THAT HAPPENS TO THEM WHILE THEY READ SHOULD REMOVE
+> THE EXPLANATION.**
+
+**Three surfaces, doing three different jobs.** A sticky red banner at the top of the scrolling area, listing
+every outstanding failure — inside the scroll container, so a client at the bottom of a long form still has
+it in view, which is exactly what the footer was not. The message beside the control, with the label turned
+red and a ring on the input, because a client scanning a long form reads labels rather than captions; the
+error replaces the hint rather than stacking under it. And the footer as a **counted** summary in red —
+"2 changes didn't save" — which beats every status, because nobody may read "All changes saved" while
+something has not.
+
+**No dismiss button**, deliberately. A client who dismisses this is a client who has lost data and agreed to
+forget about it.
+
+### Two dead fields, fixed on the way past
+
+Overheads and Fixed Assets declared `_error` on their row type, read it for the row tint and the tooltip, and
+**never wrote it** — so a row failure could never colour its own row. §6.89 again, twice. Both now read the
+channel, keyed by the row, so the tint has something real behind it.
+
+### What was NOT converted, and why
+
+Vision, Goals, Assumptions and the What-If planner already render their errors in `text-bad` at the point of
+action rather than in the footer. They keep their own handling. Dialog-local validation — the delete
+confirmation, the spreadsheet import — still clears as you type, and should: that is a check on what is being
+typed right now, not a record of a save that failed.
+
+### On the verification
+
+The whole path was driven on a real screen: an invalid email typed into Plan settings raised the banner, the
+red label, the ringed input, the message under it and "1 change didn't save" in the footer; typing in a
+DIFFERENT field left all of it standing; correcting the address cleared every one of them. The other twelve
+share that one channel and are covered by the compiler and the rules tests rather than by twelve more
+click-throughs — stated here plainly, because "verified" should mean what it says (§6.89).

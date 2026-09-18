@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { ModuleFrame, ModuleStatusFooter, useModule } from "@/components/module/ModuleFrame";
+import { useSaveErrors } from "@/components/module/saveErrors";
 import { Section, FieldGrid, Field, FieldInput, FieldSelect } from "@/components/module/FieldGrid";
 import { Input } from "@/components/ui/input";
 import { Toolbar, Meta, Grid, Th, Td, Row as GridRow } from "@/components/module/DataGrid";
@@ -36,14 +37,25 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
   const [s, setS] = useState(initial);
   const [established, setEstablished] = useState(formatMonth(initial.date_established));
   const [dirty, setDirty] = useState<"profile" | "financial" | null>(null);
-  const [error, setError] = useState<string | undefined>();
+  /**
+   * THREE SOURCES, THREE KEYS (§6.98). Profile, licences and the logo used to race into one `error` slot
+   * and overwrite each other, so a licence that would not save could be erased by a logo that would not
+   * either. Keyed, they sit side by side until each is fixed.
+   */
+  const errors = useSaveErrors();
   const [pending, start] = useTransition();
   const ref = useRef(s); useEffect(() => { ref.current = s; }, [s]);
   const estRef = useRef(established); useEffect(() => { estRef.current = established; }, [established]);
 
   // §6.10: text saves when focus leaves the area; choices save on selection.
+  /*
+   * TYPING DOES NOT CLEAR A FAILURE (§6.98). This called `setError(undefined)` on every keystroke, so the
+   * reason a save failed was gone before a client could read it — which is exactly how three cover fields
+   * were typed into a table with no columns for them and nobody was told. Only a successful save of the
+   * same thing clears it, in `commit` below.
+   */
   const edit = (changes: Partial<Settings>, which: "profile" | "financial", immediate = false) => {
-    setS((x) => ({ ...x, ...changes })); setDirty(which); setError(undefined);
+    setS((x) => ({ ...x, ...changes })); setDirty(which);
     if (immediate) queueMicrotask(() => commit(which));
   };
   const commit = (which: "profile" | "financial" | null) => {
@@ -53,18 +65,27 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
       const res = which === "profile"
         ? await saveProfile(planId, { ...(ref.current as Profile), established_text: estRef.current })
         : await saveFinancial(planId, ref.current as Financial);
-      if (!res.ok) { setError(res.error); setDirty(which); }
-      else if (res.data && "date_established" in res.data) { setS((x) => ({ ...x, date_established: res.data!.date_established })); setEstablished(formatMonth(res.data.date_established)); }
+      if (!res.ok) {
+        errors.raise({
+          key: which, message: res.error, field: "field" in res ? res.field : undefined,
+          label: which === "profile" ? "Business profile" : "Financial year & tax",
+        });
+        setDirty(which);
+      } else {
+        errors.clear(which);
+        if (res.data && "date_established" in res.data) { setS((x) => ({ ...x, date_established: res.data!.date_established })); setEstablished(formatMonth(res.data.date_established)); }
+      }
     });
   };
   const left = (e: React.FocusEvent<HTMLElement>) => !e.currentTarget.contains(e.relatedTarget as Node);
   /* Neither printing control is typed, so there is no field to leave — both save on the choice itself. */
   const editPrinting = (changes: Partial<Settings>) => {
     const next = { ...ref.current, ...changes };
-    setS(next); setError(undefined);
+    setS(next);
     start(async () => {
       const res = await savePrinting(planId, next);
-      if (!res.ok) setError(res.error);
+      if (!res.ok) errors.raise({ key: "printing", message: res.error, label: "How the plan prints" });
+      else errors.clear("printing");
     });
   };
   const missing = profileMissing(s);
@@ -73,12 +94,21 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
    * One PendingBridge per module: two of them race and the footer flickers between "Saving" and "Saved".
    */
   const [licBusy, setLicBusy] = useState(false);
-  const [licError, setLicError] = useState<string | undefined>();
-  const onLicPending = useCallback((busy: boolean, e?: string) => { setLicBusy(busy); setLicError(e); }, []);
+  const raise = errors.raise, clear = errors.clear;
+  /** Licences and the logo report under their own keys, so neither can erase the other (§6.98). */
+  const onLicPending = useCallback((busy: boolean, e?: string) => {
+    setLicBusy(busy);
+    if (e) raise({ key: "licences", message: e, label: "Licences" }); else clear("licences");
+  }, [raise, clear]);
+  const onLogoPending = useCallback((busy: boolean, e?: string) => {
+    setLicBusy(busy);
+    if (e) raise({ key: "logo", message: e, label: "Logo" }); else clear("logo");
+  }, [raise, clear]);
 
   return (
     <ModuleFrame
       group={navGroup("settings")} title="Plan settings" subtitle="Who the business is, how its year runs, and how the plan is branded" mode={mode}
+      errors={errors}
       areas={[
         { key: "profile", label: "Business profile", ...(missing.length ? { count: missing.length } : {}) },
         { key: "financial", label: "Financial year & tax" },
@@ -100,14 +130,14 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
         <p>Debtor, stock and creditor days, tax timing and CapEx are forecast assumptions, not settings. They live with the forecast, defaulted from your historic figures.</p>
       </>}
     >
-      <PendingBridge pending={pending || licBusy} dirty={!!dirty} error={error ?? licError} />
+      <PendingBridge pending={pending || licBusy} dirty={!!dirty} />
 
       {area === "profile" && (
         <div onBlur={(e) => left(e) && dirty === "profile" && commit("profile")}>
           <Toolbar><Meta className="ml-0">{missing.length ? <>Reports need {missing.length} more field{missing.length === 1 ? "" : "s"}: <b>{missing.map((k) => k.replace(/_/g, " ")).join(", ")}</b>.</> : "Everything a report\u2019s business overview needs is here."}</Meta></Toolbar>
           <Section title="Business">
             <FieldGrid>
-              <Field label="Business name" span={2}><FieldInput value={s.business_name} onChange={(e) => edit({ business_name: e.target.value }, "profile")} /></Field>
+              <Field label="Business name" span={2} error={errors.forField("business_name")}><FieldInput value={s.business_name} onChange={(e) => edit({ business_name: e.target.value }, "profile")} /></Field>
               <Field label="Industry" span={2}><FieldInput value={s.industry ?? ""} placeholder="e.g. Commercial concreting" onChange={(e) => edit({ industry: e.target.value }, "profile")} /></Field>
               <Field label="Date established"><FieldInput value={established} placeholder="month year" onChange={(e) => { setEstablished(e.target.value); setDirty("profile"); }} /></Field>
               <Field label="Plan year" hint="The year on the front cover of the report — not the financial year."><FieldInput numeric inputMode="numeric" value={s.plan_year ?? ""} onChange={(e) => edit({ plan_year: Number(e.target.value.replace(/\D/g, "")) || 0 }, "profile")} /></Field>
@@ -153,13 +183,13 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
           {/* Everything here is optional, and every line disappears from the cover when it is empty (§6.96). */}
           <Section title="On the cover">
             <FieldGrid>
-              <Field label="Tagline" span={4} hint="The line under your name on the cover. What the business does, in its own words — not the industry.">
+              <Field label="Tagline" span={4} error={errors.forField("tagline")} hint="The line under your name on the cover. What the business does, in its own words — not the industry.">
                 <FieldInput value={s.tagline ?? ""} placeholder="e.g. Concreting &amp; civil works" onChange={(e) => edit({ tagline: e.target.value }, "profile")} />
               </Field>
-              <Field label="Contact email" span={2} hint="Printed at the foot of the cover. Not your sign-in address.">
+              <Field label="Contact email" span={2} error={errors.forField("contact_email")} hint="Printed at the foot of the cover. Not your sign-in address.">
                 <FieldInput value={s.contact_email ?? ""} placeholder="e.g. hello@example.com" onChange={(e) => edit({ contact_email: e.target.value }, "profile")} />
               </Field>
-              <Field label="Main website" span={2} hint="Printed without the https:// and the www.">
+              <Field label="Main website" span={2} error={errors.forField("website")} hint="Printed without the https:// and the www.">
                 <FieldInput value={s.website ?? ""} placeholder="e.g. example.com" onChange={(e) => edit({ website: e.target.value }, "profile")} />
               </Field>
             </FieldGrid>
@@ -257,17 +287,18 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
       {area === "branding" && (
         <>
           <Toolbar><Meta className="ml-0">Your logo goes on the business plan&apos;s cover and the header of every page after it.</Meta></Toolbar>
-          <LogoSection planId={planId} path={s.logo_path} url={logoUrl} onPending={onLicPending} />
+          <LogoSection planId={planId} path={s.logo_path} url={logoUrl} onPending={onLogoPending} />
         </>
       )}
     </ModuleFrame>
   );
 }
 
-function PendingBridge({ pending, dirty, error }: { pending: boolean; dirty: boolean; error?: string }) {
+/** STATUS ONLY now (§6.98) — failure travels on its own channel and is rendered in red, not in this grey. */
+function PendingBridge({ pending, dirty }: { pending: boolean; dirty: boolean }) {
   const { setPending, setNote } = useModule();
   useEffect(() => setPending(pending), [pending, setPending]);
-  useEffect(() => setNote(error ? error : pending ? "Saving…" : dirty ? "Unsaved — saves when you leave the field" : undefined), [pending, dirty, error, setNote]);
+  useEffect(() => setNote(pending ? "Saving…" : dirty ? "Unsaved — saves when you leave the field" : undefined), [pending, dirty, setNote]);
   return null;
 }
 

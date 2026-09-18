@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
+import { useSaveErrors } from "@/components/module/saveErrors";
 import { Toolbar, Meta, RemoveButton, CellTextarea, LinkButton, focusRow } from "@/components/module/DataGrid";
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { upsertSwot, deleteSwot, continueFromSwot } from "./actions";
 import { QUADRANTS, QUADRANT_LABEL, QUADRANT_HINT, RESPONSE_PROMPT, RISK_QUADRANTS, QUADRANT_NOUN, type Quadrant, type SwotItem, type Suggestion, type LinkedGoal } from "./model";
 
-type Row = SwotItem & { _dirty?: boolean; _error?: string };
+type Row = SwotItem & { _dirty?: boolean };
 const STEP = GUIDED_STEPS.find((s) => s.id === "swot")?.step ?? 5;
 const blank = (q: Quadrant, id = `tmp-new-${q}`): Row => ({ id, quadrant: q, text: "", source: null, sort_order: 0, response: null });
 
@@ -20,18 +21,22 @@ export function SwotModule({ planId, initial, suggestions, goals, mode }: {
 }) {
   // Every quadrant with nothing in it starts with a blank line (closed decision 8); fixed ids keep server and client in step.
   const [rows, setRows] = useState<Row[]>(() => [...initial, ...QUADRANTS.filter((q) => !initial.some((i) => i.quadrant === q)).map((q) => blank(q))]);
+  /** Keyed per row, so several broken lines are several messages rather than the first one found (§6.98). */
+  const errors = useSaveErrors();
   const [pending, start] = useTransition();
   const ref = useRef(rows); useEffect(() => { ref.current = rows; }, [rows]);
   const left = (e: React.FocusEvent<HTMLElement>) => !e.currentTarget.contains(e.relatedTarget as Node);
 
-  const edit = (id: string, patch: Partial<Row>) => setRows((xs) => xs.map((x) => (x.id === id ? { ...x, ...patch, _dirty: true, _error: undefined } : x)));
+  /* Typing no longer erases the reason a line would not save (§6.98). */
+  const edit = (id: string, patch: Partial<Row>) => setRows((xs) => xs.map((x) => (x.id === id ? { ...x, ...patch, _dirty: true } : x)));
   const commit = (id: string) => {
     const row = ref.current.find((x) => x.id === id);
     if (!row || !row._dirty || !row.text.trim()) return;
     setRows((xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: false } : x)));
     start(async () => {
       const r = await upsertSwot(planId, { id: id.startsWith("tmp-") ? undefined : id, quadrant: row.quadrant, text: row.text, source: row.source, response: row.response });
-      setRows((xs) => xs.map((x) => (x.id === id ? (r.ok ? { ...x, id: r.data!.id } : { ...x, _dirty: true, _error: r.error }) : x)));
+      if (r.ok) { errors.clear(`line:${id}`); setRows((xs) => xs.map((x) => (x.id === id ? { ...x, id: r.data!.id } : x))); }
+      else { errors.raise({ key: `line:${id}`, message: r.error, label: "SWOT line" }); setRows((xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: true } : x))); }
     });
   };
   const add = (q: Quadrant) => { const id = `tmp-${crypto.randomUUID()}`; setRows((xs) => [blank(q, id), ...xs]); focusRow(`[data-row="${id}"]`); };
@@ -45,7 +50,8 @@ export function SwotModule({ planId, initial, suggestions, goals, mode }: {
     setRows((xs) => [{ id, quadrant: s.quadrant, text: s.text, source: s.key, sort_order: 0, response: null }, ...xs.filter((x) => !(x.quadrant === s.quadrant && !x.text.trim() && x.id.startsWith("tmp-")))]);
     start(async () => {
       const r = await upsertSwot(planId, { quadrant: s.quadrant, text: s.text, source: s.key });
-      setRows((xs) => xs.map((x) => (x.id === id ? (r.ok ? { ...x, id: r.data!.id } : { ...x, _error: r.error }) : x)));
+      if (r.ok) { errors.clear(`line:${id}`); setRows((xs) => xs.map((x) => (x.id === id ? { ...x, id: r.data!.id } : x))); }
+      else errors.raise({ key: `line:${id}`, message: r.error, label: "SWOT line" });
     });
   };
   const flush = () => ref.current.forEach((r) => r._dirty && commit(r.id));
@@ -58,7 +64,6 @@ export function SwotModule({ planId, initial, suggestions, goals, mode }: {
   const real = rows.filter((r) => r.text.trim());
   const used = new Set(rows.map((r) => r.source).filter(Boolean));
   const open = suggestions.filter((s) => !used.has(s.key));
-  const err = rows.find((r) => r._error)?._error;
 
   /**
    * The gap, named out loud (§6.41.3). A SWOT that lists four threats and plans for none of them is worth
@@ -74,6 +79,7 @@ export function SwotModule({ planId, initial, suggestions, goals, mode }: {
   return (
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group={navGroup("swot")} title="SWOT" subtitle="Four honest lists — half of it is already in your plan" mode={mode}
+      errors={errors}
       areas={[{ key: "swot", label: "SWOT", count: real.length }]} area="swot" onArea={() => {}} scope={{ label: "This plan" }}
       footer={<ModuleFooter planId={planId} moduleId="swot" formId="swot-form" />}
       help={<>
@@ -88,7 +94,7 @@ export function SwotModule({ planId, initial, suggestions, goals, mode }: {
         <p>SWOT section of every report, responses included. The AI reads all four quadrants when it drafts your Goals in step {GUIDED_STEPS.find((s) => s.id === "goals")?.step}.</p>
       </>}
     >
-      <PendingBridge pending={pending} dirty={rows.some((r) => r._dirty)} error={err} />
+      <PendingBridge pending={pending} dirty={rows.some((r) => r._dirty)} />
       <form id="swot-form" onSubmit={onSubmit} className="hidden" />
       <Toolbar>
         <Meta className="ml-0">
@@ -119,8 +125,8 @@ export function SwotModule({ planId, initial, suggestions, goals, mode }: {
                 {list.map((r) => {
                   const goal = byId.get(r.id);
                   return (
-                    <li key={r.id} data-row={r.id} onBlur={(e) => left(e) && commit(r.id)} title={r._error}
-                      className={cn("border-b border-border py-1 pl-5 pr-3", r._error && "bg-bad-soft")}>
+                    <li key={r.id} data-row={r.id} onBlur={(e) => left(e) && commit(r.id)} title={errors.forKey(`line:${r.id}`)}
+                      className={cn("border-b border-border py-1 pl-5 pr-3", errors.forKey(`line:${r.id}`) && "bg-bad-soft")}>
                       <div className="flex items-start gap-2">
                         <span className="mt-[9px] size-1.5 shrink-0 rounded-full bg-border" />
                         <CellTextarea value={r.text} placeholder="One line" className="min-h-[30px]" onChange={(e) => edit(r.id, { text: e.target.value })} />
@@ -163,9 +169,10 @@ export function SwotModule({ planId, initial, suggestions, goals, mode }: {
   );
 }
 
-function PendingBridge({ pending, dirty, error }: { pending: boolean; dirty: boolean; error?: string }) {
+/** STATUS ONLY (§6.98) — a failed save travels on its own channel and is shown in red, not in this grey. */
+function PendingBridge({ pending, dirty }: { pending: boolean; dirty: boolean }) {
   const { setPending, setNote } = useModule();
   useEffect(() => setPending(pending), [pending, setPending]);
-  useEffect(() => setNote(error ? error : pending ? "Saving…" : dirty ? "Unsaved — saves when you leave the line" : undefined), [pending, dirty, error, setNote]);
+  useEffect(() => setNote(pending ? "Saving…" : dirty ? "Unsaved — saves when you leave the line" : undefined), [pending, dirty, setNote]);
   return null;
 }

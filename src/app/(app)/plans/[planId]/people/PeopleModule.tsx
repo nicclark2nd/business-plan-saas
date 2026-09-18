@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
+import { useSaveErrors } from "@/components/module/saveErrors";
 import { Grid, Th, Td, Row, FootRow, GroupRow, Toolbar, Meta, Note, NameLink, LinkButton, RemoveButton, CellInput, CellSelect, CellTextarea, focusRow } from "@/components/module/DataGrid";
 import { cn } from "@/lib/utils";
 import type { CapTable } from "@/engine/funding/ownership";
@@ -13,7 +14,7 @@ import { useMoney } from "@/components/MoneyProvider";
 import { upsertPerson, deletePerson, upsertCapability, deleteCapability, continueFromPeople } from "./actions";
 import { PERSON_ROLES, ROLE_LABEL, CAPABILITY_KINDS, KIND_LABEL, formatMonth, type Person, type Capability, type CapabilityKind, type PeopleData } from "./model";
 
-type Row = Person & { _key: string; started_text: string; _dirty?: boolean; _state?: "saving" | "saved" | "error"; _error?: string };
+type Row = Person & { _key: string; started_text: string; _dirty?: boolean; _state?: "saving" | "saved" };
 type Cap = Capability & { _key: string; _dirty?: boolean };
 type AreaKey = "people" | "salary" | "cap" | "risk";
 
@@ -39,6 +40,8 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
   ]);
   const [area, setArea] = useState<AreaKey>("people");
   const [scope, setScope] = useState<string | null>(null);        // a person's _key, or everyone
+  /** Keyed per person, so two who will not save are two messages (§6.98). */
+  const errors = useSaveErrors();
   const [pending, start] = useTransition();
   const peopleRef = useRef(people); useEffect(() => { peopleRef.current = people; }, [people]);
   const capsRef = useRef(caps); useEffect(() => { capsRef.current = caps; }, [caps]);
@@ -63,10 +66,15 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
     start(async () => {
       const res = await upsertPerson(planId, { ...row, id: row.id || undefined });
       if (res.ok) {
+        errors.clear(`person:${key}`);
         patch(key, { id: res.data!.id, started_on: res.data!.started_on, started_text: formatMonth(res.data!.started_on), name: `${row.first_name.trim()} ${(row.last_name ?? "").trim()}`.trim(), _state: "saved" });
         if (!row.id) setCaps((cs) => cs.some((c) => c.person_id === res.data!.id) ? cs : [...cs, blankCap(res.data!.id, `tmp-${crypto.randomUUID()}`)]);
       }
-      else patch(key, { _state: "error", _error: res.error, _dirty: true });
+      else {
+        /* Keyed by the person, so two who will not save are two messages (§6.98). */
+        errors.raise({ key: `person:${key}`, message: res.error, label: `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim() || "This person" });
+        patch(key, { _dirty: true });
+      }
     });
   };
   const left = (e: React.FocusEvent<HTMLElement>) => !e.currentTarget.contains(e.relatedTarget as Node);
@@ -131,6 +139,7 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
   return (
     <ModuleFrame
       step={2} total={GUIDED_STEPS.length} group={navGroup("people")} title="Leadership Team" subtitle="Owners, directors and the key people a lender asks about — not the whole payroll" mode={mode}
+      errors={errors}
       areas={areas} area={area} onArea={(k) => setArea(k as AreaKey)}
       scope={{ label: scoped ? scoped.name || `${scoped.first_name} ${scoped.last_name ?? ""}`.trim() || "New person" : "All people", onClear: scope ? () => setScope(null) : undefined }}
       primaryAction={<Button size="sm" type="button" onClick={addPerson}>+ New person</Button>}
@@ -145,7 +154,7 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
         <p>12-month focus for each person lives under <b>Goals</b>, where every goal has an owner.</p>
       </>}
     >
-      <PendingBridge pending={pending} saving={people.some((p) => p._state === "saving")} error={people.find((p) => p._state === "error")?._error} />
+      <PendingBridge pending={pending} saving={people.some((p) => p._state === "saving")} />
       <form id="people-form" onSubmit={onSubmit} className="hidden" />
 
       {area === "people" && (
@@ -169,7 +178,7 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
             <thead><tr><Th style={{ width: 130 }}>First name</Th><Th style={{ width: 130 }}>Last name</Th><Th>Position</Th><Th style={{ width: 130 }}>Role</Th><Th right style={{ width: 90 }}>Share %</Th><Th style={{ width: 115 }}>Started</Th><Th right style={{ width: 95 }}>Tenure</Th><Th style={{ width: 36 }} /></tr></thead>
             <tbody>
               {visible.map((r) => (
-                <Row key={r._key} data-row={r._key} onBlur={(e) => left(e) && commitPerson(r._key)} className={cn(r._state === "error" && "[&>td]:bg-bad-soft")} title={r._error}>
+                <Row key={r._key} data-row={r._key} onBlur={(e) => left(e) && commitPerson(r._key)} className={cn(errors.forKey(`person:${r._key}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`person:${r._key}`)}>
                   <Td className="relative">
                     {r.id && missing(r).length > 0 && <i title={`Missing: ${missing(r).join(", ")}`} className="absolute left-2 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-warn" />}
                     {r.id && scope !== r._key
@@ -284,10 +293,11 @@ const missing = (p: Row) => [
 ];
 
 /** Reports saving state up to the frame (footer text + disabled buttons). */
-function PendingBridge({ pending, saving, error }: { pending: boolean; saving: boolean; error?: string }) {
+/** STATUS ONLY (§6.98) — a failed save travels on its own channel and is shown in red, not in this grey. */
+function PendingBridge({ pending, saving }: { pending: boolean; saving: boolean }) {
   const { setPending, setNote } = useModule();
   useEffect(() => setPending(pending), [pending, setPending]);
-  useEffect(() => setNote(error ? error : saving ? "Saving…" : undefined), [saving, error, setNote]);
+  useEffect(() => setNote(saving ? "Saving…" : undefined), [saving, setNote]);
   return null;
 }
 

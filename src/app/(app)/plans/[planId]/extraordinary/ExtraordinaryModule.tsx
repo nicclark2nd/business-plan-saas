@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
+import { useSaveErrors } from "@/components/module/saveErrors";
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, RemoveButton } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
@@ -68,7 +69,8 @@ export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth,
   const [dlg, setDlg] = useState<{ key: string } | null>(null);
   const [draft, setDraft] = useState<Row | null>(null);
   const [confirmKey, setConfirm] = useState<string | null>(null);
-  const [error, setErr] = useState<string | undefined>();
+  /** Keyed failures that survive a keystroke and clear only on a save that works (§6.98). */
+  const errors = useSaveErrors();
   const [pending, start] = useTransition();
   const once = useSaveOnce();
 
@@ -90,10 +92,11 @@ export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth,
   };
 
   const save = (next: Row) => {
-    setErr(undefined);
     start(once(async () => {
       const res = await upsertExtraordinary(planId, next);
-      if (!res.ok) { setErr(res.error); return; }
+      if (!res.ok) { errors.raise({ key: "one-off", message: res.error, label: "One-off income & costs" }); return; }
+      /* Cleared HERE, by the save that worked — never by the next keystroke or the next attempt (§6.98). */
+      errors.clear("one-off");
       const saved = { ...next, id: res.data!.id };
       setRows((rs) => (rs.some((r) => r._key === next._key) ? rs.map((r) => (r._key === next._key ? saved : r)) : [...rs, saved]));
       setDraft(null); setDlg(null);
@@ -106,7 +109,8 @@ export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth,
     if (!row) { setDraft(null); return; }
     start(async () => {
       const res = await deleteExtraordinary(planId, row.id);
-      if (!res.ok) { setErr(res.error); return; }
+      if (!res.ok) { errors.raise({ key: "one-off", message: res.error, label: "One-off income & costs" }); return; }
+      errors.clear("one-off");
       setRows((rs) => rs.filter((r) => r._key !== key));
     });
   };
@@ -119,6 +123,7 @@ export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth,
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group={navGroup("extraordinary")} title="One-off income &amp; costs"
       subtitle="Money in or out that has nothing to do with trading" mode={mode}
+      errors={errors}
       areas={[{ key: "items", label: "One-offs", count: named.length }, { key: "monthly", label: "Monthly projections" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "This plan" }}
       primaryAction={area === "items" ? <Button size="sm" type="button" onClick={add}>+ One-off</Button> : undefined}
@@ -133,7 +138,7 @@ export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth,
         <p>A single net line in the profit and loss, below operating profit and above interest and tax — so these are taxed. In the cash flow they sit on their own, split between what came in and what went out.</p>
       </>}
     >
-      <PendingBridge pending={pending} error={error} />
+      <PendingBridge pending={pending} />
       <form id="extraordinary-form" onSubmit={onSubmit} className="hidden" />
 
       {area === "items" && (<>
@@ -301,10 +306,11 @@ function IconButton({ title, onClick, children }: { title: string; onClick: () =
   return <button type="button" title={title} aria-label={title} onClick={onClick} className="px-1.5 text-[14px] leading-none text-muted-foreground hover:text-primary">{children}</button>;
 }
 
-function PendingBridge({ pending, error }: { pending: boolean; error?: string }) {
+/** STATUS ONLY (§6.98) — a failed save travels on its own channel and is shown in red, not in this grey. */
+function PendingBridge({ pending }: { pending: boolean }) {
   const { setPending, setNote } = useModule();
   useEffect(() => setPending(pending), [pending, setPending]);
-  useEffect(() => setNote(error ? error : pending ? "Saving…" : undefined), [pending, error, setNote]);
+  useEffect(() => setNote(pending ? "Saving…" : undefined), [pending, setNote]);
   return null;
 }
 
