@@ -2566,3 +2566,59 @@ red label, the ringed input, the message under it and "1 change didn't save" in 
 DIFFERENT field left all of it standing; correcting the address cleared every one of them. The other twelve
 share that one channel and are covered by the compiler and the rules tests rather than by twelve more
 click-throughs — stated here plainly, because "verified" should mean what it says (§6.89).
+
+## 6.99 The step that could never be finished (18 Sep 2026)
+
+Nic: *"is there anything broken we need to fix"*. The right answer to that is not an opinion, so: tsc,
+eslint and 655 tests, then nineteen screens loaded in the browser reading the console on each — **no runtime
+errors** (and the console reader was checked against a non-error log first, because a probe that cannot fail
+proves nothing, §6.92.1).
+
+Then the dashboard, which is where it was.
+
+**Step 14 Assumptions had no completeness section, and step 15 Review forecast had one that measured
+Assumptions' work.** The row read `{ id: "forecast", label: "Review forecast", done: assumptionsSet ... }`.
+
+So a client who set their debtor days ticked off **Review forecast**; Assumptions itself could never turn
+green in the sidebar however much they entered, and could never appear in the plan's "what is not in this
+plan" list. The guided path counted "17 steps, 14 done" while only fifteen could ever be counted.
+
+The drift is two passes long and the second is mine. §6.79 split Assumptions out of Review forecast and left
+the measure on the old step — harmless-looking while Assumptions was unnumbered. §6.94 numbered it and made
+the gap real. Neither pass went back to the dashboard.
+
+> **A SECTION THAT MEASURES ONE THING AND IS LABELLED ANOTHER IS WORSE THAN NO SECTION.** No section is a
+> gap somebody notices. A wrong label is a green tick against work nobody did, and the step that WAS done
+> sits grey beside it.
+
+### What "done" means for a step that writes nothing
+
+Nic chose: **the checks pass**. Review forecast reads the forecast and judges it, so the only honest measure
+of finished is the judgement — the statements reconcile, which is the same test the Reports screen prints as
+"Figures agree". A plan whose checks fail is not a plan a client has finished, whatever else is filled in.
+
+That needs the forecast run, and `getCompleteness` lives in `plan.ts` while `planLoad.ts` imports `plan.ts` —
+so computing it there would be a circular import. `planCompleteness.ts` sits above both and supplies the
+verdict. `loadPlan` is now wrapped in React's `cache`, so the dashboard — which already loads the plan and
+runs the forecast for its own tiles — pays nothing for this at all.
+
+**It fails soft.** A forecast that throws must not take the sidebar down on every page: the verdict becomes
+false, Review forecast reads as outstanding, everything else is unaffected. A step wrongly shown as
+outstanding is a nuisance; a blank application is not (§6.94, the logo's rule again).
+
+### The test that would have caught it
+
+`completeness.test.ts` asserts that **every numbered step has a section**, with one exemption — the Business
+plan, which is an output with nothing to fill in. It reads the ids out of `plan.ts` rather than running a
+query, which is inelegant and is the only way to state the rule without a database. A rule nobody can check
+is the rule that drifts.
+
+It also asserts the reverse, and there the exemption is the interesting one: **Plan settings is measured and
+carries no number** (§6.82) — upstream of the path rather than a step in the story. Writing the test found
+that immediately, by failing on it.
+
+### Still open, and deliberately not decided here
+
+The **Business plan** step has no section either, so the guided path can never read 17 of 17 — a client never
+sees the plan as finished. Making it "done when everything else is" would be well-defined and slightly
+circular. That is a judgement about what the last step means, and it is Nic's, not this pass's.

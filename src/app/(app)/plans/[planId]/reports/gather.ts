@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { loadPlan } from "@/lib/planLoad";
-import { getCompleteness } from "@/lib/plan";
+import { getPlanCompleteness } from "@/lib/planCompleteness";
 import { FORECAST_YEARS } from "@/engine/forecast/model";
 import { runForecast } from "@/engine/forecast/run";
 import { strengthByYear } from "@/engine/balance/lines";
@@ -69,7 +69,7 @@ export async function gatherReport(planId: string) {
     rows(supabase.from("plan_suppliers").select("*").eq("plan_id", planId).order("sort_order")),
     rows(supabase.from("plan_operations_steps").select("*").eq("plan_id", planId).order("sort_order")),
     supabase.from("plan_operations").select("*").eq("plan_id", planId).maybeSingle().then((r) => r.data),
-    getCompleteness(planId),
+    getPlanCompleteness(planId),
   ]);
   const historicRow = await supabase.from("plan_historic_periods").select("*").eq("plan_id", planId)
     .order("period_number").limit(1).maybeSingle().then((r) => r.data);

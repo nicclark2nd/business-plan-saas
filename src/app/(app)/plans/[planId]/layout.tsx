@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getSession, getCompleteness } from "@/lib/plan";
+import { getPlanCompleteness } from "@/lib/planCompleteness";
+import { getSession } from "@/lib/plan";
 import { createClient } from "@/lib/supabase/server";
 import { ModeToggle } from "@/components/ModeToggle";
 import { MoneyProvider } from "@/components/MoneyProvider";
@@ -17,7 +18,7 @@ export default async function PlanLayout({ children, params }: { children: React
   const plan = session.plans.find((p) => p.id === planId);
   if (!plan) notFound();
   const mode = (session.profile?.mode ?? "guided") as "guided" | "advanced";
-  const completeness = await getCompleteness(planId);
+  const completeness = await getPlanCompleteness(planId);
   const supabase = await createClient();
   const { data: settings } = await supabase.from("plan_settings").select("currency, product_type, customer_type, country, gst_registered, gst_rate, gst_frequency, tax_region, tax_components").eq("plan_id", planId).maybeSingle();
   const STATUS: Record<string, string> = { draft: "Working draft", active: "Active", complete: "Complete", archived: "Archived" };

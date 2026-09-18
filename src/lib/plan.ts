@@ -23,7 +23,15 @@ export const getSession = cache(async () => {
 });
 
 /** Section completeness for the dashboard — counts rows in each module for one plan. */
-export const getCompleteness = cache(async (planId: string) => {
+/**
+ * `reconciled` is passed IN rather than worked out here (§6.99).
+ *
+ * Deciding it needs the whole plan loaded and the forecast run, and `planLoad.ts` imports this file — so
+ * computing it here would be a circular import. `planCompleteness.ts` sits above both and supplies it.
+ * Undefined means "not known", which is treated as not done: a plan whose checks have not been shown to
+ * pass has not passed them.
+ */
+export const getCompleteness = cache(async (planId: string, reconciled?: boolean) => {
   const supabase = await createClient();
   const count = async (table: string, opts?: { annualOnly?: boolean }) => {
     const base = supabase.from(table).select("*", { count: "exact", head: true }).eq("plan_id", planId);
@@ -151,12 +159,20 @@ export const getCompleteness = cache(async (planId: string) => {
     // "none" is a legitimate answer here, and now there is a way to give it rather than only imply it.
     { id: "extraordinary", label: "One-off income & costs", done: Math.min(extraordinary + (said.oneOffs ? 1 : 0), 1), total: 1 },
     /**
-     * Step 13 shows three statements the plan PRODUCES, so the only thing on it a client can finish is the
-     * one thing they type: debtor days, creditor days and when the tax is paid. Left at zero the forecast
-     * assumes every client pays on the day of the job — the most optimistic cash flow that can be drawn —
-     * so setting them is exactly the act this step is asking for.
+     * ASSUMPTIONS MEASURES ASSUMPTIONS (§6.99), which it had not since §6.79 split it out of Review
+     * forecast: the row below kept the measure and the row for this step was never written. So a client
+     * who set their debtor days ticked off REVIEW FORECAST, and Assumptions — step 14 since §6.94 — could
+     * never turn green in the sidebar or appear in the plan's "what is not in this plan" list, however
+     * much they entered. One fact wearing another's label (§6.41).
      */
-    { id: "forecast", label: "Review forecast", done: assumptionsSet ? 1 : 0, total: 1 },
+    { id: "assumptions", label: "Assumptions", done: assumptionsSet ? 1 : 0, total: 1 },
+    /**
+     * REVIEW FORECAST IS DONE WHEN THE CHECKS PASS. It is the one step that writes nothing — it reads the
+     * forecast and judges it — so the only honest measure of "finished" is the judgement itself: the
+     * statements reconcile. A plan whose checks fail is not a plan a client has finished, whatever else
+     * they have filled in, and this is the same test the Reports screen prints as "Figures agree".
+     */
+    { id: "forecast", label: "Review forecast", done: reconciled ? 1 : 0, total: 1 },
     { id: "goals", label: "Goals", done: annualGoals, total: 6 },
   ];
   const done = sections.reduce((a, s) => a + s.done / s.total, 0);

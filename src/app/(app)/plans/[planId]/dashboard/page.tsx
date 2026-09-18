@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { getCompleteness, getSession } from "@/lib/plan";
+import { getSession } from "@/lib/plan";
+import { getPlanCompleteness } from "@/lib/planCompleteness";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
   const { planId } = await params;
   const session = await getSession();
   const plan = session!.plans.find((p) => p.id === planId)!;
-  const c = await getCompleteness(planId);
+  const c = await getPlanCompleteness(planId);
   const supabase = await createClient();
   const { data: ps } = await supabase.from("plan_settings")
     .select("industry, country, legal_structure, products_services_statement, financial_year_end_month, first_projected_year")

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { loadFundingRows, loadMarketingByYear, loadSalariesByYear } from "@/lib/planSources";
@@ -43,7 +44,12 @@ export type LoadedPlan = {
 
 const num = (v: unknown) => Number(v ?? 0) || 0;
 
-export async function loadPlan(planId: string): Promise<LoadedPlan> {
+/**
+ * DEDUPED PER REQUEST (§6.99). It was a plain async function, so a page that loads the plan and a helper
+ * that also needs it each paid the nine queries. React's `cache` makes the second call free within one
+ * request and changes nothing across requests — the data cannot move underneath a single render.
+ */
+export const loadPlan = cache(async function loadPlan(planId: string): Promise<LoadedPlan> {
   const supabase = await createClient();
   const [session, settings] = await Promise.all([
     getSession(),
@@ -118,4 +124,4 @@ export async function loadPlan(planId: string): Promise<LoadedPlan> {
     noun: productNoun(s?.product_type as string | null),
     settings: (s ?? null) as Record<string, unknown> | null,
   };
-}
+});
