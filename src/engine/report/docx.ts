@@ -20,6 +20,7 @@ import { PAGE_DIMENSIONS, type PageSize } from "./pageSize";
 import { imageSize } from "./imageSize";
 import { PLAN_STYLES, S, PAGE_BREAK_STYLES, ACCENT, MUTED, HAIRLINE } from "./docxStyles";
 import { applyStylePageBreaks } from "./docxPatch";
+import { COPY } from "./content";
 
 const RULE = { style: BorderStyle.SINGLE, size: 4, color: HAIRLINE };
 
@@ -276,6 +277,9 @@ export async function renderDocx(
       /* Smaller than body text and a touch grey: it is a notice to be read once, not the plan itself. */
       new Paragraph({ style: S.noticeBody, children: [text(part.body)] }),
     ]),
+
+    /* Which copy this is (§6.102). The foot of the notice page, not the cover. */
+    new Paragraph({ style: S.noticePrepared, children: [text(COPY.preparedOn(doc.preparedOn))] }),
 
     new Paragraph({ style: S.contentsTitle, children: [text("Contents")] }),
     ...flat.map((s) => new Paragraph({

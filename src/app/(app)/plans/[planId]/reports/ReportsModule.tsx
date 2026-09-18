@@ -145,6 +145,9 @@ export function ReportsModule({ planId, mode, doc, reconciled, missing, pageSize
               <p className="mt-0.5 text-[12.5px] leading-[1.55] text-muted-foreground">{part.body}</p>
             </div>
           ))}
+          {/* Which copy this is (§6.102). On screen it is always today, which is the honest answer for a
+              plan that is never frozen — the line earns its keep in the file a client sends. */}
+          <p className="mt-5 text-[12px] italic text-faint">{COPY.preparedOn(doc.preparedOn)}</p>
         </div>
 
         <div className="mb-8">

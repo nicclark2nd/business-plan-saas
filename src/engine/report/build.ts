@@ -114,6 +114,7 @@ export type ReportInput = {
   yearEndLabels: string[];
   money: (v: number) => string;
   date: string;
+  preparedOn: string;
 };
 
 /** The stage labels the Sales screen uses, so the plan says what the client picked. */
@@ -636,6 +637,7 @@ export function buildReport(i: ReportInput): ReportDoc {
     businessName: i.businessName,
     subtitle: COPY.subtitle,
     date: i.date,
+    preparedOn: i.preparedOn,
     /*
      * The cover (§6.96), following the placement Nic supplied: name, tagline, title, year, then the contact
      * line and the address at the foot. Every one of those but the name is allowed to be absent.

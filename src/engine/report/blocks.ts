@@ -84,6 +84,14 @@ export type ReportDoc = {
   businessName: string;
   subtitle: string;
   date: string;
+  /**
+   * The day this copy was rendered (§6.102), long-form: "18 September 2026".
+   *
+   * Separate from `date`, which is the month and year on the cover. A cover reading "18 September 2026"
+   * looks like a receipt; a document a client emailed a fortnight ago and cannot tell apart from the one
+   * they are looking at now is worse. So the cover keeps the month and the notice page carries the day.
+   */
+  preparedOn: string;
   cover: Cover;
   disclaimer: Disclaimer;
   sections: Section[];

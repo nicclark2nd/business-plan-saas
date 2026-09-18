@@ -2695,3 +2695,51 @@ smudge.
 logo does not belong on their cover.
 
 > **THE PRODUCT THAT BUILT THE DOCUMENT IS NOT A PARTY TO WHAT THE DOCUMENT ASKS FOR.**
+
+---
+
+## §6.102 — Two copies of a plan that look identical are worse than two that disagree
+
+Asked how the screen and the document keep up when a client goes back and changes data, the answer turned
+out to be: completely, and that is not the interesting part.
+
+Every module's save action ends in `revalidatePath(/plans/${planId}, "layout")`, which discards the cached
+render of the whole plan subtree rather than the one module — so a price typed in Sales invalidates the
+dashboard, the completeness panel and the forecast in the same moment. No number is stored anywhere. There
+is no forecast table, no cache, no snapshot; the forecast is recomputed from raw inputs on every load. The
+download route is `force-dynamic` with `Cache-Control: no-store` and calls the same `gatherReport` the
+screen calls, so there is no stored `.docx` either. **A plan is never produced. It is only ever rendered.**
+
+**THE HOLE WAS IN THE ONE COPY THE APP CANNOT REACH: THE FILE ALREADY ON A CLIENT'S DISK, AND THE COPY THEY
+EMAILED TO THEIR BANK.** That a downloaded file does not update is unavoidable. That a client could not
+tell two of them apart was not.
+
+The cover date was month and year — `{ month: "long", year: "numeric" }` — and `docxFileName` was built
+from that same string. So a client who downloaded on the 2nd, sent it to a lender, reworked their pricing
+and downloaded again on the 18th got **the same filename and the same cover date**. Their browser saved the
+second as `(1)` or silently overwrote the first.
+
+> **THIS IS §6.92.1 IN NEW CLOTHES: TWO ARTEFACTS THAT ARE GENUINELY DIFFERENT AND CARRY NOTHING THAT SAYS
+> SO. A LENDER READING ONE AND A CLIENT DISCUSSING THE OTHER HAVE NO WAY TO DISCOVER IT.**
+
+**The cover keeps the month.** A cover dated to the day reads like a receipt, and the month-and-year is the
+plan's period rather than the print run. The day goes at the foot of the notice page — the confidentiality
+statement from §6.95, which is already the page for saying what this document is and is not — as one
+italic line: *This version prepared 18 September 2026.*
+
+"This version" and not "This document", because the whole point is that there may be others.
+
+**It prints on the screen too.** On a live screen the line is trivially true — the plan is never frozen, so
+it was always prepared today. It stays because §6.90 holds: the preview and the file are one document, and
+a line that appears only in what a client sends is a surprise in the worst possible place.
+
+It carries a style, `PlanNoticePrepared`, rather than direct formatting (§6.97) — and the tests assert
+placement as well as presence, because the day being *off the cover* is half the decision.
+
+**WHAT IS STILL BROKEN, AND IS ON THE OPEN ITEMS LIST RATHER THAN FIXED HERE:** the filename. Two downloads
+in the same calendar month still collide, and a Downloads folder is where a client will look first.
+
+**One thing noticed and not acted on:** every date the document prints is formatted `en-AU`, including for
+a plan whose country is somewhere else. §6.93 established that the paper size follows the country; the date
+format does not. Fixing one date and not the others would put two conventions in one document, so this is
+all of them or none, and it is a decision rather than a build.

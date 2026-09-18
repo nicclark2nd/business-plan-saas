@@ -73,6 +73,23 @@ Word document a bank receives. What is not defensible is not having decided.
 
 ---
 
+## Loose ends from a fix that was only half taken
+
+### 10. Two downloads in the same month still collide — **Build**
+
+§6.102 put *"This version prepared 18 September 2026"* on the notice page, so two copies of a plan can now
+be told apart once they are open. The filename still cannot: `docxFileName` is built from the cover's
+month-and-year, so both are `Name-Business-Plan-September-2026.docx` and the second saves as `(1)` or
+overwrites the first. A Downloads folder is where a client looks before they open anything.
+
+### 11. Every date in the document is formatted `en-AU` — **Nic**
+
+Including for a plan whose country is somewhere else. §6.93 made the paper size follow the country; the
+date format never did. It is all of them or none — one document with two conventions in it is worse than
+one with the wrong convention — so it needs a decision before it needs work.
+
+---
+
 ## Waiting on the domain
 
 ### 8. A shared link previews as a blank rectangle — **Build, after the domain**

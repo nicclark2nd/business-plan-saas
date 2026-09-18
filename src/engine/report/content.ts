@@ -127,6 +127,15 @@ export const COPY = {
     ],
   }),
 
+  /*
+   * The line at the foot of the notice page (§6.102).
+   *
+   * "This version" rather than "This document", because the point is that there may be others. A client
+   * who changes a price and downloads again now holds two files, and until this line existed nothing in
+   * either one said which was which.
+   */
+  preparedOn: (day: string) => `This version prepared ${day}.`,
+
   overheads: (name: string) =>
     `The running costs ${name} carries whether or not it sells anything, as projected for Year 1.`,
   overheadsGrouped:

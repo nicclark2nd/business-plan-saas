@@ -6,6 +6,7 @@ const doc = (): ReportDoc => ({
   businessName: "BNE Concreting",
   subtitle: "Business Plan",
   date: "September 2026",
+  preparedOn: "18 September 2026",
   omitted: [],
   cover: {
     tagline: "Concreting & civil works",
@@ -355,5 +356,45 @@ describe("the Word renderer", () => {
 
   it("names the file so it can be found again", () => {
     expect(docxFileName(doc())).toBe("BNE-Concreting-Business-Plan-September-2026.docx");
+  });
+});
+
+/**
+ * WHICH COPY THIS IS (§6.102).
+ *
+ * A client who downloads, sends the file to their bank, changes a price and downloads again holds two
+ * different plans. Until this line existed nothing in either one said which was which — the cover carried
+ * the month, so both said "September 2026", and the filename was built from that same string.
+ *
+ * The assertions are about placement as much as presence: the day belongs on the notice page and must stay
+ * off the cover, because a cover dated to the day reads like a receipt rather than a plan.
+ */
+describe("which version of the plan this is", () => {
+  it("prints the day it was prepared on the notice page", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    expect(xml).toContain("This version prepared 18 September 2026.");
+  });
+
+  it("says it once and not twice", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    expect(xml.split("This version prepared").length - 1).toBe(1);
+  });
+
+  it("keeps the day off the cover, which carries the month", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    const cover = xml.slice(0, xml.indexOf("CONFIDENTIALITY STATEMENT"));
+    expect(cover).toContain("September 2026");
+    expect(cover).not.toContain("18 September 2026");
+  });
+
+  it("carries a style of its own rather than direct formatting (§6.97)", async () => {
+    const styles = await stylesXml(await renderDocx(doc(), []));
+    expect(styles).toContain('w:styleId="PlanNoticePrepared"');
+  });
+
+  it("sits after the notice and before the contents", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    expect(xml.indexOf("This version prepared")).toBeGreaterThan(xml.indexOf("CONFIDENTIALITY STATEMENT"));
+    expect(xml.indexOf("This version prepared")).toBeLessThan(xml.indexOf("Contents"));
   });
 });

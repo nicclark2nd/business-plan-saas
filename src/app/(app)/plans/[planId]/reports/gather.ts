@@ -315,6 +315,12 @@ export async function gatherReport(planId: string) {
     printSalaries: settings?.print_key_people_salaries !== false,
     money,
     date: new Date().toLocaleDateString("en-AU", { month: "long", year: "numeric" }),
+    /*
+     * The day, for the notice page (§6.102). Same clock as `date` above, one call apart, which is close
+     * enough: a download that straddles midnight would put one date on the cover and another on page two,
+     * and nobody would ever see it.
+     */
+    preparedOn: new Date().toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" }),
   };
 
   /**
