@@ -308,6 +308,8 @@ export async function gatherReport(planId: string) {
       };
     })() : null,
     noun: { ...noun, aOne: `${/^[aeiou]/i.test(noun.one) ? "an" : "a"} ${noun.one}` },
+    /* The client's own opening line for What We Sell (§6.104), asked in Plan settings. */
+    productsServices: text(settings?.products_services_statement),
     taxLabel: components.length ? taxLabel : "Not registered",
     currency,
     yearEndLabels: FORECAST_YEARS.map((y) => planYearEndLabel(firstYear + y - 1, fyEndMonth)),

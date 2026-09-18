@@ -52,6 +52,12 @@ export type ReportInput = {
   };
   /** The year on the front cover — the PLAN's year, never the clock's (§6.33.2). */
   planYear: number | null;
+  /**
+   * The client's own elevator pitch (§6.104), from Plan settings. It OPENS the What We Sell section, which
+   * the screen has promised since §6.34 and the report has never done: the column was written, saved, and
+   * read by nothing. Null falls back to the app's generated sentence, as before.
+   */
+  productsServices: string | null;
   framework: { vision: string | null; mission: string | null; purpose: string | null; brandPromise: string | null; fieldOfPlay: string | null };
   goals: { area: string; title: string }[];
   capital: { name: string; amount: number; year: number; category: string | null; usefulLifeMonths: number | null; residual: number; financed: boolean }[];

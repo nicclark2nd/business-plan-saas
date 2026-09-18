@@ -2804,3 +2804,38 @@ not bring that with it.
 exists — that is Mission"*. A JSX **attribute** is not a JavaScript string literal and does not process
 escapes; the same escape three lines away in `fields.ts` was fine, because that one is. 663 tests said
 nothing, because no test renders that attribute.
+
+---
+
+## §6.104 — A field that opens a section it never reached
+
+Found while wiring the first AI context slice, which needed the products & services statement and could not
+find it in `ReportInput`. It was not there because **nothing in the report had ever read it.**
+
+The column was written, saved, and consumed by exactly three places: the Sales screen that collected it, the
+Dashboard's completeness query, and Plan settings after §6.103. The report read it nowhere. Meanwhile both
+the old hint and the new one told the client it *"opens the products section of the report"*.
+
+> **THE WORST KIND OF §6.87: NOT A FIELD THAT DOES NOTHING, BUT A FIELD THAT SAYS WHERE IT GOES AND DOES NOT
+> GO THERE.** A client who writes two careful sentences for a lender has been told exactly where a lender
+> will read them. They will not.
+
+It now opens `What We Sell`, in the client's own words, falling back to the app's generated sentence when
+there is none — because a section that opens with nothing looks like a fault, and a section that opens with
+a sentence this app wrote *about* a business, when the owner has written one *for* it, is worse.
+
+**663 tests were green throughout, and could not have been otherwise: `narrative.ts` had no test file.**
+Every section of the document a lender actually reads was assembled by an untested module. `narrative.test.ts`
+now exists and starts here — the client's words when present, the fallback when absent, whitespace treated
+as nothing written, and no section conjured for a plan that sells nothing.
+
+> **THE SUITE WAS NOT WRONG. IT WAS ABSENT, AND A COUNT OF PASSING TESTS SAYS NOTHING ABOUT WHAT IS NOT
+> TESTED.**
+
+**A correction to §6.103, which claimed "one column, one writer".** The deletion of `saveProductsStatement`
+removed the function's doc comment and left the function — uncalled, unreferenced, and still holding an
+`update` on that column. `tsc` and `eslint --max-warnings=0` both passed, because an exported server action
+with no callers is not an error to either of them. It is now actually deleted.
+
+> **AN UNUSED EXPORT THAT WRITES A COLUMN IS §6.35 EXACTLY: A SECOND ANSWER WAITING FOR SOMEONE TO ASK THE
+> QUESTION. NOTHING IN THE TOOLCHAIN WILL TELL YOU IT IS THERE.**

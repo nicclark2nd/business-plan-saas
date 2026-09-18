@@ -98,13 +98,3 @@ export async function deleteProduct(planId: string, id: string): Promise<Result>
 export async function continueFromSales(planId: string, intent: "next" | "later") {
   redirect(intent === "next" ? nextHref(planId, "sales") : `/plans/${planId}/dashboard`);
 }
-
-export async function saveProductsStatement(planId: string, statement: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const supabase = await createClient();
-  const { error } = await supabase.from("plan_settings")
-    .update({ products_services_statement: statement.trim() || null })
-    .eq("plan_id", planId);
-  if (error) return { ok: false, error: error.message };
-  revalidatePath(`/plans/${planId}`, "layout");
-  return { ok: true };
-}

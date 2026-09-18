@@ -89,7 +89,14 @@ export function whatWeSell(i: ReportInput): Draft {
   };
   return {
     title: `What We Sell`,
-    blocks: [para(COPY.whatWeSell(i.businessName, lower(i.noun.many)))],
+    /*
+     * THE CLIENT'S WORDS FIRST, AND THE APP'S ONLY IF THERE ARE NONE (§6.104).
+     *
+     * A plan that says what it sells in its owner's voice should not have that replaced by a sentence this
+     * app generated about it. The generated line stays as the fallback, because a section that opens with
+     * nothing looks like a fault.
+     */
+    blocks: [para(i.productsServices?.trim() || COPY.whatWeSell(i.businessName, lower(i.noun.many)))],
     children: [
       { title: `The ${lower(i.noun.many)} we offer`,
         blocks: [
