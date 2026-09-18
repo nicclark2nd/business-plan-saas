@@ -161,7 +161,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, a
         return (
         <>
           <Toolbar><Meta className="ml-0">Two decisions about the business plan document. Neither changes a figure — the forecast, the statements and the totals are the same either way.</Meta></Toolbar>
-          <Section title="Key people salaries">
+          <Section title="Leadership Team salaries">
             <label className="flex items-start gap-2 text-[13px]">
               <input type="checkbox" checked={s.print_key_people_salaries}
                 onChange={(e) => editPrinting({ print_key_people_salaries: e.target.checked })}

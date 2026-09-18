@@ -406,7 +406,7 @@ function financialPlan(i: ReportInput): Draft {
    * overheads table and the profit and loss whatever this says.
    */
   const keyPeople: Draft = !i.printSalaries || i.keyPeople.length === 0 ? null : {
-    title: "Key people salaries",
+    title: "Leadership Team salaries",
     blocks: [
       { kind: "para", text: COPY.keyPeople(i.businessName) },
       { kind: "table",

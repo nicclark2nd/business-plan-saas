@@ -94,7 +94,7 @@ export const COPY = {
    * the forecast is accounted for person by person — rather than apologising for printing salaries.
    */
   keyPeople: (name: string) =>
-    `What ${name} pays the people running it, year by year. These figures are the Leadership Team salaries line in the overheads below, set out person by person.`,
+    `What ${name} pays the people running it, year by year. This is the Leadership Team salaries line in the overheads below, set out person by person — the totals are the same figures.`,
   keyPeopleNote:
     "Contractors are not included: they are paid for work delivered rather than employed, and their cost sits in the cost of sales or in overheads with the work it belongs to. On-costs — superannuation, payroll tax and workers' compensation — are added on top of these figures in the forecast.",
 

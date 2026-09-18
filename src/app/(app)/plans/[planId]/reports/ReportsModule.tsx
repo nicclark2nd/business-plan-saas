@@ -85,8 +85,8 @@ export function ReportsModule({ planId, mode, doc, reconciled, missing, pageSize
         <Meta className="ml-0"><b>{doc.businessName}</b> · {doc.subtitle} · {doc.date}</Meta>
         <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
           {printSalaries
-            ? "Key people salaries print by name"
-            : "Key people salaries are left out — the total still prints"}
+            ? "Leadership Team salaries print by name"
+            : "Leadership Team salaries are left out — the total still prints"}
           · Word download on {PAGE_SIZE_LABEL[pageSize].split(" — ")[0]}
           <a href={`/plans/${planId}/settings?area=printing`} className="font-semibold text-primary hover:underline">Change</a>
         </span>
