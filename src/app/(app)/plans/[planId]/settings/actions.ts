@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/plan";
 import { parseMonth } from "../people/model";
 import type { Profile, Financial, Printing, Licence } from "./model";
 import { serializeComponents } from "@/engine/plan/gst";
@@ -114,6 +115,35 @@ export async function savePrinting(planId: string, p: Partial<Printing>): Promis
     page_size: size,
   }, { onConflict: "plan_id" });
   if (error) { console.error("printing", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }
+  touch(planId);
+  return { ok: true };
+}
+
+/**
+ * Turning AI drafting on, and off (§6.106).
+ *
+ * THE CLIENT SENDS A SWITCH. THE SERVER WRITES THE RECORD.
+ *
+ * `ai_enabled_at` and `ai_enabled_by` are never taken from the request, because a consent whose timestamp
+ * and signatory were supplied by the thing being consented to is not evidence of anything. The time is this
+ * server's clock and the person is whoever this session actually is.
+ *
+ * Switching OFF keeps both. A plan that was on and is now off has a history, and erasing it would destroy
+ * the only record that the plan's words were ever sent anywhere.
+ */
+export async function saveAiConsent(planId: string, enabled: boolean): Promise<Result> {
+  const supabase = await createClient();
+  const session = await getSession();
+  if (!session?.profile?.id) return { ok: false, error: "Couldn't confirm who you are. Sign in again and retry." };
+
+  const { error } = await supabase.from("plan_settings").upsert({
+    plan_id: planId,
+    ai_enabled: enabled,
+    /* Only ever set, never cleared: the constraint in 0044 needs both present whenever enabled is true. */
+    ...(enabled ? { ai_enabled_at: new Date().toISOString(), ai_enabled_by: session.profile.id } : {}),
+  }, { onConflict: "plan_id" });
+
+  if (error) { console.error("ai consent", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }
   touch(planId);
   return { ok: true };
 }

@@ -129,7 +129,20 @@ export type Printing = {
   /** null means "whatever this plan's country uses" — the answer for almost every plan (§6.93). */
   page_size: "a4" | "letter" | null;
 };
-export type Settings = Profile & Financial & Printing & { logo_path: string | null };
+/**
+ * Permission to send this plan's words to a model (§6.106).
+ *
+ * A CONSENT, NOT A PREFERENCE, which is why it is three fields rather than a boolean: `ai_enabled` alone
+ * cannot answer "did this client agree, and when", and that is the only question anyone will ever ask.
+ * The two records are read-only on the screen — the client sets the switch, the server writes the rest.
+ */
+export type Ai = {
+  ai_enabled: boolean;
+  ai_enabled_at: string | null;
+  ai_enabled_by: string | null;
+};
+
+export type Settings = Profile & Financial & Printing & Ai & { logo_path: string | null };
 
 /** The fields a report's business overview cannot do without. */
 /** What a report cannot open without. The products & services statement moved to Sales (§6.34). */

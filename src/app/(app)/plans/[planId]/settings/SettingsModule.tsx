@@ -10,7 +10,7 @@ import { currentFinancialYear, firstProjectedYear, planYearEnding, planYearLabel
 import { taxComponents, taxHeading } from "@/engine/plan/gst";
 import { needsRegion, regimeFor, regionLabel, regionsFor, type TaxComponent } from "@/engine/plan/taxRegimes";
 import { formatMonth } from "../people/model";
-import { saveProfile, saveFinancial, savePrinting } from "./actions";
+import { saveProfile, saveFinancial, savePrinting, saveAiConsent } from "./actions";
 import { PAGE_SIZE_LABEL, defaultPageSizeFor } from "@/engine/report/pageSize";
 import { DangerArea, type PlanInventory } from "./DangerArea";
 import { LicenceSection } from "./LicenceSection";
@@ -19,7 +19,7 @@ import { legalStructuresFor, CUSTOMER_TYPES, PRODUCT_TYPES, COUNTRIES, CURRENCIE
 import { navGroup } from "@/lib/nav";
 import { governingLawNote } from "@/engine/plan/jurisdiction";
 
-type AreaKey = "profile" | "financial" | "printing" | "branding" | "lifecycle";
+type AreaKey = "profile" | "financial" | "printing" | "ai" | "branding" | "lifecycle";
 const opts = (xs: string[]) => xs.map((x) => ({ value: x, label: x }));
 
 export function SettingsModule({ planId, initial, mode, initialArea, licences, logoUrl, archivedAt, inventory }: {
@@ -88,6 +88,18 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
       else errors.clear("printing");
     });
   };
+  /*
+   * A CONSENT SAVES LIKE A CONSENT (§6.106): the switch is all the client sends, and the server writes who
+   * and when. It reports under its own error key so a failure here cannot erase a failure elsewhere.
+   */
+  const editAi = (enabled: boolean) => {
+    setS((x) => ({ ...x, ai_enabled: enabled }));
+    start(async () => {
+      const res = await saveAiConsent(planId, enabled);
+      if (!res.ok) { errors.raise({ key: "ai", message: res.error, label: "AI drafting" }); setS((x) => ({ ...x, ai_enabled: !enabled })); }
+      else errors.clear("ai");
+    });
+  };
   const missing = profileMissing(s);
   /**
    * The licence list saves on its own schedule, so it reports its own state up rather than sharing `dirty`.
@@ -113,6 +125,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
         { key: "profile", label: "Business profile", ...(missing.length ? { count: missing.length } : {}) },
         { key: "financial", label: "Financial year & tax" },
         { key: "printing", label: "How the plan prints" },
+        { key: "ai", label: "AI drafting" },
         { key: "branding", label: "Branding" },
         { key: "lifecycle", label: "Archive & delete" },
       ]}
@@ -295,6 +308,48 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
         </>
         );
       })()}
+
+      {area === "ai" && (
+        <>
+          <Toolbar><Meta className="ml-0">Whether this plan&apos;s written sections can be drafted for you.</Meta></Toolbar>
+          <Section title="Use AI to help draft this plan">
+            {/*
+              THE STATEMENT IS THE FEATURE, NOT THE TOGGLE (§6.106).
+              Every sentence here is one the code actually keeps: the slices decide what is sent and a test
+              proves names, wages and funding are in none of them. Nothing is claimed that is enforced only
+              by a setting in somebody's dashboard.
+            */}
+            <label className="flex max-w-[760px] cursor-pointer items-start gap-3">
+              <input type="checkbox" className="mt-[3px] size-4 accent-[var(--primary)]"
+                checked={s.ai_enabled} onChange={(e) => editAi(e.target.checked)} />
+              <span>
+                <span className="block text-[13px] font-semibold">Let me ask for a draft of a written section</span>
+                <span className="mt-1.5 block text-[12.5px] leading-[1.6] text-muted-foreground">
+                  When this is on, you can ask for a draft of any written section. To do that we send the
+                  relevant parts of this plan — your industry, what you sell, your market and your goals — to
+                  an AI service, which returns suggested wording.
+                </span>
+                <span className="mt-1.5 block text-[12.5px] leading-[1.6] text-muted-foreground">
+                  <b>We never send names, salaries or funding details.</b> Nothing is sent unless you press a
+                  draft button. Every suggestion is yours to edit or discard, and nothing is saved to your
+                  plan until you accept it.
+                </span>
+                <span className="mt-1.5 block text-[12.5px] leading-[1.6] text-muted-foreground">
+                  The AI models are provided by third parties and may change over time.
+                </span>
+              </span>
+            </label>
+            {/* The record, shown rather than hidden: a client is entitled to see what they agreed to and when. */}
+            {s.ai_enabled_at && (
+              <p className="mt-4 text-[11.5px] text-muted-foreground">
+                {s.ai_enabled
+                  ? <>Turned on {new Date(s.ai_enabled_at).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })}.</>
+                  : <>Off. It was last turned on {new Date(s.ai_enabled_at).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })} — that record is kept rather than erased.</>}
+              </p>
+            )}
+          </Section>
+        </>
+      )}
 
       {area === "branding" && (
         <>

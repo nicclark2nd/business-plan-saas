@@ -48,6 +48,10 @@ export default async function SettingsPage({ params, searchParams }: { params: P
     /* Default true: a client who typed every salary should see them in the plan unless someone decided
        otherwise (§6.93). `?? true` covers the row that predates the column as well as a genuine null. */
     print_key_people_salaries: s.print_key_people_salaries ?? true,
+    /* Off unless someone turned it on. A default that adds is not a default that discloses (0044). */
+    ai_enabled: !!s.ai_enabled,
+    ai_enabled_at: s.ai_enabled_at ?? null,
+    ai_enabled_by: s.ai_enabled_by ?? null,
     page_size: (s.page_size === "a4" || s.page_size === "letter" ? s.page_size : null),
   };
   /**

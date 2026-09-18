@@ -2839,3 +2839,44 @@ with no callers is not an error to either of them. It is now actually deleted.
 
 > **AN UNUSED EXPORT THAT WRITES A COLUMN IS §6.35 EXACTLY: A SECOND ANSWER WAITING FOR SOMEONE TO ASK THE
 > QUESTION. NOTHING IN THE TOOLCHAIN WILL TELL YOU IT IS THERE.**
+
+---
+
+## §6.106 — A consent, not a preference
+
+Migration 0044 gives `plan_settings` three columns rather than one, and the screen above them is the first
+place in this app where a client is asked to agree to something rather than to configure something.
+
+**WHY THREE.** `ai_enabled` answers "is the feature on". It cannot answer *"did this client agree to their
+plan's words being sent to a third party, and when"* — which is the only question anyone will ever ask, and
+the entire reason the toggle exists. One column is a preference; three make it a consent.
+
+`ai_enabled_by` carries **no foreign key**, deliberately. A record of who agreed has to survive that person
+leaving the organisation; a consent that deletes itself when its signatory closes their account is not a
+record of anything.
+
+**THE CLIENT SENDS A SWITCH. THE SERVER WRITES THE RECORD.** The timestamp is this server's clock and the
+signatory is whoever the session actually is — never values taken from the request.
+
+> **A CONSENT WHOSE TIMESTAMP AND SIGNATORY WERE SUPPLIED BY THE THING BEING CONSENTED TO IS NOT EVIDENCE OF
+> ANYTHING.**
+
+**SWITCHING OFF KEEPS BOTH RECORDS**, and the screen says so: *"Off. It was last turned on 18 September 2026
+— that record is kept rather than erased."* Erasing it would destroy the only evidence that the plan's words
+were ever sent anywhere, which is precisely the thing a client might later want to establish.
+
+**DEFAULT OFF, AND THE DISTINCTION IS WORTH KEEPING.** §6.93's salary toggle defaults ON because otherwise a
+client types every figure and never sees it — the app failing to deliver what they entered. Nothing is lost
+by AI being off; the fields behave exactly as they did.
+
+> **A DEFAULT THAT ADDS IS NOT A DEFAULT THAT DISCLOSES.**
+
+**Every sentence in the statement is one the code keeps.** "We never send names, salaries or funding
+details" is not a promise about intent — `slices.ts` is the only thing that can turn plan data into text,
+and `slices.test.ts` seeds every excluded field with a poison string and proves none can emit one (§6.105).
+Nothing is claimed that rests on a setting in somebody's dashboard.
+
+**Verified on a real plan against the applied migration**, in both directions and across a reload rather
+than on the word of a footer that said "All changes saved". The record line appearing at all is the
+strongest evidence available: 0044's check constraint would have refused the row unless the timestamp **and**
+the signatory were both written.
