@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { renderDocx, docxFileName } from "./docx";
-import { numberSections, cell, num, type ReportDoc } from "./blocks";
+import { renderDocx, docxFileName, bookmarkFor } from "./docx";
+import { numberSections, walk, cell, num, type ReportDoc } from "./blocks";
 
 const doc = (): ReportDoc => ({
   businessName: "BNE Concreting",
@@ -396,5 +396,71 @@ describe("which version of the plan this is", () => {
     const xml = await documentXml(await renderDocx(doc(), []));
     expect(xml.indexOf("This version prepared")).toBeGreaterThan(xml.indexOf("CONFIDENTIALITY STATEMENT"));
     expect(xml.indexOf("This version prepared")).toBeLessThan(xml.indexOf("Contents"));
+  });
+});
+
+
+/**
+ * PAGE NUMBERS (§6.107).
+ *
+ * Two different problems wearing one name. The footer's number Word works out as it lays the page; the
+ * contents' numbers it can only work out by looking up where a bookmark ended up. So the assertions are
+ * about the PLUMBING — a bookmark for every entry, a field pointing at each one, and the instruction to
+ * calculate them — because what the number actually says is Word's answer and not ours to test.
+ */
+describe("page numbers", () => {
+  /** Every numbered heading in the fixture, flattened the way the contents page flattens them. */
+  const numberedSections = () => walk(doc().sections).map((s) => s.number);
+
+  it("puts a page number in the footer", async () => {
+    const buf = await renderDocx(doc(), []);
+    const { default: JSZip } = await import("jszip");
+    const zip = await JSZip.loadAsync(buf);
+    const names = Object.keys(zip.files).filter((n) => /footer\d*\.xml$/.test(n));
+    expect(names.length).toBeGreaterThan(0);
+    const all = (await Promise.all(names.map((n) => zip.file(n)!.async("string")))).join("");
+    expect(all).toContain("PAGE");
+    expect(all).toContain("NUMPAGES");
+    expect(all).toContain("Page ");
+  });
+
+  /* A cover with "Page 1 of 27" across the bottom is not a cover. */
+  it("leaves the cover without one", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    expect(xml).toContain("titlePg");
+  });
+
+  it("bookmarks every section and subsection", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    for (const s of numberedSections()) {
+      expect(xml, `no bookmark for ${s}`).toContain(`w:name="${bookmarkFor(s)}"`);
+    }
+  });
+
+  it("points a page-reference field at each of them", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    for (const s of numberedSections()) {
+      expect(xml, `no PAGEREF for ${s}`).toContain(`PAGEREF ${bookmarkFor(s)}`);
+    }
+  });
+
+  it("asks Word to calculate the fields, or the contents reads as a column of ones", async () => {
+    const buf = await renderDocx(doc(), []);
+    const { default: JSZip } = await import("jszip");
+    const settings = await (await JSZip.loadAsync(buf)).file("word/settings.xml")!.async("string");
+    expect(settings).toContain("updateFields");
+  });
+
+  /* A bookmark name with a dot in it is silently ignored by Word, which is the worst kind of failure. */
+  it("makes a bookmark name Word will accept", () => {
+    expect(bookmarkFor("1.10")).toBe("sec_1_10");
+    expect(bookmarkFor("1.0")).not.toMatch(/[. ]/);
+  });
+
+  it("gives the contents a dot leader out to the page edge", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    expect(xml).toContain('w:leader="dot"');
+    /* A4 text width: 11906 less two 1134 margins. */
+    expect(xml).toContain('w:pos="9638"');
   });
 });

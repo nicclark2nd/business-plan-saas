@@ -56,6 +56,7 @@ export const S = {
   noticeHeading: "PlanNoticeHeading",
   noticeBody: "PlanNoticeBody",
   noticePrepared: "PlanNoticePrepared",
+  pageNumber: "PlanPageNumber",
   contentsTitle: "PlanContentsTitle",
   contentsEntry: "PlanContentsEntry",
   coverName: "PlanCoverName",
@@ -175,6 +176,11 @@ export const PLAN_STYLES: IStylesOptions = {
     { id: S.noticePrepared, name: "Plan Notice Prepared", basedOn: "Normal", next: "Normal",
       run: { size: 16, italics: true, color: MUTED },
       paragraph: { spacing: { before: 320, after: 0 } } },
+
+    /* The footer's page number (§6.107). A style, so a client can change it once for the whole document. */
+    { id: S.pageNumber, name: "Plan Page Number", basedOn: "Normal", next: "Normal",
+      run: { size: 16, color: MUTED },
+      paragraph: { spacing: { before: 0, after: 0 } } },
 
     { id: S.contentsTitle, name: "Plan Contents Title", basedOn: "Normal", next: S.contentsEntry,
       run: { size: 28, bold: true, color: ACCENT },

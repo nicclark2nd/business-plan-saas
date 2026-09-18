@@ -3088,3 +3088,51 @@ of §6.106.3 stands, and it is the only part that does.
 **Never read a field's value from extracted page text. Look at the screen.** Every real fault this project
 has found came from looking at a rendered screen; both of these phantom faults came from reading a
 convenient summary of one.
+
+---
+
+## §6.107 — Page numbers, and the one number this app cannot work out
+
+Nic: *"The plan needs page numbers. And the table of contents also needs page numbers… every plan needs page
+numbers so the reader knows where to find things."*
+
+One request, two entirely different problems.
+
+**THE FOOTER WAS MISSING ENTIRELY.** `footers: undefined`, since the document was first built. Every plan
+this app has ever produced has been unnumbered — which nobody noticed on a screen, because a screen has no
+pages.
+
+It now reads **"Page 4 of 27"** rather than a bare 4, because a business plan is read on paper as often as
+on a screen and a reader who has dropped it needs to know whether they are holding all of it.
+
+**The cover has none**, which is why `titlePage` is now set for every plan rather than only for one with a
+logo: the first page needs a header AND a footer of its own. A cover with *"Page 1 of 27"* across the bottom
+is not a cover.
+
+### The contents is a different problem, and the difference is the whole section
+
+> **THIS APP CANNOT KNOW WHAT PAGE A SECTION LANDS ON.** It depends on the paper (§6.93), on which fonts the
+> reader has installed, and on how every chart above it reflowed. There is no arithmetic that gets there
+> from here. **Only Word knows, so we ask Word.**
+
+Every section heading is wrapped in a **bookmark**, and every contents entry carries a **PAGEREF field**
+pointing at it, with a dot leader out to a right tab stop. The document also sets `updateFields`, so Word
+calculates them when it opens the file — without that, a client opens their plan to a contents page of ones.
+
+Three details that are load-bearing rather than decorative:
+
+- **The bookmark wraps the heading's runs**, it does not sit beside them. A bookmark marks a span, and an
+  empty span has no page to report.
+- **The name is `sec_1_10`, not `sec_1.10`.** Word silently ignores a bookmark name containing a dot, which
+  is the worst kind of failure — no error, just a field that never resolves. A test pins the shape.
+- **The tab stop is set per paragraph, not on the style.** It sits at the text width, and the text width is
+  9638 twips on A4 and 9972 on Letter. A style cannot hold two answers, and §6.93 made the paper a per-plan
+  decision.
+
+**The tests assert the plumbing, not the numbers.** A bookmark for every entry, a field pointing at each
+one, the dot leader, the tab position, and the instruction to calculate. What the number actually *says* is
+Word's answer, and a test that asserted it would be asserting our guess at someone else's layout — §6.92.1
+in a new hat.
+
+> **THE LAST WORD ON A PAGE NUMBER BELONGS TO THE PROGRAM THAT DRAWS THE PAGE. THE MOST THIS ONE CAN DO IS
+> ASK THE QUESTION PROPERLY AND LEAVE SOMEWHERE FOR THE ANSWER TO GO.**

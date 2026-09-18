@@ -10,7 +10,8 @@
  * computation belongs in `build.ts` where the screen gets it too.
  */
 import {
-  AlignmentType, BorderStyle, Document, Header, HeadingLevel, ImageRun, Packer, Paragraph,
+  AlignmentType, Bookmark, BorderStyle, Document, Footer, Header, HeadingLevel, ImageRun, LeaderType,
+  PageNumber, PageReference, Packer, Paragraph, Tab, TabStopType,
   Table, TableCell, TableRow, TextRun, WidthType, type ISectionOptions,
 } from "docx";
 import type { Block, ReportDoc, Section } from "./blocks";
@@ -137,6 +138,15 @@ function table(rows: DCell[][], header: { text: string; right?: boolean }[] | nu
 /** What a paragraph must not be separated from: anything a reader has to see WITH it (§6.97). */
 const HOLDS_ON = new Set<Block["kind"]>(["table", "chart", "facts"]);
 
+/**
+ * A section's bookmark name (§6.107). Word is unforgiving here: no spaces, letters first, and unique in the
+ * document — so "1.10" becomes `sec_1_10`, which is also what the contents entry asks for by name.
+ */
+/** 2cm, in twips. One constant, because the contents' tab stop has to agree with the page margin (§6.41). */
+const MARGIN = 1134;
+
+export const bookmarkFor = (number: string) => `sec_${number.replace(/\./g, "_")}`;
+
 function sectionToDocx(s: Section, pngs: Map<string, Buffer>): (Paragraph | Table)[] {
   const top = s.number.endsWith(".0");
   /*
@@ -165,9 +175,19 @@ function sectionToDocx(s: Section, pngs: Map<string, Buffer>): (Paragraph | Tabl
        */
       style: newPage ? S.sectionNewPage : top ? S.section : S.subsection,
       heading: top ? HeadingLevel.HEADING_1 : HeadingLevel.HEADING_2,
+      /*
+       * A BOOKMARK ROUND THE HEADING (§6.107) — what the contents page's page numbers point at. Invisible in
+       * Word, and it has to wrap the heading's own runs rather than sit beside them, because a bookmark
+       * marks a span and an empty one has no page to report.
+       */
       children: [
-        text(`${s.number}  `, { bold: true, color: MUTED, size: top ? 28 : 22 }),
-        text(s.title, { bold: true, color: ACCENT, size: top ? 28 : 22 }),
+        new Bookmark({
+          id: bookmarkFor(s.number),
+          children: [
+            text(`${s.number}  `, { bold: true, color: MUTED, size: top ? 28 : 22 }),
+            text(s.title, { bold: true, color: ACCENT, size: top ? 28 : 22 }),
+          ],
+        }),
       ],
     }),
     ...s.blocks.flatMap((b, i) => blockToDocx(b, pngs, HOLDS_ON.has(s.blocks[i + 1]?.kind))),
@@ -227,6 +247,9 @@ export async function renderDocx(
   const goldRule = (before: number, after: number) =>
     new Paragraph({ style: S.coverRule, spacing: { before, after }, children: [text("\u00a0")] });
 
+  /* The measure the contents' right tab stop hangs off: the page less both margins (§6.107). */
+  const textWidth = PAGE_DIMENSIONS[pageSize].width - MARGIN * 2;
+
   const c = doc.cover;
   const cover: (Paragraph | Table)[] = [
     ...(logo ? [new Paragraph({
@@ -282,12 +305,25 @@ export async function renderDocx(
     new Paragraph({ style: S.noticePrepared, children: [text(COPY.preparedOn(doc.preparedOn))] }),
 
     new Paragraph({ style: S.contentsTitle, children: [text("Contents")] }),
+    /*
+     * CONTENTS WITH PAGE NUMBERS (§6.107).
+     *
+     * The number is a PAGEREF field pointing at the heading's bookmark, because the page a section lands on
+     * is not knowable here — it depends on the paper, the fonts installed, and how every chart before it
+     * reflowed. Only Word can answer it, so we ask Word.
+     *
+     * The dot leader and the right tab stop are set per paragraph rather than on the style, because the stop
+     * sits at the text width and THAT changes between A4 and Letter. A style cannot hold two answers.
+     */
     ...flat.map((s) => new Paragraph({
       style: S.contentsEntry,
       indent: { left: s.number.endsWith(".0") ? 0 : 340 },
+      tabStops: [{ type: TabStopType.RIGHT, position: textWidth - (s.number.endsWith(".0") ? 0 : 340), leader: LeaderType.DOT }],
       children: [
         text(`${s.number}`.padEnd(8, " "), { color: MUTED, size: 18 }),
         text(s.title, { bold: s.number.endsWith(".0"), size: 18 }),
+        new TextRun({ children: [new Tab()] }),
+        new PageReference(bookmarkFor(s.number), { hyperlink: false }),
       ],
     })),
   ];
@@ -324,13 +360,30 @@ export async function renderDocx(
       })] })
     : undefined;
 
+  /*
+   * A PAGE NUMBER ON EVERY PAGE BUT THE COVER (§6.107).
+   *
+   * "Page 4 of 27" rather than a bare 4, because a plan is read on paper as often as on a screen and a
+   * reader who has dropped it needs to know whether they are holding all of it.
+   *
+   * The cover is page 1 and carries no footer, which is why `titlePage` is now set for every plan rather
+   * than only for one with a logo: the first page needs its own header AND its own footer, and a cover with
+   * "Page 1 of 27" across the bottom is not a cover.
+   */
+  const footer = new Footer({ children: [new Paragraph({
+    style: S.pageNumber,
+    alignment: AlignmentType.RIGHT,
+    children: [new TextRun({ children: ["Page ", PageNumber.CURRENT, " of ", PageNumber.TOTAL_PAGES] })],
+  })] });
+  const blankFirst = new Paragraph({ children: [] });
+
   const section: ISectionOptions = {
     properties: {
-      page: { size: PAGE_DIMENSIONS[pageSize], margin: { top: 1134, bottom: 1134, left: 1134, right: 1134 } },
-      ...(header ? { titlePage: true } : {}),
+      page: { size: PAGE_DIMENSIONS[pageSize], margin: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN } },
+      titlePage: true,
     },
-    ...(header ? { headers: { default: header, first: new Header({ children: [new Paragraph({ children: [] })] }) } } : {}),
-    footers: undefined,
+    ...(header ? { headers: { default: header, first: new Header({ children: [blankFirst] }) } } : {}),
+    footers: { default: footer, first: new Footer({ children: [new Paragraph({ children: [] })] }) },
     children: [...cover, ...doc.sections.flatMap((s) => sectionToDocx(s, pngs)), ...tail],
   };
 
@@ -340,6 +393,12 @@ export async function renderDocx(
     description: `${doc.subtitle} for ${doc.businessName}, ${doc.date}`,
     /* Every named style the plan uses, and the pagination rules that hang off them (§6.97). */
     styles: PLAN_STYLES,
+    /*
+     * ASK WORD TO WORK THE FIELDS OUT ON OPEN (§6.107). The contents' page numbers are PAGEREF fields and a
+     * field that has never been calculated shows its placeholder. Without this a client opens their plan to
+     * a contents page of ones.
+     */
+    features: { updateFields: true },
     sections: [section],
   });
   /* The one pagination rule the library cannot put on a style, put there anyway (§6.97.1). */
