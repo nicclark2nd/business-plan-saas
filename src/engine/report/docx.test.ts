@@ -150,6 +150,45 @@ describe("what must not be split across a page", () => {
     expect(xml).toContain("<w:keepNext");
   });
 
+  /**
+   * §6.97.1. The library's type refuses `pageBreakBefore` on a paragraph style, so it is written into the
+   * stylesheet after packing. These assertions read the FINISHED file — if the patch silently failed, or
+   * the document was still relying on per-paragraph breaks, one of them says so.
+   */
+  it("starts each section on a new page from the style, not from the paragraph", async () => {
+    const buf = await renderDocx(doc(), []);
+    expect(styleBlock(await stylesXml(buf), "PlanSectionNewPage")).toContain("<w:pageBreakBefore/>");
+    /* Nothing sets it directly any more, so a client clearing the checkbox actually clears it. */
+    expect(await documentXml(buf)).not.toContain("<w:pageBreakBefore/>");
+  });
+
+  it("puts the break before the other properties, as the schema requires", async () => {
+    const block = styleBlock(await stylesXml(await renderDocx(doc(), [])), "PlanSectionNewPage");
+    const pPr = block.indexOf("<w:pPr>");
+    const brk = block.indexOf("<w:pageBreakBefore/>");
+    const keep = block.indexOf("<w:keepNext");
+    expect(pPr).toBeGreaterThan(-1);
+    expect(brk).toBe(pPr + "<w:pPr>".length);
+    if (keep > -1) expect(brk).toBeLessThan(keep);
+  });
+
+  it("leaves every other style alone", async () => {
+    const styles = await stylesXml(await renderDocx(doc(), []));
+    for (const id of ["PlanSection", "PlanSubsection", "PlanBody", "PlanFigureTitle", "PlanNoticeBody"]) {
+      expect(styleBlock(styles, id), id).not.toContain("pageBreakBefore");
+    }
+  });
+
+  it("is still a Word file Word will open after being patched", async () => {
+    const buf = await renderDocx(doc(), []);
+    expect(buf.subarray(0, 2).toString()).toBe("PK");
+    const { default: JSZip } = await import("jszip");
+    const zip = await JSZip.loadAsync(buf);
+    for (const part of ["[Content_Types].xml", "word/document.xml", "word/styles.xml", "_rels/.rels"]) {
+      expect(zip.file(part), `missing ${part}`).not.toBeNull();
+    }
+  });
+
   it("never breaks a table row in half", async () => {
     const xml = await documentXml(await renderDocx(doc(), []));
     expect(xml).toContain("<w:cantSplit");
@@ -209,15 +248,17 @@ describe("the confidentiality statement", () => {
     expect(xml).toContain("Confidentiality &amp; Intellectual Property");
   });
 
-  it("carries a page break before it and before the contents, so it is a page of its own", async () => {
-    const xml = await documentXml(await renderDocx(doc(), []));
+  it("is a page of its own, and the contents is the page after it", async () => {
+    const buf = await renderDocx(doc(), []);
+    const xml = await documentXml(buf);
     const title = xml.indexOf("CONFIDENTIALITY STATEMENT");
     const contents = xml.indexOf("Contents");
     expect(title).toBeGreaterThan(-1);
     expect(contents).toBeGreaterThan(title);
-    // Two breaks between the cover and the first section: one onto page 2, one onto page 3.
-    const breaks = [...xml.matchAll(/w:pageBreakBefore/g)].length;
-    expect(breaks).toBeGreaterThanOrEqual(2);
+    /* The breaks are on the styles now (§6.97.1), so that is where they are asserted. */
+    const styles = await stylesXml(buf);
+    expect(styleBlock(styles, "PlanNoticeTitle")).toContain("<w:pageBreakBefore/>");
+    expect(styleBlock(styles, "PlanContentsTitle")).toContain("<w:pageBreakBefore/>");
   });
 
   it("comes after the cover and before the contents", async () => {

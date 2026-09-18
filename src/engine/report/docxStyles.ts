@@ -65,6 +65,15 @@ export const S = {
   coverRule: "PlanCoverRule",
 } as const;
 
+/**
+ * The styles that start a new page (§6.97.1).
+ *
+ * Named here rather than in the renderer because it is a fact about the STYLES — which of them begin a page
+ * — and because the list is what `applyStylePageBreaks` patches into the stylesheet after packing. One
+ * place: a style added to this list gets the break, and nothing else has to be told.
+ */
+export const PAGE_BREAK_STYLES: readonly string[] = [S.sectionNewPage, S.noticeTitle, S.contentsTitle];
+
 const HAIR = { style: BorderStyle.SINGLE, size: 4, color: HAIRLINE };
 
 export const PLAN_STYLES: IStylesOptions = {

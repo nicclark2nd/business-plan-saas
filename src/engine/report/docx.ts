@@ -18,7 +18,8 @@ import { walk } from "./blocks";
 import { rasterise } from "./rasterise";
 import { PAGE_DIMENSIONS, type PageSize } from "./pageSize";
 import { imageSize } from "./imageSize";
-import { PLAN_STYLES, S, ACCENT, MUTED, HAIRLINE } from "./docxStyles";
+import { PLAN_STYLES, S, PAGE_BREAK_STYLES, ACCENT, MUTED, HAIRLINE } from "./docxStyles";
+import { applyStylePageBreaks } from "./docxPatch";
 
 const RULE = { style: BorderStyle.SINGLE, size: 4, color: HAIRLINE };
 
@@ -142,15 +143,16 @@ function sectionToDocx(s: Section, pngs: Map<string, Buffer>): (Paragraph | Tabl
     new Paragraph({
       /*
        * A NAMED STYLE, not bold-and-blue (§6.97). `heading` alone made it look like a heading; the style is
-       * what makes Word treat it as one — keep-with-next, keep-lines-together and a place in the navigation
-       * pane, all set once in `docxStyles.ts` rather than on 1,613 paragraphs.
+       * what makes Word treat it as one — keep-with-next, keep-lines-together, the page break and a place
+       * in the navigation pane, all set once rather than on 1,613 paragraphs.
        *
-       * `pageBreakBefore` stays on the paragraph because this library will not take it on a style; the
-       * separate `PlanSectionNewPage` style records the intent regardless.
+       * THE PAGE BREAK IS NOT SET HERE (§6.97.1). `PlanSectionNewPage` carries it, added to the stylesheet
+       * after packing because the library's type will not express it. Setting it on the paragraph as well
+       * would be direct formatting overriding the style, and a client who cleared the checkbox would find
+       * the breaks still there.
        */
       style: newPage ? S.sectionNewPage : top ? S.section : S.subsection,
       heading: top ? HeadingLevel.HEADING_1 : HeadingLevel.HEADING_2,
-      pageBreakBefore: newPage,
       children: [
         text(`${s.number}  `, { bold: true, color: MUTED, size: top ? 28 : 22 }),
         text(s.title, { bold: true, color: ACCENT, size: top ? 28 : 22 }),
@@ -257,20 +259,14 @@ export async function renderDocx(
      * a legal notice does not belong in a list of what the business does, and numbering it would push the
      * Executive Summary to 2.0.
      */
-    new Paragraph({
-      style: S.noticeTitle, pageBreakBefore: true,
-      children: [text(doc.disclaimer.title.toUpperCase())],
-    }),
+    new Paragraph({ style: S.noticeTitle, children: [text(doc.disclaimer.title.toUpperCase())] }),
     ...doc.disclaimer.parts.flatMap((part) => [
       new Paragraph({ style: S.noticeHeading, children: [text(part.heading)] }),
       /* Smaller than body text and a touch grey: it is a notice to be read once, not the plan itself. */
       new Paragraph({ style: S.noticeBody, children: [text(part.body)] }),
     ]),
 
-    new Paragraph({
-      style: S.contentsTitle, pageBreakBefore: true,
-      children: [text("Contents")],
-    }),
+    new Paragraph({ style: S.contentsTitle, children: [text("Contents")] }),
     ...flat.map((s) => new Paragraph({
       style: S.contentsEntry,
       indent: { left: s.number.endsWith(".0") ? 0 : 340 },
@@ -282,10 +278,7 @@ export async function renderDocx(
   ];
 
   const tail: Paragraph[] = omitted.length === 0 ? [] : [
-    new Paragraph({
-      style: S.contentsTitle, pageBreakBefore: true,
-      children: [text("What is not in this plan", { size: 26 })],
-    }),
+    new Paragraph({ style: S.contentsTitle, children: [text("What is not in this plan", { size: 26 })] }),
     ...omitted.map((o) => new Paragraph({
       style: S.bullet, bullet: { level: 0 },
       children: [text(o.label, { bold: true }), text(" \u2014 nothing recorded yet.", { color: MUTED })],
@@ -334,7 +327,8 @@ export async function renderDocx(
     styles: PLAN_STYLES,
     sections: [section],
   });
-  return Packer.toBuffer(document);
+  /* The one pagination rule the library cannot put on a style, put there anyway (§6.97.1). */
+  return applyStylePageBreaks(await Packer.toBuffer(document), PAGE_BREAK_STYLES);
 }
 
 /** A file name a client can find again in a downloads folder six months from now. */

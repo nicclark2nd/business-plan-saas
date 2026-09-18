@@ -2405,3 +2405,50 @@ styles, and it was right to. The suite now reads `word/styles.xml` and asserts w
 that PlanFigureTitle keeps with next, that PlanSection keeps its lines — rather than that some paragraph
 somewhere was formatted, which was always true and never the point. One test asserts the ratio directly:
 more than 60% of paragraphs must carry a `pStyle`, which is the number that was 5.6%.
+
+## 6.97.1 The page break belongs on the style too (18 Sep 2026)
+
+§6.97 moved every pagination rule onto a named style except one, and said so plainly: the `docx` library
+takes `keepNext`, `keepLines` and `outlineLevel` on a paragraph style and refuses `pageBreakBefore`. Nic
+read that and did not accept it:
+
+> *"headings like 1.0 should be able to have a style of Page Break Before."*
+
+He was right, and the reasoning is worth keeping.
+
+> **A LIBRARY'S TYPE IS A STATEMENT ABOUT THAT LIBRARY, NOT ABOUT THE FILE FORMAT.** `w:pageBreakBefore` is
+> an ordinary child of `w:pPr`, and Word has honoured it inside a style definition for twenty years. The
+> wrapper could not express it; the format has no such limit. "The library won't let me" is a fact about a
+> dependency, and a dependency is a choice.
+
+Checked first, because the cheapest good outcome would have been a newer release: `docx` is at **9.7.1 and
+that is the latest**. No upgrade to wait for.
+
+**What was built.** The document is packed as usual and then one element is written into one part:
+`applyStylePageBreaks` opens the .docx, adds `<w:pageBreakBefore/>` to the three styles that begin a page,
+and repacks. Everything else is copied through untouched.
+
+Two details that are not decoration:
+
+*It goes in at the FRONT of `w:pPr`.* The schema fixes the order of that element's children, and
+`w:pageBreakBefore` comes before `w:keepNext` and `w:spacing`. Out of order, Word rejects the file — so
+there is a test asserting the element sits immediately after the opening tag.
+
+*Nothing sets it on a paragraph any more.* Direct formatting beats a style, so leaving it on both would mean
+a client clearing the checkbox in Word and finding the breaks still there — the exact opposite of the point.
+A test asserts `<w:pageBreakBefore/>` appears in `styles.xml` and **nowhere in `document.xml`**.
+
+**The rejected alternative** was `initialStyles`, which does accept raw XML — and would mean hand-authoring
+the entire stylesheet, discarding the library's own Normal and Heading definitions, to change one flag. A
+far larger surface for a far smaller gain.
+
+**The cost** is `jszip` moving from a dev dependency to a real one. It was already in the tree for the
+tests; it is now in the shipped path.
+
+**It fails soft**, like the logo (§6.94): a missing stylesheet, a style that is not there, XML that does not
+parse as expected — all return the document unpatched. A plan that prints without page breaks is a cosmetic
+disappointment. A plan that fails to download is not.
+
+The general lesson, which has now come up twice in one pass: **when a tool says no, find out whether the
+format said no.** §6.93 found a page size nobody had chosen because a dependency's default filled the gap;
+this is the same shape, with the dependency's *type system* doing the filling.
