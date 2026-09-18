@@ -84,6 +84,47 @@ export const COPY = {
     `This stops at gross profit deliberately. Overheads — rent, wages, insurance — belong to the business rather than to any one ${one}, and splitting them across lines would need a basis nobody has agreed.`,
   noServices: (many: string) => `No ${many} have been recorded for this plan yet.`,
 
+  /**
+   * THE CONFIDENTIALITY STATEMENT AND LEGAL DISCLAIMER (§6.95), page two of every plan.
+   *
+   * Supplied by Nic as finished legal wording, and kept as he wrote it. The ONE thing that changes is the
+   * name: the source named a business, and a template that carries one client's company name into every
+   * other client's plan is the worst kind of copy-paste — it appears on a page about confidentiality, in a
+   * document handed to a bank, and it says plainly that the plan was made from somebody else's.
+   *
+   * Two edits of punctuation only, both from the source text running together: a missing space after
+   * "these statements." and the heading "Financial Data & Governing Law" printed inside the paragraph
+   * above it. Neither changes a word.
+   *
+   * "local laws" is left exactly as written. The app knows the plan's country and could name it, but the
+   * governing-law clause of a legal notice is not something to improve on somebody's behalf.
+   */
+  disclaimer: (name: string) => ({
+    title: "Confidentiality Statement & Legal Disclaimer",
+    parts: [
+      {
+        heading: "Confidentiality & Intellectual Property",
+        body: `The information within this document is strictly confidential to ${name} ("the Company") and is intended solely for the person to whom it is delivered. This document, its concepts, and the intellectual property contained herein may not be reproduced, distributed, or shared in whole or in part, nor may any information be disclosed to any third party, without the prior written consent of the directors of the Company.`,
+      },
+      {
+        heading: "No Offer or Invitation",
+        body: "This document is for informational purposes only. It does not constitute an offer, invitation, solicitation, or recommendation to purchase shares, invest capital, or enter into any binding legal or financial contract.",
+      },
+      {
+        heading: "Accuracy of Information & No Liability",
+        body: `The contents of this document have not been independently verified. While the information contained herein is believed to be reliable and correct to the best of the Company's knowledge, ${name}, its directors, advisors, and consultants make no representation, warranty, or undertaking, express or implied, as to the accuracy, adequacy, or completeness of the information. No responsibility or liability is or will be accepted by the Company or its representatives for any errors, omissions, or misstatements contained within this document.`,
+      },
+      {
+        heading: "Forward-Looking Statements & Projections",
+        body: "The aims, strategies, targets, plans, and financial projections referred to in this document are forward-looking statements based upon assumptions that the Company considers reasonable at the time of writing. However, these projections and plans involve known and unknown risks, uncertainties, and market variables. Actual results may differ materially from those anticipated in these statements.",
+      },
+      {
+        heading: "Financial Data & Governing Law",
+        body: "The financial statements and projections within this document are for illustrative purposes and have not been audited. By accepting this document, the recipient agrees to be bound by the foregoing limitations, which shall be governed by and construed in accordance with local laws.",
+      },
+    ],
+  }),
+
   overheads: (name: string) =>
     `The running costs ${name} carries whether or not it sells anything, as projected for Year 1.`,
   overheadsGrouped:

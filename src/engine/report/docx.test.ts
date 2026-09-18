@@ -7,6 +7,10 @@ const doc = (): ReportDoc => ({
   subtitle: "Business Plan",
   date: "September 2026",
   omitted: [],
+  disclaimer: {
+    title: "Confidentiality Statement & Legal Disclaimer",
+    parts: [{ heading: "Confidentiality & Intellectual Property", body: "Strictly confidential to BNE Concreting." }],
+  },
   sections: numberSections([
     {
       title: "Executive Summary",
@@ -82,6 +86,35 @@ async function zipNames(buf: Buffer) {
   const { default: JSZip } = await import("jszip");
   return Object.keys((await JSZip.loadAsync(buf)).files);
 }
+
+/**
+ * Page two (§6.95). The point of every assertion here is that a legal notice which names the WRONG company,
+ * or lands in the middle of the contents, is worse than not having one.
+ */
+describe("the confidentiality statement", () => {
+  it("is in the document, under its own heading", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    expect(xml).toContain("CONFIDENTIALITY STATEMENT &amp; LEGAL DISCLAIMER");
+    expect(xml).toContain("Confidentiality &amp; Intellectual Property");
+  });
+
+  it("carries a page break before it and before the contents, so it is a page of its own", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    const title = xml.indexOf("CONFIDENTIALITY STATEMENT");
+    const contents = xml.indexOf("Contents");
+    expect(title).toBeGreaterThan(-1);
+    expect(contents).toBeGreaterThan(title);
+    // Two breaks between the cover and the first section: one onto page 2, one onto page 3.
+    const breaks = [...xml.matchAll(/w:pageBreakBefore/g)].length;
+    expect(breaks).toBeGreaterThanOrEqual(2);
+  });
+
+  it("comes after the cover and before the contents", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    expect(xml.indexOf("BNE Concreting")).toBeLessThan(xml.indexOf("CONFIDENTIALITY STATEMENT"));
+    expect(xml.indexOf("CONFIDENTIALITY STATEMENT")).toBeLessThan(xml.indexOf("Contents"));
+  });
+});
 
 describe("the logo", () => {
   it("is absent from a plan that has none, and the file is still valid", async () => {

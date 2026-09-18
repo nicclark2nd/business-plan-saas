@@ -188,6 +188,25 @@ export async function renderDocx(
     new Paragraph({ spacing: { before: logo ? 0 : 2400 }, children: [text(doc.businessName, { bold: true, color: ACCENT, size: 56 })] }),
     new Paragraph({ spacing: { before: 120 }, children: [text(doc.subtitle, { size: 32, color: MUTED })] }),
     new Paragraph({ spacing: { before: 80, after: 2400 }, children: [text(doc.date, { size: 22, color: MUTED })] }),
+
+    /*
+     * PAGE TWO (§6.95): the confidentiality statement, between the cover and the contents.
+     *
+     * `pageBreakBefore` on its title and again on "Contents" is what makes it a page of its own rather than
+     * something that lands wherever the text happens to reach. It is deliberately NOT a numbered section —
+     * a legal notice does not belong in a list of what the business does, and numbering it would push the
+     * Executive Summary to 2.0.
+     */
+    new Paragraph({
+      spacing: { after: 240 }, pageBreakBefore: true,
+      children: [text(doc.disclaimer.title.toUpperCase(), { bold: true, color: ACCENT, size: 24 })],
+    }),
+    ...doc.disclaimer.parts.flatMap((part) => [
+      new Paragraph({ spacing: { before: 200, after: 60 }, children: [text(part.heading, { bold: true, size: 20 })] }),
+      /* Smaller than body text and a touch grey: it is a notice to be read once, not the plan itself. */
+      new Paragraph({ spacing: { after: 100, line: 264 }, children: [text(part.body, { size: 17, color: MUTED })] }),
+    ]),
+
     new Paragraph({
       spacing: { after: 160 }, pageBreakBefore: true,
       children: [text("Contents", { bold: true, color: ACCENT, size: 28 })],

@@ -53,10 +53,20 @@ export type Draft = { title: string; blocks?: Block[]; children?: (Draft | null)
 
 export type Omission = { title: string; why: string };
 
+/**
+ * The page between the cover and the contents (§6.95) — front matter, not a section.
+ *
+ * It carries no number and never appears in the contents, which is why it is a field on the document rather
+ * than an entry in `sections`. A numbered "1.0 Confidentiality statement" would push the Executive Summary
+ * to 2.0 and put a legal notice in a list of what the business does.
+ */
+export type Disclaimer = { title: string; parts: { heading: string; body: string }[] };
+
 export type ReportDoc = {
   businessName: string;
   subtitle: string;
   date: string;
+  disclaimer: Disclaimer;
   sections: Section[];
   /** Sections left out, and the reason for each. Printed at the end rather than silently dropped. */
   omitted: Omission[];

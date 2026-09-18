@@ -620,6 +620,8 @@ export function buildReport(i: ReportInput): ReportDoc {
     businessName: i.businessName,
     subtitle: COPY.subtitle,
     date: i.date,
+    /* Page two, with this plan's own name in it and never another's (§6.95). */
+    disclaimer: COPY.disclaimer(i.businessName),
     sections,
     omitted,
   };

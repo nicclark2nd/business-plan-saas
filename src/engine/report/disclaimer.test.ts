@@ -1,0 +1,57 @@
+import { describe, expect, it } from "vitest";
+import { COPY } from "./content";
+
+/**
+ * The confidentiality statement (§6.95).
+ *
+ * The heart of this file is one test: the plan must never name another company. The wording arrived as a
+ * finished legal notice written for one business, and the failure it invites is the most embarrassing kind
+ * — a page ABOUT confidentiality, in a document handed to a bank, carrying somebody else's name.
+ */
+describe("the confidentiality statement", () => {
+  it("names this plan's business, and no other", () => {
+    const d = COPY.disclaimer("BNE Concreting");
+    const all = d.parts.map((p) => p.body).join(" ");
+    expect(all).toContain("strictly confidential to BNE Concreting");
+    expect(all).toContain("BNE Concreting, its directors, advisors, and consultants");
+    // The company the wording was originally written for must appear nowhere.
+    expect(all).not.toMatch(/DesignOne/i);
+  });
+
+  it("carries the name into every plan, whatever it is called", () => {
+    for (const name of ["Acme Pty Ltd", "O'Brien & Sons", "北京建筑"]) {
+      const all = COPY.disclaimer(name).parts.map((p) => p.body).join(" ");
+      expect(all).toContain(name);
+    }
+  });
+
+  it("is the five parts, in order", () => {
+    expect(COPY.disclaimer("X").parts.map((p) => p.heading)).toEqual([
+      "Confidentiality & Intellectual Property",
+      "No Offer or Invitation",
+      "Accuracy of Information & No Liability",
+      "Forward-Looking Statements & Projections",
+      "Financial Data & Governing Law",
+    ]);
+  });
+
+  /**
+   * The source text ran two of these together — "...in these statements.Financial Data & Governing LawThe
+   * financial statements..." — with a heading printed inside the paragraph above it. Split, and this is
+   * what stops it being silently re-merged.
+   */
+  it("does not print a heading inside a paragraph", () => {
+    for (const part of COPY.disclaimer("X").parts) {
+      for (const other of COPY.disclaimer("X").parts) {
+        expect(part.body).not.toContain(other.heading);
+      }
+      expect(part.body).toMatch(/^[A-Z]/);
+      expect(part.body.trim()).toBe(part.body);
+    }
+  });
+
+  it("says nothing the wording did not say — governing law is still local", () => {
+    const all = COPY.disclaimer("X").parts.map((p) => p.body).join(" ");
+    expect(all).toContain("in accordance with local laws");
+  });
+});

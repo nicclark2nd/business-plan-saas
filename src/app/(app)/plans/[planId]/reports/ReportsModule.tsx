@@ -106,6 +106,21 @@ export function ReportsModule({ planId, mode, doc, reconciled, missing, pageSize
           <div className="mt-1 text-[15px] text-muted-foreground">{doc.subtitle} · {doc.date}</div>
         </div>
 
+        {/*
+          PAGE TWO ON SCREEN TOO (§6.95). The screen report is what a client reads before they download, so
+          a page that exists only in the .docx would be a surprise in the file they send — the two have to
+          be the same document (§6.90).
+        */}
+        <div className="mb-8 border-b border-border pb-6">
+          <div className="mb-3 text-[13px] font-semibold uppercase tracking-[.06em] text-primary">{doc.disclaimer.title}</div>
+          {doc.disclaimer.parts.map((part) => (
+            <div key={part.heading} className="mb-3 last:mb-0">
+              <div className="text-[13px] font-semibold">{part.heading}</div>
+              <p className="mt-0.5 text-[12.5px] leading-[1.55] text-muted-foreground">{part.body}</p>
+            </div>
+          ))}
+        </div>
+
         <div className="mb-8">
           <div className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-muted-foreground">Contents</div>
           {flat.map((s) => (

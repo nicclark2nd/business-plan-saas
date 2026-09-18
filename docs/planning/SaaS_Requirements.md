@@ -2189,3 +2189,39 @@ a logo that cannot be fetched lays the cover out as it was before there was one.
 > **THE SHAPE OF THE STORED PATH IS LOAD-BEARING, NOT COSMETIC.** `<plan_id>/logo.<ext>` is what the storage
 > policy reads to decide who may touch the object. A path that stopped starting with the plan id would not
 > fail loudly — it would quietly stop being protected. There is a test on that string for exactly that reason.
+
+## 6.95 Page two, and the company name that must never be somebody else's (18 Sep 2026)
+
+Nic supplied a finished confidentiality statement and legal disclaimer, to sit between the cover and the
+contents: cover on page one, the notice on page two, the contents on page three.
+
+**It is front matter, not a section.** It is a field on `ReportDoc` rather than an entry in `sections`,
+because a numbered "1.0 Confidentiality Statement" would push the Executive Summary to 2.0 and put a legal
+notice in a list of what the business does. Two `pageBreakBefore`s — one onto its own page, one onto the
+contents — are what make it a page rather than something that lands wherever the text happens to reach.
+
+**The one thing that changes is the name.** The wording arrived written for a particular business, named
+twice. Kept verbatim except that the name comes from the plan.
+
+> **A TEMPLATE THAT CARRIES ONE CLIENT'S COMPANY NAME INTO ANOTHER CLIENT'S PLAN IS THE WORST KIND OF
+> COPY-PASTE.** Here it would appear on the page *about confidentiality*, in the document handed to a bank,
+> and it would say plainly that the plan was made out of somebody else's.
+
+There is a test whose only job is that: the supplied company's name must appear nowhere in the output, for
+any plan.
+
+**Two punctuation fixes, and nothing else.** The source ran two parts together — *"...anticipated in these
+statements.Financial Data & Governing LawThe financial statements..."* — a missing space and a heading
+printed inside the paragraph above it. Split into its own heading, with a test that no part's body contains
+another part's heading, so it cannot be silently re-merged.
+
+**"local laws" was left exactly as written.** The app knows the plan's country and could name it, and that
+would probably read better.
+
+> **THE GOVERNING-LAW CLAUSE OF A LEGAL NOTICE IS NOT SOMETHING TO IMPROVE ON SOMEBODY'S BEHALF.** When the
+> supplied text is legal wording, the job is to carry it faithfully and raise the question, not to exercise
+> judgement inside it.
+
+**It renders on the screen as well as in the .docx**, in the same place. The screen report is what a client
+reads before they download; a page that existed only in the file would be a surprise in the thing they send
+(§6.90).
