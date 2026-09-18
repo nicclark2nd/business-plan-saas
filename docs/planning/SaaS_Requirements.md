@@ -2452,3 +2452,37 @@ disappointment. A plan that fails to download is not.
 The general lesson, which has now come up twice in one pass: **when a tool says no, find out whether the
 format said no.** §6.93 found a page size nobody had chosen because a dependency's default filled the gap;
 this is the same shape, with the dependency's *type system* doing the filling.
+
+## 6.97.2 One section behaved differently from eleven (18 Sep 2026)
+
+Nic, reading the styled document in Word:
+
+> *"the heading '1.0 Executive Summary' must use the style 'Plan Section (new page)'. All the other ones
+> e.g. 2.0, 3.0, 4.0 use this style."*
+
+`sectionToDocx` carried `top && s.number !== "1.0"`. Every top-level heading started a page except the
+Executive Summary, which landed under the tail of the contents list.
+
+The exemption made sense when it was written: the contents was a short block, and a page break after it
+looked like a wasted sheet. It stopped being true the moment the plan grew to twelve sections and eighty-one
+subsections, and nothing went back to look.
+
+> **AN EXCEPTION OUTLIVES THE CONDITION THAT JUSTIFIED IT, SILENTLY.** Nobody re-reads a special case; it
+> is in the code, it has a comment, and it looks deliberate forever. The condition it was weighing — "the
+> contents is short" — was not written down anywhere, so nothing could notice it had changed.
+
+The second cost is the one that matters more now that styles exist. It made "1.0" the ONE heading in the
+document not using `Plan Section (new page)`, so a client editing that style would change eleven of the
+twelve and have to hunt the twelfth. An inconsistency a client meets while trying to use the feature is
+worse than the wasted page the exemption was avoiding.
+
+Fixed by deleting the condition. The test asserts the count directly: every top-level section carries the
+new-page style and none carries the plain one — the shape of assertion that catches "all but one" rather
+than merely "at least one".
+
+*Also recorded, because it cost a file:* the edit that added this test was written as
+`open(p, "w").write(s.replace(old, new))`, where `new` had a stray comma and was a tuple. Python opens and
+TRUNCATES before evaluating the argument, so the exception left `docx.test.ts` at zero bytes. It was in git
+and came back with one command, which is the only reason it was a footnote rather than an afternoon. **Build
+the whole string first, then open the file** — and the reason the loss was cheap is that the work had been
+committed ten minutes earlier.

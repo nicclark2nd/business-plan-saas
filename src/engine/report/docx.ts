@@ -138,7 +138,18 @@ const HOLDS_ON = new Set<Block["kind"]>(["table", "chart", "facts"]);
 
 function sectionToDocx(s: Section, pngs: Map<string, Buffer>): (Paragraph | Table)[] {
   const top = s.number.endsWith(".0");
-  const newPage = top && s.number !== "1.0";
+  /*
+   * EVERY top-level section starts a page, 1.0 included (§6.97.2).
+   *
+   * This carried `&& s.number !== "1.0"`, so the Executive Summary alone was exempt and landed under the
+   * tail of the contents list. The exemption dated from when the contents was a short block and a break
+   * after it looked like a wasted page; it stopped being true the moment the plan grew to twelve sections,
+   * and nothing went back to check.
+   *
+   * It also made "1.0" the one heading in the document that did not use `Plan Section (new page)` — so a
+   * client changing that style would have changed eleven of the twelve, which is worse than a wasted page.
+   */
+  const newPage = top;
   return [
     new Paragraph({
       /*

@@ -155,6 +155,21 @@ describe("what must not be split across a page", () => {
    * stylesheet after packing. These assertions read the FINISHED file — if the patch silently failed, or
    * the document was still relying on per-paragraph breaks, one of them says so.
    */
+  /**
+   * §6.97.2. Nic, reading the file: "the heading '1.0 Executive Summary' must use the style 'Plan Section
+   * (new page)'. All the other ones e.g. 2.0, 3.0, 4.0 use this style." One section behaving differently
+   * from eleven is not a special case — it is an inconsistency a client meets when they edit that style
+   * and eleven headings move.
+   */
+  it("gives EVERY top-level section the same style, 1.0 included", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    const newPage = (xml.match(/PlanSectionNewPage/g) ?? []).length;
+    const plain = (xml.match(/w:val="PlanSection"/g) ?? []).length;
+    /* The fixture has two top-level sections; both take the new-page style, and none the plain one. */
+    expect(newPage).toBe(2);
+    expect(plain).toBe(0);
+  });
+
   it("starts each section on a new page from the style, not from the paragraph", async () => {
     const buf = await renderDocx(doc(), []);
     expect(styleBlock(await stylesXml(buf), "PlanSectionNewPage")).toContain("<w:pageBreakBefore/>");
