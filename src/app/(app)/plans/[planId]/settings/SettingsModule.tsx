@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { ModuleFrame, ModuleStatusFooter, useModule } from "@/components/module/ModuleFrame";
 import { useSaveErrors } from "@/components/module/saveErrors";
-import { Section, FieldGrid, Field, FieldInput, FieldSelect } from "@/components/module/FieldGrid";
+import { Section, FieldGrid, Field, FieldInput, FieldSelect, FieldTextarea } from "@/components/module/FieldGrid";
 import { Input } from "@/components/ui/input";
 import { Toolbar, Meta, Grid, Th, Td, Row as GridRow } from "@/components/module/DataGrid";
 import { currentFinancialYear, firstProjectedYear, planYearEnding, planYearLabel } from "@/engine/plan/calendar";
@@ -177,6 +177,18 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
               <Field label="Legal structure" span={2} hint="Grouped by liability; your country's names come first."><FieldSelect value={s.legal_structure} groups={legalStructuresFor(s.country)} placeholder="Choose" onValueChange={(v) => edit({ legal_structure: v }, "profile", true)} /></Field>
               <Field label="Type of customer" span={2} hint="Changes the word the app uses for the people you sell to."><FieldSelect value={s.customer_type} options={opts(CUSTOMER_TYPES)} placeholder="Choose" onValueChange={(v) => edit({ customer_type: v }, "profile", true)} /></Field>
               <Field label="Type of product sold" span={2}><FieldSelect value={s.product_type} options={PRODUCT_TYPES} placeholder="Choose" onValueChange={(v) => edit({ product_type: v }, "profile", true)} /></Field>
+              {/*
+                ABOUT WHAT YOU SELL (§6.103) — asked here rather than at step 8.
+                It was on the Sales screen, below a ten-row table, two-thirds of the way through the path:
+                the one paragraph describing the business, asked after six steps that would have been easier
+                for having read it. The column has always been on plan_settings, so nothing moved but the
+                question.
+              */}
+              <Field label="About what you sell" span={4}
+                hint="An elevator pitch in two or three sentences: what you sell, who buys it, and what it is worth to them. Not why the business exists — that is Mission, at step 1. Opens the products section of the report.">
+                <FieldTextarea value={s.products_services_statement ?? ""} className="min-h-[72px]"
+                  placeholder="e.g. We pour, finish and guarantee residential and light-commercial concrete for builders and homeowners across the South Coast. Quoted price is the final price, and a slab is poured within ten working days of the site being ready."
+                  onChange={(e) => edit({ products_services_statement: e.target.value }, "profile")} /></Field>
             </FieldGrid>
           </Section>
 

@@ -292,21 +292,14 @@ get a grasp. Step 8 wants every product with a price, a volume and a growth curv
 forecast is built from. Those are different questions at different depths and neither substitutes for the
 other.
 
-## The overview field already exists, in the wrong place
+## The overview field — done, §6.103
 
-`plan_settings.products_services_statement` — the prose paragraph describing what the business sells — is
-**already a column**, and is already asked. On the **Sales screen, at step 8.**
+`plan_settings.products_services_statement` already existed and was already asked, on the Sales screen at
+step 8 — so the one field that would ground every draft in the app sat two-thirds of the way through the
+path. **Moved to Plan settings in §6.103**, with the text still shown read-only on Sales.
 
-> **THE ONE FIELD THAT WOULD GROUND EVERY DRAFT IN THE APP IS ASKED TWO-THIRDS OF THE WAY THROUGH THE PATH.**
-
-Moving where it is asked is a UI change, not a data change: the column is on `plan_settings`, not on a Sales
-table, so nothing migrates. Asked at setup, it grounds Vision, Marketing, Competitors, SWOT and Operations —
-the five narrative steps that currently have nothing behind them — and Sales can still show it at step 8 for
-review.
-
-This is the cheapest thing on this page by some distance, and it is worth doing whether or not AI is ever
-built, because a plan whose first seven steps do not know what the business sells is missing the same
-sentence a human consultant would ask for first.
+That was the prerequisite for everything above: a draft button at step 1 now has a paragraph describing the
+business behind it, instead of an interrogation repeated at five separate steps.
 
 ## Always a button, and it never overwrites
 

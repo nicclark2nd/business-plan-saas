@@ -2743,3 +2743,64 @@ in the same calendar month still collide, and a Downloads folder is where a clie
 a plan whose country is somewhere else. §6.93 established that the paper size follows the country; the date
 format does not. Fixing one date and not the others would put two conventions in one document, so this is
 all of them or none, and it is a decision rather than a build.
+
+---
+
+## §6.103 — The question moves, the text stays (supersedes §6.34's placement)
+
+§6.34 moved "About what you sell" **out** of Plan settings and onto the Sales screen, four days ago, and it
+gave two reasons. One was that settings holds configuration and a narrative is not configuration. The other
+was sharper: the app appeared to ask the same question at three levels of zoom — Mission, Brand promise, and
+this — and the third looked like the first two added together.
+
+**The first reason has weakened; the second was wrong.**
+
+**On placement.** When §6.34 was written, Plan settings sat "next to currency and tax rates". It no longer
+does: it now opens on a Business profile — business name, industry, country, state, legal structure, type of
+customer, type of product — and carries the **tagline**, which is prose that prints on the cover. A
+paragraph describing what the business sells is not the odd one out in that company.
+
+**On the overlap, which is the part that matters.** Nic's objection, and it holds:
+
+| | Answers |
+|---|---|
+| **Vision** | the long-term future state — where the organisation is going |
+| **Mission** | present purpose, who is served, and the methods used |
+| **About what you sell** | an elevator pitch — the core offering, who buys it, and what it is worth to them |
+
+Vision is future and the other two are present. Mission is *purpose and method*; the overview is *offering
+and value*, written from the buyer's side. A mission statement does not list what you sell, and an elevator
+pitch does not say why the business exists.
+
+> **§6.34 JUDGED THE THREE BY THEIR EXAMPLE SENTENCES RATHER THAN BY WHAT EACH IS FOR. THREE EXAMPLES THAT
+> READ ALIKE ARE A FAULT IN THE EXAMPLES, NOT EVIDENCE THAT THE FIELDS ARE THE SAME FIELD.**
+
+§6.35.1 had already written the remedy and then not applied it here: *when two fields could take the same
+answer, the fix is not to delete one — it is to make each say what the other is for.* Brand promise has
+carried that device since §6.34 (*"Not what makes you better than the competition — that is Our advantage,
+on the Competitors step"*). Vision, Mission and the overview now carry it too.
+
+**The actual reason to move it, which neither §6.34 nor §6.35.1 could have known:** it is the one paragraph
+in the app that describes the business in prose, and it was asked at **step 8** — after six narrative steps
+that would each have been easier for having read it, and below a ten-row table where the most heavily worked
+plan on the platform had left it **completely empty**. Placement that produces a blank field on the only
+plan anyone has ever driven hard is placement that does not work.
+
+It also grounds AI drafting, which is why this surfaced (Design Notes, Note 4). But the move earns its place
+without that: a plan whose first seven steps do not know what the business sells is missing the sentence a
+human consultant asks for first.
+
+**The question moved; the text did not.** Sales still shows the paragraph, read-only, with a link back —
+because someone pricing ten services wants to see the description they are pricing against, and must not
+have a second box that can disagree with the first. `saveProductsStatement` is deleted: **one column, one
+writer** (§6.41). Where the plan has no statement, Sales says so and offers the way to fix it, rather than
+showing an empty panel.
+
+**It is not required**, and that is deliberate. §6.34 recorded that being required is what made it nag —
+*"Reports need 1 more field: products & services"* on both Settings and the Dashboard. Moving it back must
+not bring that with it.
+
+**Found by looking at the screen, not by the suite:** the new hint first rendered as *"Not why the business
+exists — that is Mission"*. A JSX **attribute** is not a JavaScript string literal and does not process
+escapes; the same escape three lines away in `fields.ts` was fine, because that one is. 663 tests said
+nothing, because no test renders that attribute.

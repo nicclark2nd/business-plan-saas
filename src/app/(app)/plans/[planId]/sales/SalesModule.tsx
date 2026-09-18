@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import Link from "next/link";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { GstToggle, GstFreeTag } from "@/components/module/GstToggle";
@@ -21,7 +22,7 @@ import { YEARS, yearlyProjection, firstPlanYear, evenDistribution, moderateDistr
 import { productYears, productYear1Months, productYear1Clients, newClientsYear1, planRevenueByYear, planYear1Months, sourceOf, isLinked, bookNow, monthlyFee, recurring } from "@/engine/sales/product";
 import { useMoney } from "@/components/MoneyProvider";
 import { useProductNoun } from "@/components/VocabularyProvider";
-import { upsertProduct, deleteProduct, continueFromSales, saveProductsStatement } from "./actions";
+import { upsertProduct, deleteProduct, continueFromSales } from "./actions";
 import { LIFECYCLE, LIFE_MODE, SOLD_AS, type Product } from "./model";
 
 /**
@@ -311,43 +312,35 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
 }
 
 /**
- * The paragraph that opens the report's products and services section (§6.34).
+ * The paragraph that opens the report's products and services section (§6.34, moved again in §6.103).
  *
- * It used to live in Plan settings, next to currency and tax rates — and a narrative is not configuration.
- * It sits here, under the lines it summarises, because that is the section of the document it opens: one
- * screen owns one section. Under the grid rather than above it, so the list a client came here for stays
- * where they left it and the summary reads as the thing that follows, not the toll for reaching it.
+ * IT IS NOT EDITED HERE ANY MORE, AND THE REASON IS ABOUT ORDER RATHER THAN TIDINESS.
  *
- * It saves on leaving the field, like every other text in the app.
+ * §6.34 moved it out of Plan settings and onto this screen, under the lines it summarises, because a
+ * narrative is not configuration and one screen should own one section of the document. Sound, and it put
+ * the one paragraph describing the business at step 8 — after six steps that would each have been easier
+ * for having read it, and below a table, where the plan it was written for never got it filled in at all.
+ *
+ * So the QUESTION moved to Plan settings and the TEXT stayed here, read-only: someone pricing ten services
+ * wants to see the description they are pricing against, and does not want a second box that can disagree
+ * with the first. One column, one writer (§6.41).
  */
 function ProductsStatement({ planId, initial, noun }: { planId: string; initial: string; noun: string }) {
-  const [text, setText] = useState(initial);
-  const [pending, start] = useTransition();
-  const [error, setError] = useState<string>();
-  const saved = useRef(initial);
-
-  const commit = () => {
-    if (text.trim() === saved.current.trim()) return;
-    const next = text;
-    start(async () => {
-      const r = await saveProductsStatement(planId, next);
-      if (r.ok) { saved.current = next; setError(undefined); } else setError(r.error);
-    });
-  };
-
+  if (!initial.trim()) {
+    return (
+      <p className="mt-5 max-w-[860px] text-[11.5px] text-muted-foreground">
+        The {noun} section of the report opens with a short description of what you sell, and this plan has
+        none. <Link href={`/plans/${planId}/settings`} className="font-semibold text-primary hover:underline">Add it in Plan settings</Link>.
+      </p>
+    );
+  }
   return (
     <div className="mt-5 max-w-[860px]">
-      <label className="mb-[3px] block text-[11.5px] font-semibold text-muted-foreground" htmlFor="products-statement">
-        About what you sell
-      </label>
-      <Textarea
-        id="products-statement" value={text} disabled={pending} onChange={(e) => setText(e.target.value)} onBlur={commit}
-        placeholder={`e.g. We pour, finish and guarantee residential and light-commercial concrete for builders and homeowners across the South Coast. Quoted price is the final price, and a slab is poured within ten working days of the site being ready.`}
-        className="min-h-[72px]"
-      />
+      <div className="mb-[3px] text-[11.5px] font-semibold text-muted-foreground">About what you sell</div>
+      <p className="whitespace-pre-line rounded-md border border-border bg-secondary px-3 py-2 text-[12.5px] leading-[1.55]">{initial}</p>
       <p className="mt-1 text-[11.5px] text-muted-foreground">
-        {error ? <span className="text-bad">{error}</span>
-          : <>Two or three sentences: what you sell, to whom, and what makes a customer pick you. Opens the {noun} section of the report, above the list.</>}
+        Opens the {noun} section of the report, above the list.{" "}
+        <Link href={`/plans/${planId}/settings`} className="font-semibold text-primary hover:underline">Edit in Plan settings</Link>.
       </p>
     </div>
   );

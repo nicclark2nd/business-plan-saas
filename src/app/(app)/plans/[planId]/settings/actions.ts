@@ -58,6 +58,8 @@ export async function saveProfile(planId: string, p: Partial<Profile> & { establ
       legal_structure: p.legal_structure?.trim() || null,
       customer_type: p.customer_type?.trim() || null,
       product_type: p.product_type?.trim() || null,
+      /* One column, one writer (§6.41). The Sales screen used to save this too; it now only displays it. */
+      products_services_statement: p.products_services_statement?.trim() || null,
       tagline: p.tagline?.trim() || null,
       /* Stored as typed, tidied only for printing — what the client wrote is theirs (§6.96). */
       contact_email: email.value,
