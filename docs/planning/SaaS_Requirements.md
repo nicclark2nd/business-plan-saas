@@ -3035,3 +3035,56 @@ never reaches is not a field, and a row nobody has filled in is not a customer.
 **The wider point, which is the reason this section exists:** the redaction rule is enforced because it is
 code. Everything else the context does — what it includes, what it implies by including an empty heading —
 is a design decision with no test watching it, and the model will make something of whatever it is handed.
+
+---
+
+## §6.106.4 — Correcting §6.106.1 and §6.106.3, which were both wrong
+
+Two sections above this one accuse the model of inventing things it did not invent. Both rest on the same
+mistake, made twice in a row, and the sections stay where they are because a decisions log that quietly
+edits its errors is worth nothing.
+
+**THE MISTAKE: READING FORM VALUES OUT OF A TEXT DUMP.** `get_page_text` returns a page's `innerText`, and
+the value of an `<input>` or a `<textarea>` is **not** in `innerText`. Every grid cell and every field on
+these screens is one of those.
+
+So a Marketing screen holding a long, detailed customer segment read back as a table of empty headings. I
+concluded the plan had no customers.
+
+> **THE SAME TOOL HAD ALREADY MISLED ME ONCE THAT DAY, ON PLAN SETTINGS, AND I NOTICED, SAID SO, AND THEN
+> TRUSTED IT AGAIN TWENTY MINUTES LATER ON A DIFFERENT SCREEN. A LESSON LEARNED ONCE IS NOT LEARNED.**
+
+### What §6.106.1 got wrong
+
+It records the first draft as inventing a region: the plan said *"South East Queensland"* and the draft said
+*"South East and Central Queensland"*.
+
+**The plan says Central Queensland.** It is in the customer segment, along with the Gladstone region. The
+model read the plan correctly. The claim that *"the instruction not to invent is a request, not a
+constraint"* may still be true in general, but **this was not evidence for it**, and it was presented as
+the founding evidence.
+
+### What §6.106.3 got wrong
+
+It records the segments table as empty, and explains the word "builders" as the model filling the silence
+under an empty heading. **The table is not empty**, and "builders" is a reasonable reading of *"construction
+head contractors"* in that same row.
+
+**The blank-row fix in that section is still correct** — a grid's empty trailing row genuinely should not
+make a slice report itself present, and the tests for it are sound. But it was a defensive fix presented as
+a diagnosis, and the diagnosis was of a fault that was not there.
+
+### What was actually true
+
+**"Ten crews" and "our own batching plant" came from a test answer I typed into the Vision dialog**, and
+`products_services_statement` said *"Builders and homeowners choose us"* because I typed that too. That part
+of §6.106.3 stands, and it is the only part that does.
+
+> **THE MODEL USED THE PLAN FAITHFULLY. THE FICTION IN THE PLAN WAS MINE, AND SO WAS THE FICTION IN THE
+> ANALYSIS OF IT.**
+
+### The rule
+
+**Never read a field's value from extracted page text. Look at the screen.** Every real fault this project
+has found came from looking at a rendered screen; both of these phantom faults came from reading a
+convenient summary of one.
