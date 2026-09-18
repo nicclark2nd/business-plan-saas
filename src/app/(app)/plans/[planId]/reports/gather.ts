@@ -339,6 +339,9 @@ export async function gatherReport(planId: string) {
    * is the kind of cost that never shows up until a plan is slow. Each caller resolves what it needs.
    */
   return {
+    /* The structured facts, beside the finished document. AI drafting projects slices of THIS — one
+       assembly, two projections, rather than a second path to the same plan (§6.41, §6.105). */
+    input,
     doc, missing, mode, reconciled: checked.reconciled, pageSize,
     printSalaries: input.printSalaries, logoPath: (settings?.logo_path as string | null) ?? null,
   };

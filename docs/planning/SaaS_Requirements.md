@@ -2880,3 +2880,61 @@ Nothing is claimed that rests on a setting in somebody's dashboard.
 than on the word of a footer that said "All changes saved". The record line appearing at all is the
 strongest evidence available: 0044's check constraint would have refused the row unless the timestamp **and**
 the signatory were both written.
+
+---
+
+## §6.106.1 — The draft button, and the first thing it got wrong
+
+Vision's six fields can now be drafted. Everything the popup shows — its heading, its sub-line, its guidance
+— is the screen's own field definition, so there is no second copy to drift (§6.105.2).
+
+**NO SPINNER, AND NOT BY EXCEPTION.** The route streams and the text simply begins appearing, so the wait
+is filled by the answer rather than by a picture of waiting. Before the first character there is one quiet
+line, *"Writing…"*, which is the idiom the footer already uses for *"Saving…"*. The rule survives intact
+rather than acquiring its first carve-out.
+
+**Absent, not disabled.** With AI off there is no greyed-out button and no tooltip about a locked door —
+there is a line saying where to turn it on. And the caption is computed by the same check that decides what
+is sent, so it cannot promise products seven steps before products exist, which is exactly what the stub it
+replaces did (§6.87).
+
+**The consent is enforced in the route, not on the screen.** A hidden button is a courtesy; a server that
+refuses holds whatever the browser was persuaded to send.
+
+**Nothing is written to the plan.** The draft returns to the form as a suggestion and the form's own save
+runs when the client leaves the field, exactly as when they type.
+
+### The bug that only a live call could find
+
+The first attempt sat on *"Writing…"* for ever. The network log said `ERR_ABORTED`.
+
+The dialog aborted its request from an unmount cleanup. React's development double-mount fires that cleanup
+immediately, so the only attempt was cancelled the instant it started; a ref meant to stop duplicates then
+prevented a second; and `run`'s catch swallowed the `AbortError` silently. Three correct-looking decisions
+producing a dialog that waits for ever.
+
+The effect now owns the controller, so a double-mount aborts the first attempt and starts a second — which
+is what that pattern is for.
+
+> **NO TEST WOULD HAVE FOUND THIS. IT NEEDED A REAL CALL, IN A REAL BROWSER, WITH SOMEONE WATCHING THE
+> NETWORK TAB.**
+
+### And the first real draft invented something
+
+It came back in about three seconds, through a zero-retention endpoint, which answers the question this
+whole design hinged on: Gemini 3.1 Flash Lite can be served under `zdr: true`.
+
+The plan's own words say the business works **"across South East Queensland"**. The draft said:
+
+> *"…residential and light-commercial concrete services across **South East and Central Queensland**…"*
+
+Two invented words, in a sentence that opens a document a bank reads, produced under a system prompt whose
+first rule is *never invent a place*.
+
+> **THE INSTRUCTION NOT TO INVENT IS A REQUEST, NOT A CONSTRAINT. EVERY GUARANTEE THIS FEATURE MAKES MUST
+> REST ON SOMETHING ENFORCED — WHICH IS WHY THE REDACTION RULE IS CODE AND A TEST, AND NOT A SENTENCE IN
+> THE PROMPT.**
+
+It is also the argument for the whole shape of this feature: a suggestion the client reads, edits and
+accepts, never text written into a plan on their behalf. **The last check is a person, and the design has to
+keep assuming it.** Whether the screen should say so out loud is the open question this leaves.
