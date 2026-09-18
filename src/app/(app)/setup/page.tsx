@@ -4,6 +4,7 @@ import { SetupForm } from "./SetupForm";
 import { PlanCard } from "./PlanCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Brand } from "@/components/Brand";
 
 function orgName(p: { organisations?: { name: string } | { name: string }[] | null }) {
   const o = p.organisations;
@@ -22,6 +23,10 @@ export default async function SetupPage() {
     return (
       <main className="px-4 py-12">
         <div className="mx-auto max-w-2xl">
+          {/* The plan picker is where a returning client lands and it carried no name at all
+              until now — the only signed-in screen outside a plan, so the only one the dark
+              header never reaches (§6.101). */}
+          <Brand height={26} className="mb-8" />
           <div className="mb-6 flex items-end justify-between">
             <div><div className="eyebrow">Your plans</div><h1 className="text-2xl font-semibold">Welcome back{session.profile?.full_name ? `, ${session.profile.full_name.split(" ")[0]}` : ""}</h1></div>
             <form action="/auth/signout" method="post"><Button variant="outline" size="sm" type="submit">Sign out</Button></form>
@@ -62,6 +67,7 @@ export default async function SetupPage() {
   return (
     <main className="px-4 py-12">
       <div className="mx-auto max-w-xl">
+        <Brand height={26} className="mb-8" />
         <div className="eyebrow">Setup · takes about a minute</div>
         <h1 className="mt-1 text-2xl font-semibold">Let&apos;s set up your plan</h1>
         <p className="mt-1 max-w-[60ch] text-[13px] text-muted-foreground">Two questions now; everything else is asked step by step inside the plan. You can change any of this later in Settings.</p>

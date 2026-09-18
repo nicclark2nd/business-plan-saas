@@ -2644,3 +2644,54 @@ recording what the app displayed when four of the thirteen currencies were forma
 Not renamed, because they are not the brand: the GitHub repository (`business-plan-saas`), the npm package
 name, the Supabase project, and the folder on Nic's own disk. Each is an address rather than a name, and
 changing an address breaks the things pointing at it for no gain a client can see.
+
+---
+
+## §6.101 — A logo is not a picture, it is the place the name lives
+
+§6.100 renamed the app but left the brand as a `▲` glyph in a rounded blue square — a placeholder standing
+in for artwork that did not exist yet. The artwork now exists, so this section is about where it goes, and
+about the two things that were found by asking that question rather than by drawing anything.
+
+**THE FIRST FINDING WAS THAT TWO SCREENS NEVER CARRIED THE NAME AT ALL.** The rename swept the sidebar, the
+browser tab and the spreadsheet template. It did not sweep the landing page or the sign-in layout, both of
+which read `▲ Business planning platform`. Those are the first two screens a client ever sees.
+
+> **A RENAME THAT REACHES EVERY SCREEN BUT THE FIRST ONE HAS RENAMED NOTHING A NEW CLIENT WILL EVER READ.**
+
+The plan picker at `/setup` was worse: it carried no brand of any kind. It is the only signed-in screen
+that sits outside a plan, so it is the only one the dark header never reaches, and it is exactly where a
+returning client lands. Four surfaces, then, not the two this pass set out to change.
+
+**THE SECOND FINDING WAS THAT THE FIRST ARTWORK SUPPLIED COULD NOT GO ON THREE OF THEM.** Its wordmark was
+white, which is correct for the dark header and invisible on the three white screens; its mark was a
+different symbol from the one that followed; and its blue was `#0D7FFC` against the app's `#1F6FCB`.
+
+That last one is the measurable part. Against white, `#1F6FCB` gives **5.01:1** and `#0D7FFC` gives
+**3.85:1**. Adopting the logo's blue as the interface blue would have dropped every primary button with
+white text on it below AA for normal text, and a logo is not a reason to make the buttons harder to read.
+
+The pair finally supplied resolved all three: one symbol, two files differing only in the wordmark's
+colour, and — checked pixel by pixel rather than by eye — `#1F6FCB` and `#1F2933` exactly, the app's own
+`--primary` and `--foreground`.
+
+> **THE PALETTE DID NOT HAVE TO BEND, SO NOTHING WAS DECIDED HERE THAT ANYONE HAS TO LIVE WITH LATER.**
+
+**One component, not four `<Image>` tags.** `components/Brand.tsx` takes a height and a variant. The lockup
+is one fact and the wordmark's colour is a property of the surface it sits on, not a second logo, so §6.41
+applies to artwork exactly as it applies to figures: when the lockup changes it changes in one file.
+
+Its `alt` is `"BizPlanHQ"` rather than `"logo"`, because on the landing and sign-in screens this image **is**
+where the name appears. A client using a screen reader who is told "logo" has been told nothing about whose
+site they are signing in to.
+
+**The favicon was the Next.js placeholder.** It had been since the repository was created — a detail nobody
+sees in development, because a tab strip full of localhost ports is not a thing anyone reads. It now carries
+the mark at 16, 32 and 48 pixels, cut tight to the frame rather than padded, because at sixteen pixels the
+difference between filling the square and sitting politely inside it is the difference between a mark and a
+smudge.
+
+**The Word document was deliberately left alone.** The plan goes to a bank under the client's name, and our
+logo does not belong on their cover.
+
+> **THE PRODUCT THAT BUILT THE DOCUMENT IS NOT A PARTY TO WHAT THE DOCUMENT ASKS FOR.**
