@@ -218,10 +218,41 @@ without doing anything.
 ## What is there today
 
 **One** stub, in `vision/VisionForm.tsx`, rendered six times — a disabled button reading *✦ Suggest a draft*
-with the caption *"Will use your industry, products and goals"*. No AI code anywhere in the repository.
-The goals model already carries `source: "manual" | "ai" | "whatif"`, so the shape was anticipated.
+with the caption *"Will use your industry, products and goals"*. No AI code anywhere in the repository. The
+goals model already carries `source: "manual" | "ai" | "whatif"`, so the shape was anticipated.
 
 Six buttons promising a capability that does not exist is §6.87. Either it ships or the caption goes.
+
+**And the caption is wrong for a second reason, which turned out to drive the whole design.** Vision is step
+1. Products are step 8. Goals are step 16. A client who does everything in perfect order still has no
+products and no goals when they reach Vision, so that sentence promises data from steps that have not
+happened and, at that point in the path, never will have.
+
+## What a plan actually holds at step 1
+
+Plan settings comes before Vision, and `industry` is already a required profile field
+(`PROFILE_REQUIRED`). So by the time anyone reaches a draft button the plan knows: business name, industry,
+country, main state, legal structure, type of customer, type of product, date established and the tagline.
+
+That is a real grounding set. What is absent is everything the later steps collect.
+
+## The mechanism: one thing, not two
+
+An earlier draft of this note had each field declare itself **grounded** (the plan can answer it) or
+**ask-first** (only the owner knows). That was wrong, and Nic's objection is what corrected it: the same
+field is grounded at step 12 and ungrounded at step 1. It is not a property of the field.
+
+> **A FIELD DECLARES WHAT IT WOULD LIKE. AT THE MOMENT THE BUTTON IS PRESSED, WHATEVER IS PRESENT BECOMES
+> CONTEXT AND WHATEVER IS MISSING BECOMES THE QUESTIONS.**
+
+Mission wants profile, an overview of what is sold, and who it is sold to. Press it at step 1 and the
+profile is there but the rest is not, so it asks. Press it at step 12 and it drafts without asking anything.
+One button, one code path, correct in both places — and no static classification for anyone to maintain or
+get wrong.
+
+**The caption is computed from the same check**, so it can no longer lie: *"Will use your industry and
+business profile"* early, *"Will use your industry, products and goals"* once those exist. It describes what
+it will actually use because it is reading the same thing the drafting reads.
 
 ## The prompt is built from the field, never written per field
 
@@ -230,54 +261,88 @@ promise, for instance: *what you guarantee every customer, every time* — *"A c
 your own cost. Not what makes you better than the competition — that is Our advantage, on the Competitors
 step."*
 
-That is better field-specific guidance than a hand-written prompt would be, and it is already on the screen
-in front of the client.
+That is better field guidance than a hand-written prompt would be, and it is already on the screen in front
+of the client.
 
-> **FORTY HAND-WRITTEN PROMPTS ARE FORTY COPIES OF GUIDANCE THAT ALREADY EXISTS, AND THEY WILL DRIFT FROM
-> IT (§6.41). ONE DRAFTING FUNCTION READS THE FIELD DEFINITION.**
+> **FORTY HAND-WRITTEN PROMPTS ARE FORTY COPIES OF GUIDANCE THAT ALREADY EXISTS, AND THEY WILL DRIFT FROM IT
+> (§6.41). ONE DRAFTING FUNCTION READS THE FIELD DEFINITION.**
 
-A new field then gets drafting for free, and a hint edited on the screen changes what the AI is told in the
-same commit.
+A new field then gets drafting for free, and a hint edited on the screen changes what the model is told in
+the same commit. The popup is headed with the field's own label and sub-line — *"Mission — what you do, for
+whom, every day"* — so there is never a question about which box is being filled, and no second copy of that
+wording to drift.
 
-## Grounded fields and fields only the owner knows
-
-Two kinds, declared in the field definition:
-
-- **Grounded** — the plan can answer it. "Mission: what you do, for whom" comes from products and segments.
-  Press the button, get a draft.
-- **Ask first** — only the owner knows. "Purpose: why the business exists beyond profit" is not in a
-  products table, and drafting it from one is the app putting words in a client's mouth that they will then
-  sign and send to a bank. One or two questions, then draft from the answer.
+## What the AI may not invent
 
 > **A GENERATED SENTENCE THE OWNER DID NOT MEAN IS WORSE THAN A BLANK FIELD.**
+
+"Purpose: why the business exists beyond profit" is not in a products table. Where the plan cannot ground an
+answer the model asks rather than guesses, because the alternative is the app putting words in a client's
+mouth that they will then sign and send to a bank.
+
+## The questions
+
+At most **three**, ranked by how much each would change the draft, and only ever for what is genuinely
+missing. Each one must be answerable in a sentence: *"What are the main things you sell?"* is a question;
+*"Describe your market"* is homework.
+
+**They are asked at the granularity of an overview, never of a list.** Nic's correction, and it matters:
+step 1 wants *"I sell driveways, patios and housing slabs to the domestic market"* — enough for the model to
+get a grasp. Step 8 wants every product with a price, a volume and a growth curve, because that is what the
+forecast is built from. Those are different questions at different depths and neither substitutes for the
+other.
+
+## The overview field already exists, in the wrong place
+
+`plan_settings.products_services_statement` — the prose paragraph describing what the business sells — is
+**already a column**, and is already asked. On the **Sales screen, at step 8.**
+
+> **THE ONE FIELD THAT WOULD GROUND EVERY DRAFT IN THE APP IS ASKED TWO-THIRDS OF THE WAY THROUGH THE PATH.**
+
+Moving where it is asked is a UI change, not a data change: the column is on `plan_settings`, not on a Sales
+table, so nothing migrates. Asked at setup, it grounds Vision, Marketing, Competitors, SWOT and Operations —
+the five narrative steps that currently have nothing behind them — and Sales can still show it at step 8 for
+review.
+
+This is the cheapest thing on this page by some distance, and it is worth doing whether or not AI is ever
+built, because a plan whose first seven steps do not know what the business sells is missing the same
+sentence a human consultant would ask for first.
+
+## Always a button, and it never overwrites
+
+The client decides, every time. Nothing drafts automatically.
+
+And **if the field already has text, the draft appears as a suggestion to accept or discard, never straight
+into the box.** Someone pasting from an existing plan must not be able to lose it to a mis-click.
 
 ## Context comes from the loader, and only what the field asks for
 
 `gatherReport(planId)` already assembles the whole plan — every module, the forecast, the figures — into one
-object. The AI context is a projection of that. **It is not a second reading** (§6.41, §6.67): writing a
-"fetch plan data for AI" function would recreate the fault this codebase has spent its life fixing.
+object. The AI context is a projection of that. **It is not a second reading** (§6.41, §6.67): a "fetch plan
+data for AI" function would recreate the fault this codebase has spent its life fixing.
 
-Each field declares what it needs — `context: ["products", "segments", "positioning"]`. Sending forty pages
-to draft one sentence is expensive and makes the model worse, not better.
+Each field declares what it needs. Sending forty pages to draft one sentence is expensive and makes the
+model worse, not better.
 
 ## The protection that actually works is sending less
 
-Nic's correction, which reframed this: **the confidentiality statement on page 2 is the client's notice to
-whoever they hand the plan to. It is not our notice to them.** The two had been conflated.
+Nic's correction, which reframed the disclosure question: **the confidentiality statement on page 2 is the
+client's notice to whoever they hand the plan to. It is not our notice to them.** The two had been
+conflated.
 
-So the disclosure question is answered honestly, in the right place — and separately, the app simply does
-not send most of what would worry anyone:
+So disclosure is answered honestly in its own place — and separately, the app simply does not send most of
+what would worry anyone:
 
 > **ONLY THE CONTEXT A FIELD DECLARES IS SENT. PEOPLE'S NAMES, SALARIES AND FUNDING SOURCES ARE IN NO
 > FIELD'S CONTEXT.**
 
-Drafting a vision statement needs the industry, the products and the segments. It does not need what the
+Drafting a vision statement needs the industry, the overview and the segments. It does not need what the
 operations manager is paid or which bank holds the loan. This is enforceable in code and testable, which a
 consent paragraph is not.
 
 ## The toggle
 
-Per plan, in Plan settings, beside the print settings — and per plan for the reason already written into
+Per plan, in Plan settings, beside the print settings — per plan for the reason already written into
 migration 0041: these decisions *differ between two plans the same consultant writes in the same week*. A
 café and a defence subcontractor are not the same answer.
 
@@ -307,24 +372,23 @@ A first cut. Every sentence has to be one the code actually keeps:
 >
 > The AI models are provided by third parties and may change over time.
 
-Terms at purchase are the proper home for the general version. This toggle is not a substitute for that —
-it is what puts the disclosure where the decision is actually being made.
+Terms at purchase are the proper home for the general version. This toggle is not a substitute for that — it
+is what puts the disclosure where the decision is being made.
 
 ## The provider
 
-**Checked, September 2026, rather than remembered:**
+**Checked in September 2026 rather than remembered:**
 
 - **OpenAI direct** does not train on API data by default, but retains abuse-monitoring logs up to 30 days
   as standard; zero data retention requires approval by their sales team.
 - **OpenRouter** retains nothing unless prompt logging is opted into, offers ZDR toggles per model group in
   account settings, and — the part that matters — a **per-request** parameter: `provider: { zdr: true }`.
 
-OpenRouter wins on the strength of that last point. **A guarantee that travels with every request lives in
-the code and can be tested. A guarantee that lives in a dashboard toggle depends on nobody changing it in
-eighteen months.**
+> **A GUARANTEE THAT TRAVELS WITH EVERY REQUEST LIVES IN THE CODE AND CAN BE TESTED. A GUARANTEE THAT LIVES
+> IN A DASHBOARD TOGGLE DEPENDS ON NOBODY CHANGING IT IN EIGHTEEN MONTHS.**
 
-It also keeps model choice, which matters here: drafting a vision statement and drafting an operations
-narrative may want different models, and cost and quality will want comparing per field.
+OpenRouter also keeps model choice, which matters here: drafting a vision statement and drafting an
+operations narrative may want different models, and cost and quality will want comparing per field.
 
 **Keep the distinction straight in the wording:** OpenRouter separates retention from training. Some
 providers do not train but do retain. `zdr` addresses retention; training is a separate control. The consent
@@ -332,19 +396,17 @@ statement must describe what is actually configured.
 
 **Build so the choice does not matter.** `engine/ai/` with a provider interface; model and provider in
 config; the key server-side and never `NEXT_PUBLIC_`. Swapping vendor becomes configuration rather than a
-rewrite, which is the right posture for a field moving this fast. Coupling to one vendor is the mistake, not
-picking the wrong one today.
+rewrite, which is the right posture for a field moving this fast.
 
 Two caveats held lightly: confirm what the OpenRouter account's privacy settings actually say before the
-wording is written, and remember that a vendor toggle is a policy rather than a contract — a client who
-needs a contractual guarantee is a procurement conversation, not a setting.
+wording is finalised, and remember that a vendor toggle is a policy rather than a contract.
 
 ## Security: the model never touches the database
 
 > **THE AI IS HANDED TEXT AND RETURNS TEXT. IT GETS NO CONNECTION, NO TOKEN, AND NO TOOL THAT CAN QUERY.**
 
-The server loads the plan through the same Supabase client with RLS that every page uses, under the signed-in
-user's own session. The model only ever sees what that loader returned.
+The server loads the plan through the same Supabase client with RLS that every page uses, under the
+signed-in user's own session. The model only ever sees what that loader returned.
 
 So the guarantee is not "we instructed it not to read other plans" — there is nothing for it to read from.
 If "ask the AI about my plan" is ever built, it goes through the same loader. **Never give the model a tool
@@ -352,9 +414,69 @@ that runs a query.**
 
 ## Open questions
 
-1. Which fields are grounded and which must ask first — a pass over every written field in the app.
+1. **Waiting.** This app has no spinners, and that rule holds because every save is milliseconds. A draft is
+   five to ten seconds. That is a state the app has never had to express, and it needs an answer before the
+   first button works rather than after — otherwise the first AI feature is also the thing that breaks the
+   app's one consistent interaction rule.
 2. Rate limiting and a per-plan cap, so a stuck button cannot spend a fortune.
-3. Does an accepted draft record that it came from AI? The goals model already has `source: "ai"`; written
-   fields do not. Worth it for honesty, and worth asking whether a client wants that visible.
-4. What happens when the provider is down or slow — this app has no spinners (§ house rule), and a draft
-   takes seconds rather than milliseconds. That needs its own answer before the first button works.
+3. Does an accepted draft record that it came from AI? Goals already have `source: "ai"`; written fields do
+   not. Worth it for honesty, and worth asking whether a client wants it visible.
+4. Whether an answer given to a question at step 1 is kept anywhere beyond that draft, or asked again later.
+   The overview move above removes most of this, since the commonest question now has a home.
+
+---
+
+# Note 5 — Whether the financials should come first
+
+**Status:** open. Raised, not decided. **The empty-plan walkthrough is what settles it.**
+
+Nic: *"we are forcing the clients to start on areas they might not want to as we don't have an intelligent
+AI."*
+
+## The order today
+
+Plan settings, then Vision (1), Leadership Team (2), Marketing (3), Competitors (4), SWOT (5), Operations
+(6), then the financials from Historic (7) through One-off income and costs (13), then Assumptions (14),
+Review forecast (15), Goals (16), the plan itself (17).
+
+So **six narrative steps come before a single number.** The hardest writing in the whole app — a vision, a
+purpose, a brand promise — is what a client meets first, cold, with nothing behind them.
+
+## The case for turning it round
+
+Most owners know what they sell and roughly what it costs. Very few have ever written down why the business
+exists. The numbers are the part they can answer; the narrative is the part they have never articulated —
+and it is far easier to write once the forecast is in front of you, with or without a model helping.
+
+It would also change what AI drafting can do. Under the current order the model is close to blind for six
+steps. With the numbers first it would reach every narrative field knowing the business properly.
+
+## The case against, and it is not nothing
+
+**Real dependencies run the other way.** Leadership Team feeds salaries into Overheads; Marketing feeds
+spend into Overheads. Both must precede step 10, or a client enters overheads with synced lines sitting at
+zero and never comes back to them.
+
+And a plan's logic is strategy then numbers: you decide what you are doing, then you forecast it. Reversing
+that means forecasting before deciding — though it is worth being honest that this is partly a consultant's
+idealisation, since the real plan is usually already in the owner's head.
+
+**The report order does not have to match the entry order.** The document reads Executive Summary, strategy,
+then financials whatever order the screens were filled in. So nothing about the document constrains this.
+
+## Where this actually lands
+
+Three things are true at once, and they point at different sizes of change:
+
+1. **Advanced mode already exists.** Clients are not locked in; the guided path only suggests an order. Some
+   of this complaint may be about how firmly it suggests it.
+2. **Moving the overview to setup (Note 4) removes much of the pain without touching the order**, because
+   the reason the early steps feel cold is not their position — it is that nothing has yet captured what the
+   business does in prose.
+3. **Reordering seventeen steps is not a small change**: the nav, `stepAfter`/`stepBefore`, completeness,
+   the guided path's whole shape, and the two sync dependencies above.
+
+> **REORDERING A PATH NOBODY HAS WALKED IS GUESSING WITH THE EXPENSIVE OPTION.**
+
+Do the overview move first. Then walk an empty plan from step 1 to 17 and find out where a client actually
+stalls, which is the only evidence that could justify the larger change.
