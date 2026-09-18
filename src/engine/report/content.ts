@@ -96,10 +96,12 @@ export const COPY = {
    * "these statements." and the heading "Financial Data & Governing Law" printed inside the paragraph
    * above it. Neither changes a word.
    *
-   * "local laws" is left exactly as written. The app knows the plan's country and could name it, but the
-   * governing-law clause of a legal notice is not something to improve on somebody's behalf.
+   * The governing-law clause NAMES THE PLACE (§6.95.1), which it did not at first: it said "local laws",
+   * true of every plan and useful to nobody, while Plan settings already knew the country. `governingLaw`
+   * decides the phrase and falls back to those exact words where a client has not named a country, so the
+   * vague version is still the honest answer rather than the default one.
    */
-  disclaimer: (name: string) => ({
+  disclaimer: (name: string, governingLawPhrase = "local laws") => ({
     title: "Confidentiality Statement & Legal Disclaimer",
     parts: [
       {
@@ -120,7 +122,7 @@ export const COPY = {
       },
       {
         heading: "Financial Data & Governing Law",
-        body: "The financial statements and projections within this document are for illustrative purposes and have not been audited. By accepting this document, the recipient agrees to be bound by the foregoing limitations, which shall be governed by and construed in accordance with local laws.",
+        body: `The financial statements and projections within this document are for illustrative purposes and have not been audited. By accepting this document, the recipient agrees to be bound by the foregoing limitations, which shall be governed by and construed in accordance with ${governingLawPhrase}.`,
       },
     ],
   }),

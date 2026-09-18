@@ -115,6 +115,8 @@ export async function gatherReport(planId: string) {
       legalStructure: text(settings?.legal_structure),
       customerType: text(settings?.customer_type),
       productType: text(settings?.product_type),
+      /* Set for the United States and Canada only — the two countries whose tax needs it (§6.95.1). */
+      taxRegion: text(settings?.tax_region),
     },
     framework: {
       vision: text(framework?.vision), mission: text(framework?.mission),

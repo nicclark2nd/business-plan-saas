@@ -18,6 +18,7 @@ import { barsChart, columnsChart, linesChart, trendChart } from "./charts";
 import { cell, num, numberSections, type Block, type Cell, type Draft, type Omission, type ReportDoc } from "./blocks";
 import { COPY } from "./content";
 import { groupByCategory } from "../overheads/categories";
+import { governingLaw } from "../plan/jurisdiction";
 import { goalsAndMilestones, historicAppendix, howWeOperate, marketingAndSales, ourPeople, risksAndMitigation, theBusiness, theCompetition, theMarket, whatWeSell } from "./narrative";
 
 export type ReportInput = {
@@ -35,7 +36,16 @@ export type ReportInput = {
     description: string | null; whyTheyBuy: string | null; pricingRationale: string | null;
     lifecycle: string | null; soldAs: string | null; startYear: number;
   }[];
-  profile: { established: string | null; industry: string | null; country: string | null; legalStructure: string | null; customerType: string | null; productType: string | null };
+  profile: {
+    established: string | null; industry: string | null; country: string | null;
+    legalStructure: string | null; customerType: string | null; productType: string | null;
+    /**
+     * The state or province, where one is on record (§6.95.1). It exists only for the United States and
+     * Canada, because that is where sales tax needs it (§6.39) — every other country has none, and this is
+     * NOT a second field meaning "main state of operation" (§6.41).
+     */
+    taxRegion: string | null;
+  };
   framework: { vision: string | null; mission: string | null; purpose: string | null; brandPromise: string | null; fieldOfPlay: string | null };
   goals: { area: string; title: string }[];
   capital: { name: string; amount: number; year: number; category: string | null; usefulLifeMonths: number | null; residual: number; financed: boolean }[];
@@ -620,8 +630,9 @@ export function buildReport(i: ReportInput): ReportDoc {
     businessName: i.businessName,
     subtitle: COPY.subtitle,
     date: i.date,
-    /* Page two, with this plan's own name in it and never another's (§6.95). */
-    disclaimer: COPY.disclaimer(i.businessName),
+    /* Page two, with this plan's own name in it and never another's (§6.95), governed by the laws of the
+       place the client actually named (§6.95.1). */
+    disclaimer: COPY.disclaimer(i.businessName, governingLaw(i.profile.country, i.profile.taxRegion)),
     sections,
     omitted,
   };

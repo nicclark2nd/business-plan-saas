@@ -2225,3 +2225,37 @@ would probably read better.
 **It renders on the screen as well as in the .docx**, in the same place. The screen report is what a client
 reads before they download; a page that existed only in the file would be a surprise in the thing they send
 (§6.90).
+
+## 6.95.1 Whose laws, and the field that already existed (18 Sep 2026)
+
+§6.95 kept "in accordance with local laws" verbatim and raised the question rather than answering it. Nic:
+*"lets make the plan respect the laws of the local country and state that are captured in the 'Main country
+of operation'."*
+
+So the clause now names the place. `governingLaw(country, region)` builds the phrase and the notice owns its
+own full stop, which is the only reason it is a phrase and not a sentence.
+
+**"Other" is not a place.** It is the option a client picks when the list does not have their country — an
+absence wearing the clothes of an answer. A notice claiming to be governed by *the laws of Other* would be
+worse than the vague wording it replaced, so no country, or "Other", and the fallback is exactly what was
+supplied. The vague version is still available; it is now the honest answer rather than the default one.
+
+**The state was already captured, and a second field would have been the bug.** Nic: *"If we wanted to make
+it more specific we would need to capture the 'Main state of operation' also."* It is there —
+`plan_settings.tax_region`, which exists because sales tax in the United States and Canada depends on it
+(§6.39). So those two countries have a state or province on record and no other country does.
+
+> **BEFORE ADDING A FIELD, FIND OUT WHETHER THE ANSWER IS ALREADY ON RECORD UNDER ANOTHER NAME.** A "main
+> state of operation" beside `tax_region` would be two fields meaning one thing (§6.41), and for a US plan
+> the notice would then depend on which of the two a client happened to fill in. That is not a small bug: it
+> is a legal clause whose answer varies by where the client typed.
+
+The honest limit of this: outside the United States and Canada no state is captured, so an Australian plan
+names the country alone. Widening `tax_region` into a general state or province for every country is a real
+option and a separate decision — it touches the tax regime code that owns the field today, and it should be
+made on its own rather than smuggled in behind a legal notice.
+
+**The consequence is visible on the field that causes it.** The country picker now reads *"The plan's legal
+notice will say it is governed by the laws of Australia."* A field whose consequence a client cannot see is
+how a plan ends up governed by the laws of somewhere they picked in passing eighteen months ago — the same
+argument as §6.93's salary toggle showing its state on the Reports screen.

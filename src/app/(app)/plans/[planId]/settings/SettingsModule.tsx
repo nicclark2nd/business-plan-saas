@@ -16,6 +16,7 @@ import { LicenceSection } from "./LicenceSection";
 import { LogoSection } from "./LogoSection";
 import { legalStructuresFor, CUSTOMER_TYPES, PRODUCT_TYPES, COUNTRIES, CURRENCIES, MONTHS, profileMissing, type Settings, type Profile, type Financial, type Licence } from "./model";
 import { navGroup } from "@/lib/nav";
+import { governingLawNote } from "@/engine/plan/jurisdiction";
 
 type AreaKey = "profile" | "financial" | "printing" | "branding" | "lifecycle";
 const opts = (xs: string[]) => xs.map((x) => ({ value: x, label: x }));
@@ -112,7 +113,17 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
               <Field label="Plan year" hint="The year on the front cover of the report — not the financial year."><FieldInput numeric inputMode="numeric" value={s.plan_year ?? ""} onChange={(e) => edit({ plan_year: Number(e.target.value.replace(/\D/g, "")) || 0 }, "profile")} /></Field>
               {/* Moving country resets the taxes that came with the old one — enforced in `saveProfile`, so
                   it holds whichever screen changes the country (§6.39.1). */}
-              <Field label="Main country of operation"><FieldSelect value={s.country} options={opts(COUNTRIES)} placeholder="Choose" onValueChange={(v) => edit({ country: v }, "profile", true)} /></Field>
+              {/*
+                THE COUNTRY NOW DECIDES THE LEGAL NOTICE TOO (§6.95.1), so the screen says what it will say.
+                A field with a consequence a client cannot see is how a plan ends up governed by the laws of
+                somewhere they picked in passing eighteen months ago.
+              */}
+              <Field label="Main country of operation"
+                hint={governingLawNote(s.country, s.tax_region)
+                  ? `The plan's legal notice will say it is governed by ${governingLawNote(s.country, s.tax_region)}.`
+                  : "Also decides the sales tax, the paper the Word file prints on, and the legal notice on page two."}>
+                <FieldSelect value={s.country} options={opts(COUNTRIES)} placeholder="Choose" onValueChange={(v) => edit({ country: v }, "profile", true)} />
+              </Field>
               <Field label="Legal structure" span={2} hint="Grouped by liability; your country's names come first."><FieldSelect value={s.legal_structure} groups={legalStructuresFor(s.country)} placeholder="Choose" onValueChange={(v) => edit({ legal_structure: v }, "profile", true)} /></Field>
               <Field label="Type of customer" span={2} hint="Changes the word the app uses for the people you sell to."><FieldSelect value={s.customer_type} options={opts(CUSTOMER_TYPES)} placeholder="Choose" onValueChange={(v) => edit({ customer_type: v }, "profile", true)} /></Field>
               <Field label="Type of product sold" span={2}><FieldSelect value={s.product_type} options={PRODUCT_TYPES} placeholder="Choose" onValueChange={(v) => edit({ product_type: v }, "profile", true)} /></Field>

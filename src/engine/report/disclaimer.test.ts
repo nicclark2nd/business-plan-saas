@@ -50,8 +50,26 @@ describe("the confidentiality statement", () => {
     }
   });
 
-  it("says nothing the wording did not say — governing law is still local", () => {
+  /**
+   * §6.95.1. The clause names the place the client actually chose, and says "local laws" only where they
+   * have not chosen one — so the vague wording is the honest answer rather than the default one.
+   */
+  it("is governed by the laws of the place the plan names", () => {
+    const body = (phrase?: string) =>
+      COPY.disclaimer("X", phrase).parts.find((p) => p.heading === "Financial Data & Governing Law")!.body;
+    expect(body("the laws of Australia")).toContain("in accordance with the laws of Australia.");
+    expect(body("the laws of Texas, United States")).toContain("in accordance with the laws of Texas, United States.");
+  });
+
+  it("still says local laws when no country has been set", () => {
     const all = COPY.disclaimer("X").parts.map((p) => p.body).join(" ");
-    expect(all).toContain("in accordance with local laws");
+    expect(all).toContain("in accordance with local laws.");
+  });
+
+  /** One full stop, from the notice, never from the phrase. */
+  it("does not double the full stop", () => {
+    const body = COPY.disclaimer("X", "the laws of Australia").parts.at(-1)!.body;
+    expect(body).not.toContain("..");
+    expect(body.endsWith("laws of Australia.")).toBe(true);
   });
 });
