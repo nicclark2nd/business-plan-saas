@@ -25,6 +25,15 @@ import type { ReportInput } from "@/engine/report/build";
  * apologise for, it is the signal that this becomes a QUESTION instead of context.
  */
 
+/**
+ * A BLANK ROW IS NOT DATA (§6.106.3, and §6.89 again).
+ *
+ * A grid in this app keeps an empty row at the bottom for the next entry. Counting it made `customers`
+ * report itself present on a plan with no customers at all — so the button promised "your customers", the
+ * model was handed "Customer groups:" and nothing underneath, and it filled the silence by inventing some.
+ *
+ * Every slice below therefore counts only rows a client has actually named.
+ */
 export const SLICE_KEYS = [
   "profile", "overview", "whatYouSell", "customers", "market", "competition", "framework", "operations",
 ] as const;
@@ -64,8 +73,9 @@ const SLICES: Record<SliceKey, (i: ReportInput) => string | null> = {
    * the question is the right one.
    */
   whatYouSell: (i) => {
-    if (!i.productLines.length) return null;
-    const rows = i.productLines.map((l) => block([
+    const named = i.productLines.filter((l) => has(l.name));
+    if (!named.length) return null;
+    const rows = named.map((l) => block([
       `- ${l.name}`,
       line("  what it is", l.description),
       line("  why they buy it", l.whyTheyBuy),
@@ -74,10 +84,11 @@ const SLICES: Record<SliceKey, (i: ReportInput) => string | null> = {
   },
 
   customers: (i) => {
-    if (!i.segments.length) return null;
+    const named = i.segments.filter((s) => has(s.name));
+    if (!named.length) return null;
     return block([
       "Customer groups:",
-      ...i.segments.map((s) => block([`- ${s.name}`, line("  who they are", s.profile), line("  what they care about", s.caresAbout)])),
+      ...named.map((s) => block([`- ${s.name}`, line("  who they are", s.profile), line("  what they care about", s.caresAbout)])),
     ]);
   },
 
@@ -91,9 +102,10 @@ const SLICES: Record<SliceKey, (i: ReportInput) => string | null> = {
   competition: (i) => block([
     line("Our advantage", i.position.ourAdvantage),
     line("Barriers to entry", i.position.barriers),
-    ...(i.competitors.length
-      ? ["Competitors:", ...i.competitors.map((c) => block([`- ${c.name}`, line("  how we win", c.howWeWin)]))]
-      : []),
+    ...(() => {
+      const named = i.competitors.filter((c) => has(c.name));
+      return named.length ? ["Competitors:", ...named.map((c) => block([`- ${c.name}`, line("  how we win", c.howWeWin)]))] : [];
+    })(),
   ]),
 
   /** What the client has already written about direction, so a draft agrees with it rather than contradicting it. */

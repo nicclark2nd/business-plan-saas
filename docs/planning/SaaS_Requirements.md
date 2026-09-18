@@ -2991,3 +2991,47 @@ decision rather than as a preamble nobody reads.
 **Still open:** the second answer — the one about a labourer finishing with a trade — did not reach the
 sentence. Defensible for a field that asks for one sentence, and worth watching on fields that ask for
 three.
+
+---
+
+## §6.106.3 — A blank row is not data, and neither is a tester's sentence
+
+Nic, on the first vision the feature produced: *"the AI made a lot of stuff up e.g. ten crews, own batching
+plant and default choice for builders when the business serves homeowners not builders."*
+
+Checking it found two separate faults, and the first one was not the model's.
+
+### The sentence was mine
+
+`plan_settings.products_services_statement` on SEQ Concreting said *"Builders and homeowners choose us…"*
+because **I typed it**, while testing §6.103, to see a field save. The ten crews and the batching plant came
+from a test answer I invented at the Vision dialog. The model then used them faithfully, as instructed.
+
+> **PLAUSIBLE TEST CONTENT TYPED INTO A LIVE PLAN IS INDISTINGUISHABLE FROM THE CLIENT'S OWN WORDS AN HOUR
+> LATER. IT PRINTS IN THE REPORT, IT FEEDS THE MODEL, AND THE ONLY PERSON WHO KNOWS IT IS FICTION IS THE ONE
+> WHO TYPED IT.**
+
+Filling a field to prove a save works is fine. Filling it with invented specifics about a real business is
+not: the next thing that reads it cannot tell. Test content goes in a scratch plan, or it is obviously
+placeholder, or it is removed in the same sitting.
+
+### The blank row was real
+
+Marketing's segments table on that plan holds **no customer groups at all** — only the empty row every grid
+in this app keeps at the bottom for the next entry.
+
+`slices.ts` counted that row. So `customers` reported itself **present** on a plan with no customers: the
+button's caption promised *"your customers"*, and the model was handed the heading `Customer groups:` with
+nothing underneath it.
+
+> **A HEADING WITH NOTHING UNDER IT IS AN INVITATION. THE MODEL FILLED THE SILENCE, WHICH IS WHAT A MODEL
+> DOES, AND A CONCRETER WHO SELLS TO HOMEOWNERS ACQUIRED A VISION ABOUT BEING THE DEFAULT CHOICE FOR
+> BUILDERS.**
+
+Every slice now counts only rows a client has actually named — products, segments and competitors alike.
+This is §6.89 wearing its third hat: a column with no editor is not data, a field that promises a section it
+never reaches is not a field, and a row nobody has filled in is not a customer.
+
+**The wider point, which is the reason this section exists:** the redaction rule is enforced because it is
+code. Everything else the context does — what it includes, what it implies by including an empty heading —
+is a design decision with no test watching it, and the model will make something of whatever it is handed.

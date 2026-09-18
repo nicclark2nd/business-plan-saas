@@ -104,3 +104,39 @@ describe("present becomes context, absent becomes a question", () => {
     expect(text.indexOf("owner's words")).toBeLessThan(text.indexOf("Industry"));
   });
 });
+
+
+/**
+ * A BLANK ROW IS NOT DATA (§6.106.3).
+ *
+ * Found on a real plan. The Marketing grid keeps an empty row at the bottom for the next entry; the slice
+ * counted it, so a plan with NO customers reported customers as present. The button promised "your
+ * customers", the model was handed a heading with nothing under it, and it invented some — which is how a
+ * concreter who sells to homeowners acquired a vision about being the default choice for builders.
+ */
+describe("a row nobody has filled in", () => {
+  it("does not make customers present", () => {
+    const blank = input({ segments: [{ name: "", profile: null, caresAbout: null, share: null }] as ReportInput["segments"] });
+    expect(hasSlice(blank, "customers")).toBe(false);
+  });
+
+  it("does not make products present", () => {
+    const blank = input({ productLines: [{ name: "  ", averagePrice: 0, units: 0, revenue: 0, description: null, whyTheyBuy: null, pricingRationale: null, lifecycle: null, soldAs: null, startYear: 1 }] as ReportInput["productLines"] });
+    expect(hasSlice(blank, "whatYouSell")).toBe(false);
+  });
+
+  it("keeps the named rows and drops the blank ones", () => {
+    const mixed = input({ segments: [
+      { name: "Homeowners", profile: "Owner-occupiers in the suburbs.", caresAbout: null, share: null },
+      { name: "", profile: null, caresAbout: null, share: null },
+    ] as ReportInput["segments"] });
+    const text = slice(mixed, "customers")!;
+    expect(text).toContain("Homeowners");
+    expect(text.split("- ")).toHaveLength(2);
+  });
+
+  it("never emits a bare dash for a nameless competitor", () => {
+    const blank = input({ competitors: [{ name: "", kind: null, reach: null, pricing: null, threat: null, strengths: null, weaknesses: null, howWeWin: null }] as ReportInput["competitors"] });
+    expect(slice(blank, "competition") ?? "").not.toContain("Competitors:");
+  });
+});
