@@ -238,13 +238,18 @@ export async function renderDocx(
   const cover: (Paragraph | Table)[] = [
     ...(logo ? [new Paragraph({
       alignment: AlignmentType.CENTER,
-      spacing: { before: 1400, after: 360 },
+      /* 400 above, 360 below (§6.107.2) — his numbers. It was 1400, which pushed the mark down the page. */
+      spacing: { before: 400, after: 360 },
       children: [new ImageRun({
         type: logo.type === "jpg" ? "jpg" : "png", data: logo.data,
         transformation: scaled(110),
         altText: { name: "Logo", title: "Logo", description: `${doc.businessName} logo` },
       })],
     })] : []),
+    /*
+     * No drop above the name when there is a logo: the logo's own 360 below it is the gap (§6.107.2).
+     * Without a logo the cover still needs the name off the top edge, and 2200 is where it sat before.
+     */
     styled(S.coverName, [text(doc.businessName)], { before: logo ? 0 : 2200 }),
     ...(c.tagline
       /*
@@ -264,11 +269,11 @@ export async function renderDocx(
     ...(c.year
       ? [new Paragraph({ style: S.coverYear, children: [new TextRun({ text: c.year, characterSpacing: 80 })] })]
       : []),
-    styled(S.coverMeta, [text(doc.date)], { before: 240 }),
+    styled(S.coverDetail, [text(doc.date)], { before: 240 }),
 
     goldRule(2600, 300),
-    ...(c.contact ? [styled(S.coverMeta, [text(c.contact)])] : []),
-    ...(c.address ? [styled(S.coverMeta, [text(c.address)])] : []),
+    ...(c.contact ? [styled(S.coverDetail, [text(c.contact)])] : []),
+    ...(c.address ? [styled(S.coverDetail, [text(c.address)])] : []),
 
     /*
      * PAGE TWO (§6.95): the confidentiality statement, between the cover and the contents.

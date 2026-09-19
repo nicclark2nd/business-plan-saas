@@ -60,7 +60,7 @@ export const S = {
   coverTagline: "PlanCoverTagline",
   coverTitle: "PlanCoverTitle",
   coverYear: "PlanCoverYear",
-  coverMeta: "PlanCoverMeta",
+  coverDetail: "PlanCoverDetail",
   coverRule: "PlanCoverRule",
 } as const;
 
@@ -209,26 +209,45 @@ export const PLAN_STYLES: IStylesOptions = {
       run: { size: 18, color: INK },
       paragraph: { spacing: { after: 40 }, keepLines: true } },
 
-    /* The cover. Centred here rather than on each paragraph, so the whole cover moves as one decision. */
+    /*
+     * THE COVER, AS NIC SET IT (§6.107.2).
+     *
+     * These six sizes are not an opinion of this app's. He opened a plan, adjusted the cover styles in Word
+     * until it looked right, and sent the file back — so the numbers below were read out of HIS styles.xml
+     * rather than approximated from a description of it.
+     *
+     * Centred on the style rather than on each paragraph, so the whole cover still moves as one decision.
+     */
+    /* 18pt. It was 20 and competed with the title below it. */
     { id: S.coverName, name: "Plan Cover Name", basedOn: "Normal", next: S.coverTagline,
-      run: { size: 40, bold: true, color: ACCENT },
+      run: { size: 36, bold: true, color: ACCENT },
       paragraph: { alignment: AlignmentType.CENTER, keepNext: true, keepLines: true } },
+    /* 10pt — the same size as the detail lines, which is what makes them read as one family. */
     { id: S.coverTagline, name: "Plan Cover Tagline", basedOn: "Normal", next: S.coverTitle,
-      run: { size: 18, color: MUTED },
+      run: { size: 20, color: MUTED },
       paragraph: { alignment: AlignmentType.CENTER, spacing: { before: 140 }, keepNext: true, keepLines: true } },
+    /* 36pt. The one thing on the page that is allowed to be big. */
     { id: S.coverTitle, name: "Plan Cover Title", basedOn: "Normal", next: S.coverYear,
       run: { size: 72, color: INK },
       paragraph: { alignment: AlignmentType.CENTER, keepNext: true, keepLines: true } },
-    { id: S.coverYear, name: "Plan Cover Year", basedOn: "Normal", next: S.coverMeta,
+    /* 13pt. */
+    { id: S.coverYear, name: "Plan Cover Year", basedOn: "Normal", next: S.coverDetail,
       run: { size: 26, color: ACCENT },
       paragraph: { alignment: AlignmentType.CENTER, spacing: { before: 260 }, keepNext: true, keepLines: true } },
-    { id: S.coverMeta, name: "Plan Cover Detail", basedOn: "Normal", next: S.coverMeta,
-      run: { size: 18, color: MUTED },
+    /* 10pt. The id now matches the name it has always shown in Word's styles pane. */
+    { id: S.coverDetail, name: "Plan Cover Detail", basedOn: "Normal", next: S.coverDetail,
+      run: { size: 20, color: MUTED },
       paragraph: { alignment: AlignmentType.CENTER, spacing: { before: 60 }, keepLines: true } },
+    /*
+     * The rule is a paragraph border, and its LENGTH is the indent: 7cm in from each side (3969 twips),
+     * which is what turns a line across the whole page into a short centred mark. Indenting is the only way
+     * to shorten a border, since a border follows the paragraph's measure.
+     */
     { id: S.coverRule, name: "Plan Cover Rule", basedOn: "Normal", next: S.coverTitle,
       run: { size: 2 },
       paragraph: {
         alignment: AlignmentType.CENTER, keepNext: true,
+        indent: { left: 3969, right: 3969 },
         border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: ACCENT, space: 6 } },
       } },
   ],

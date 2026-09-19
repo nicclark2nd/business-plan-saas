@@ -247,11 +247,42 @@ describe("the cover", () => {
   /* Centring moved onto the cover styles, so it is asserted where it now lives (§6.97). */
   it("is centred, by style rather than by paragraph", async () => {
     const styles = await stylesXml(await renderDocx(doc(), []));
-    for (const id of ["PlanCoverName", "PlanCoverTitle", "PlanCoverYear", "PlanCoverMeta"]) {
+    for (const id of ["PlanCoverName", "PlanCoverTitle", "PlanCoverYear", "PlanCoverDetail"]) {
       expect(styleBlock(styles, id), id).toContain('w:val="center"');
     }
     const xml = await documentXml(await renderDocx(doc(), []));
     expect(xml).toContain('w:pStyle w:val="PlanCoverTitle"');
+  });
+
+  /*
+   * THE SIZES NIC SET (§6.107.2). Read out of the styles.xml of a plan he adjusted in Word and sent back,
+   * so these assertions are a record of a decision rather than a guess at one. Half-points, as Word stores
+   * them: 36 is 18pt.
+   */
+  it("carries the cover sizes he set", async () => {
+    const styles = await stylesXml(await renderDocx(doc(), []));
+    const sizes: [string, number][] = [
+      ["PlanCoverName", 36], ["PlanCoverTagline", 20], ["PlanCoverTitle", 72],
+      ["PlanCoverYear", 26], ["PlanCoverDetail", 20],
+    ];
+    for (const [id, half] of sizes) {
+      expect(styleBlock(styles, id), `${id} should be ${half / 2}pt`).toContain(`<w:sz w:val="${half}"/>`);
+    }
+  });
+
+  /* A border runs the width of its paragraph, so the only way to shorten the rule is to indent it. */
+  it("shortens the cover rule by indenting it 7cm from each side", async () => {
+    const block = styleBlock(await stylesXml(await renderDocx(doc(), [])), "PlanCoverRule");
+    expect(block).toContain('w:left="3969"');
+    expect(block).toContain('w:right="3969"');
+    expect(block).toContain("pBdr");
+  });
+
+  /* The id said Meta and the styles pane said Detail — two names for one style is one too many (§6.41). */
+  it("gives the detail style the id its name has always shown", async () => {
+    const styles = await stylesXml(await renderDocx(doc(), []));
+    expect(styles).toContain('w:styleId="PlanCoverDetail"');
+    expect(styles).not.toContain("PlanCoverMeta");
   });
 });
 

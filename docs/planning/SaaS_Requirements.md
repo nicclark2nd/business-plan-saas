@@ -3194,3 +3194,46 @@ Every §6.107 assertion passed: a bookmark per entry, a field per bookmark, the 
 > **THE TESTS PINNED THE IMPLEMENTATION OF A MISTAKE. THEY NOW ASSERT THE PROPERTY THAT MATTERS INSTEAD —
 > THAT NO HEADING STYLE OF OUR OWN INVENTION APPEARS IN THE DOCUMENT, AND THAT WORD IS THE ONE BUILDING THE
 > CONTENTS.**
+
+---
+
+## §6.107.2 — The cover, as its designer set it
+
+With the contents finally real (§6.107.1), Nic went at the cover the way anyone would: he opened the plan in
+Word, adjusted the styles until it looked right, and sent the file back.
+
+> *"Plan Cover Name — 18 point. Plan Cover Tagline — 10 point. Plan Cover Rule — border indentation left 7cm
+> and right 7cm. Plan Cover Title — 36 point. Plan Cover Year — 13 point. Plan Cover Detail — 10 point."*
+
+**The numbers below were read out of HIS `styles.xml`, not transcribed from that list.** The list is a
+summary; the file is the decision. Unzipping the document he sent also caught two things the list did not
+mention — the logo's spacing and a name that no longer needed a drop above it — and one thing that was
+quietly wrong in ours.
+
+| Style | Was | Is |
+|---|---|---|
+| Plan Cover Name | 20pt | **18pt** |
+| Plan Cover Tagline | 9pt | **10pt** |
+| Plan Cover Title | 36pt | 36pt |
+| Plan Cover Year | 13pt | 13pt |
+| Plan Cover Detail | 9pt | **10pt** |
+| Plan Cover Rule | full measure | **indented 7cm each side** |
+| Logo paragraph | 1400 above | **400 above** |
+
+**The rule is indented because a border runs the width of its paragraph.** There is no other way to shorten
+one: to make a short centred mark you narrow the paragraph it hangs off. 7cm in from each side is 3969
+twips, and it is now on the style, so one change moves both rules.
+
+**`PlanCoverMeta` is now `PlanCoverDetail`.** The id said Meta and the name in Word's styles pane said
+Detail, and Nic's own file — where Word had regenerated the id from the name — is what surfaced it.
+
+> **A STYLE WITH ONE NAME IN THE CODE AND ANOTHER IN THE PANE IS §6.41 IN A PLACE NOBODY THOUGHT TO LOOK:
+> THE ID IS WHAT THE DOCUMENT REFERS TO AND THE NAME IS WHAT A CLIENT EDITS, AND THEY HAVE TO BE THE SAME
+> THING.**
+
+**The tests now record the sizes rather than the structure.** Five exact half-point values, the two indents,
+and the absence of the old id. They are not there to catch a bug — they are there so the next person to
+change a cover size knows they are changing somebody's decision rather than a default.
+
+> **THE BEST DESIGN INPUT THIS DOCUMENT HAS HAD CAME BACK AS A .DOCX. THE RIGHT RESPONSE WAS TO OPEN IT AND
+> READ THE XML, NOT TO RE-DERIVE IT FROM THE COVERING NOTE.**
