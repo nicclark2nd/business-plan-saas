@@ -230,8 +230,12 @@ describe("the cover", () => {
     expect(xml).toContain("Business Plan");
     expect(xml).toContain("Concreting &amp; civil works");
     expect(xml).toContain("2027");
-    expect(xml).toContain("bne.example");
-    expect(xml).toContain("Geebung QLD 4004");
+    /* The contact block is in the cover's FOOTER now (§6.107.4), so it is not in the body at all. */
+    const zip = await (await import("jszip")).default.loadAsync(await renderDocx(doc(), []));
+    const feet = await Promise.all(Object.keys(zip.files).filter((n) => /footer\d*\.xml$/.test(n))
+      .map((n) => zip.file(n)!.async("string")));
+    expect(feet.join("")).toContain("bne.example");
+    expect(feet.join("")).toContain("Geebung QLD 4004");
   });
 
   it("drops each optional line rather than printing a blank one", async () => {
@@ -262,8 +266,8 @@ describe("the cover", () => {
   it("carries the cover sizes he set", async () => {
     const styles = await stylesXml(await renderDocx(doc(), []));
     const sizes: [string, number][] = [
-      ["PlanCoverName", 36], ["PlanCoverTagline", 20], ["PlanCoverTitle", 72],
-      ["PlanCoverYear", 26], ["PlanCoverDetail", 20],
+      ["PlanCoverName", 32], ["PlanCoverTagline", 20], ["PlanCoverTitle", 96],
+      ["PlanCoverYear", 48], ["PlanCoverDetail", 20],
     ];
     for (const [id, half] of sizes) {
       expect(styleBlock(styles, id), `${id} should be ${half / 2}pt`).toContain(`<w:sz w:val="${half}"/>`);
@@ -330,10 +334,12 @@ describe("the confidentiality statement", () => {
     const contents = xml.indexOf("Contents");
     expect(title).toBeGreaterThan(-1);
     expect(contents).toBeGreaterThan(title);
-    /* The breaks are on the styles now (§6.97.1), so that is where they are asserted. */
-    const styles = await stylesXml(buf);
-    expect(styleBlock(styles, "PlanNoticeTitle")).toContain("<w:pageBreakBefore/>");
-    expect(styleBlock(styles, "PlanContentsTitle")).toContain("<w:pageBreakBefore/>");
+    /*
+     * The notice opens the SECOND SECTION (§6.107.4), so the section break is what starts its page — it no
+     * longer needs a break of its own, and having both would leave a blank page between them.
+     */
+    expect((xml.match(/<w:sectPr/g) ?? []).length).toBe(2);
+    expect(styleBlock(await stylesXml(buf), "PlanContentsTitle")).toContain("<w:pageBreakBefore/>");
   });
 
   it("comes after the cover and before the contents", async () => {
@@ -356,8 +362,10 @@ describe("the logo", () => {
     const names = await zipNames(buf);
     expect(names.some((n) => n.startsWith("word/media/"))).toBe(true);
     expect(names.some((n) => /header\d*\.xml$/.test(n))).toBe(true);
-    // titlePage, so the cover does not carry the header copy as well as the big one.
-    expect(await documentXml(buf)).toContain("w:titlePg");
+    /* The cover is a section of its own with no header at all (§6.107.4), which titlePage used to fake. */
+    const xml = await documentXml(buf);
+    const cover = xml.slice(0, xml.indexOf("<w:sectPr"));
+    expect(cover).not.toContain("headerReference");
   });
 
   /**
@@ -484,7 +492,11 @@ describe("page numbers and the contents", () => {
 
   /* A cover with "Page 1 of 27" across the bottom is not a cover. */
   it("leaves the cover without one", async () => {
-    expect(await documentXml(await renderDocx(doc(), []))).toContain("titlePg");
+    const xml = await documentXml(await renderDocx(doc(), []));
+    /* Two sections: the cover's footer is its contact block, the body's is the page number (§6.107.4). */
+    const cover = xml.slice(0, xml.indexOf("</w:sectPr>"));
+    expect((xml.match(/<w:sectPr/g) ?? []).length).toBe(2);
+    expect(cover).toContain("footerReference");
   });
 
   /*

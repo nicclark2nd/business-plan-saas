@@ -154,6 +154,15 @@ const HOLDS_ON = new Set<Block["kind"]>(["table", "chart", "facts"]);
 /** 2cm, in twips. One constant, named because the page margin is referred to in more than one place. */
 const MARGIN = 1134;
 
+/**
+ * How far the foot of each page's footer sits above the bottom edge (§6.107.4).
+ *
+ * The cover's is higher, because its contact block is part of the design rather than a page number. Both
+ * were measured against the cover Nic built, by rendering the file and looking at where the lines landed.
+ */
+const COVER_FOOT = 1566;
+const PAGE_FOOT = 708;
+
 function sectionToDocx(s: Section, pngs: Map<string, Buffer>): (Paragraph | Table)[] {
   const top = s.number.endsWith(".0");
   /*
@@ -254,7 +263,7 @@ export async function renderDocx(
     ...(logo ? [new Paragraph({
       alignment: AlignmentType.CENTER,
       /* 400 above, 360 below (§6.107.2) — his numbers. It was 1400, which pushed the mark down the page. */
-      spacing: { before: 400, after: 360 },
+      spacing: { before: 1225, after: 360 },
       children: [new ImageRun({
         type: logo.type === "jpg" ? "jpg" : "png", data: logo.data,
         transformation: scaled(110),
@@ -265,7 +274,7 @@ export async function renderDocx(
      * No drop above the name when there is a logo: the logo's own 360 below it is the gap (§6.107.2).
      * Without a logo the cover still needs the name off the top edge, and 2200 is where it sat before.
      */
-    styled(S.coverName, [text(doc.businessName)], { before: logo ? 0 : 2200 }),
+    styled(S.coverName, [text(doc.businessName)], { before: logo ? 674 : 2200 }),
     ...(c.tagline
       /*
        * PRINTED AS TYPED (§6.96.1). This upper-cased it, because the example's tagline was two words —
@@ -280,16 +289,24 @@ export async function renderDocx(
       : []),
 
     goldRule(760, 520),
-    styled(S.coverTitle, [text(doc.subtitle)]),
+    styled(S.coverTitle, [text(doc.subtitle)], { before: 724 }),
     ...(c.year
       ? [new Paragraph({ style: S.coverYear, children: [new TextRun({ text: c.year, characterSpacing: 80 })] })]
       : []),
     styled(S.coverDetail, [text(doc.date)], { before: 240 }),
 
-    goldRule(2600, 300),
-    ...(c.contact ? [styled(S.coverDetail, [text(c.contact)])] : []),
-    ...(c.address ? [styled(S.coverDetail, [text(c.address)])] : []),
 
+  ];
+
+  /*
+   * EVERYTHING AFTER THE COVER (§6.107.4), which is a SECTION of its own.
+   *
+   * The cover needs its contact block at a fixed height above the foot of the page, and every other page
+   * needs its number near the bottom edge. Those are two different footer distances, and a Word section
+   * holds exactly one — so the cover gets a section to itself. It also gets no header, which is what
+   * `titlePage` was faking before.
+   */
+  const frontMatter: (Paragraph | Table)[] = [
     /*
      * PAGE TWO (§6.95): the confidentiality statement, between the cover and the contents.
      *
@@ -377,16 +394,42 @@ export async function renderDocx(
     alignment: AlignmentType.RIGHT,
     children: [new TextRun({ children: ["Page ", PageNumber.CURRENT, " of ", PageNumber.TOTAL_PAGES] })],
   })] });
-  const blankFirst = new Paragraph({ children: [] });
 
-  const section: ISectionOptions = {
-    properties: {
-      page: { size: PAGE_DIMENSIONS[pageSize], margin: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN } },
-      titlePage: true,
-    },
-    ...(header ? { headers: { default: header, first: new Header({ children: [blankFirst] }) } } : {}),
-    footers: { default: footer, first: new Footer({ children: [new Paragraph({ children: [] })] }) },
-    children: [...cover, ...doc.sections.flatMap((s) => sectionToDocx(s, pngs)), ...tail],
+  /*
+   * THE FOOT OF THE COVER IS A FOOTER (§6.107.4).
+   *
+   * The rule and the contact line used to sit at the end of the cover's text, held down by a stack of
+   * paragraph spacing. That put them at the mercy of everything above: a taller logo, a tagline that wraps
+   * to two lines, a plan with no logo at all — each moved them, and no fixed gap could be right for all of
+   * them.
+   *
+   * > A FOOTER IS MEASURED FROM THE BOTTOM OF THE PAGE. Nothing above it can push it anywhere.
+   */
+  const coverFoot = new Footer({ children: [
+    new Paragraph({ style: S.coverRule, spacing: { after: 236 }, children: [text("\u00a0")] }),
+    ...(c.contact ? [new Paragraph({ style: S.coverDetail, children: [text(c.contact)] })] : []),
+    ...(c.address ? [new Paragraph({ style: S.coverDetail, children: [text(c.address)] })] : []),
+  ] });
+
+  const page = (footerDistance: number) => ({
+    size: PAGE_DIMENSIONS[pageSize],
+    /* `footer` is the distance from the bottom edge of the page to the footer (§6.107.4). */
+    margin: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN, footer: footerDistance },
+  });
+
+  /* The cover: no header, no page number, and its contact block held at a fixed height off the foot. */
+  const coverSection: ISectionOptions = {
+    properties: { page: page(COVER_FOOT) },
+    footers: { default: coverFoot },
+    children: cover,
+  };
+
+  /* Everything else: the logo in the header, the page number where a page number goes. */
+  const bodySection: ISectionOptions = {
+    properties: { page: page(PAGE_FOOT) },
+    ...(header ? { headers: { default: header } } : {}),
+    footers: { default: footer },
+    children: [...frontMatter, ...doc.sections.flatMap((s) => sectionToDocx(s, pngs)), ...tail],
   };
 
   const document = new Document({
@@ -401,7 +444,7 @@ export async function renderDocx(
      * a contents page of ones.
      */
     features: { updateFields: true },
-    sections: [section],
+    sections: [coverSection, bodySection],
   });
   /* The one pagination rule the library cannot put on a style, put there anyway (§6.97.1). */
   return applyStylePageBreaks(await Packer.toBuffer(document), PAGE_BREAK_STYLES);

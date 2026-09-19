@@ -77,7 +77,7 @@ export const S = {
  * `Heading1` rather than a style of our own: every top-level section starts a page, and a client who wants
  * the plan to run continuously clears one checkbox on a style their Word already knows the name of.
  */
-export const PAGE_BREAK_STYLES: readonly string[] = ["Heading1", S.noticeTitle, S.contentsTitle];
+export const PAGE_BREAK_STYLES: readonly string[] = ["Heading1", S.contentsTitle];
 
 const HAIR = { style: BorderStyle.SINGLE, size: 4, color: HAIRLINE };
 
@@ -218,22 +218,22 @@ export const PLAN_STYLES: IStylesOptions = {
      *
      * Centred on the style rather than on each paragraph, so the whole cover still moves as one decision.
      */
-    /* 18pt. It was 20 and competed with the title below it. */
+    /* 16pt (§6.107.4) — measured off the cover Nic built, not off the number he quoted. */
     { id: S.coverName, name: "Plan Cover Name", basedOn: "Normal", next: S.coverTagline,
-      run: { size: 36, bold: true, color: ACCENT },
+      run: { size: 32, bold: true, color: ACCENT },
       paragraph: { alignment: AlignmentType.CENTER, keepNext: true, keepLines: true } },
     /* 10pt — the same size as the detail lines, which is what makes them read as one family. */
     { id: S.coverTagline, name: "Plan Cover Tagline", basedOn: "Normal", next: S.coverTitle,
       run: { size: 20, color: MUTED },
       paragraph: { alignment: AlignmentType.CENTER, spacing: { before: 140 }, keepNext: true, keepLines: true } },
-    /* 36pt. The one thing on the page that is allowed to be big. */
+    /* 48pt. The one thing on the page that is allowed to be big, and it has to be this big. */
     { id: S.coverTitle, name: "Plan Cover Title", basedOn: "Normal", next: S.coverYear,
-      run: { size: 72, color: INK },
+      run: { size: 96, color: INK },
       paragraph: { alignment: AlignmentType.CENTER, keepNext: true, keepLines: true } },
-    /* 13pt. */
+    /* 24pt. */
     { id: S.coverYear, name: "Plan Cover Year", basedOn: "Normal", next: S.coverDetail,
-      run: { size: 26, color: ACCENT },
-      paragraph: { alignment: AlignmentType.CENTER, spacing: { before: 260 }, keepNext: true, keepLines: true } },
+      run: { size: 48, color: ACCENT },
+      paragraph: { alignment: AlignmentType.CENTER, spacing: { before: 866 }, keepNext: true, keepLines: true } },
     /* 10pt. The id now matches the name it has always shown in Word's styles pane. */
     { id: S.coverDetail, name: "Plan Cover Detail", basedOn: "Normal", next: S.coverDetail,
       run: { size: 20, color: MUTED },
@@ -244,7 +244,12 @@ export const PLAN_STYLES: IStylesOptions = {
      * to shorten a border, since a border follows the paragraph's measure.
      */
     { id: S.coverRule, name: "Plan Cover Rule", basedOn: "Normal", next: S.coverTitle,
-      run: { size: 2 },
+      /*
+       * 10pt, not the 1pt hairline this used to be (§6.107.4). The paragraph is empty and the border hangs
+       * off it, so its RUN SIZE is the height of the gap the rule sits in — and everything below the rule
+       * moves with it. Measured off Nic's cover, where the rule's run is 10pt.
+       */
+      run: { size: 20 },
       paragraph: {
         alignment: AlignmentType.CENTER, keepNext: true,
         indent: { left: 3969, right: 3969 },

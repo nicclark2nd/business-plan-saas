@@ -3292,3 +3292,58 @@ LEFT column — the sizes he asked for, which are not the cover he has on screen
 > **HE TUNED A DOCUMENT WHOSE STYLES COULD NOT TAKE EFFECT, SO THE NUMBERS HE READ OUT OF THE STYLES PANE
 > AND THE COVER HE WAS JUDGING WERE NEVER THE SAME THING.** Which to keep is a design decision and his, not
 > something to infer.
+
+---
+
+## §6.107.4 — Measuring the page instead of arguing about it
+
+Four rounds on the cover, each one confidently wrong, because every claim rested on reading XML and
+imagining the result. Nic, at the end of it: *"How do I get a front cover that looks like screenshot_cover?
+I gave you my word file so you could interrogate the front cover, and still I get something different."*
+
+The files were never the problem. The method was.
+
+> **NOTHING IN THIS APP HAD EVER LOOKED AT A RENDERED PAGE.** Styles were compared, fields were compared,
+> half-points were compared. Where a line actually lands on paper was inferred every single time.
+
+**The loop that ended it:** render the `.docx` to PDF with LibreOffice, convert page 1 to an image, and
+measure the vertical band of every line of ink as a percentage of page height. Run it on Nic's file and on
+the app's, and diff the two columns. The first run reproduced his screenshot to within half a percent, which
+is what made the rest trustworthy.
+
+It found things no amount of XML reading had:
+
+- **Font sizes were already right** — the bands were the same height. Every remaining difference was space.
+- **The bottom gap was exactly his duplicate `PlanCoverRule` paragraph**, which §6.106.3 had dismissed as an
+  editing slip: 2600 + 300 + a line ≈ 18.9% of the page against the 17.2% the app was short. Word merges
+  the borders of consecutive identically-bordered paragraphs, so two paragraphs draw **one** line — which is
+  why it looked like a slip and was not.
+- **A footer grows UPWARD from its anchor.** Adding space after the rule moved the rule up, not the contact
+  down. Two renders settled what no reasoning had.
+- **Space before is suppressed at the top of a page and at the top of a footer.** A spacer paragraph with an
+  exact line height is not suppressed, which is the only reason the page number could be placed at all.
+
+### What changed
+
+**The cover's contact block is a FOOTER, and the cover is a SECTION of its own.**
+
+It used to be the last paragraphs of the cover's text, held down by a stack of spacing. That put it at the
+mercy of everything above — a taller logo, a tagline wrapping to two lines, a plan with no logo — and no
+fixed gap could be right for all of them.
+
+> **A FOOTER IS MEASURED FROM THE BOTTOM OF THE PAGE. NOTHING ABOVE IT CAN PUSH IT ANYWHERE.**
+
+The cover needs its foot high (1566 twips) and every other page needs its number low (708). A Word section
+carries exactly one footer distance, so the cover gets a section of its own — which also gives it no header,
+the thing `titlePage` was faking, and no page number, for free.
+
+Measured result, against the cover Nic built: **rule within 0.4% of his, contact line within 0.1%.**
+
+### What is still not matched, honestly
+
+The upper block still sits 2–6% high. That is not tuned, because it cannot be: the fixture used a stand-in
+logo, and a logo's proportions and internal padding differ for every client. **Tuning the top of the cover
+against a logo that is not the real one would be guessing again, with more steps.**
+
+> **THE RULE FROM ALL OF THIS: IF A CHANGE IS ABOUT HOW A PAGE LOOKS, RENDER THE PAGE AND MEASURE IT. A TEST
+> THAT READS THE STYLESHEET IS ASKING THE DOCUMENT WHAT IT MEANT TO DO.**
