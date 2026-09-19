@@ -278,6 +278,36 @@ describe("the cover", () => {
     expect(block).toContain("pBdr");
   });
 
+  /*
+   * THE TEST THAT SHOULD HAVE EXISTED FROM THE START (§6.107.3).
+   *
+   * `text()` carried `size: o.size ?? 20`, so every run in the document had a hard 10pt on it. Direct
+   * formatting beats a paragraph style, so every size in the stylesheet was decorative — the cover's 36pt
+   * title rendered at 10pt and had done since the first Word file was built. 722 tests were green.
+   *
+   * Nothing checked what a reader would SEE, only what the stylesheet CLAIMED. So this one reads the
+   * document rather than the styles.
+   */
+  it("lets the cover styles decide the cover's sizes", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    const cover = xml.slice(0, xml.indexOf("PlanNoticeTitle"));
+    for (const id of ["PlanCoverName", "PlanCoverTagline", "PlanCoverTitle", "PlanCoverYear", "PlanCoverDetail"]) {
+      const at = cover.indexOf(`w:pStyle w:val="${id}"`);
+      expect(at, `${id} missing from the cover`).toBeGreaterThan(-1);
+      const para = cover.slice(at, cover.indexOf("</w:p>", at));
+      expect(para, `${id} sets its own size and overrides the style`).not.toContain("<w:sz ");
+    }
+  });
+
+  it("lets the heading styles decide the headings' sizes", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    const at = xml.indexOf('w:pStyle w:val="Heading1"');
+    const para = xml.slice(at, xml.indexOf("</w:p>", at));
+    expect(para).not.toContain("<w:sz ");
+    /* Two colours in one heading is a real per-run decision, and stays. */
+    expect(para).toContain("w:color");
+  });
+
   /* The id said Meta and the styles pane said Detail — two names for one style is one too many (§6.41). */
   it("gives the detail style the id its name has always shown", async () => {
     const styles = await stylesXml(await renderDocx(doc(), []));

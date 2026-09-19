@@ -3237,3 +3237,58 @@ change a cover size knows they are changing somebody's decision rather than a de
 
 > **THE BEST DESIGN INPUT THIS DOCUMENT HAS HAD CAME BACK AS A .DOCX. THE RIGHT RESPONSE WAS TO OPEN IT AND
 > READ THE XML, NOT TO RE-DERIVE IT FROM THE COVERING NOTE.**
+
+---
+
+## §6.107.3 — Every font size in the stylesheet was decorative
+
+Nic, on the cover produced after §6.107.2: *"the values you stated you had and then changed do not reflect
+the word document downloaded… either you are reviewing the incorrect values, the values are being changed
+when the word document is created, or you are in fantasy land?"*
+
+The second one. And it had been true of every Word file this app has ever produced.
+
+```ts
+const text = (s, o = {}) => new TextRun({ ..., size: o.size ?? 20 });
+```
+
+**EVERY RUN IN THE DOCUMENT CARRIED A HARD 10pt.** Direct formatting beats a paragraph style, so every font
+size in `docxStyles.ts` was decorative. The cover's 36pt title rendered at 10pt. So did the name, the year
+and the tagline. It has been that way since §6.90 built the first Word file.
+
+> **§6.97 ARGUED AT LENGTH THAT A HEADING MUST BE A STYLE RATHER THAN DIRECT FORMATTING, AND ONE LINE IN THE
+> RUN HELPER HAD BEEN OVERRIDING EVERY STYLE IN THE DOCUMENT THE WHOLE TIME.** The sections about styles were
+> right. They were also, for font size, describing something that never reached the page.
+
+`size` is now left unset unless a caller passes one. A run inherits its paragraph's style; a style-less
+paragraph inherits the document default, which is 10pt and set once. Body text is unchanged. The heading
+runs lost their explicit sizes too — two colours in one heading is a real per-run decision, the size never
+was.
+
+### How it hid
+
+**722 tests were green.** Several asserted that a style *defined* a size, and one asserted the cover was
+centred "by style rather than by paragraph". None asked what a reader would SEE. The two new tests read the
+document rather than the stylesheet, and both were confirmed by putting `?? 20` back and watching them fail.
+
+> **A TEST THAT READS THE STYLESHEET IS ASKING THE DOCUMENT WHAT IT INTENDED. ONLY A TEST THAT READS THE
+> BODY ASKS WHAT IT DID.**
+
+### The part that is still Nic's to decide
+
+Unzipping both files side by side showed the sizes disagree with themselves:
+
+| | Style says | His document shows |
+|---|---|---|
+| Cover title | 36pt | **48pt** |
+| Cover name | 18pt | **16pt** |
+| Cover year | 13pt | **24pt** |
+| Cover detail | 10pt | **12pt** |
+
+The left column is what he set in the styles pane and quoted; the right is direct formatting sitting on top
+of it in his own copy, which is what he has actually been looking at. With this fix the app produces the
+LEFT column — the sizes he asked for, which are not the cover he has on screen.
+
+> **HE TUNED A DOCUMENT WHOSE STYLES COULD NOT TAKE EFFECT, SO THE NUMBERS HE READ OUT OF THE STYLES PANE
+> AND THE COVER HE WAS JUDGING WERE NEVER THE SAME THING.** Which to keep is a design decision and his, not
+> something to infer.

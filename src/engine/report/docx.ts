@@ -25,8 +25,21 @@ import { COPY } from "./content";
 
 const RULE = { style: BorderStyle.SINGLE, size: 4, color: HAIRLINE };
 
+/**
+ * A run of text (§6.107.3).
+ *
+ * `size` IS LEFT UNSET UNLESS A CALLER GIVES ONE, and that is the whole point of this comment.
+ *
+ * It used to read `size: o.size ?? 20`, so every run in the document carried a hard 10pt. Direct formatting
+ * beats a paragraph style, so every font size in `docxStyles.ts` was decorative: the cover's 36pt title
+ * rendered at 10pt, and had since §6.90 built the first Word file. §6.97 argued at length that a heading
+ * must be a STYLE rather than direct formatting, and then this line overrode every style in the document.
+ *
+ * Unset, a run inherits its paragraph's style, and a style-less paragraph inherits the document default —
+ * which is 10pt, set once in `PLAN_STYLES.default.document`. Same body text, styles that finally work.
+ */
 const text = (s: string, o: { bold?: boolean; italics?: boolean; color?: string; size?: number } = {}) =>
-  new TextRun({ text: s, bold: o.bold, italics: o.italics, color: o.color, size: o.size ?? 20 });
+  new TextRun({ text: s, bold: o.bold, italics: o.italics, color: o.color, size: o.size });
 
 /**
  * A chart, rasterised (§6.91). Word cannot draw an SVG the way a browser does, so the same SVG the screen
@@ -172,9 +185,11 @@ function sectionToDocx(s: Section, pngs: Map<string, Buffer>): (Paragraph | Tabl
        * is the entire reason to use one.
        */
       heading: top ? HeadingLevel.HEADING_1 : HeadingLevel.HEADING_2,
+      /* Two colours in one heading is a per-run decision. The SIZE is the style's, and saying it again
+         here is what stopped the style from having any effect (§6.107.3). */
       children: [
-        text(`${s.number}  `, { bold: true, color: MUTED, size: top ? 28 : 22 }),
-        text(s.title, { bold: true, color: ACCENT, size: top ? 28 : 22 }),
+        text(`${s.number}  `, { bold: true, color: MUTED }),
+        text(s.title, { bold: true, color: ACCENT }),
       ],
     }),
     ...s.blocks.flatMap((b, i) => blockToDocx(b, pngs, HOLDS_ON.has(s.blocks[i + 1]?.kind))),
