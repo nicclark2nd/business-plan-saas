@@ -3136,3 +3136,61 @@ in a new hat.
 
 > **THE LAST WORD ON A PAGE NUMBER BELONGS TO THE PROGRAM THAT DRAWS THE PAGE. THE MOST THIS ONE CAN DO IS
 > ASK THE QUESTION PROPERLY AND LEAVE SOMEWHERE FOR THE ANSWER TO GO.**
+
+---
+
+## §6.107.1 — A picture of a table of contents
+
+§6.107 added page numbers and got the easy half right. Nic, on the result:
+
+> *"You have not used or updated Heading 1, 2, 3 as you have created new styles… The table of contents which
+> produces the table of contents automatically and the page numbers is not used by you. You are manually
+> constructing a pretend table of contents. When any moderately Word user opens the file they would have to
+> delete the pretend table of contents and put in a real table of contents if they inserted material as the
+> page numbering would need to change."*
+
+All of that is correct, and the column of 1s in his screenshot was the least of it.
+
+**THE HEADINGS WERE NOT HEADINGS.** Each one carried both a custom style — `Plan Section`, `Plan Subsection`
+— and a heading level, and the style won. The document *looked* structured and was not: Insert → Table of
+Contents found nothing, the navigation pane was empty, and any format a reader picked from Word's own list
+had no material to work with.
+
+§6.97's own comment shows the reasoning that got us there: `outlineLevel` was set so a client "can insert a
+real table of contents over the top of ours". That sentence is the whole fault in miniature — it treats the
+app's output as the real one and Word's as an overlay, when a business plan in Word belongs to Word.
+
+> **A TABLE OF CONTENTS THAT CANNOT REBUILD ITSELF IS A PICTURE OF A TABLE OF CONTENTS.** Insert a page and
+> it is wrong. Edit a heading and it is wrong. There is no key that refreshes it, because there is nothing
+> behind it to refresh.
+
+### What changed
+
+**Word's built-in `Heading1`, `Heading2` and `Heading3` are redefined to the plan's look**, rather than the
+plan's look being given a name of its own. The custom heading styles are deleted. Everything downstream then
+works without being taught: the navigation pane, Insert → Table of Contents, a client's preferred TOC format,
+and the styles pane they already know.
+
+**The contents is a `TOC` field** over Heading 1 and 2, hyperlinked. Word owns it: F9 rebuilds it, inserted
+material renumbers it, entries are links, and a client who wants one of Word's formats can replace it with a
+command they already know rather than by deleting ours first.
+
+**The page-break rule moved onto `Heading1`.** Every top-level section starts a page by definition now,
+rather than by the correct style being chosen at each heading — which is what let 1.0 be the odd one out in
+§6.97.2. And a client who wants the plan to run continuously clears one checkbox on a style their Word
+already names.
+
+**Word's own `TOC1`, `TOC2` and `TOC3` are defined** so the generated contents looks like the rest of the
+plan instead of like a default.
+
+**The bookmarks and `PAGEREF` fields from §6.107 are gone.** A TOC field finds its own headings and works
+out its own page numbers — that is the entire reason to use one. The footer's "Page X of Y" stays.
+
+### What the tests were worth
+
+Every §6.107 assertion passed: a bookmark per entry, a field per bookmark, the dot leader, the tab stop at
+9638 twips. All true, all green, and all describing scaffolding under a thing that should not have existed.
+
+> **THE TESTS PINNED THE IMPLEMENTATION OF A MISTAKE. THEY NOW ASSERT THE PROPERTY THAT MATTERS INSTEAD —
+> THAT NO HEADING STYLE OF OUR OWN INVENTION APPEARS IN THE DOCUMENT, AND THAT WORD IS THE ONE BUILDING THE
+> CONTENTS.**

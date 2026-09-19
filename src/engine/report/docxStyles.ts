@@ -39,9 +39,6 @@ export const HAIRLINE = "D1D5DB";
  * job rather than the appearance ("Plan Figure Title", not "Blue Bold 11").
  */
 export const S = {
-  section: "PlanSection",
-  sectionNewPage: "PlanSectionNewPage",
-  subsection: "PlanSubsection",
   body: "PlanBody",
   lead: "PlanLead",
   quote: "PlanQuote",
@@ -74,42 +71,65 @@ export const S = {
  * — and because the list is what `applyStylePageBreaks` patches into the stylesheet after packing. One
  * place: a style added to this list gets the break, and nothing else has to be told.
  */
-export const PAGE_BREAK_STYLES: readonly string[] = [S.sectionNewPage, S.noticeTitle, S.contentsTitle];
+/**
+ * Styles that start a new page (§6.97.1, §6.107.1).
+ *
+ * `Heading1` rather than a style of our own: every top-level section starts a page, and a client who wants
+ * the plan to run continuously clears one checkbox on a style their Word already knows the name of.
+ */
+export const PAGE_BREAK_STYLES: readonly string[] = ["Heading1", S.noticeTitle, S.contentsTitle];
 
 const HAIR = { style: BorderStyle.SINGLE, size: 4, color: HAIRLINE };
 
 export const PLAN_STYLES: IStylesOptions = {
   default: {
     document: { run: { font: "Calibri", size: 20, color: INK }, paragraph: { spacing: { line: 276 } } },
-  },
-  paragraphStyles: [
+
     /*
-     * A SECTION HEADING NEVER ENDS A PAGE. `keepNext` binds it to whatever follows and `keepLines` stops a
-     * two-line heading splitting across the break. `outlineLevel` is what puts it in Word's navigation
-     * pane and lets a client insert a real table of contents over the top of ours.
+     * THE PLAN'S HEADINGS ARE WORD'S HEADINGS (§6.107.1).
+     *
+     * They used to be `Plan Section` and `Plan Subsection` — custom styles carrying `outlineLevel`, on the
+     * theory that outline levels were enough. They are not enough in the way that matters: a reader who
+     * does Insert → Table of Contents, or opens the navigation pane, or applies one of Word's own TOC
+     * formats, is working with Heading 1, 2 and 3. A document whose headings are something else is a
+     * document their Word does not recognise as having any structure at all.
+     *
+     * > So the BUILT-IN styles are redefined to the plan's look, rather than the plan's look being given
+     * > a name of its own. Everything downstream — the contents field, the navigation pane, a client's own
+     * > inserted TOC, and the styles pane they already know how to use — then works without being taught.
      */
-    {
-      id: S.section, name: "Plan Section", basedOn: "Normal", next: S.body, quickFormat: true,
+    heading1: {
       run: { size: 28, bold: true, color: ACCENT },
       paragraph: {
         spacing: { before: 0, after: 200 }, keepNext: true, keepLines: true, outlineLevel: 0,
         border: { bottom: { ...HAIR, space: 6 } },
       },
     },
-    /*
-     * The same heading, starting a page. It is a SEPARATE STYLE rather than a property set on each
-     * paragraph so that a client who wants the plan to run continuously can clear one checkbox in Word
-     * and have every section follow suit — which is exactly the control Nic pointed at.
-     */
-    {
-      id: S.sectionNewPage, name: "Plan Section (new page)", basedOn: S.section, next: S.body, quickFormat: true,
-      paragraph: { keepNext: true, keepLines: true, outlineLevel: 0 },
-    },
-    {
-      id: S.subsection, name: "Plan Subsection", basedOn: "Normal", next: S.body, quickFormat: true,
+    heading2: {
       run: { size: 22, bold: true, color: ACCENT },
       paragraph: { spacing: { before: 280, after: 120 }, keepNext: true, keepLines: true, outlineLevel: 1 },
     },
+    heading3: {
+      run: { size: 20, bold: true, color: INK },
+      paragraph: { spacing: { before: 200, after: 80 }, keepNext: true, keepLines: true, outlineLevel: 2 },
+    },
+  },
+  paragraphStyles: [
+    /*
+     * The contents Word builds for itself (§6.107.1). These are Word's OWN TOC styles, redefined so the
+     * generated contents looks like the rest of the plan instead of like a default. A client who replaces
+     * the field with their own still gets these, because they are the styles Word reaches for.
+     */
+    { id: "TOC1", name: "toc 1", basedOn: "Normal", next: "Normal",
+      run: { size: 18, bold: true },
+      paragraph: { spacing: { before: 120, after: 0 } } },
+    { id: "TOC2", name: "toc 2", basedOn: "Normal", next: "Normal",
+      run: { size: 18 },
+      paragraph: { spacing: { before: 0, after: 0 }, indent: { left: 340 } } },
+    { id: "TOC3", name: "toc 3", basedOn: "Normal", next: "Normal",
+      run: { size: 18, color: MUTED },
+      paragraph: { spacing: { before: 0, after: 0 }, indent: { left: 680 } } },
+
 
     { id: S.body, name: "Plan Body", basedOn: "Normal", next: S.body, quickFormat: true,
       run: { size: 20, color: INK },
