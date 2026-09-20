@@ -2,6 +2,7 @@ import type { DraftableField } from "./draft";
 import { VISION_FIELDS } from "@/app/(app)/plans/[planId]/vision/fields";
 import { POSITION_ONE_LINER, BRAND_FIELDS, POSITION_FIELDS } from "@/app/(app)/plans/[planId]/marketing/model";
 import { CAPACITY_FIELDS } from "@/app/(app)/plans/[planId]/operations/model";
+import { PRODUCT_PROSE } from "@/app/(app)/plans/[planId]/sales/model";
 
 /**
  * WHICH FIELDS CAN BE DRAFTED, AND WHAT EACH ONE WANTS TO KNOW (§6.106.1).
@@ -277,6 +278,49 @@ const fromOperations = (): DraftableField[] =>
     wants: OPERATIONS_WANTS[f.key], asks: OPERATIONS_ASKS[f.key],
   }));
 
+/**
+ * SALES, STEP 8 \u2014 THE FIRST ROW FIELDS (\u00a76.113).
+ *
+ * These are not about the business, they are about ONE LINE of it, so each declares `subject: "product"`
+ * and the row it is on reaches the model through `subject.ts`. Neither wants `whatYouSell`: the subject
+ * already carries this line in full, and the slice would hand it back a second time alongside its siblings.
+ *
+ * WHY THIS PRICE HAS NO BUTTON. It is the third box in that dialog and the only one that cannot be written
+ * without the number beside it \u2014 and a price is not something the drafter sends. Nic took that as a
+ * decision rather than letting it be assumed: prices stay out, so this field stays typed. Everything else
+ * on the line never needed the figure.
+ */
+const SALES_WANTS: Record<string, DraftableField["wants"]> = {
+  description: ["profile", "overview", "customers"],
+  /* Why they buy THIS one is a comparison, so the competitors come with it. */
+  notes: ["profile", "overview", "customers", "competition"],
+};
+
+const SALES_ASKS: Record<string, readonly string[]> = {
+  /*
+   * A NAME IS NOT A DESCRIPTION. Given only "House Slab" a model will confidently explain what a house slab
+   * is, which is a guess about this business dressed as a fact about it.
+   */
+  description: [
+    "In plain words, what does a customer actually get when they buy this one?",
+  ],
+  /*
+   * The field asks for margin and the drafter does not send figures. So the owner supplies it here, in
+   * words, rather than the number being read out of the plan \u2014 which keeps the redaction rule intact and
+   * still answers the box.
+   */
+  notes: [
+    "Why do customers pick this one over the alternatives, and what is not great about it \u2014 thin margin, hassle, anything?",
+  ],
+};
+
+const fromSales = (): DraftableField[] =>
+  PRODUCT_PROSE.map((f) => ({
+    key: f.key, label: f.label, placeholder: f.placeholder,
+    subject: "product" as const,
+    wants: SALES_WANTS[f.key], asks: SALES_ASKS[f.key],
+  }));
+
 const fromVision = (): DraftableField[] =>
   VISION_FIELDS.map((f) => ({
     key: f.key,
@@ -289,7 +333,7 @@ const fromVision = (): DraftableField[] =>
   }));
 
 /** Every draftable field in the app, in the order a client meets them. */
-export const DRAFTABLE_FIELDS: DraftableField[] = [...SETTINGS_FIELDS, ...fromVision(), ...fromMarketing(), ...fromCompetitors(), ...fromOperations()];
+export const DRAFTABLE_FIELDS: DraftableField[] = [...SETTINGS_FIELDS, ...fromVision(), ...fromMarketing(), ...fromCompetitors(), ...fromOperations(), ...fromSales()];
 
 /**
  * Keyed by the field's own key, so a route can look one up from a request without a second list.

@@ -1,5 +1,6 @@
 import type { ReportInput } from "@/engine/report/build";
 import { SLICE_KEYS, contextFor, hasSlice, type SliceKey } from "./slices";
+import { SUBJECT_LABEL, type SubjectKind } from "./subject";
 
 /**
  * WHAT TO SEND, WHAT TO ASK, AND WHAT THE BUTTON MAY CLAIM (§6.105).
@@ -81,6 +82,14 @@ export type DraftableField = {
    */
   contextOnly?: readonly SliceKey[];
   /**
+   * THIS FIELD IS ABOUT ONE ROW, NOT ABOUT THE BUSINESS (§6.113).
+   *
+   * "Why they buy it" is a different sentence for every line you sell. A field that sets this cannot be
+   * drafted without knowing which row it is on, and the route refuses rather than guessing — a passage
+   * about an unnamed product is the invention this whole design exists to prevent.
+   */
+  subject?: SubjectKind;
+  /**
    * QUESTIONS THAT ARE ALWAYS ASKED, BECAUSE THE ANSWER IS NEVER IN THE PLAN (§6.106.2).
    *
    * `wants` covers a gap the plan has not filled YET. This covers what the plan will never hold however
@@ -145,7 +154,12 @@ export function planDraft(i: ReportInput, field: DraftableField): DraftPlan {
   const asking = questions.length
     ? `Will ask you ${questions.length === 1 ? "one question" : `${questions.length} short questions`}`
     : null;
-  const using = present.length ? `use ${sentence(present.map((k) => SLICE_LABEL[k]))}` : null;
+  /*
+   * A row field names the row FIRST, because that is what the client is looking at. "Will use your business
+   * profile" under a box headed "Why they buy it" on one product among nine reads like the wrong button.
+   */
+  const parts = [...(field.subject ? [SUBJECT_LABEL[field.subject]] : []), ...present.map((k) => SLICE_LABEL[k])];
+  const using = parts.length ? `use ${sentence(parts)}` : null;
   const caption = asking && using ? `${asking}, then ${using}`
     : asking ? asking
       : using ? `Will ${using}`

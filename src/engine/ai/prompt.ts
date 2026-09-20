@@ -47,6 +47,12 @@ export function buildMessages(
   field: DraftableField,
   plan: DraftPlan,
   answers: { question: string; answer: string }[] = [],
+  /**
+   * The one row this passage is about, when the field is a row field (§6.113). Written by `subject.ts`
+   * from the plan, never from the request, and placed FIRST — before what the plan says about the business
+   * as a whole — because everything below it is background to this one line.
+   */
+  subject: string | null = null,
 ): Message[] {
   const asked = answers.filter((a) => a.answer.trim());
 
@@ -57,7 +63,9 @@ export function buildMessages(
       field.placeholder ? `An example of the right shape (do not copy it): ${field.placeholder.replace(/^e\.g\.\s*/i, "")}` : null,
     ].filter(Boolean).join("\n")),
 
-    section("WHAT THE PLAN ALREADY SAYS", plan.context),
+    section("THE ONE THING THIS PASSAGE IS ABOUT", subject),
+
+    section("WHAT THE PLAN SAYS ABOUT THE BUSINESS AS A WHOLE", plan.context),
 
     section("WHAT THE OWNER HAS JUST TOLD US", asked.map((a) => `${a.question}\n${a.answer.trim()}`).join("\n\n")),
 

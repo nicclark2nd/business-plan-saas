@@ -4,6 +4,7 @@ import { planDraft, type DraftableField } from "@/engine/ai/draft";
 import { buildMessages } from "@/engine/ai/prompt";
 import { AiUnavailable, openRouter } from "@/lib/ai/provider";
 import { DRAFTABLE } from "@/engine/ai/fields";
+import { subjectFor } from "@/engine/ai/subject";
 
 /**
  * ONE DRAFT (6.106.1).
@@ -35,7 +36,7 @@ const bad = (message: string, status = 400) =>
 export async function POST(req: Request, { params }: { params: Promise<{ planId: string }> }) {
   const { planId } = await params;
 
-  let body: { field?: string; answers?: { question: string; answer: string }[] };
+  let body: { field?: string; row?: string; answers?: { question: string; answer: string }[] };
   try { body = await req.json(); } catch { return bad("Malformed request."); }
 
   const field: DraftableField | undefined = DRAFTABLE[body.field ?? ""];
@@ -54,7 +55,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ planId:
   let messages;
   try {
     const { input } = await gatherReport(planId);
-    messages = buildMessages(field, planDraft(input, field), body.answers ?? []);
+
+    /*
+     * A ROW FIELD IS REFUSED WITHOUT ITS ROW (6.113).
+     *
+     * The browser sends a name; `subjectFor` finds that row in the plan and writes the block from what it
+     * found, so nothing the request said becomes a fact. No match means the row is not in the saved plan -
+     * usually a line typed into the dialog and not saved yet - and the honest answer is to say so, not to
+     * write a passage about "why they buy it" with no idea what "it" is.
+     */
+    let subject: string | null = null;
+    if (field.subject) {
+      subject = subjectFor(input, field.subject, body.row ?? "", field.key);
+      if (subject === null) {
+        return bad("Save this line first \u2014 a draft needs to know which one it is about.", 409);
+      }
+    }
+    messages = buildMessages(field, planDraft(input, field), body.answers ?? [], subject);
   } catch (e) {
     console.error("draft gather", e);
     return bad("Couldn't read this plan.", 500);

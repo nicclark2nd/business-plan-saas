@@ -68,6 +68,12 @@ describe("every draftable field", () => {
     /* Not in any slice: the plan records how you would lift capacity, but never reads it back to a model. */
     capacity_plan: () => ({}),
     /*
+     * ROW FIELDS (§6.113). These check the PLAN-WIDE half only — that `whatYouSell` cannot hand a product
+     * box its own text back. The other half, the row's own subject block, is `subject.test.ts`.
+     */
+    description: (v) => ({ productLines: [{ name: "A line", description: v }] as ReportInput["productLines"] }),
+    notes: (v) => ({ productLines: [{ name: "A line", whyTheyBuy: v }] as ReportInput["productLines"] }),
+    /*
      * No slice reads this one, so it cannot echo. Kept in the list rather than skipped, because the check
      * below insists every draftable field appears here \u2014 the point being that adding a field forces
      * someone to answer "and where does this live?" rather than quietly opting out.

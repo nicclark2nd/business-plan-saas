@@ -38,3 +38,25 @@ export type Product = {
   gst_applies: boolean;
 };
 export const isRecurring = (p: Pick<Product, "sold_as">) => p.sold_as === "recurring";
+
+/**
+ * THE TWO PROSE BOXES ON A PRODUCT (\u00a76.113).
+ *
+ * Lifted out of the dialog's JSX so the drafter can be built from the client's own wording rather than a
+ * second copy of it (\u00a76.41) \u2014 the same arrangement Vision and Marketing already have.
+ *
+ * "Why this price" is NOT here, and that is a decision rather than an oversight: it is the one box on this
+ * screen that cannot be written without the figure beside it, and a price is not something the drafter
+ * sends (`engine/ai/subject.ts`). It keeps its own markup below, and no button.
+ */
+export const PRODUCT_PROSE = [
+  {
+    key: "description", label: "What it is",
+    placeholder: "One or two plain sentences \u2014 e.g. Reinforced concrete slabs for new homes, poured and finished by our own crew",
+  },
+  {
+    key: "notes", label: "Why they buy it, margin, weaknesses",
+    placeholder: "e.g. Builders choose us on turnaround; margin is thin \u2014 shifting effort to decorative work",
+  },
+] as const;
+export type ProductProseKey = (typeof PRODUCT_PROSE)[number]["key"];

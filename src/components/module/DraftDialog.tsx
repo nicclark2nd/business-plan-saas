@@ -25,10 +25,12 @@ export type DraftQuestion = { slice: string; question: string };
 const FAIL_MARK = "[[DRAFT_FAILED]]";
 
 export function DraftDialog({
-  planId, fieldKey, label, sub, hint, questions, hasText, onUse, onClose,
+  planId, fieldKey, row, label, sub, hint, questions, hasText, onUse, onClose,
 }: {
   planId: string;
   fieldKey: string;
+  /** For a field that is about one row, that row's own name (§6.113). The server resolves it. */
+  row?: string;
   label: string;
   sub?: string;
   hint?: string;
@@ -70,6 +72,7 @@ export function DraftDialog({
         signal: controller.signal,
         body: JSON.stringify({
           field: fieldKey,
+          row,
           answers: questions.map((q) => ({ question: q.question, answer: answers[q.slice] ?? "" })),
         }),
       });
@@ -102,7 +105,7 @@ export function DraftDialog({
       if ((e as Error).name === "AbortError") return;
       setError("Lost the connection before the draft finished."); setState("failed");
     }
-  }, [planId, fieldKey, questions, answers]);
+  }, [planId, fieldKey, row, questions, answers]);
 
   /*
    * With nothing to ask, the draft starts on open: a dialog whose only content is a button to begin is a

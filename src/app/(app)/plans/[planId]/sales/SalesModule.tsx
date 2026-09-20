@@ -23,7 +23,8 @@ import { productYears, productYear1Months, productYear1Clients, newClientsYear1,
 import { useMoney } from "@/components/MoneyProvider";
 import { useProductNoun } from "@/components/VocabularyProvider";
 import { upsertProduct, deleteProduct, continueFromSales } from "./actions";
-import { LIFECYCLE, LIFE_MODE, SOLD_AS, type Product } from "./model";
+import { LIFECYCLE, LIFE_MODE, SOLD_AS, PRODUCT_PROSE, type Product } from "./model";
+import { DraftField, type Drafting } from "@/components/module/DraftField";
 
 /**
  * Sales — APeX's shape, rebuilt (§6.16, fifth cut): three read-only lists on the module bar and three dialogs.
@@ -53,8 +54,10 @@ const firstYear = (r: Pick<Row, "start_selling_year">) => firstPlanYear(r.start_
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
 const box = "h-8";
 
-export function SalesModule({ planId, initial, mode, initialArea, hasHistory, historicRevenue, historicEnd, fyEndMonth, firstProjectedYear: firstYearEnding, statement, currency }: {
+export function SalesModule({ planId, initial, mode, initialArea, hasHistory, historicRevenue, historicEnd, fyEndMonth, firstProjectedYear: firstYearEnding, statement, currency, drafting = {} }: {
   planId: string; initial: Product[]; mode: "guided" | "advanced"; initialArea: AreaKey; hasHistory: boolean | null; historicRevenue: number | null; historicEnd: string | null; fyEndMonth: number; firstProjectedYear: number | null; statement: string; currency: string;
+  /** What the two prose boxes on a product may offer (§6.113). "Why this price" is deliberately absent. */
+  drafting?: Drafting;
 }) {
   const gst = useGst();
   // What Year 1 actually is, from the two Settings fields that define the financial year (§6.33.1).
@@ -279,7 +282,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
         </>
       )}
 
-      {open && dlg?.kind === "product" && <ProductDialog key={open._key} r={open} others={named.filter((x) => x._key !== open._key && !x.clients_from_product_id && !isNew(x))} onSave={(r) => { save(r); close(); }} onClose={close} />}
+      {open && dlg?.kind === "product" && <ProductDialog key={open._key} planId={planId} drafting={drafting} r={open} others={named.filter((x) => x._key !== open._key && !x.clients_from_product_id && !isNew(x))} onSave={(r) => { save(r); close(); }} onClose={close} />}
       {open && dlg?.kind === "growth" && <GrowthDialog key={open._key} r={open} source={src(open)} startOptions={startOptions} yearOne={yearOne} onSave={(r) => { save(r); close(); }} onClose={close} />}
       {confirm && (() => {
         const y1 = productYear1Months(confirm.row, src(confirm.row)).reduce((a, b) => a + b, 0);
@@ -362,7 +365,7 @@ function IconButton({ children, title, onClick }: { children: React.ReactNode; t
 }
 
 /* ---------- Product dialog (APeX "Product") ---------- */
-function ProductDialog({ r, others, onSave, onClose }: { r: Row; others: Row[]; onSave: (r: Row) => void; onClose: () => void }) {
+function ProductDialog({ planId, drafting, r, others, onSave, onClose }: { planId: string; drafting: Drafting; r: Row; others: Row[]; onSave: (r: Row) => void; onClose: () => void }) {
   const gst = useGst();
   const num = useMoney();
   const [d, setD] = useState<Row>(r);
@@ -378,8 +381,28 @@ function ProductDialog({ r, others, onSave, onClose }: { r: Row; others: Row[]; 
             <div><label className={label}>Sold as</label><FieldSelect value={d.sold_as} options={SOLD_AS} onValueChange={(v) => set({ sold_as: v as Row["sold_as"] })} /></div>
             <div><label className={label}>Lifecycle</label><FieldSelect value={d.lifecycle} options={LIFECYCLE} placeholder="Choose —" onValueChange={(v) => set({ lifecycle: v })} /></div>
           </div>
-          <div><label className={label}>What it is</label><Textarea value={d.description ?? ""} placeholder="One or two plain sentences — e.g. Reinforced concrete slabs for new homes, poured and finished by our own crew" onChange={(e) => set({ description: e.target.value })} className="min-h-[64px]" /></div>
-          <div><label className={label}>Why they buy it, margin, weaknesses</label><Textarea value={d.notes ?? ""} placeholder="e.g. Builders choose us on turnaround; margin is thin — shifting effort to decorative work" onChange={(e) => set({ notes: e.target.value })} className="min-h-[64px]" /></div>
+          {/*
+            THE TWO PROSE BOXES, AND THEIR DRAFT BUTTONS (§6.113).
+            Wording comes from PRODUCT_PROSE so the drafter is built from what the client is reading, not
+            from a second copy of it (§6.41). A draft lands in the dialog's own state, so it is saved by
+            the dialog's Save like anything else typed here — nothing is written behind the client.
+          */}
+          {PRODUCT_PROSE.map((f) => (
+            <div key={f.key}>
+              <label className={label}>{f.label}</label>
+              <Textarea value={d[f.key] ?? ""} placeholder={f.placeholder} className="min-h-[64px]"
+                onChange={(e) => set({ [f.key]: e.target.value } as Partial<Row>)} />
+              {/*
+                The row is named by the SAVED name, not the one in this dialog: the server resolves it
+                against the plan and a line that has not been saved yet gets a clear refusal rather than a
+                passage about nothing. `isNew` is the one case where there is no saved row at all.
+              */}
+              {!isNew(r) && (
+                <DraftField planId={planId} field={f} offer={drafting[f.key]} value={d[f.key] ?? ""}
+                  row={r.name} onUse={(text) => set({ [f.key]: text } as Partial<Row>)} />
+              )}
+            </div>
+          ))}
           <div className="border-t border-border pt-3">
             <div className="mb-2 text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Product sales baseline</div>
             {d.sold_as === "recurring" ? (

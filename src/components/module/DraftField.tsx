@@ -34,7 +34,7 @@ export type DraftOffer = { caption: string; questions: DraftQuestion[] } | null;
 export type Drafting = Record<string, DraftOffer | undefined>;
 
 export function DraftField({
-  planId, field, offer, value, onUse,
+  planId, field, offer, value, onUse, row,
 }: {
   planId: string;
   /** The screen's own field definition. Nothing about the field is written again here. */
@@ -47,6 +47,12 @@ export function DraftField({
    * and the screen's own save runs when focus leaves, exactly as it does when the client types.
    */
   onUse: (text: string) => void;
+  /**
+   * For a field that is about one row — a product, a competitor, a process step — that row's own name
+   * (§6.113). The server resolves it against the saved plan and refuses if it finds nothing, so a name
+   * typed into a dialog and not saved yet gets a clear message rather than a passage about nothing.
+   */
+  row?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -69,7 +75,7 @@ export function DraftField({
       </div>
       {open && (
         <DraftDialog
-          planId={planId} fieldKey={field.key} label={field.label} sub={field.sub} hint={field.hint}
+          planId={planId} fieldKey={field.key} row={row} label={field.label} sub={field.sub} hint={field.hint}
           questions={offer.questions} hasText={!!value.trim()}
           onUse={onUse} onClose={() => setOpen(false)}
         />

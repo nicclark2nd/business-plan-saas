@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { SalesModule } from "./SalesModule";
-import type { Product } from "./model";
+import { PRODUCT_PROSE, type Product } from "./model";
+import { draftingFor } from "../drafting";
 
 export default async function SalesPage({ params, searchParams }: { params: Promise<{ planId: string }>; searchParams: Promise<{ area?: string }> }) {
   const { planId } = await params;
@@ -14,6 +15,13 @@ export default async function SalesPage({ params, searchParams }: { params: Prom
     supabase.from("plan_settings").select("has_history, financial_year_end_month, first_projected_year, currency, products_services_statement").eq("plan_id", planId).maybeSingle(),
   ]);
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
+
+  /*
+   * THE TWO PROSE BOXES ON A PRODUCT (§6.113). "Why this price" is not among them and never will be while
+   * prices stay out of what the drafter sends — it is the one box here that cannot be written without the
+   * figure beside it. See `engine/ai/subject.ts`.
+   */
+  const drafting = await draftingFor(planId, PRODUCT_PROSE.map((f) => f.key));
   // Defaults keep the module honest if a column has not reached this database yet (§6.17, migration 0013).
   const rows = (products.data ?? []).map((p) => ({
     ...p, average_price: Number(p.average_price), units_sold: Number(p.units_sold),
@@ -31,6 +39,6 @@ export default async function SalesPage({ params, searchParams }: { params: Prom
   return (
     <SalesModule planId={planId} initial={rows} mode={mode} initialArea={area === "annual" || area === "monthly" ? area : "products"} hasHistory={settings.data?.has_history ?? null}
       historicRevenue={historic.data ? Number(historic.data.revenue) : null} historicEnd={historic.data?.period_end ?? null}
-      fyEndMonth={settings.data?.financial_year_end_month ?? 6} firstProjectedYear={settings.data?.first_projected_year ?? null} statement={settings.data?.products_services_statement ?? ""} currency={settings.data?.currency ?? "AUD"} />
+      fyEndMonth={settings.data?.financial_year_end_month ?? 6} firstProjectedYear={settings.data?.first_projected_year ?? null} statement={settings.data?.products_services_statement ?? ""} currency={settings.data?.currency ?? "AUD"} drafting={drafting} />
   );
 }
