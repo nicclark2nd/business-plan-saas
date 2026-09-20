@@ -90,6 +90,28 @@ one with the wrong convention — so it needs a decision before it needs work.
 
 ---
 
+## The AI, now that it is built
+
+§6.105 to §6.115 shipped the drafting. Two things were deliberately left, and they are here rather than in
+Note 4 because neither is a design question any more.
+
+### 12. Nothing limits how much a plan can spend on drafts — **Build**
+
+No rate limit, no per-plan cap, no daily ceiling. A client holding *Try again* costs real money, and the
+Goals drafter (§6.115) made the worst case six times larger: one press writes six passages. Nothing has
+gone wrong yet because one plan has been used by one person who was watching. That is not a control.
+
+This is the one item on this list that can hurt before anybody notices it.
+
+### 13. An accepted written draft records nothing — **Nic**
+
+A goal taken from the drafter writes `source: "ai"` and the screen can say so. A vision, a brand promise or
+a positioning line taken from a draft button records nothing at all — the tables have no column for it, so
+this is a migration and not a tweak.
+
+The question underneath is whether a client WANTS it visible. It is honest, and it is also a label on their
+own business plan saying a machine helped write it. Worth asking one before building either.
+
 ## Waiting on the domain
 
 ### 8. A shared link previews as a blank rectangle — **Build, after the domain**

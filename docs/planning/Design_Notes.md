@@ -407,15 +407,32 @@ that runs a query.**
 
 ## Open questions
 
-1. **Waiting.** This app has no spinners, and that rule holds because every save is milliseconds. A draft is
-   five to ten seconds. That is a state the app has never had to express, and it needs an answer before the
-   first button works rather than after — otherwise the first AI feature is also the thing that breaks the
-   app's one consistent interaction rule.
-2. Rate limiting and a per-plan cap, so a stuck button cannot spend a fortune.
-3. Does an accepted draft record that it came from AI? Goals already have `source: "ai"`; written fields do
-   not. Worth it for honesty, and worth asking whether a client wants it visible.
+1. ~~**Waiting.**~~ **Answered by building it (§6.105.3).** The draft streams, so there was never a blank
+   pause to express: the wait is filled by the answer arriving. The app still has no spinners and the rule
+   held without an exception being carved for AI.
+2. **Rate limiting and a per-plan cap, so a stuck button cannot spend a fortune. STILL OPEN**, and now
+   larger than it was: the Goals drafter writes six passages per press (§6.115), so one impatient client on
+   *Try again* is six times the earlier worst case. Moved to `Open_Items.md`, because a cost control is not
+   a design question any more.
+3. **Does an accepted draft record that it came from AI? HALF ANSWERED.** Goals taken from the drafter now
+   write `source: "ai"` (§6.115) — on the insert only, so a goal since rewritten is the client's. Written
+   fields still record nothing, and there is nowhere on those tables to put it. Moved to `Open_Items.md`.
 4. Whether an answer given to a question at step 1 is kept anywhere beyond that draft, or asked again later.
-   The overview move above removes most of this, since the commonest question now has a home.
+   The overview move above removes most of this, since the commonest question now has a home. **Still open**,
+   and cheap to leave open: the questions are short and a client who answers the same one twice has lost
+   ten seconds, not their work.
+
+## What got built, so this note is not read as a plan
+
+Everything in Note 4 above is now shipped, across §6.105 to §6.115. The consent toggle, the slices and
+their redaction test, the streaming draft, the questions the plan cannot answer, a button on every field
+that should have one and a written reason on every field that should not, the per-row drafter, and the
+Goals drafter. The sweep table below is the record of which fields got which.
+
+> **THE ONE RULE THAT SURVIVED ALL OF IT INTACT:** nothing leaves the building that the server did not
+> assemble from the plan. Not a row named in a request, not a price, not a person. Every widening of that
+> rule — the forecast's eight figures for Goals — was a decision Nic made out loud, not a default that crept
+> in.
 
 
 ## Which fields get a button — the sweep, step by step
