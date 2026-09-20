@@ -103,3 +103,29 @@ with are the people worth impressing.
 
 Domain is held in GoDaddy and not connected. Vercel issues the certificate; the records are pasted
 into GoDaddy. Nothing in the app changes.
+
+---
+
+## Closed, so nobody investigates it twice
+
+### Word's "fields that may refer to other files" dialog — **not a fault, do not chase**
+
+Opening a downloaded plan shows: *"This document contains fields that may refer to other files. Do you want
+to update the fields in this document?"*
+
+**The file contains no external links.** Every relationship in it was audited: styles, settings, fonts,
+numbering, headers, footers, and the logo embedded at `word/media/`. Zero external targets. The only fields
+are `TOC`, `PAGE` and `NUMPAGES`, all internal.
+
+The dialog comes from the TOC field's own `w:dirty="true"` marker — Word's way of being told "refresh this
+when you open the document". It was first blamed on `<w:updateFields w:val="true"/>` in settings.xml; two
+otherwise identical files were built, one with that flag and one without, and **both showed the dialog**,
+which ruled it out.
+
+> **THE DIALOG AND THE CORRECT PAGE NUMBERS ARE THE SAME FEATURE. Removing `dirty` removes the prompt and
+> the automatic refresh with it, and the contents goes back to needing a manual update.**
+
+Nic's decision: keep the dialog, keep the working contents. A PDF export was scoped as the version with no
+dialog and no stale numbers — it needs LibreOffice running somewhere off Vercel, and the conversion must
+refresh the document's indexes explicitly or the contents page comes out blank — and was judged too much
+machinery for a second copy of a document that already works. **Word stays the only export.**
