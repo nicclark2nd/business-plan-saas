@@ -1,7 +1,7 @@
 import type { DraftableField } from "./draft";
 import { VISION_FIELDS } from "@/app/(app)/plans/[planId]/vision/fields";
-import { POSITION_ONE_LINER, BRAND_FIELDS, POSITION_FIELDS } from "@/app/(app)/plans/[planId]/marketing/model";
-import { CAPACITY_FIELDS } from "@/app/(app)/plans/[planId]/operations/model";
+import { POSITION_ONE_LINER, BRAND_FIELDS, POSITION_FIELDS, COMPETITOR_PROSE } from "@/app/(app)/plans/[planId]/marketing/model";
+import { CAPACITY_FIELDS, STEP_DETAIL } from "@/app/(app)/plans/[planId]/operations/model";
 import { PRODUCT_PROSE } from "@/app/(app)/plans/[planId]/sales/model";
 
 /**
@@ -321,6 +321,49 @@ const fromSales = (): DraftableField[] =>
     wants: SALES_WANTS[f.key], asks: SALES_ASKS[f.key],
   }));
 
+/**
+ * THE LAST TWO ROW FIELDS (§6.114). Both ride the mechanism built for Sales; neither needed anything new.
+ *
+ * `how_we_win` is the case §6.110 said to build the per-row drafter for. Its two neighbours in that band
+ * stay refused and the reason has not changed: what a rival is GOOD and BAD at are claims about a named
+ * real business this plan knows nothing about. How we win is a claim about this business, said against
+ * them — which is exactly what the row subject can ground, because it carries their pricing, their reach
+ * and the client's own notes on them.
+ *
+ * `detail` is a process step. The step's OWNER is a person and is not drafted and not sent; its duration
+ * is a bare fact. What happens at the step is the only part of that row anything can shape.
+ */
+const ROW_WANTS: Record<string, DraftableField["wants"]> = {
+  /* `competition` carries our advantage and our barriers — the plan-level version of the same argument. */
+  how_we_win: ["profile", "overview", "whatYouSell", "customers", "competition"],
+  detail: ["profile", "overview", "whatYouSell", "operations"],
+};
+
+const ROW_ASKS: Record<string, readonly string[]> = {
+  /*
+   * NOT "why are you better" — the plan is full of that already, and a model given it writes the same
+   * paragraph for every rival. One thing that actually happened is what makes this row different from the
+   * one above it.
+   */
+  how_we_win: [
+    "Think of a customer who went with you instead of them. What decided it?",
+  ],
+  detail: [
+    "What actually gets done at this step, and what goes wrong later if it is rushed?",
+  ],
+};
+
+const fromRows = (): DraftableField[] => [
+  ...COMPETITOR_PROSE.filter((f) => f.draftable).map((f) => ({
+    key: f.key, label: f.label, placeholder: f.placeholder,
+    subject: "competitor" as const, wants: ROW_WANTS[f.key], asks: ROW_ASKS[f.key],
+  })),
+  {
+    key: STEP_DETAIL.key, label: STEP_DETAIL.label, placeholder: STEP_DETAIL.placeholder,
+    subject: "step" as const, wants: ROW_WANTS.detail, asks: ROW_ASKS.detail,
+  },
+];
+
 const fromVision = (): DraftableField[] =>
   VISION_FIELDS.map((f) => ({
     key: f.key,
@@ -333,7 +376,7 @@ const fromVision = (): DraftableField[] =>
   }));
 
 /** Every draftable field in the app, in the order a client meets them. */
-export const DRAFTABLE_FIELDS: DraftableField[] = [...SETTINGS_FIELDS, ...fromVision(), ...fromMarketing(), ...fromCompetitors(), ...fromOperations(), ...fromSales()];
+export const DRAFTABLE_FIELDS: DraftableField[] = [...SETTINGS_FIELDS, ...fromVision(), ...fromMarketing(), ...fromCompetitors(), ...fromOperations(), ...fromSales(), ...fromRows()];
 
 /**
  * Keyed by the field's own key, so a route can look one up from a request without a second list.

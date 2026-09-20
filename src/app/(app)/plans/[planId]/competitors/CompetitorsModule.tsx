@@ -10,7 +10,7 @@ import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { cn } from "@/lib/utils";
 import { saveMarket, upsertRow, deleteRow } from "../marketing/actions";
-import { POSITION_FIELDS, COMPETITOR_KIND, COMPETITOR_REACH, COMPETITOR_PRICING, COMPETITOR_THREAT, type Position, type Competitor } from "../marketing/model";
+import { POSITION_FIELDS, COMPETITOR_PROSE, COMPETITOR_KIND, COMPETITOR_REACH, COMPETITOR_PRICING, COMPETITOR_THREAT, type Position, type Competitor } from "../marketing/model";
 import { DraftField, type Drafting } from "@/components/module/DraftField";
 import { continueFromCompetitors } from "./actions";
 
@@ -148,21 +148,23 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
                 <tr key={c.id + "b"} data-row={c.id} onBlur={(e) => left(e) && commit(c.id)} className={cn(errors.forKey(`competitor:${c.id}`) && "[&>td]:bg-bad-soft")}>
                   <Td colSpan={6} wrap className="pb-2.5 pt-0">
                     <div className="grid grid-cols-3 gap-x-0 gap-y-3 rounded-[3px] border-l-2 border-input bg-secondary/60 py-2 pl-3.5 pr-3 max-[1180px]:grid-cols-1">
-                      <div className="min-w-0 pr-5">
-                        <div className={proseLabel}>What they do well</div>
-                        <CellTextarea value={c.strengths ?? ""} placeholder="Reputation, market position, what clients say they like"
-                          onChange={(e) => edit(c.id, { strengths: e.target.value })} />
-                      </div>
-                      <div className="min-w-0 border-border pr-5 min-[1181px]:border-l min-[1181px]:pl-5">
-                        <div className={proseLabel}>Where they&apos;re weak</div>
-                        <CellTextarea value={c.weaknesses ?? ""} placeholder="What their reviews complain about; where they can&apos;t follow"
-                          onChange={(e) => edit(c.id, { weaknesses: e.target.value })} />
-                      </div>
-                      <div className="min-w-0 border-border min-[1181px]:border-l min-[1181px]:pl-5">
-                        <div className={proseLabel}>How we win</div>
-                        <CellTextarea value={c.how_we_win ?? ""} placeholder="The specific reason a client picks you over them"
-                          onChange={(e) => edit(c.id, { how_we_win: e.target.value })} />
-                      </div>
+                      {/*
+                        One loop, three columns, and only the third has a button (§6.114). The wording comes
+                        from COMPETITOR_PROSE so the drafter reads what the client reads (§6.41); the rules
+                        between the thirds are derived from position rather than written out three times.
+                        A draft lands in the row and `edit` marks it dirty exactly as typing does.
+                      */}
+                      {COMPETITOR_PROSE.map((f, i) => (
+                        <div key={f.key} className={cn("min-w-0", i < 2 && "pr-5", i > 0 && "border-border min-[1181px]:border-l min-[1181px]:pl-5")}>
+                          <div className={proseLabel}>{f.label}</div>
+                          <CellTextarea value={c[f.key] ?? ""} placeholder={f.placeholder}
+                            onChange={(e) => edit(c.id, { [f.key]: e.target.value } as Partial<Competitor>)} />
+                          {c.name.trim() && (
+                            <DraftField planId={planId} field={f} offer={drafting[f.key]} value={c[f.key] ?? ""}
+                              row={c.name} onUse={(text) => edit(c.id, { [f.key]: text } as Partial<Competitor>)} />
+                          )}
+                        </div>
+                      ))}
                     </div>
                   </Td>
                 </tr>,

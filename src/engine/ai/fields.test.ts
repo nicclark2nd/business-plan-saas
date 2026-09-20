@@ -73,6 +73,9 @@ describe("every draftable field", () => {
      */
     description: (v) => ({ productLines: [{ name: "A line", description: v }] as ReportInput["productLines"] }),
     notes: (v) => ({ productLines: [{ name: "A line", whyTheyBuy: v }] as ReportInput["productLines"] }),
+    how_we_win: (v) => ({ competitors: [{ name: "A rival", howWeWin: v }] as ReportInput["competitors"] }),
+    /* A process step is in no slice: the plan records the steps but never reads them back to a model. */
+    detail: () => ({}),
     /*
      * No slice reads this one, so it cannot echo. Kept in the list rather than skipped, because the check
      * below insists every draftable field appears here \u2014 the point being that adding a field forces
@@ -111,9 +114,15 @@ describe("every draftable field", () => {
   });
 
   /* The boxes that are refused, and stay refused (§6.109, §6.110). */
-  it("will not draft a fact about the world, a person, a rival, or a capacity", () => {
-    for (const k of ["market_size", "market_trends", "sales_team", "strengths", "weaknesses", "how_we_win",
-      "operating_hours", "capacity_now"]) {
+  /*
+   * `how_we_win` LEFT THIS LIST IN §6.114 and its two neighbours did not, which is the distinction worth
+   * keeping: a claim about THIS business said against a named rival is groundable; a claim about what that
+   * rival is good or bad at is not. `pricing_rationale` is here because prices stay out of what the
+   * drafter sends, and `owner` because it is a person.
+   */
+  it("will not draft a fact about the world, a person, a rival, a capacity or a price", () => {
+    for (const k of ["market_size", "market_trends", "sales_team", "strengths", "weaknesses",
+      "operating_hours", "capacity_now", "pricing_rationale", "owner"]) {
       expect(DRAFTABLE[k], `${k} must not be draftable`).toBeUndefined();
     }
   });

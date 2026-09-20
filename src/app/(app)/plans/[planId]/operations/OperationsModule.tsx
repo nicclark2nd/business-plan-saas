@@ -9,7 +9,7 @@ import { Section, FieldGrid, Field, FieldTextarea } from "@/components/module/Fi
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { cn } from "@/lib/utils";
-import { CAPACITY_FIELDS, DEPENDENCY, TENURE, type Capacity, type OpStep, type Premise, type Supplier } from "./model";
+import { CAPACITY_FIELDS, STEP_DETAIL, DEPENDENCY, TENURE, type Capacity, type OpStep, type Premise, type Supplier } from "./model";
 import { DraftField, type Drafting } from "@/components/module/DraftField";
 import { continueFromOperations, deleteRow, saveCapacity, setPrimaryPremise, upsertRow, type RowKind } from "./actions";
 
@@ -290,9 +290,19 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
                 <tr key={x.id + "b"} data-row={x.id} onBlur={(e) => left(e) && commit("steps", x.id)} className={cn(errors.forKey(`steps:${x.id}`) && "[&>td]:bg-bad-soft")}>
                   <Td colSpan={4} wrap className="pb-2.5 pt-0">
                     <div className="rounded-[3px] border-l-2 border-input bg-secondary/60 py-2 pl-3.5 pr-3">
-                      <div className={proseLabel}>What happens</div>
-                      <CellTextarea value={x.detail ?? ""} placeholder="e.g. Levels taken, boxing set, steel ordered against the measured quantity rather than the quote."
+                      <div className={proseLabel}>{STEP_DETAIL.label}</div>
+                      <CellTextarea value={x.detail ?? ""} placeholder={STEP_DETAIL.placeholder}
                         onChange={(e) => edit("steps", x.id, { detail: e.target.value })} />
+                      {/*
+                        Per step (§6.114). The step's OWNER sits in the row above and has no button — it is
+                        a person's name, and no slice of this plan reads a person. A step with no title yet
+                        has nothing for the server to resolve, so it has no button either.
+                      */}
+                      {x.title.trim() && (
+                        <DraftField planId={planId} field={STEP_DETAIL} offer={drafting[STEP_DETAIL.key]}
+                          value={x.detail ?? ""} row={x.title}
+                          onUse={(text) => edit("steps", x.id, { detail: text })} />
+                      )}
                     </div>
                   </Td>
                 </tr>,

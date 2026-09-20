@@ -120,7 +120,12 @@ const SLICES: Record<SliceKey, (i: ReportInput, except?: string) => string | nul
     own("barriers_to_entry", "Barriers to entry", i.position.barriers, except),
     ...(() => {
       const named = i.competitors.filter((c) => has(c.name));
-      return named.length ? ["Competitors:", ...named.map((c) => block([`- ${c.name}`, line("  how we win", c.howWeWin)]))] : [];
+      /*
+       * `own` here strips how-we-win from EVERY competitor, not only the one being drafted (§6.114). That
+       * loses a little sibling context and buys a guarantee, which is the right trade: this slice cannot
+       * tell which row the field is on, and a field handed its own answer is the fault being prevented.
+       */
+      return named.length ? ["Competitors:", ...named.map((c) => block([`- ${c.name}`, own("how_we_win", "  how we win", c.howWeWin, except)]))] : [];
     })(),
   ]),
 

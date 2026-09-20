@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { CompetitorsModule } from "./CompetitorsModule";
-import { POSITION_FIELDS, type Position, type Competitor } from "../marketing/model";
+import { POSITION_FIELDS, COMPETITOR_PROSE, type Position, type Competitor } from "../marketing/model";
 import { draftingFor } from "../drafting";
 
 export default async function CompetitorsPage({ params, searchParams }: { params: Promise<{ planId: string }>; searchParams: Promise<{ area?: string }> }) {
@@ -18,11 +18,17 @@ export default async function CompetitorsPage({ params, searchParams }: { params
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
 
   /*
-   * ALL THREE POSITION BOXES, AND NOTHING IN THE GRID (§6.110). A competitor's strengths and weaknesses
-   * are claims about a named real business that this plan knows nothing about; a model will make them up
-   * fluently and the client will send them to a bank. See `engine/ai/fields.ts`.
+   * ALL THREE POSITION BOXES, PLUS HOW WE WIN PER ROW (§6.110, §6.114).
+   *
+   * A competitor's strengths and weaknesses stay refused: they are claims about a named real business this
+   * plan knows nothing about, and a model will make them up fluently. How we win is a claim about THIS
+   * business said against them, which the row subject can ground. See `engine/ai/fields.ts`.
    */
-  const drafting = await draftingFor(planId, POSITION_FIELDS.map((f) => f.key));
+  const drafting = await draftingFor(planId, [
+    ...POSITION_FIELDS.map((f) => f.key),
+    /* Plus How we win, per row (§6.114). Its two neighbours in that band stay refused. */
+    ...COMPETITOR_PROSE.filter((f) => f.draftable).map((f) => f.key),
+  ]);
 
   return (
     <CompetitorsModule planId={planId} initialPosition={position} initialCompetitors={(competitors.data ?? []) as Competitor[]} mode={mode}

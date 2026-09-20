@@ -55,3 +55,15 @@ export const CAPACITY_FIELDS = [
 
 export type CapacityKey = (typeof CAPACITY_FIELDS)[number]["key"];
 export type Capacity = Record<CapacityKey, string>;
+
+/**
+ * THE WRITTEN ROW UNDER A PROCESS STEP (\u00a76.114). Out of the grid's JSX for the same reason as everything
+ * else the drafter reads: one wording, on the screen and in the prompt (\u00a76.41).
+ *
+ * The step's OWNER is not draftable and never will be \u2014 it is a person's name, and no slice of this plan
+ * reads a person. Its duration is a fact nothing can shape.
+ */
+export const STEP_DETAIL = {
+  key: "detail", label: "What happens",
+  placeholder: "e.g. Levels taken, boxing set, steel ordered against the measured quantity rather than the quote.",
+} as const;

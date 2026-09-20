@@ -87,6 +87,20 @@ export type Competitor = {
   id: string; name: string; kind: "direct" | "indirect"; reach: string | null; pricing: string | null; threat: "low" | "medium" | "high" | "critical";
   strengths: string | null; weaknesses: string | null; how_we_win: string | null; sort_order: number;
 };
+/**
+ * THE THREE WRITTEN COLUMNS UNDER A COMPETITOR (\u00a76.114).
+ *
+ * Lifted out of the grid's JSX so the drafter is built from the client's own wording rather than a second
+ * copy of it (\u00a76.41). Only ONE of the three is draftable and the list says which: what a rival is good and
+ * bad at are claims about a named real business that this plan knows nothing about (\u00a76.110). How we win is
+ * a claim about THIS business, which is a different thing entirely.
+ */
+export const COMPETITOR_PROSE = [
+  { key: "strengths", label: "What they do well", placeholder: "Reputation, market position, what clients say they like", draftable: false },
+  { key: "weaknesses", label: "Where they\u2019re weak", placeholder: "What their reviews complain about; where they can\u2019t follow", draftable: false },
+  { key: "how_we_win", label: "How we win", placeholder: "The specific reason a client picks you over them", draftable: true },
+] as const;
+
 export type Spend = { id: string; kind: SpendKind; approach: string; annual_budget: number; sort_order: number };
 export type Evidence = {
   id: string; source: string; finding: string | null; occurred_on: string | null; sort_order: number;
