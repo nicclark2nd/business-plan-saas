@@ -11,6 +11,9 @@ import { taxComponents, taxHeading } from "@/engine/plan/gst";
 import { needsRegion, regimeFor, regionLabel, regionsFor, type TaxComponent } from "@/engine/plan/taxRegimes";
 import { formatMonth } from "../people/model";
 import { saveProfile, saveFinancial, savePrinting, saveAiConsent } from "./actions";
+import { Button } from "@/components/ui/button";
+import { DraftDialog, type DraftQuestion } from "@/components/module/DraftDialog";
+import { DRAFTABLE } from "@/engine/ai/fields";
 import { PAGE_SIZE_LABEL, defaultPageSizeFor } from "@/engine/report/pageSize";
 import { DangerArea, type PlanInventory } from "./DangerArea";
 import { LicenceSection } from "./LicenceSection";
@@ -22,8 +25,9 @@ import { governingLawNote } from "@/engine/plan/jurisdiction";
 type AreaKey = "profile" | "financial" | "printing" | "ai" | "branding" | "lifecycle";
 const opts = (xs: string[]) => xs.map((x) => ({ value: x, label: x }));
 
-export function SettingsModule({ planId, initial, mode, initialArea, licences, logoUrl, archivedAt, inventory }: {
+export function SettingsModule({ planId, initial, mode, initialArea, licences, logoUrl, archivedAt, inventory, drafting = {}}: {
   planId: string; initial: Settings; mode: "guided" | "advanced"; initialArea: AreaKey;
+  drafting?: Record<string, { caption: string; questions: DraftQuestion[] }>;
   /** What the business itself is licensed, registered or insured to do (§6.64). */
   licences: Licence[];
   /** A signed URL for the plan's logo, minted on the server for this request (§6.94). */
@@ -34,6 +38,8 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
   inventory: PlanInventory;
 }) {
   const [area, setArea] = useState<AreaKey>(initialArea);
+  /* Which field's draft dialog is open. Null when AI is off, because then no button exists. */
+  const [draftOpen, setDraftOpen] = useState<string | null>(null);
   const [s, setS] = useState(initial);
   const [established, setEstablished] = useState(formatMonth(initial.date_established));
   const [dirty, setDirty] = useState<"profile" | "financial" | null>(null);
@@ -201,7 +207,19 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
                 hint="An elevator pitch in two or three sentences: what you sell, who buys it, and what it is worth to them. Not why the business exists — that is Mission, at step 1. Opens the products section of the report.">
                 <FieldTextarea value={s.products_services_statement ?? ""} className="min-h-[72px]"
                   placeholder="e.g. We pour, finish and guarantee residential and light-commercial concrete for builders and homeowners across the South Coast. Quoted price is the final price, and a slab is poured within ten working days of the site being ready."
-                  onChange={(e) => edit({ products_services_statement: e.target.value }, "profile")} /></Field>
+                  onChange={(e) => edit({ products_services_statement: e.target.value }, "profile")} />
+                {/*
+                  ABSENT RATHER THAN DISABLED (§6.108), and the caption is computed alongside what will
+                  actually be sent, so it cannot name data the plan does not hold.
+                */}
+                {drafting.products_services_statement && (
+                  <div className="mt-1.5 flex items-center gap-2.5">
+                    <Button type="button" variant="outline" size="sm"
+                      onClick={() => setDraftOpen("products_services_statement")}>✦ Suggest a draft</Button>
+                    <span className="text-xs text-muted-foreground">{drafting.products_services_statement.caption}</span>
+                  </div>
+                )}
+              </Field>
             </FieldGrid>
           </Section>
 
@@ -350,6 +368,24 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
           </Section>
         </>
       )}
+
+      {/*
+        The draft returns to the FORM, not to the database (§6.106.1): it lands in the box and the screen's
+        own save runs when focus leaves the area, exactly as when a client types.
+      */}
+      {draftOpen && (() => {
+        const f = DRAFTABLE[draftOpen];
+        return (
+          <DraftDialog
+            planId={planId} fieldKey={f.key} label={f.label} sub={f.sub} hint={f.hint}
+            questions={drafting[f.key]?.questions ?? []}
+            hasText={!!String(s[f.key as keyof Settings] ?? "").trim()}
+            /* `immediate`, because a client who pressed "Use this" has decided — there is no field to leave. */
+            onUse={(text) => edit({ [f.key]: text } as Partial<Settings>, "profile", true)}
+            onClose={() => setDraftOpen(null)}
+          />
+        );
+      })()}
 
       {area === "branding" && (
         <>

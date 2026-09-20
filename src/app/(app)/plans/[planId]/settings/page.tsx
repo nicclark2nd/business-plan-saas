@@ -1,5 +1,8 @@
 import { cleanComponent } from "@/engine/plan/gst";
 import { createClient } from "@/lib/supabase/server";
+import { gatherReport } from "../reports/gather";
+import { planDraft } from "@/engine/ai/draft";
+import { DRAFTABLE } from "@/engine/ai/fields";
 import { getSession } from "@/lib/plan";
 import { SettingsModule } from "./SettingsModule";
 import type { Settings, Licence } from "./model";
@@ -30,6 +33,24 @@ export default async function SettingsPage({ params, searchParams }: { params: P
     held("plan_historic_periods", "year of history", "years of history"),
     held("plan_goals", "goal"),
   ]);
+  /*
+   * WHAT THE DRAFT BUTTON MAY CLAIM, AND WHAT IT WILL ASK (§6.108) — worked out on the server, from the
+   * same assembly the report is built from, so the caption is computed by the check that decides what gets
+   * sent. Fails soft: AI off, or a plan too empty to gather, leaves the button absent rather than breaking
+   * the screen.
+   */
+  let drafting: Record<string, { caption: string; questions: { slice: string; question: string }[] }> = {};
+  if (settings.data?.ai_enabled) {
+    try {
+      const { input } = await gatherReport(planId);
+      const f = DRAFTABLE.products_services_statement;
+      const d = planDraft(input, f);
+      drafting = { [f.key]: { caption: d.caption, questions: d.questions } };
+    } catch (e) {
+      console.error("settings drafting", e);
+    }
+  }
+
   const s = settings.data ?? {};
   const initial: Settings = {
     business_name: plan.data?.business_name ?? "",
@@ -65,7 +86,7 @@ export default async function SettingsPage({ params, searchParams }: { params: P
     : null;
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
   const initialArea = area === "financial" || area === "printing" || area === "branding" || area === "lifecycle" ? area : "profile";
-  return <SettingsModule planId={planId} initial={initial} mode={mode} initialArea={initialArea}
+  return <SettingsModule planId={planId} initial={initial} mode={mode} initialArea={initialArea} drafting={drafting}
     licences={(licences.data ?? []) as Licence[]} logoUrl={logoUrl}
     archivedAt={plan.data?.archived_at ?? null} inventory={inventory} />;
 }

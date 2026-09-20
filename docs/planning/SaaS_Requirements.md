@@ -3391,3 +3391,56 @@ rather than as a fix.
 **Checked for regressions** on a nine-page render: cover unchanged, the contact block still at the foot, the
 notice on page 2, the contents on page 3, every top-level section starting its own page, and "Page n of 9"
 on every page but the cover.
+
+---
+
+## §6.108 — Which fields get a draft button, and the test that decides
+
+Nic, on where the button belongs: *"it works well for Vision, Mission, Purpose, Brand promise. But not good
+for anything in Historic, or Average price. But it could be ok for Why they buy it… or Why this price."*
+
+Reading every prose field in the app turns that instinct into three tests. **A field gets the button only
+if all three hold.**
+
+1. **It is prose.** A price is not draftable, and neither is a unit count or last year's turnover.
+2. **It is the owner's to ASSERT, not a fact about the world.** "How you want to be seen" is theirs.
+   "Market size" is a fact the plan cannot know, and the model would produce a confident invented figure
+   into a document a lender reads.
+3. **It is not about a named person or a named competitor.** The least obvious test and the one to hold
+   hardest.
+
+> **THE REFUSAL WORTH WRITING DOWN: A COMPETITOR'S STRENGTHS AND WEAKNESSES.** The placeholder on that field
+> says *"What their reviews complain about"*. Ask a model that about a named local business and it will
+> write something plausible and unverified, about a real company, into a document going to a bank, under a
+> client's name. That is not a quality problem. **Our advantage** and **How we win** are the same subject
+> from the owner's side, and those are fine.
+
+The people fields refuse themselves: names and wages are in no slice (§6.105), so there would be nothing to
+draft from.
+
+**Twenty-one fields across seven steps qualify**, and they are being added a module at a time, top down.
+
+### First one: Plan settings, "About what you sell"
+
+The registry now holds fields from more than one screen, so keys are flat and `fields.test.ts` asserts they
+are unique — a second field quietly answering to `positioning` would draft the wrong thing and nothing else
+would notice. It also checks every `wants` names a slice that exists, and that no field hard-asks so many
+questions that a real gap in the plan cannot fit inside the cap of three.
+
+**This field's `wants` deliberately exclude the `overview` slice, which reads this very field.** Handing a
+field its own current value back is not context, it is an echo.
+
+**And it has no `asks` at all.** Every question it would want to put is one the plan can hold once the later
+steps are done, so each arrives through the gap mechanism instead of being asked when the answer is already
+on file — and the obvious question, *"what do you sell?"*, would be the field asking for itself.
+
+**Verified live on SEQ Concreting.** The button's caption read *"Will use business profile, your products,
+your customers and your competitors"* — all four present — and the draft came back:
+
+> *"We provide residential and commercial concrete services, including slabs, foundations, retaining walls,
+> and industrial mining works, to builders, developers, and homeowners across South East and Central
+> Queensland. We deliver reliable, fixed-price projects with guaranteed pour dates…"*
+
+Every element of it traces to the plan: the services from Sales, the customers and the region from the
+customer segment. Accepted, saved, and confirmed across a reload — **which also replaced the placeholder
+sentence a tester had typed into that field in §6.106.3, with one made of the client's own data.**

@@ -61,6 +61,26 @@ const VISION_WANTS: Record<string, DraftableField["wants"]> = {
   field_of_play: ["profile", "overview", "whatYouSell", "customers", "competition"],
 };
 
+/**
+ * PLAN SETTINGS — the elevator pitch that everything else grounds on (§6.108).
+ *
+ * `wants` deliberately EXCLUDES the `overview` slice, which reads this very field: handing a field its own
+ * current value back is not context, it is an echo. The other three are what the pitch is made of — what
+ * the business is, what it sells, who buys it — and `competition` carries why they choose it.
+ *
+ * NO `asks`. Every question this field would want to put is one the plan can hold once the later steps are
+ * done, so each one arrives through the gap mechanism instead of being asked when the answer is already on
+ * file. And the obvious question — "what do you sell?" — would be the field asking for itself.
+ */
+const SETTINGS_FIELDS: DraftableField[] = [{
+  key: "products_services_statement",
+  label: "About what you sell",
+  sub: "an elevator pitch",
+  hint: "Two or three sentences: what you sell, who buys it, and what it is worth to them. Not why the business exists — that is Mission, at step 1.",
+  placeholder: "We pour, finish and guarantee residential and light-commercial concrete for builders and homeowners across the South Coast. Quoted price is the final price.",
+  wants: ["profile", "whatYouSell", "customers", "competition"],
+}];
+
 const fromVision = (): DraftableField[] =>
   VISION_FIELDS.map((f) => ({
     key: f.key,
@@ -72,8 +92,17 @@ const fromVision = (): DraftableField[] =>
     asks: VISION_ASKS[f.key] ?? [],
   }));
 
-/** Keyed by the field's own key, so a route can look one up from a request without a second list. */
+/** Every draftable field in the app, in the order a client meets them. */
+export const DRAFTABLE_FIELDS: DraftableField[] = [...SETTINGS_FIELDS, ...fromVision()];
+
+/**
+ * Keyed by the field's own key, so a route can look one up from a request without a second list.
+ *
+ * The keys are flat rather than namespaced by module, which is fine and is checked: `fields.test.ts`
+ * asserts they are unique, because a second field quietly answering to `positioning` would draft the wrong
+ * thing and nothing else would notice.
+ */
 export const DRAFTABLE: Record<string, DraftableField> =
-  Object.fromEntries(fromVision().map((f) => [f.key, f]));
+  Object.fromEntries(DRAFTABLE_FIELDS.map((f) => [f.key, f]));
 
 export const isDraftable = (key: string): boolean => key in DRAFTABLE;
