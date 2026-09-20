@@ -17,6 +17,8 @@ const POISON = {
   money: "POISONFUNDER",
   history: "POISONHISTORIC",
   overhead: "POISONOVERHEAD",
+  /* §6.115 added ONE slice that reads money. These are the parts of the forecast it still may not touch. */
+  forecastDetail: "POISONFORECASTDETAIL",
 } as const;
 
 const input = (over: Partial<ReportInput> = {}): ReportInput => ({
@@ -54,6 +56,27 @@ const input = (over: Partial<ReportInput> = {}): ReportInput => ({
   overheads: [{ name: POISON.overhead, amount: 936574, category: null, source: "entered" }],
   historic: { label: POISON.history, pnl: [{ label: POISON.history, value: 1 }], balance: [] },
   capital: [{ name: POISON.money, amount: 1, year: 1, category: null, usefulLifeMonths: null, residual: 0, financed: true }],
+  /*
+   * The `finance` slice takes revenue, gross margin, net profit and closing cash from here and NOTHING
+   * ELSE (§6.115). Every other figure in a forecast year is poisoned, so a slice that widened to "just
+   * send the P&L" fails here and names the line it leaked.
+   */
+  forecast: {
+    pnl: {
+      1: {
+        revenue: 604800, grossMargin: 42, netProfit: 88000,
+        overheads: POISON.forecastDetail, cogs: POISON.forecastDetail, depreciation: POISON.forecastDetail,
+        interest: POISON.forecastDetail, tax: POISON.forecastDetail, dividends: POISON.forecastDetail,
+        operatingProfit: POISON.forecastDetail, profitBeforeTax: POISON.forecastDetail,
+      },
+      2: { revenue: 712000, grossMargin: 44, netProfit: 121000, overheads: POISON.forecastDetail },
+    },
+    cashFlow: {
+      1: { closingCash: 51000, debtProceeds: POISON.forecastDetail, equityRaised: POISON.forecastDetail, dividendsPaid: POISON.forecastDetail },
+      2: { closingCash: 96000, debtRepaid: POISON.forecastDetail },
+    },
+    balanceSheet: { 1: { debtCurrent: POISON.forecastDetail, cash: POISON.forecastDetail } },
+  },
   ...over,
 } as unknown as ReportInput);
 
@@ -138,5 +161,54 @@ describe("a row nobody has filled in", () => {
   it("never emits a bare dash for a nameless competitor", () => {
     const blank = input({ competitors: [{ name: "", kind: null, reach: null, pricing: null, threat: null, strengths: null, weaknesses: null, howWeWin: null }] as ReportInput["competitors"] });
     expect(slice(blank, "competition") ?? "").not.toContain("Competitors:");
+  });
+});
+
+/**
+ * A REDACTION TEST THAT PASSES BECAUSE THE SLICE RETURNED NOTHING PROVES NOTHING (§6.92.1).
+ *
+ * So the poison run above is paired with this: the `finance` slice really does emit all four figures for
+ * both years from the same fixture. If it ever silently stops producing output, this fails and the clean
+ * poison result stops being reassuring.
+ */
+describe("the finance slice", () => {
+  it("emits the four headline figures, both years", () => {
+    const text = slice(input(), "finance");
+    /* The fixture's `money` is String(), so these are the figures as the slice would print them. */
+    for (const want of ["604800", "42%", "88000", "51000", "712000", "44%", "121000", "96000"]) {
+      expect(text, `finance did not emit ${want}`).toContain(want);
+    }
+  });
+
+  /*
+   * A LOSS IS SAID IN WORDS (§6.115.1).
+   *
+   * Caught live, not here: the slice sent net profit through `money`, which prints a loss as (23,324), and
+   * the draft came back "we will achieve a net profit of 23,324" for a year the forecast shows losing it.
+   * Brackets mean negative to an accountant and nothing reliable to a model. This is the test that keeps
+   * the word in, and it asserts the MAGNITUDE is still there so the fix cannot degrade into silence.
+   */
+  it("says the word LOSS when a year loses money, and never calls it a profit", () => {
+    const text = slice(input({
+      forecast: {
+        pnl: { 1: { revenue: 2182240, grossMargin: 39, netProfit: -136681 } },
+        cashFlow: { 1: { closingCash: -4200 } },
+      } as unknown as ReportInput["forecast"],
+    }), "finance");
+    expect(text).toContain("LOSS");
+    expect(text).toContain("136681");
+    expect(text, "a loss was described as a profit").not.toContain("a profit of");
+    /* And an overdrawn bank balance is said too, for exactly the same reason. */
+    expect(text).toContain("OVERDRAWN");
+    expect(text).toContain("4200");
+  });
+
+  it("still calls a profit a profit", () => {
+    expect(slice(input(), "finance")).toContain("a profit of");
+  });
+
+  it("says nothing at all when there is no forecast to quote", () => {
+    expect(hasSlice(input({ forecast: undefined as unknown as ReportInput["forecast"] }), "finance")).toBe(false);
+    expect(hasSlice(input({ forecast: { pnl: {}, cashFlow: {} } as unknown as ReportInput["forecast"] }), "finance")).toBe(false);
   });
 });

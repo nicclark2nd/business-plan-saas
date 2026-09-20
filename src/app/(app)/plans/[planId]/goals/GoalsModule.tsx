@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { useSaveOnce } from "@/lib/saveOnce";
 import { AREA_LABEL, GOAL_AREAS, type GoalArea } from "@/engine/whatif/goals";
 import { AREA_HINT, AREA_PROMPT, STATUSES, STATUS_LABEL, type Goal, type GoalStatus, type Person, type SwotResponse } from "./model";
+import { GoalsDraftDialog, type GoalQuestion } from "@/components/goals/GoalsDraftDialog";
 import { continueFromGoals, deleteGoal, saveAnnualGoal, saveQuarterlyGoal, setGoalStatus } from "./actions";
 import { QuarterlyGoalDialog } from "@/components/goals/QuarterlyGoalDialog";
 
@@ -36,11 +37,18 @@ const TONE: Record<GoalStatus, string> = {
  * The annual goal is edited in place because it is one sentence. A quarterly goal has five fields and goes
  * through a dialog (§6.16), except its status, which is the one thing a review changes and saves on the spot.
  */
-export function GoalsModule({ planId, mode, initial, people, quarters, thisQuarter, swot }: {
+export function GoalsModule({ planId, mode, initial, people, quarters, thisQuarter, swot, drafting = null, questions = [] }: {
   planId: string; mode: "guided" | "advanced"; initial: Goal[]; people: Person[];
   quarters: QuarterChoice[]; thisQuarter: { planYear: number; quarter: number };
   /** Lines from step 5 the client said they would act on (§6.59.1). */
   swot: SwotResponse[];
+  /**
+   * Whether the six annual goals can be drafted, decided on the server (§6.115). Null means drafting is
+   * off for this plan; `ready: false` means it is on but the plan has no forecast to quote yet, and
+   * carries the sentence that says so.
+   */
+  drafting?: { ready: boolean; reason?: string } | null;
+  questions?: GoalQuestion[];
 }) {
   const [area, setArea] = useState<AreaKey>("areas");
   const [goals, setGoals] = useState<Goal[]>(initial);
@@ -49,6 +57,7 @@ export function GoalsModule({ planId, mode, initial, people, quarters, thisQuart
   const [err, setErr] = useState<string>();
   const [editing, setEditing] = useState<{ area: GoalArea | null; goal?: Goal; from?: SwotResponse } | null>(null);
   const [toRemove, setToRemove] = useState<Goal | null>(null);
+  const [drafts, setDrafts] = useState(false);
 
   // The plan can move underneath an open screen; the same rule the forecast grids follow (§6.43.2).
   const [cameFrom, setCameFrom] = useState(initial);
@@ -66,10 +75,26 @@ export function GoalsModule({ planId, mode, initial, people, quarters, thisQuart
       return [...xs, { id: `tmp-${a}`, parent_id: null, area: a, title, detail: null, year: null, quarter: null, owner_person_id: null, status: "not_started", milestone_date: null, source: "manual", sort_order: 0, swot_item_id: null }];
     });
 
-  const commitAnnual = (a: GoalArea) => start(async () => {
-    const r = await saveAnnualGoal(planId, a, annual(a)?.title ?? "");
+  const commitAnnual = (a: GoalArea, source: "manual" | "ai" = "manual") => start(async () => {
+    const r = await saveAnnualGoal(planId, a, annual(a)?.title ?? "", source);
     if (!r.ok) setErr(r.error); else setErr(undefined);
   });
+
+  /*
+   * ONE ACCEPTED GOAL (§6.115).
+   *
+   * Unlike every other draft in the app this one DOES save on accept, and the difference is the screen,
+   * not the rule. A field's draft lands in a box whose own blur-save is a keystroke away; these six boxes
+   * are behind a dialog, so a draft dropped into them and left there would be lost the moment the client
+   * closed it. The client still accepts them one at a time and nothing is written until they do.
+   */
+  const useDraft = (a: GoalArea, text: string) => {
+    setAnnual(a, text);
+    start(async () => {
+      const r = await saveAnnualGoal(planId, a, text, "ai");
+      if (!r.ok) setErr(r.error); else setErr(undefined);
+    });
+  };
 
   const changeStatus = (g: Goal, status: GoalStatus) => {
     setGoals((xs) => xs.map((x) => (x.id === g.id ? { ...x, status } : x)));
@@ -129,6 +154,26 @@ export function GoalsModule({ planId, mode, initial, people, quarters, thisQuart
 
       {area === "areas" ? (
         <div className="divide-y divide-border">
+          {/*
+            THE DRAFTER, OFFERED ONCE, ABOVE ALL SIX (§6.115). Not six buttons: the six goals are written
+            together so they agree with each other, and a per-box button would promise the opposite.
+            Absent rather than disabled when drafting is off (§6.106); a plan with no forecast gets the
+            reason and somewhere to go, because that is not a fault, it is the step not being ready.
+          */}
+          {drafting && (
+            <div className="flex flex-wrap items-center gap-2.5 px-5 py-2.5">
+              {drafting.ready ? (
+                <>
+                  <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => setDrafts(true)}>✦ Suggest all six</Button>
+                  <span className="text-[11.5px] text-muted-foreground">
+                    Will ask you 2 short questions, then use your forecast, your plan and what you said you would do about your SWOT. No owners, no quarters — those stay yours.
+                  </span>
+                </>
+              ) : (
+                <span className="text-[11.5px] text-muted-foreground">{drafting.reason}</span>
+              )}
+            </div>
+          )}
           {GOAL_AREAS.map(({ key, label: areaLabel }) => {
             const a = annual(key);
             const rows = quarterly(key);
@@ -256,6 +301,14 @@ export function GoalsModule({ planId, mode, initial, people, quarters, thisQuart
             if (!r.ok) { setErr(r.error); return; }
             setErr(undefined); setEditing(null);
           }))}
+        />
+      )}
+
+      {drafts && (
+        <GoalsDraftDialog
+          planId={planId} questions={questions}
+          existing={Object.fromEntries(GOAL_AREAS.map(({ key }) => [key, annual(key)?.title ?? ""]))}
+          onUse={useDraft} onClose={() => setDrafts(false)}
         />
       )}
 

@@ -19,7 +19,19 @@ const isArea = (a: string): a is GoalArea => GOAL_AREAS.some((x) => x.key === a)
  * the same row. An empty title deletes it, because an area with nothing to say should not leave a blank
  * heading in the report.
  */
-export async function saveAnnualGoal(planId: string, area: string, title: string): Promise<Result<{ id: string | null }>> {
+export async function saveAnnualGoal(
+  planId: string, area: string, title: string,
+  /**
+   * WHERE THIS SENTENCE CAME FROM (§6.115).
+   *
+   * The column has accepted "ai" since migration 0002 and nothing has ever written it. It matters for the
+   * same reason the What-If chip does: a client scanning six goals months later should be able to see
+   * which ones a model proposed and they accepted, rather than having to remember. It is recorded on the
+   * INSERT only — a goal the client has since rewritten in the box is theirs, and an update that kept
+   * saying "ai" would be the screen telling them otherwise.
+   */
+  source: "manual" | "ai" = "manual",
+): Promise<Result<{ id: string | null }>> {
   if (!isArea(area)) return { ok: false, error: "Unknown area." };
   const supabase = await createClient();
   const text = title.trim();
@@ -38,7 +50,7 @@ export async function saveAnnualGoal(planId: string, area: string, title: string
 
   const q = existing
     ? supabase.from("plan_goals").update({ title: text }).eq("id", existing.id).eq("plan_id", planId).select("id").single()
-    : supabase.from("plan_goals").insert({ plan_id: planId, area, title: text, source: "manual" }).select("id").single();
+    : supabase.from("plan_goals").insert({ plan_id: planId, area, title: text, source }).select("id").single();
   const { data, error } = await q;
   if (error) return { ok: false, error: `Couldn't save: ${error.message}` };
   touch(planId); return { ok: true, data: { id: data.id } };

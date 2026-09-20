@@ -42,6 +42,12 @@ export const SLICE_QUESTION: Record<SliceKey, string | null> = {
   competition: "Why does a customer pick you rather than someone else?",
   framework: null,
   operations: "How does the work actually get done?",
+  /*
+   * Null, and not for the usual reason. The others are context-only because asking would be a circle; this
+   * one is because nobody can answer "what is your forecast?" in a popup. It is in the plan by step 16 or
+   * the plan is not ready for goals, which is a thing to SAY on the screen, not a question to ask.
+   */
+  finance: null,
 };
 
 /** Short names, for the line under the button. Lower case: they read inside a sentence. */
@@ -54,6 +60,7 @@ export const SLICE_LABEL: Record<SliceKey, string> = {
   competition: "your competitors",
   framework: "your vision and mission",
   operations: "your operations",
+  finance: "your forecast",
 };
 
 /** What a screen's field tells the drafter about itself. Every part of it is already on the screen. */

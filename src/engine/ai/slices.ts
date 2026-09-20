@@ -36,6 +36,7 @@ import type { ReportInput } from "@/engine/report/build";
  */
 export const SLICE_KEYS = [
   "profile", "overview", "whatYouSell", "customers", "market", "competition", "framework", "operations",
+  "finance",
 ] as const;
 export type SliceKey = (typeof SLICE_KEYS)[number];
 
@@ -137,6 +138,73 @@ const SLICES: Record<SliceKey, (i: ReportInput, except?: string) => string | nul
     own("brand_promise", "Brand promise", i.framework.brandPromise, except),
     own("field_of_play", "Field of play", i.framework.fieldOfPlay, except),
   ]),
+
+  /**
+   * THE FORECAST'S HEADLINE, AND NOTHING ELSE (§6.115).
+   *
+   * The one slice that reads money, added for the Goals drafter and used by nothing else. The screen it
+   * serves says plainly why it has to exist: "a target set before the forecast exists is a wish. Your
+   * revenue, margin and cash figures are all decided by now — quote them." A drafter that cannot see a
+   * number writes "grow revenue steadily" on a plan that knows revenue to the dollar, which is the feature
+   * failing its own brief.
+   *
+   * EIGHT FIGURES. Revenue, gross margin, net profit and closing cash, for year 1 and year 2. Read from
+   * `i.forecast`, which is the finished forecast every report prints — so nothing here is a second
+   * calculation of anything (§6.41), and none of it is a fact the client has not already seen.
+   *
+   * WHAT IS DELIBERATELY NOT HERE, and it is most of the forecast: no overheads, no wages, no drawings, no
+   * debt, no funding, no assets, no tax, no per-line revenue, no month. The consent wording promises "we
+   * never send names, salaries or funding details" and this keeps every word of it. `slices.test.ts`
+   * poisons all of them and proves it.
+   *
+   * Nic decided this one rather than letting it be assumed, the same way he decided prices stay out
+   * (§6.113). The two sit differently: a price belongs to one line and one line is a competitor's
+   * business; these are the plan's own headline, printed on its own first page.
+   */
+  finance: (i) => {
+    const y = (n: number) => {
+      const p = i.forecast?.pnl?.[n];
+      const c = i.forecast?.cashFlow?.[n];
+      if (!p || !p.revenue) return null;
+      /*
+       * A LOSS IS SAID IN WORDS, NEVER LEFT TO A BRACKET (§6.115.1).
+       *
+       * The first build sent net profit through `money`, which renders a loss the way an accountant does:
+       * (23,324). Verified against the plan's own P&L, the draft it produced read "we will achieve a net
+       * profit of 23,324" for a year the forecast shows LOSING that much — and it said so directly beneath
+       * the client's own goal, which was "turn the Year 1 operating loss into a profit".
+       *
+       * > A CONVENTION IS NOT A STATEMENT. Brackets mean negative to an accountant and mean nothing
+       * > reliable to a model, and this is a number that goes to a lender.
+       *
+       * So the sign is carried by the word, where it cannot be dropped, and `money` is given the absolute
+       * value so it can format without being asked to also communicate.
+       */
+      const profit = p.netProfit < 0
+        ? `a LOSS of ${i.money(Math.abs(p.netProfit))}`
+        : `a profit of ${i.money(p.netProfit)}`;
+      const cash = c ? (c.closingCash < 0
+        ? `OVERDRAWN by ${i.money(Math.abs(c.closingCash))}`
+        : i.money(c.closingCash)) : null;
+      return block([
+        `Year ${n}:`,
+        line("  revenue", i.money(p.revenue)),
+        line("  gross margin", p.grossMargin === null ? null : `${Math.round(p.grossMargin)}%`),
+        line("  the bottom line", profit),
+        line("  cash at year end", cash),
+      ]);
+    };
+    /*
+     * THE HEADING GOES ONLY IF SOMETHING IS UNDER IT.
+     *
+     * `block` keeps every non-null line, and the heading is never null — so the first version of this
+     * returned "The plan's own forecast:" and nothing else on a plan with no numbers yet. That is §6.106.3
+     * exactly: an empty heading is worse than silence, because a model handed one fills it in. Caught by
+     * the test that asks whether an empty forecast really is absent, which is why that test exists.
+     */
+    const years = [y(1), y(2)].filter((t): t is string => t !== null);
+    return years.length ? block(["The plan's own forecast:", ...years]) : null;
+  },
 
   operations: (i, except) => block([
     own("operating_hours", "Operating hours", i.operations.capacity.operatingHours, except),

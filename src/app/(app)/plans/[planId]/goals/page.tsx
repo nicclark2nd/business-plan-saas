@@ -3,6 +3,8 @@ import { getSession } from "@/lib/plan";
 import { firstProjectedYear, planQuarters, planYearEnding, quarterOf } from "@/engine/plan/calendar";
 import { GoalsModule } from "./GoalsModule";
 import type { Goal, Person, SwotResponse } from "./model";
+import { gatherReport } from "../reports/gather";
+import { GOAL_ASKS, goalsReadiness } from "@/engine/ai/goals";
 
 /**
  * Goals (§6.7) — one annual goal per area, quarterly goals beneath them.
@@ -25,6 +27,25 @@ export default async function GoalsPage({ params }: { params: Promise<{ planId: 
       .not("response", "is", null).order("sort_order"),
   ]);
 
+  /*
+   * WHETHER THE DRAFTER CAN BE OFFERED AT ALL (§6.115).
+   *
+   * Three things have to be true and they fail differently, so they are decided here rather than in the
+   * browser: drafting is switched on for this plan, the plan gathers, and it has a forecast worth quoting.
+   * The last one is not an error — it is the screen's own belief that "a target set before the forecast
+   * exists is a wish" — so it comes back as a sentence with somewhere to go, not as a button that fails.
+   */
+  const { data: aiRow } = await supabase.from("plan_settings").select("ai_enabled").eq("plan_id", planId).maybeSingle();
+  let drafting: { ready: boolean; reason?: string } | null = null;
+  if (aiRow?.ai_enabled) {
+    try {
+      const { input } = await gatherReport(planId);
+      drafting = goalsReadiness(input);
+    } catch (e) {
+      console.error("goals readiness", e);
+    }
+  }
+
   const fyEndMonth = Number(settings.data?.financial_year_end_month ?? 6);
   const firstYear = firstProjectedYear(settings.data?.first_projected_year, fyEndMonth);
 
@@ -43,6 +64,8 @@ export default async function GoalsPage({ params }: { params: Promise<{ planId: 
       quarters={quarters}
       thisQuarter={{ planYear: 1, quarter: quarterOf(fyEndMonth, new Date()) }}
       swot={((swot.data ?? []) as SwotResponse[]).filter((s) => (s.response ?? "").trim())}
+      drafting={drafting}
+      questions={GOAL_ASKS.map((question, i) => ({ key: `ask:${i}`, question }))}
     />
   );
 }
