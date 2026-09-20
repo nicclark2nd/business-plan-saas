@@ -438,6 +438,10 @@ appear is worse than silence.
 | 4 | Competitors | our advantage, barriers, what could change | the rival grid, all of it |
 | 5 | SWOT | — | the whole step, see below |
 | 6 | Operations | what limits it, how we lift it, quality | operating hours, what we can deliver today |
+| 7, 9–15 | the financials | — | every field, on Nic's instruction |
+| 8 | Sales | **blocked**, see below | the numbers |
+| 16 | Goals | **not this mechanism**, see below | — |
+| 17 | Business plan | — | it has no input fields |
 
 ### The four reasons a field is refused
 
@@ -466,13 +470,32 @@ The `response` boxes ("How you'll fix it") are a fair question and still a no fo
 **goal** at step 16 — an owner, a quarter, a status. A model writing "hire a second estimator in Q3" is not
 suggesting prose, it is inventing a commitment.
 
-### The one thing deferred rather than decided
+### Where the sweep stops, and why it is finished rather than abandoned
 
-**A per-row drafter.** Three places want the same missing mechanism — `how_we_win` per competitor, a SWOT
-`response` per line, `detail` per process step. Each needs its row's own name and notes as context, which
-the per-field drafter has no way to carry. It is a real feature, not a variation on this one, and it is not
-being half-built inside a sweep. If it is ever wanted, `how_we_win` is the case to build it for: unlike a
-rival's weaknesses, it is a claim about THIS business.
+**The per-field drafter is done.** Every plan-level prose box in the app either has a button or has a
+written reason not to. What is left needs different machinery, and both cases were visible from outside
+before any of it was built.
+
+**Step 8, Sales — a per-row drafter, and a question about prices.** The three boxes Nic named himself
+(*"Why they buy it, margin, weaknesses field or the field Why this price"*) all live inside the per-product
+dialog, one set per line. So do `how_we_win` per competitor, a SWOT `response` per line, and `detail` per
+process step: five fields across four screens now want the same missing thing. A row's own name and notes
+have to reach the model, which the per-field drafter has no way to carry.
+
+That part is buildable and not large — `ReportInput` already holds the lines, so it is a subject block and
+a row id on the request, not a second query (§6.41). **The part that is not mine to decide is the price.**
+
+> `whatYouSell` deliberately sends names and words and NOT prices — the smallest context that answers the
+> question. But "Why this price" cannot be drafted without the price. Building it means sending a figure
+> the slices currently refuse to send, which changes what the consent wording promises.
+
+So it waits for Nic, as a deliberate choice about the redaction rule rather than a detail inside a feature.
+
+**Step 16, Goals — never this mechanism.** The nav has tagged Goals **AI-drafted** since before any of this
+existed, and Note 4 says the model reads all four SWOT quadrants when it drafts them. That is a drafter
+that proposes a SET of goals — an area, a quarter, an owner, a milestone — from the SWOT responses and the
+finished forecast. A "suggest a draft" button on a goal's title would be a much smaller thing wearing the
+same name, and shipping it would make the real feature harder to add later, not easier.
 
 ---
 
