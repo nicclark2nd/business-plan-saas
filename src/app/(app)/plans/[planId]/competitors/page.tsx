@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { CompetitorsModule } from "./CompetitorsModule";
 import { POSITION_FIELDS, type Position, type Competitor } from "../marketing/model";
+import { draftingFor } from "../drafting";
 
 export default async function CompetitorsPage({ params, searchParams }: { params: Promise<{ planId: string }>; searchParams: Promise<{ area?: string }> }) {
   const { planId } = await params;
@@ -15,8 +16,17 @@ export default async function CompetitorsPage({ params, searchParams }: { params
   ]);
   const position = Object.fromEntries(POSITION_FIELDS.map((f) => [f.key, (marketing.data?.[f.key] as string | null) ?? ""])) as Position;
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
+
+  /*
+   * ALL THREE POSITION BOXES, AND NOTHING IN THE GRID (§6.110). A competitor's strengths and weaknesses
+   * are claims about a named real business that this plan knows nothing about; a model will make them up
+   * fluently and the client will send them to a bank. See `engine/ai/fields.ts`.
+   */
+  const drafting = await draftingFor(planId, POSITION_FIELDS.map((f) => f.key));
+
   return (
     <CompetitorsModule planId={planId} initialPosition={position} initialCompetitors={(competitors.data ?? []) as Competitor[]} mode={mode}
-      initialArea={area === "position" ? "position" : "competitors"} customerWord={(settings.data?.customer_type ?? "customer").toLowerCase()} />
+      initialArea={area === "position" ? "position" : "competitors"} customerWord={(settings.data?.customer_type ?? "customer").toLowerCase()}
+      drafting={drafting} />
   );
 }

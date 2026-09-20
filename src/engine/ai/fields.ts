@@ -1,6 +1,6 @@
 import type { DraftableField } from "./draft";
 import { VISION_FIELDS } from "@/app/(app)/plans/[planId]/vision/fields";
-import { POSITION_ONE_LINER, BRAND_FIELDS } from "@/app/(app)/plans/[planId]/marketing/model";
+import { POSITION_ONE_LINER, BRAND_FIELDS, POSITION_FIELDS } from "@/app/(app)/plans/[planId]/marketing/model";
 
 /**
  * WHICH FIELDS CAN BE DRAFTED, AND WHAT EACH ONE WANTS TO KNOW (§6.106.1).
@@ -162,6 +162,69 @@ const fromMarketing = (): DraftableField[] => [
   SALES_PROCESS,
 ];
 
+/**
+ * COMPETITORS, STEP 4 (§6.110).
+ *
+ * Two shapes on that step, and only one of them gets buttons.
+ *
+ * THE POSITION TAB — three plan-level boxes, all three drafted. This is the section a lender reads
+ * hardest, it is about THIS business, and by step 4 the plan holds the competitors to say it against.
+ *
+ * THE COMPETITOR GRID — `strengths`, `weaknesses` and `how_we_win`, per row. NO BUTTON, and the reason is
+ * not the mechanism.
+ *
+ * > A competitor's strengths and weaknesses are claims about a NAMED REAL BUSINESS. Nothing in this plan
+ * > knows anything about them. A model asked what James West is bad at will answer, fluently, and the
+ * > client will paste it into a document that goes to a bank.
+ *
+ * Market size at least fails towards a number somebody can check. This fails towards defamation. The grid
+ * stays typed from what the client actually knows. (`how_we_win` is about this business rather than the
+ * rival and could be grounded — but it needs that row's name and notes as context, which is a per-row
+ * drafter and a separate decision, not something to half-build here.)
+ */
+const COMPETITORS_WANTS: Record<string, DraftableField["wants"]> = {
+  /* Said against the rows, or it means nothing — so `competition` leads, and `except` keeps this box out of it. */
+  our_advantage: ["profile", "overview", "competition", "whatYouSell", "customers", "operations"],
+  barriers_to_entry: ["profile", "overview", "competition", "whatYouSell", "operations"],
+  /* What would let one of them beat you: your rivals, and how the work actually gets done today. */
+  future_threats: ["profile", "overview", "competition", "operations", "market"],
+};
+
+/**
+ * `competition` asks "why does a customer pick you rather than someone else?" — which is Our advantage
+ * word for word. Taken as context, never asked for (§6.110). The other two are safe: nobody confuses
+ * "why do they pick you" with "what stops someone copying you".
+ */
+const COMPETITORS_CONTEXT_ONLY: Record<string, readonly ("competition")[]> = {
+  our_advantage: ["competition"],
+};
+
+/** What no table holds (§6.106.2). Each one pushes for a real example rather than a general claim. */
+const COMPETITORS_ASKS: Record<string, readonly string[]> = {
+  our_advantage: [
+    "Think of the last job you won that someone else was also quoting. Why did you get it?",
+  ],
+  barriers_to_entry: [
+    "What do you have that someone starting next week could not get quickly \u2014 a licence, a contract, a relationship, a piece of gear?",
+  ],
+  /*
+   * THIS ONE CARRIES MORE WEIGHT THAN THE OTHERS. Asked to invent a threat, a model writes "a national
+   * franchise opening a depot nearby" \u2014 fluent, specific, and about a company that does not exist. The
+   * question makes the client name the real worry first, so the draft has something true to build on.
+   */
+  future_threats: [
+    "What actually worries you about the next two years \u2014 a customer you could lose, a licence, a person leaving, a rival getting bigger?",
+  ],
+};
+
+const fromCompetitors = (): DraftableField[] =>
+  POSITION_FIELDS.map((f) => ({
+    key: f.key, label: f.label, hint: f.hint, placeholder: f.placeholder,
+    wants: COMPETITORS_WANTS[f.key],
+    contextOnly: COMPETITORS_CONTEXT_ONLY[f.key],
+    asks: COMPETITORS_ASKS[f.key],
+  }));
+
 const fromVision = (): DraftableField[] =>
   VISION_FIELDS.map((f) => ({
     key: f.key,
@@ -174,7 +237,7 @@ const fromVision = (): DraftableField[] =>
   }));
 
 /** Every draftable field in the app, in the order a client meets them. */
-export const DRAFTABLE_FIELDS: DraftableField[] = [...SETTINGS_FIELDS, ...fromVision(), ...fromMarketing()];
+export const DRAFTABLE_FIELDS: DraftableField[] = [...SETTINGS_FIELDS, ...fromVision(), ...fromMarketing(), ...fromCompetitors()];
 
 /**
  * Keyed by the field's own key, so a route can look one up from a request without a second list.

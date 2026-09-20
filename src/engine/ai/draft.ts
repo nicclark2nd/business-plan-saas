@@ -67,6 +67,20 @@ export type DraftableField = {
   /** In order of how much each would change the draft — the first missing ones become the questions. */
   wants: readonly SliceKey[];
   /**
+   * SLICES THIS FIELD READS BUT WILL NEVER BE ASKED FOR (§6.110).
+   *
+   * A slice's question belongs to the slice, not the field — which is what stops it being written eleven
+   * times (§6.41). Once in a while that makes it the field's own question: `competition` asks "why does a
+   * customer pick you rather than someone else?", and on the Competitors step that IS Our advantage. On a
+   * plan with no competitors yet, the button would open and ask the client to write the box they pressed
+   * it on.
+   *
+   * So the field says which of its slices it will take as context but never ask about. It is a short list
+   * on purpose: if a field needs several of these, the field and the slice are the same question and one
+   * of them should not exist.
+   */
+  contextOnly?: readonly SliceKey[];
+  /**
    * QUESTIONS THAT ARE ALWAYS ASKED, BECAUSE THE ANSWER IS NEVER IN THE PLAN (§6.106.2).
    *
    * `wants` covers a gap the plan has not filled YET. This covers what the plan will never hold however
@@ -113,6 +127,7 @@ export function planDraft(i: ReportInput, field: DraftableField): DraftPlan {
    */
   const owner = (field.asks ?? []).map((question, i) => ({ slice: `ask:${i}`, question }));
   const gaps = missing
+    .filter((k) => !(field.contextOnly ?? []).includes(k))
     .map((slice) => ({ slice: slice as string, question: SLICE_QUESTION[slice] }))
     .filter((q): q is { slice: string; question: string } => q.question !== null);
   const questions = [...owner, ...gaps].slice(0, MAX_QUESTIONS);

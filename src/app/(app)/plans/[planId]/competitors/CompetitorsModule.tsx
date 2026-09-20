@@ -11,6 +11,7 @@ import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { cn } from "@/lib/utils";
 import { saveMarket, upsertRow, deleteRow } from "../marketing/actions";
 import { POSITION_FIELDS, COMPETITOR_KIND, COMPETITOR_REACH, COMPETITOR_PRICING, COMPETITOR_THREAT, type Position, type Competitor } from "../marketing/model";
+import { DraftField, type Drafting } from "@/components/module/DraftField";
 import { continueFromCompetitors } from "./actions";
 
 type AreaKey = "competitors" | "position";
@@ -19,8 +20,10 @@ const STEP = GUIDED_STEPS.find((s) => s.id === "competitors")?.step ?? 4;
 
 const proseLabel = "mb-0.5 pl-1.5 text-[10.5px] font-semibold uppercase tracking-[.05em] text-muted-foreground";
 
-export function CompetitorsModule({ planId, initialPosition, initialCompetitors, mode, initialArea, customerWord }: {
+export function CompetitorsModule({ planId, initialPosition, initialCompetitors, mode, initialArea, customerWord, drafting = {} }: {
   planId: string; initialPosition: Position; initialCompetitors: Competitor[]; mode: "guided" | "advanced"; initialArea: AreaKey; customerWord: string;
+  /** What the server decided each box may offer (§6.109). The grid is deliberately not in here (§6.110). */
+  drafting?: Drafting;
 }) {
   const [area, setArea] = useState<AreaKey>(initialArea);
   const [kill, setKill] = useState<{ id: string; name: string } | null>(null);
@@ -178,6 +181,10 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
                 <Field key={f.key} label={f.label} span={6} hint={f.hint} error={errors.forKey("position")}>
                   <FieldTextarea value={position[f.key]} placeholder={f.placeholder} className="min-h-[72px]"
                     onChange={(e) => { setPosition((p) => ({ ...p, [f.key]: e.target.value })); setPositionDirty(true); }} />
+                  {/* A draft lands in the BOX; `setPositionDirty` is the same thing typing does, so this
+                      tab's own blur-save runs on its own terms (§6.109). */}
+                  <DraftField planId={planId} field={f} offer={drafting[f.key]} value={position[f.key]}
+                    onUse={(text) => { setPosition((p) => ({ ...p, [f.key]: text })); setPositionDirty(true); }} />
                 </Field>
               ))}
             </FieldGrid>

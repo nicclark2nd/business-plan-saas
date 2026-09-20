@@ -115,9 +115,9 @@ const SLICES: Record<SliceKey, (i: ReportInput, except?: string) => string | nul
     own("brand_values", "Brand values", i.market.brandValues, except),
   ]),
 
-  competition: (i) => block([
-    line("Our advantage", i.position.ourAdvantage),
-    line("Barriers to entry", i.position.barriers),
+  competition: (i, except) => block([
+    own("our_advantage", "Our advantage", i.position.ourAdvantage, except),
+    own("barriers_to_entry", "Barriers to entry", i.position.barriers, except),
     ...(() => {
       const named = i.competitors.filter((c) => has(c.name));
       return named.length ? ["Competitors:", ...named.map((c) => block([`- ${c.name}`, line("  how we win", c.howWeWin)]))] : [];

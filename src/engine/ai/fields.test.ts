@@ -59,6 +59,10 @@ describe("every draftable field", () => {
     brand_personality: (v) => ({ market: { brandPersonality: v } as ReportInput["market"] }),
     visual_identity: (v) => ({ market: { visualIdentity: v } as ReportInput["market"] }),
     sales_process: (v) => ({ market: { salesProcess: v } as ReportInput["market"] }),
+    our_advantage: (v) => ({ position: { ourAdvantage: v } as ReportInput["position"] }),
+    barriers_to_entry: (v) => ({ position: { barriers: v } as ReportInput["position"] }),
+    /* Nothing reads this one either; it seeds SWOT from the screen, not from a slice. */
+    future_threats: () => ({}),
     /*
      * No slice reads this one, so it cannot echo. Kept in the list rather than skipped, because the check
      * below insists every draftable field appears here \u2014 the point being that adding a field forces
@@ -96,9 +100,26 @@ describe("every draftable field", () => {
     expect(DRAFTABLE.products_services_statement.wants).not.toContain("overview");
   });
 
-  /* The three Marketing boxes that are refused, and stay refused (§6.109). */
-  it("will not draft a market size, a market trend, or who sells", () => {
-    for (const k of ["market_size", "market_trends", "sales_team"]) expect(DRAFTABLE[k]).toBeUndefined();
+  /* The boxes that are refused, and stay refused (§6.109, §6.110). */
+  it("will not draft a market size, a market trend, who sells, or a rival's strengths", () => {
+    for (const k of ["market_size", "market_trends", "sales_team", "strengths", "weaknesses", "how_we_win"]) {
+      expect(DRAFTABLE[k], `${k} must not be draftable`).toBeUndefined();
     }
-  );
+  });
+
+  /*
+   * NO FIELD IS ASKED ITS OWN QUESTION (§6.110).
+   *
+   * A slice's question is written once for every field that wants it, which is the point — and once in a
+   * while it lands on a field that IS that question. `competition` asks "why does a customer pick you
+   * rather than someone else?"; on step 4 that is Our advantage word for word. On an EMPTY plan, where
+   * every wanted slice is missing, the button would open and ask the client to write the box they pressed
+   * it on. `contextOnly` is what stops that, and this is the check that it is still set.
+   */
+  it("does not open by asking the client to write the box they pressed", () => {
+    const d = planDraft(empty(), DRAFTABLE.our_advantage);
+    const asked = d.questions.map((q) => q.question).join(" | ");
+    expect(asked, "our_advantage is asked the competition question").not.toContain("pick you rather than someone else");
+    expect(d.questions.length, "still asks the owner's own question").toBeGreaterThan(0);
+  });
 });
