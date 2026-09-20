@@ -41,6 +41,21 @@ export type SliceKey = (typeof SLICE_KEYS)[number];
 
 const has = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
 const line = (label: string, v: unknown) => (has(v) ? `${label}: ${v.trim()}` : null);
+
+/**
+ * A LINE THAT BELONGS TO A DRAFTABLE FIELD, SO THE FIELD BEING DRAFTED IS LEFT OUT OF ITS OWN CONTEXT
+ * (\u00a76.109).
+ *
+ * A model handed the text already in the box returns a polish of it \u2014 so a client presses a button
+ * captioned "Suggest a draft" and is shown what they already wrote. \u00a76.108 avoided this on one field by
+ * leaving a slice out of its `wants` list, and a test written for Marketing then found three more that had
+ * shipped with it: Purpose, Brand promise and Field of play all wanted `framework`, and `framework` quotes
+ * all three.
+ *
+ * Careful list-keeping was the wrong answer. The drafter knows which field it is drafting, so the slice can
+ * simply omit it, and no future field can be added wrong. `wants` is back to meaning only "would this help".
+ */
+const own = (key: string, label: string, v: unknown, except?: string) => (key === except ? null : line(label, v));
 const block = (lines: (string | null)[]) => {
   const kept = lines.filter((l): l is string => l !== null);
   return kept.length ? kept.join("\n") : null;
@@ -50,7 +65,7 @@ const block = (lines: (string | null)[]) => {
  * Each slice is deliberately written as prose-ish lines rather than JSON. A model reads "Industry:
  * Commercial concreting" as a fact about a business; it reads a JSON blob as a document to summarise.
  */
-const SLICES: Record<SliceKey, (i: ReportInput) => string | null> = {
+const SLICES: Record<SliceKey, (i: ReportInput, except?: string) => string | null> = {
   /** Who and where the business is. The only slice that is almost always present, because Plan settings precedes step 1. */
   profile: (i) => block([
     line("Business name", i.businessName),
@@ -65,7 +80,8 @@ const SLICES: Record<SliceKey, (i: ReportInput) => string | null> = {
   ]),
 
   /** The client's own elevator pitch, from Plan settings (§6.103). The single most useful sentence in the app. */
-  overview: (i) => (has(i.productsServices) ? `What the business sells, in the owner's words: ${i.productsServices.trim()}` : null),
+  overview: (i, except) => (except !== "products_services_statement" && has(i.productsServices)
+    ? `What the business sells, in the owner's words: ${i.productsServices.trim()}` : null),
 
   /**
    * The lines themselves — NAMES AND WORDS, NOT PRICES. What something sells for is not secret, but it is
@@ -92,11 +108,11 @@ const SLICES: Record<SliceKey, (i: ReportInput) => string | null> = {
     ]);
   },
 
-  market: (i) => block([
-    line("Market size", i.market.size),
-    line("Market trends", i.market.trends),
-    line("How the business wants to be seen", i.market.positioning),
-    line("Brand values", i.market.brandValues),
+  market: (i, except) => block([
+    own("market_size", "Market size", i.market.size, except),
+    own("market_trends", "Market trends", i.market.trends, except),
+    own("positioning", "How the business wants to be seen", i.market.positioning, except),
+    own("brand_values", "Brand values", i.market.brandValues, except),
   ]),
 
   competition: (i) => block([
@@ -109,12 +125,12 @@ const SLICES: Record<SliceKey, (i: ReportInput) => string | null> = {
   ]),
 
   /** What the client has already written about direction, so a draft agrees with it rather than contradicting it. */
-  framework: (i) => block([
-    line("Vision", i.framework.vision),
-    line("Mission", i.framework.mission),
-    line("Purpose", i.framework.purpose),
-    line("Brand promise", i.framework.brandPromise),
-    line("Field of play", i.framework.fieldOfPlay),
+  framework: (i, except) => block([
+    own("vision", "Vision", i.framework.vision, except),
+    own("mission", "Mission", i.framework.mission, except),
+    own("purpose", "Purpose", i.framework.purpose, except),
+    own("brand_promise", "Brand promise", i.framework.brandPromise, except),
+    own("field_of_play", "Field of play", i.framework.fieldOfPlay, except),
   ]),
 
   operations: (i) => block([
@@ -125,17 +141,23 @@ const SLICES: Record<SliceKey, (i: ReportInput) => string | null> = {
   ]),
 };
 
-/** One slice, or null where the plan has nothing to say yet. */
-export const slice = (i: ReportInput, key: SliceKey): string | null => SLICES[key](i);
+/**
+ * One slice, or null where the plan has nothing to say yet.
+ *
+ * `except` is the key of the field being drafted, and it is threaded all the way through rather than
+ * applied at the end on purpose: a slice emptied by removing that field must report itself ABSENT, so the
+ * missing context becomes a question instead of an empty heading the model fills in for itself (§6.106.3).
+ */
+export const slice = (i: ReportInput, key: SliceKey, except?: string): string | null => SLICES[key](i, except);
 
 /** Whether a slice has anything in it — the check that decides context from questions, and the caption from both. */
-export const hasSlice = (i: ReportInput, key: SliceKey): boolean => slice(i, key) !== null;
+export const hasSlice = (i: ReportInput, key: SliceKey, except?: string): boolean => slice(i, key, except) !== null;
 
 /**
  * The context for one draft: every slice the field asked for that the plan can actually answer, in the
  * order the field asked. Absent slices are simply not mentioned — a model told "Customer groups: none"
  * will write about the absence.
  */
-export function contextFor(i: ReportInput, wants: readonly SliceKey[]): string {
-  return wants.map((k) => slice(i, k)).filter((s): s is string => s !== null).join("\n\n");
+export function contextFor(i: ReportInput, wants: readonly SliceKey[], except?: string): string {
+  return wants.map((k) => slice(i, k, except)).filter((s): s is string => s !== null).join("\n\n");
 }

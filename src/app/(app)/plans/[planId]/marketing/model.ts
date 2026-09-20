@@ -48,6 +48,21 @@ export type Market = Record<MarketKey, string>;
 /** Every field stored on plan_marketing that this module writes. */
 export const ALL_MARKET_KEYS = [...MARKET_FIELDS.map((f) => f.key), ...NARRATIVE_FIELDS.map((f) => f.key)] as MarketKey[];
 
+/**
+ * WHICH OF THESE BOXES A MODEL MAY DRAFT (\u00a76.109).
+ *
+ * The five statements of intent about THIS business. The three left out are left out on purpose:
+ * `market_size` and `market_trends` are facts about the world, which a model will supply confidently and
+ * without a source \u2014 the one thing an assessor reading this section is checking for; and `sales_team`
+ * names people, which no slice of the plan is allowed to read (`engine/ai/slices.ts`).
+ *
+ * Kept here, next to the fields themselves, so the decision is read alongside what it applies to. What
+ * each of the five wants to know, and what it always asks, is in `engine/ai/fields.ts`.
+ */
+export const DRAFTABLE_MARKET_KEYS: readonly MarketKey[] = [
+  POSITION_ONE_LINER.key, ...BRAND_FIELDS.map((f) => f.key), "sales_process",
+];
+
 export const SPEND_KINDS = ["distribution", "advertising", "content", "sales_promotion", "public_relations", "partnerships", "retention"] as const;
 export type SpendKind = (typeof SPEND_KINDS)[number];
 export const SPEND_LABEL: Record<SpendKind, string> = {

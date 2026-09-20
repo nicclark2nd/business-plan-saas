@@ -2,9 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { GuidedStep, CoachPanel, CoachExample } from "@/components/guided/GuidedStep";
 import { VisionForm } from "./VisionForm";
 import { VISION_FIELDS, type VisionValues } from "./fields";
-import { gatherReport } from "../reports/gather";
-import { planDraft } from "@/engine/ai/draft";
-import { DRAFTABLE } from "@/engine/ai/fields";
+import { draftingFor } from "../drafting";
 
 export default async function VisionPage({ params }: { params: Promise<{ planId: string }> }) {
   const { planId } = await params;
@@ -13,26 +11,13 @@ export default async function VisionPage({ params }: { params: Promise<{ planId:
   const initial = Object.fromEntries(VISION_FIELDS.map((f) => [f.key, (data?.[f.key] as string | null) ?? ""])) as VisionValues;
 
   /*
-   * WHAT EACH DRAFT BUTTON MAY CLAIM, AND WHAT IT WILL ASK (6.106.1).
+   * WHAT EACH DRAFT BUTTON MAY CLAIM, AND WHAT IT WILL ASK (§6.106.1, moved §6.109).
    *
-   * Worked out here, on the server, from the same assembly the report is built from - so the caption under
-   * a button is computed by the same check that decides what is sent, and cannot promise data the plan does
-   * not hold. It fails soft: AI switched off, or a plan too empty to gather, leaves every button absent
-   * rather than breaking the step.
+   * All six, because every statement on this step is one only the owner can make. The loop that works it
+   * out moved to `../drafting` when Marketing wanted the same loop — one function, one answer, and the
+   * caption is still computed by the same check that decides what is sent.
    */
-  const { data: aiRow } = await supabase.from("plan_settings").select("ai_enabled").eq("plan_id", planId).maybeSingle();
-  let drafting: Record<string, { caption: string; questions: { slice: string; question: string }[] }> = {};
-  if (aiRow?.ai_enabled) {
-    try {
-      const { input } = await gatherReport(planId);
-      drafting = Object.fromEntries(VISION_FIELDS.map((f) => {
-        const d = planDraft(input, DRAFTABLE[f.key]);
-        return [f.key, { caption: d.caption, questions: d.questions }];
-      }));
-    } catch (e) {
-      console.error("vision drafting", e);
-    }
-  }
+  const drafting = await draftingFor(planId, VISION_FIELDS.map((f) => f.key));
 
   return (
     <GuidedStep

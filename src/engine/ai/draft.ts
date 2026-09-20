@@ -100,8 +100,12 @@ const sentence = (parts: string[]) =>
  */
 export function planDraft(i: ReportInput, field: DraftableField): DraftPlan {
   const wants = field.wants.filter((k) => SLICE_KEYS.includes(k));
-  const present = wants.filter((k) => hasSlice(i, k));
-  const missing = wants.filter((k) => !hasSlice(i, k));
+  /*
+   * THE FIELD IS LEFT OUT OF ITS OWN CONTEXT (§6.109). A slice that holds nothing but the box being
+   * drafted therefore reports itself absent here, and becomes a question rather than an echo.
+   */
+  const present = wants.filter((k) => hasSlice(i, k, field.key));
+  const missing = wants.filter((k) => !hasSlice(i, k, field.key));
 
   /*
    * The owner's own questions come FIRST and are never dropped for a plan gap: a missing product list is
@@ -132,5 +136,5 @@ export function planDraft(i: ReportInput, field: DraftableField): DraftPlan {
       : using ? `Will ${using}`
         : "Will draft from what you have written so far";
 
-  return { context: contextFor(i, present), present, questions, caption };
+  return { context: contextFor(i, present, field.key), present, questions, caption };
 }

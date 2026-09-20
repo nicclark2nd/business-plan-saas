@@ -2,7 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { MarketingModule } from "./MarketingModule";
 import { firstProjectedYear, planQuarters, planYearEnding, quarterOf } from "@/engine/plan/calendar";
-import { ALL_MARKET_KEYS, type MarketingData, type Market } from "./model";
+import { ALL_MARKET_KEYS, DRAFTABLE_MARKET_KEYS, type MarketingData, type Market } from "./model";
+import { draftingFor } from "../drafting";
 import type { Goal, Person } from "../goals/model";
 import type { AnyProduct } from "@/engine/sales/product";
 
@@ -35,6 +36,16 @@ export default async function MarketingPage({ params, searchParams }: { params: 
     segments: (segments.data ?? []).map((g) => ({ ...g, revenue_share: g.revenue_share === null ? null : Number(g.revenue_share) })),
   };
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
+
+  /*
+   * WHICH OF THE EIGHT NARRATIVE BOXES GET A DRAFT BUTTON (§6.109).
+   *
+   * Five, not eight. Market size and Market trends are facts about the world that nothing in this plan can
+   * ground, and Who sells names people, which no slice is allowed to read. The list lives beside the field
+   * definitions in `model.ts`; this page only hands it over. A key that comes back absent gets no button
+   * and no explanation, which is the honest answer for a field that was never going to have one.
+   */
+  const drafting = await draftingFor(planId, DRAFTABLE_MARKET_KEYS);
   const initialArea = ["market", "spend", "research", "brand", "sales", "actions"].includes(area ?? "") ? (area as "market") : "market";
 
   // The PLAN's quarters, not the calendar's (§6.44) — the same two years Goals offers.
@@ -49,5 +60,5 @@ export default async function MarketingPage({ params, searchParams }: { params: 
     customerWord={(settings.data?.customer_type ?? "customer").toLowerCase()} productWord={settings.data?.product_type ?? null}
     actions={(actions.data ?? []) as unknown as Goal[]} people={(people.data ?? []) as Person[]}
     quarters={quarters} thisQuarter={{ planYear: 1, quarter: quarterOf(fyEndMonth, new Date()) }}
-    products={(products.data ?? []) as unknown as AnyProduct[]} />;
+    products={(products.data ?? []) as unknown as AnyProduct[]} drafting={drafting} />;
 }

@@ -20,6 +20,7 @@ import { QuarterlyGoalDialog, type QuarterChoice } from "@/components/goals/Quar
 import { deleteGoal, saveQuarterlyGoal, setGoalStatus } from "../goals/actions";
 import { STATUSES, type Goal, type GoalStatus, type Person } from "../goals/model";
 import { useSaveOnce } from "@/lib/saveOnce";
+import { DraftField, type Drafting } from "@/components/module/DraftField";
 import { useRouter } from "next/navigation";
 
 const TONE: Record<GoalStatus, string> = {
@@ -32,7 +33,7 @@ const TONE: Record<GoalStatus, string> = {
 type AreaKey = "market" | "spend" | "research" | "brand" | "sales" | "actions";
 type WithMeta<T> = T & { _dirty?: boolean };
 
-export function MarketingModule({ planId, initial, mode, initialArea, customerWord, productWord, actions, people, quarters, thisQuarter, products }: {
+export function MarketingModule({ planId, initial, mode, initialArea, customerWord, productWord, actions, people, quarters, thisQuarter, products, drafting = {} }: {
   planId: string; initial: MarketingData; mode: "guided" | "advanced"; initialArea: AreaKey; customerWord: string;
   /** plan_settings.product_type, for the plan's own word for one sale (§6.31.1). */
   productWord: string | null;
@@ -43,6 +44,11 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
   actions: Goal[]; people: Person[]; quarters: QuarterChoice[]; thisQuarter: { planYear: number; quarter: number };
   /** The plan's sales lines, so this screen can say what a customer costs to win (§6.61). */
   products: AnyProduct[];
+  /**
+   * What the server decided each narrative box may offer (§6.109). Absent key = no button by design,
+   * null = draftable but drafting is off. This module keeps no list of its own.
+   */
+  drafting?: Drafting;
 }) {
   const num = useMoney();
   const router = useRouter();
@@ -172,6 +178,16 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
         <Field key={f.key} label={f.label} span={3} hint={f.hint}>
           <FieldTextarea value={market[f.key as keyof Market] ?? ""} placeholder={f.placeholder} className="min-h-[84px]"
             onChange={(e) => { setMarket((m) => ({ ...m, [f.key]: e.target.value })); setMarketDirty(true); }} />
+          {/*
+            ONE LINE, EVERY NARRATIVE BOX ON THE MODULE (§6.109). The button appears where the server said
+            it may; where it may not, nothing appears at all. There is no list here of which fields those
+            are, so this screen cannot drift out of step with what the drafter will actually accept.
+
+            A draft lands in the BOX, not in the database — `setMarketDirty` is the same thing typing does,
+            so the module's own save runs on the module's own terms.
+          */}
+          <DraftField planId={planId} field={f} offer={drafting[f.key]} value={market[f.key as keyof Market] ?? ""}
+            onUse={(text) => { setMarket((m) => ({ ...m, [f.key]: text })); setMarketDirty(true); }} />
         </Field>
       ))}
     </FieldGrid>
