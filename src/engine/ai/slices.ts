@@ -133,11 +133,11 @@ const SLICES: Record<SliceKey, (i: ReportInput, except?: string) => string | nul
     own("field_of_play", "Field of play", i.framework.fieldOfPlay, except),
   ]),
 
-  operations: (i) => block([
-    line("Operating hours", i.operations.capacity.operatingHours),
-    line("Capacity today", i.operations.capacity.capacityNow),
-    line("What limits capacity", i.operations.capacity.capacityConstraint),
-    line("How quality is managed", i.operations.capacity.qualityApproach),
+  operations: (i, except) => block([
+    own("operating_hours", "Operating hours", i.operations.capacity.operatingHours, except),
+    own("capacity_now", "Capacity today", i.operations.capacity.capacityNow, except),
+    own("capacity_constraint", "What limits capacity", i.operations.capacity.capacityConstraint, except),
+    own("quality_approach", "How quality is managed", i.operations.capacity.qualityApproach, except),
   ]),
 };
 

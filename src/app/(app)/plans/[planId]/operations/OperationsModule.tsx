@@ -10,6 +10,7 @@ import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { CAPACITY_FIELDS, DEPENDENCY, TENURE, type Capacity, type OpStep, type Premise, type Supplier } from "./model";
+import { DraftField, type Drafting } from "@/components/module/DraftField";
 import { continueFromOperations, deleteRow, saveCapacity, setPrimaryPremise, upsertRow, type RowKind } from "./actions";
 
 type AreaKey = "premises" | "suppliers" | "process" | "capacity";
@@ -35,10 +36,12 @@ const proseLabel = "mb-0.5 pl-1.5 text-[10.5px] font-semibold uppercase tracking
  *   **Capacity** is the part that connects the operation to the money. "What limits it" is asked for the
  *   binding constraint rather than a list, because a list is not a constraint.
  */
-export function OperationsModule({ planId, mode, initialArea, initialPremises, initialSuppliers, initialSteps, initialCapacity, noun }: {
+export function OperationsModule({ planId, mode, initialArea, initialPremises, initialSuppliers, initialSteps, initialCapacity, noun, drafting = {} }: {
   planId: string; mode: "guided" | "advanced"; initialArea: AreaKey;
   initialPremises: Premise[]; initialSuppliers: Supplier[]; initialSteps: OpStep[]; initialCapacity: Capacity;
   noun: { one: string; many: string };
+  /** What the server decided each capacity box may offer (§6.109). Two of the five are absent (§6.111). */
+  drafting?: Drafting;
 }) {
   const [area, setArea] = useState<AreaKey>(initialArea);
   /** Keyed per row and per area, so several failures are several messages (§6.98). */
@@ -310,6 +313,10 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
                 <Field key={f.key} label={f.label} span={6} hint={f.hint}>
                   <FieldTextarea value={capacity[f.key]} placeholder={f.placeholder} className="min-h-[72px]"
                     onChange={(e) => { setCapacity((c) => ({ ...c, [f.key]: e.target.value })); setCapacityDirty(true); }} />
+                  {/* A draft lands in the BOX; `setCapacityDirty` is what typing does, so this area's own
+                      blur-save runs on its own terms (§6.109). */}
+                  <DraftField planId={planId} field={f} offer={drafting[f.key]} value={capacity[f.key]}
+                    onUse={(text) => { setCapacity((c) => ({ ...c, [f.key]: text })); setCapacityDirty(true); }} />
                 </Field>
               ))}
             </FieldGrid>

@@ -1,6 +1,7 @@
 import type { DraftableField } from "./draft";
 import { VISION_FIELDS } from "@/app/(app)/plans/[planId]/vision/fields";
 import { POSITION_ONE_LINER, BRAND_FIELDS, POSITION_FIELDS } from "@/app/(app)/plans/[planId]/marketing/model";
+import { CAPACITY_FIELDS } from "@/app/(app)/plans/[planId]/operations/model";
 
 /**
  * WHICH FIELDS CAN BE DRAFTED, AND WHAT EACH ONE WANTS TO KNOW (§6.106.1).
@@ -225,6 +226,57 @@ const fromCompetitors = (): DraftableField[] =>
     asks: COMPETITORS_ASKS[f.key],
   }));
 
+/**
+ * OPERATIONS, STEP 6 (§6.111). Three of the five capacity boxes.
+ *
+ * THE TWO REFUSED ARE REFUSED FOR DIFFERENT REASONS, AND THE SECOND IS THE INTERESTING ONE.
+ *
+ * `operating_hours` is a bare fact — days, hours, the shutdown over Christmas. No slice holds it, nothing
+ * shapes it, and a model asked for it invents a plausible roster that a lender then reads as true. The
+ * question would be the whole answer, which makes the button a typing aid with a fabrication risk attached.
+ *
+ * `capacity_now` looks draftable and is not. The plan DOES hold volumes — the sales lines carry units — but
+ * those are the FORECAST: what the business intends to sell. Capacity is what it could deliver if the work
+ * were there. Handing a model 36 slabs a year gets back "we can deliver about 36 slabs a year", which
+ * quietly states that the business is running at exactly 100% and has been all along. That is a claim no
+ * client meant to make, in the section a lender reads to find out whether the forecast is even possible.
+ *
+ * > A number the plan holds for one purpose is not evidence for a different question.
+ *
+ * The three that qualify are judgements about the business: what runs out first, what a step up would take,
+ * and what keeps the work right. Each has an `ask` that makes the owner supply the substance.
+ */
+const OPERATIONS_WANTS: Record<string, DraftableField["wants"]> = {
+  capacity_constraint: ["profile", "overview", "whatYouSell", "operations", "customers"],
+  /* Not in the `operations` slice at all, so nothing to leave out \u2014 but it needs the rest of it badly. */
+  capacity_plan: ["profile", "overview", "whatYouSell", "operations", "customers"],
+  /* `framework` carries the brand promise, which is the quality promise written down at step 1. */
+  quality_approach: ["profile", "overview", "whatYouSell", "framework", "operations"],
+};
+
+const OPERATIONS_ASKS: Record<string, readonly string[]> = {
+  capacity_constraint: [
+    "When you get busy, what runs out first \u2014 people, gear, hours, cash? And how long does it take to get more of it?",
+  ],
+  /*
+   * THIS ONE ASKS FOR THE MONEY, because the field asks for it and a model will otherwise supply a figure.
+   * "About 180,000 a year and a 65,000 asset" is the placeholder; invented, it is a number that walks into
+   * a conversation about the forecast as though somebody had worked it out.
+   */
+  capacity_plan: [
+    "What would the next step up actually need \u2014 who, what gear \u2014 and roughly what would it cost a year?",
+  ],
+  quality_approach: [
+    "What gets checked before a job is signed off, and what happens when something does go wrong?",
+  ],
+};
+
+const fromOperations = (): DraftableField[] =>
+  CAPACITY_FIELDS.filter((f) => f.key in OPERATIONS_WANTS).map((f) => ({
+    key: f.key, label: f.label, hint: f.hint, placeholder: f.placeholder,
+    wants: OPERATIONS_WANTS[f.key], asks: OPERATIONS_ASKS[f.key],
+  }));
+
 const fromVision = (): DraftableField[] =>
   VISION_FIELDS.map((f) => ({
     key: f.key,
@@ -237,7 +289,7 @@ const fromVision = (): DraftableField[] =>
   }));
 
 /** Every draftable field in the app, in the order a client meets them. */
-export const DRAFTABLE_FIELDS: DraftableField[] = [...SETTINGS_FIELDS, ...fromVision(), ...fromMarketing(), ...fromCompetitors()];
+export const DRAFTABLE_FIELDS: DraftableField[] = [...SETTINGS_FIELDS, ...fromVision(), ...fromMarketing(), ...fromCompetitors(), ...fromOperations()];
 
 /**
  * Keyed by the field's own key, so a route can look one up from a request without a second list.

@@ -63,6 +63,10 @@ describe("every draftable field", () => {
     barriers_to_entry: (v) => ({ position: { barriers: v } as ReportInput["position"] }),
     /* Nothing reads this one either; it seeds SWOT from the screen, not from a slice. */
     future_threats: () => ({}),
+    capacity_constraint: (v) => ({ operations: { capacity: { capacityConstraint: v } } as ReportInput["operations"] }),
+    quality_approach: (v) => ({ operations: { capacity: { qualityApproach: v } } as ReportInput["operations"] }),
+    /* Not in any slice: the plan records how you would lift capacity, but never reads it back to a model. */
+    capacity_plan: () => ({}),
     /*
      * No slice reads this one, so it cannot echo. Kept in the list rather than skipped, because the check
      * below insists every draftable field appears here \u2014 the point being that adding a field forces
@@ -101,8 +105,9 @@ describe("every draftable field", () => {
   });
 
   /* The boxes that are refused, and stay refused (§6.109, §6.110). */
-  it("will not draft a market size, a market trend, who sells, or a rival's strengths", () => {
-    for (const k of ["market_size", "market_trends", "sales_team", "strengths", "weaknesses", "how_we_win"]) {
+  it("will not draft a fact about the world, a person, a rival, or a capacity", () => {
+    for (const k of ["market_size", "market_trends", "sales_team", "strengths", "weaknesses", "how_we_win",
+      "operating_hours", "capacity_now"]) {
       expect(DRAFTABLE[k], `${k} must not be draftable`).toBeUndefined();
     }
   });

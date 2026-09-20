@@ -3,6 +3,7 @@ import { getSession } from "@/lib/plan";
 import { productNoun } from "@/engine/plan/vocabulary";
 import { CAPACITY_FIELDS, type Capacity, type OpStep, type Premise, type Supplier } from "./model";
 import { OperationsModule } from "./OperationsModule";
+import { draftingFor } from "../drafting";
 
 const AREAS = ["premises", "suppliers", "process", "capacity"] as const;
 
@@ -27,6 +28,13 @@ export default async function OperationsPage({ params, searchParams }: {
   ) as Capacity;
   const noun = productNoun(settings.data?.product_type as string | null);
 
+  /*
+   * THREE OF THE FIVE CAPACITY BOXES (§6.111). Operating hours is a bare fact nothing can shape, and
+   * capacity today would be answered from the sales forecast — which is what the business intends to
+   * sell, not what it could deliver. See `engine/ai/fields.ts`.
+   */
+  const drafting = await draftingFor(planId, CAPACITY_FIELDS.map((f) => f.key));
+
   return (
     <OperationsModule
       planId={planId}
@@ -37,6 +45,7 @@ export default async function OperationsPage({ params, searchParams }: {
       initialSteps={(steps.data ?? []) as OpStep[]}
       initialCapacity={written}
       noun={{ one: noun.one, many: noun.many }}
+      drafting={drafting}
     />
   );
 }

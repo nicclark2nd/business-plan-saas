@@ -417,6 +417,63 @@ that runs a query.**
 4. Whether an answer given to a question at step 1 is kept anywhere beyond that draft, or asked again later.
    The overview move above removes most of this, since the commonest question now has a home.
 
+
+## Which fields get a button — the sweep, step by step
+
+Nic, starting it: *"the button works well for Vision, Mission, Purpose, Brand promise. But not good for
+anything in Historic, or Average price, Base units sold, Base annual sales."* Then: *"start at the top and
+work downwards."*
+
+Recorded as it is decided, because the refusals are the part somebody will otherwise re-open in six months
+and get wrong. **A refused field shows nothing at all** — no greyed button, no "drafting is off" line. That
+line points at Plan settings, and sending a client there to switch on something that was never going to
+appear is worse than silence.
+
+| Step | Screen | In | Out |
+|---|---|---|---|
+| — | Plan settings | About what you sell | — |
+| 1 | Vision & Purpose | all six | — |
+| 2 | Leadership Team | — | every field: names, roles, wages |
+| 3 | Marketing | positioning, 3 × brand, sales process | market size, market trends, who sells |
+| 4 | Competitors | our advantage, barriers, what could change | the rival grid, all of it |
+| 5 | SWOT | — | the whole step, see below |
+| 6 | Operations | what limits it, how we lift it, quality | operating hours, what we can deliver today |
+
+### The four reasons a field is refused
+
+1. **It is a fact about the world.** Market size, market trends. A model supplies one fluently and without
+   a source, which is the single thing a grant assessor reads that section to check.
+2. **It names a person.** Who sells, and everything on Leadership Team. No slice of the plan is allowed to
+   read a person (`engine/ai/slices.ts`, rule 2), so a draft would either invent staff or be handed the
+   very thing the consent wording promises never leaves.
+3. **It is a claim about a named third party.** A competitor's strengths and weaknesses. Market size at
+   least fails towards a number somebody can check; this fails towards defamation.
+4. **The plan holds a number for a different question.** `capacity_now` is the sharp one: the sales lines
+   DO carry volumes, but those are the forecast — what the business intends to sell. Capacity is what it
+   could deliver. Hand a model 36 slabs a year and it writes "we can deliver about 36 slabs a year", which
+   states that the business is running at exactly 100% and always has. Nobody meant to claim that, and it
+   lands in the section a lender reads to find out whether the forecast is possible at all.
+
+### Step 5 is refused whole, and not for any of those reasons
+
+SWOT has no prose boxes — it is a 2×2 of one-line items, each with a response. And it already has
+`suggest.ts`: every line is drawn from a field the client typed, carries the screen it came from, and
+enters only on a click. **That is strictly better than a draft, because it has provenance.** Putting an AI
+button beside it would offer plausible lines with no source, next to grounded lines with one, and the
+client cannot tell them apart once they are both in the grid.
+
+The `response` boxes ("How you'll fix it") are a fair question and still a no for now. A response becomes a
+**goal** at step 16 — an owner, a quarter, a status. A model writing "hire a second estimator in Q3" is not
+suggesting prose, it is inventing a commitment.
+
+### The one thing deferred rather than decided
+
+**A per-row drafter.** Three places want the same missing mechanism — `how_we_win` per competitor, a SWOT
+`response` per line, `detail` per process step. Each needs its row's own name and notes as context, which
+the per-field drafter has no way to carry. It is a real feature, not a variation on this one, and it is not
+being half-built inside a sweep. If it is ever wanted, `how_we_win` is the case to build it for: unlike a
+rival's weaknesses, it is a claim about THIS business.
+
 ---
 
 # Note 5 — Whether the financials should come first
