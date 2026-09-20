@@ -31,22 +31,36 @@ const PAGE_BREAK = "<w:pageBreakBefore/>";
  * is a cosmetic disappointment; a plan that fails to download is not (§6.94's rule for the logo, again).
  */
 export async function applyStylePageBreaks(buffer: Buffer, styleIds: readonly string[]): Promise<Buffer> {
-  if (styleIds.length === 0) return buffer;
   try {
     const { default: JSZip } = await import("jszip");
     const zip = await JSZip.loadAsync(buffer);
-    const part = zip.file("word/styles.xml");
-    if (!part) return buffer;
 
-    const before = await part.async("string");
-    let xml = before;
-    for (const id of styleIds) xml = addPageBreak(xml, id);
-    if (xml === before) return buffer;
+    const styles = zip.file("word/styles.xml");
+    if (styles && styleIds.length) {
+      const before = await styles.async("string");
+      let xml = before;
+      for (const id of styleIds) xml = addPageBreak(xml, id);
+      if (xml !== before) zip.file("word/styles.xml", xml);
+    }
 
-    zip.file("word/styles.xml", xml);
+    /*
+     * SAY "TRUE" OUT LOUD (§6.107.5).
+     *
+     * The library writes `<w:updateFields/>`. By the schema an empty CT_OnOff means true, and by the schema
+     * that is the end of it — but this is the flag that decides whether a client opens their plan to a
+     * contents page or to a blank one, and it costs nothing to write the attribute every Word document
+     * Word itself produces has written for twenty years.
+     */
+    const settings = zip.file("word/settings.xml");
+    if (settings) {
+      const before = await settings.async("string");
+      const xml = before.replace("<w:updateFields/>", '<w:updateFields w:val="true"/>');
+      if (xml !== before) zip.file("word/settings.xml", xml);
+    }
+
     return await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
   } catch (e) {
-    console.error("style page breaks", e);
+    console.error("docx patch", e);
     return buffer;
   }
 }

@@ -340,10 +340,18 @@ export async function renderDocx(
      * who prefers one of Word's own formats can replace it with a command they already know.
      */
     new TableOfContents("Contents", {
+      /*
+       * THE SAME FOUR SWITCHES WORD ITSELF WRITES (§6.107.5): \o "1-2" \h \z \u.
+       *
+       * `\h` makes the entries links, `\z` hides the tab and page number in web view, and `\u` tells the
+       * field to use each paragraph's applied outline level. None of them is exotic — they are what Insert →
+       * Table of Contents produces — and matching it exactly removes one more way for this field to behave
+       * differently in somebody's Word than in ours.
+       */
       hyperlink: true,
       headingStyleRange: "1-2",
-      /* No table-of-figures entries mixed in: the plan's figure captions are captions, not headings. */
-      captionLabel: undefined,
+      hideTabAndPageNumbersInWebView: true,
+      useAppliedParagraphOutlineLevel: true,
     }),
   ];
 

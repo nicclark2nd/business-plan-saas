@@ -539,8 +539,20 @@ describe("page numbers and the contents", () => {
     expect(h1.slice(0, h1.indexOf("</w:style>"))).toContain("pageBreakBefore");
   });
 
-  it("asks Word to calculate the fields, or the contents opens empty", async () => {
+  /*
+   * §6.107.5. The field carries no result of its own — it cannot, because nothing here knows what page a
+   * heading lands on — so whether a client opens their plan to a contents page or to a blank one comes down
+   * to this flag and these four switches. Both were wrong in ways that read as right.
+   */
+  it("says updateFields is TRUE, out loud", async () => {
     const settings = await (await zipOf(await renderDocx(doc(), []))).file("word/settings.xml")!.async("string");
-    expect(settings).toContain("updateFields");
+    expect(settings).toContain('<w:updateFields w:val="true"/>');
+  });
+
+  it("writes the same four switches Word writes for itself", async () => {
+    const xml = await documentXml(await renderDocx(doc(), []));
+    const at = xml.indexOf("TOC ");
+    const instr = xml.slice(at, xml.indexOf("</w:instrText>", at));
+    for (const sw of ["&quot;1-2&quot;", "\\h", "\\z", "\\u"]) expect(instr, instr).toContain(sw);
   });
 });

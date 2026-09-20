@@ -3347,3 +3347,47 @@ against a logo that is not the real one would be guessing again, with more steps
 
 > **THE RULE FROM ALL OF THIS: IF A CHANGE IS ABOUT HOW A PAGE LOOKS, RENDER THE PAGE AND MEASURE IT. A TEST
 > THAT READS THE STYLESHEET IS ASKING THE DOCUMENT WHAT IT MEANT TO DO.**
+
+---
+
+## §6.107.5 — The contents was right; nothing was being asked to work it out
+
+Nic: *"The table of contents is using an actual table of content construct. It produces page number 1 for
+all items. I have to manually tell the table of contents to update."*
+
+**The first thing worth knowing is that the document is not broken.** Rendered with a renderer told to
+compute its fields, the contents comes out correct — 1.0 on page 4, 2.0 on page 6, 3.0 on page 8, with
+leaders and distinct numbers. The headings are right, the field is right, and the page numbers are
+computable from the file exactly as it stands.
+
+> **A TOC FIELD CARRIES NO RESULT OF ITS OWN, AND CANNOT: NOTHING IN THIS APP KNOWS WHAT PAGE A HEADING
+> LANDS ON UNTIL SOMETHING LAYS THE DOCUMENT OUT.** What the file controls is whether the program opening
+> it is *asked* to do that work, and asked in the words it expects.
+
+Two things were wrong in ways that read as right.
+
+**`<w:updateFields/>` with no attribute.** By the schema an empty `CT_OnOff` means true, so it was correct
+and did nothing wrong — and it is not what Word writes. Word writes `w:val="true"`. This is the one flag
+that decides between a contents page and a blank one, and matching what every Word document has written for
+twenty years costs nothing. Written now by the same post-processing step that carries the page breaks
+(§6.97.1).
+
+**Two switches missing.** The field said `TOC \h \o "1-2"`. Insert → Table of Contents writes `\o \h \z \u`.
+`\z` hides the tab and page number in web view; `\u` tells the field to use each paragraph's applied outline
+level. Neither is exotic, and each one that is absent is another way for the field to behave differently in
+somebody's Word than in ours.
+
+**What is still true, and has to be said plainly:** a generated file has never been paginated. If Word
+computes the field at the moment it opens the document, before it has laid the pages out, every heading can
+legitimately resolve to page 1 — and that is consistent with what Nic sees and with pressing update fixing
+it. The two corrections above remove the two variables this app controls. **The remaining variable is
+Word's, and this project has no way to test it** — which is why it is written down here as an open question
+rather than as a fix.
+
+> **IF IT STILL NEEDS A MANUAL UPDATE AFTER THIS, THE ANSWER IS NOT ANOTHER SWITCH. IT IS THAT A DOCUMENT
+> WHOSE NUMBERS MUST BE RIGHT THE MOMENT IT LEAVES THE BUILDING WANTS TO BE A PDF, WHERE THEY ARE ALREADY
+> DECIDED.**
+
+**Checked for regressions** on a nine-page render: cover unchanged, the contact block still at the foot, the
+notice on page 2, the contents on page 3, every top-level section starting its own page, and "Page n of 9"
+on every page but the cover.
