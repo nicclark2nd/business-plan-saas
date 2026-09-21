@@ -112,6 +112,44 @@ this is a migration and not a tweak.
 The question underneath is whether a client WANTS it visible. It is honest, and it is also a label on their
 own business plan saying a machine helped write it. Worth asking one before building either.
 
+## From the security review — 21 September 2026
+
+Full reasoning in `Security_Review.md`. Listed here because this file is the record of what is unfinished.
+
+### 14. Two open redirects — **Build**
+
+`/auth/callback?next=` has no check at all, and sign-in's `next.startsWith("/")` does not stop `//evil.com`
+or `/\evil.com`. Both are links on the real domain that land a client somewhere else. Fix is one shared
+`safeNext()` that resolves the URL and compares origins — every string-prefix version of this test has now
+been written twice and been wrong twice.
+
+### 15. Raw Postgres errors reach the browser in 49 places — **Build**
+
+`Couldn't save: ${error.message}` carries column names, constraint names and sometimes values onto a
+client's screen. One helper replaces all 49, keeps the detail in `console.error` where it is useful, and
+leaves the codebase smaller.
+
+### 16. No security headers — **Build**
+
+`next.config.ts` sets none. The four that cannot break anything go in now; a real CSP is a separate,
+deliberate job with `Content-Security-Policy-Report-Only` first.
+
+### 17. Sign-up confirms whether an email is already registered — **Build**
+
+Raw `error.message` from Supabase gives user enumeration. Sign-in already does this correctly, so the
+codebase disagrees with itself.
+
+### 18. `SUPABASE_SECRET_KEY` is advertised and unused — **Nic**
+
+`.env.example` invites the next person to set an RLS-bypassing key that nothing reads. Delete the line, and
+unset it in any environment that has it.
+
+### 19. Confirm the live database matches the migrations — **Nic's own**
+
+The review read 44 migrations, which are the intent, and found RLS complete on all 38 plan-scoped tables.
+Drift between that and the running project is invisible from the repo. One query in the SQL editor settles
+it; it is in `Security_Review.md`.
+
 ## Waiting on the domain
 
 ### 8. A shared link previews as a blank rectangle — **Build, after the domain**
