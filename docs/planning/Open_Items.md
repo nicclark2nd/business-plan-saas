@@ -95,14 +95,6 @@ one with the wrong convention — so it needs a decision before it needs work.
 §6.105 to §6.115 shipped the drafting. Two things were deliberately left, and they are here rather than in
 Note 4 because neither is a design question any more.
 
-### 12. Nothing limits how much a plan can spend on drafts — **Build**
-
-No rate limit, no per-plan cap, no daily ceiling. A client holding *Try again* costs real money, and the
-Goals drafter (§6.115) made the worst case six times larger: one press writes six passages. Nothing has
-gone wrong yet because one plan has been used by one person who was watching. That is not a control.
-
-This is the one item on this list that can hurt before anybody notices it.
-
 ### 13. An accepted written draft records nothing — **Nic**
 
 A goal taken from the drafter writes `source: "ai"` and the screen can say so. A vision, a brand promise or
@@ -114,14 +106,28 @@ own business plan saying a machine helped write it. Worth asking one before buil
 
 ## From the security review — 21 September 2026
 
+> **Built and seen working, so removed from this list (§6.119):** the drafting ceiling (was #12) and the
+> security headers (was #16). The ceiling was verified by a real draft after migration 0045 — which proved
+> both halves of it, since a failed count or a refused meter insert would have returned 503 — and by a 10MB
+> hostile body with 204 answers, malformed entries and a 50KB row name, which came back as a normal
+> 260-character draft in 3.8 seconds, the same as a legitimate request. The headers were read off a live
+> response.
+>
+> **What is NOT proven:** the 120-a-day threshold actually firing. That needs 120 calls and has not been
+> done. The count query is known to run and the insert is known to land; the comparison between them is
+> arithmetic nobody has executed.
+
 Full reasoning in `Security_Review.md`. Listed here because this file is the record of what is unfinished.
 
-### 14. Two open redirects — **Build**
+### 14. Two open redirects — **built §6.119, one half not yet seen working**
 
-`/auth/callback?next=` has no check at all, and sign-in's `next.startsWith("/")` does not stop `//evil.com`
-or `/\evil.com`. Both are links on the real domain that land a client somewhere else. Fix is one shared
-`safeNext()` that resolves the URL and compares origins — every string-prefix version of this test has now
-been written twice and been wrong twice.
+Closed by `safeNext()`, which resolves the URL and compares origins. The function is proved by tests on the
+exact payloads that defeated the old check (`//evil.com`, `/\evil.com`, `https://evil.com`, `javascript:`).
+
+**What has not been seen working:** the callback's `next` only applies after a SUCCESSFUL code exchange, so
+exercising it live needs a real magic link from a real email. The wiring is one line at each of two call
+sites and the function beneath it is tested, but the live path has not been walked. Worth doing once, the
+next time a confirmation email is going out anyway.
 
 ### 15. Raw Postgres errors reach the browser in 49 places — **Build**
 
@@ -129,15 +135,15 @@ been written twice and been wrong twice.
 client's screen. One helper replaces all 49, keeps the detail in `console.error` where it is useful, and
 leaves the codebase smaller.
 
-### 16. No security headers — **Build**
+### 17. Sign-up confirms whether an email is already registered — **built §6.119, not yet seen working**
 
-`next.config.ts` sets none. The four that cannot break anything go in now; a real CSP is a separate,
-deliberate job with `Content-Security-Policy-Report-Only` first.
+Sign-up now returns the same notice whether the address is new or known, and logs the real error rather
+than showing it.
 
-### 17. Sign-up confirms whether an email is already registered — **Build**
-
-Raw `error.message` from Supabase gives user enumeration. Sign-in already does this correctly, so the
-codebase disagrees with itself.
+**What has not been seen working:** proving it needs a sign-up attempt with an address that already has an
+account, on a deployment that sends real mail. Two minutes when there is a spare moment, and worth doing —
+this is the kind of fix that looks right in the diff and can still be wrong about which branch Supabase
+takes.
 
 ### 18. `SUPABASE_SECRET_KEY` is advertised and unused — **Nic**
 
