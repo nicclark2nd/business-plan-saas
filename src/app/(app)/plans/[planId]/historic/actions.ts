@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { deriveFromComponents, deriveFromTotals, type PeriodInput, type PeriodValues } from "@/engine/historic/derive";
 import { parseMonth } from "../people/model";
 import { nextHref } from "@/lib/nav";
+import { failed } from "@/lib/actionFailed";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
@@ -35,7 +36,7 @@ export async function savePeriod(planId: string, periodNumber: number, input: { 
   const values = deriveFromComponents(input);
   const row = { plan_id: planId, period_number: periodNumber, period_end: end, period_length: Math.min(24, Math.max(1, Math.trunc(Number(input.period_length)) || 12)), source: "manual", ...values };
   const { data, error, status } = await supabase.from("plan_historic_periods").upsert(row, { onConflict: "plan_id,period_number" }).select("period_number, revenue");
-  if (error) { console.error("historic", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }
+  if (error) return failed(error, "save the period");
   if (!data?.length) return { ok: false, error: `Saved nothing (status ${status}) — the row was rejected silently. Check plan access.` };
   touch(planId);
   return { ok: true, data: { values, period_end: end } };
@@ -53,9 +54,9 @@ export async function importPeriods(planId: string, periods: { period_number: nu
   }
   if (!rows.length) return { ok: false, error: "No periods with numbers were found in that file." };
   const { error: delErr } = await supabase.from("plan_historic_periods").delete().eq("plan_id", planId);
-  if (delErr) return { ok: false, error: `Couldn't clear the old periods: ${delErr.message}` };
+  if (delErr) return failed(delErr, "clear the old periods");
   const { error } = await supabase.from("plan_historic_periods").insert(rows);
-  if (error) { console.error("import", error); return { ok: false, error: `Couldn't load: ${error.message}` }; }
+  if (error) return failed(error, "load the figures");
   await supabase.from("plan_settings").upsert({ plan_id: planId, has_history: true }, { onConflict: "plan_id" });
   touch(planId);
   return { ok: true, data: { loaded: rows.length } };
@@ -64,14 +65,14 @@ export async function importPeriods(planId: string, periods: { period_number: nu
 export async function deletePeriod(planId: string, periodNumber: number): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from("plan_historic_periods").delete().eq("plan_id", planId).eq("period_number", periodNumber);
-  if (error) return { ok: false, error: error.message };
+  if (error) return failed(error, "remove the period");
   touch(planId); return { ok: true };
 }
 
 export async function setHasHistory(planId: string, has: boolean | null): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from("plan_settings").upsert({ plan_id: planId, has_history: has }, { onConflict: "plan_id" });
-  if (error) return { ok: false, error: error.message };
+  if (error) return failed(error, "save whether this business has history");
   touch(planId); return { ok: true };
 }
 

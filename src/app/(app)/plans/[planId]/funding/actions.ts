@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { FundingKind } from "@/engine/funding/sources";
 import type { FundingRow, LoanType } from "./model";
 import { nextHref } from "@/lib/nav";
+import { failed } from "@/lib/actionFailed";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
@@ -79,7 +80,7 @@ export async function upsertFunding(
     ? supabase.from(table).update(row).eq("id", r.id).eq("plan_id", planId).select("id").single()
     : supabase.from(table).insert(row).select("id").single();
   const { data, error } = await q;
-  if (error) { console.error("funding", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }
+  if (error) return failed(error, "save the funding");
 
   // Equipment and vehicle finance buy something the business then owns. The asset belongs to this loan and is
   // never editable in Fixed Assets — the same rule as a synced Overheads line (§6.19).
@@ -132,7 +133,7 @@ async function syncFinancedAsset(planId: string, debtId: string, name: string, r
 export async function deleteFunding(planId: string, kind: FundingKind, id: string): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from(TABLE[kind]).delete().eq("id", id).eq("plan_id", planId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return failed(error, "remove the funding");
   touch(planId); return { ok: true };                 // a financed asset goes with its loan, by cascade
 }
 
@@ -140,7 +141,7 @@ export async function deleteFunding(planId: string, kind: FundingKind, id: strin
 export async function saveOpeningCash(planId: string, value: number): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from("plan_settings").update({ opening_cash: Number(value) || 0 }).eq("plan_id", planId);
-  if (error) { console.error("opening cash", error); return { ok: false, error: error.message }; }
+  if (error) return failed(error, "save the opening cash");
   touch(planId); return { ok: true };
 }
 

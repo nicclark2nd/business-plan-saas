@@ -42,13 +42,13 @@ export async function completeSetup(_: SetupState, formData: FormData): Promise<
     .from("organisations")
     .insert({ name: orgName || businessName, kind, country, currency, created_by: user.id })
     .select("id").single();
-  if (orgErr) return { error: orgErr.message };
+  if (orgErr) { console.error("create the organisation", orgErr); return { error: "Couldn't create the organisation. Try again." }; }
 
   const { data: plan, error: planErr } = await supabase
     .from("plans")
     .insert({ organisation_id: org.id, business_name: businessName, created_by: user.id })
     .select("id").single();
-  if (planErr) return { error: planErr.message };
+  if (planErr) { console.error("create the plan", planErr); return { error: "Couldn't create the plan. Try again." }; }
 
   await supabase.from("plan_settings").update({ country, currency, financial_year_end_month: fyEndMonth, first_projected_year: firstProjectedYear }).eq("plan_id", plan.id);
   await supabase.from("profiles").update({ default_organisation_id: org.id }).eq("id", user.id);

@@ -7,6 +7,7 @@ import { nextHref } from "@/lib/nav";
 import {
   serializeCashTiming, serializeWorkingCapital, cashTimingSchedule, workingCapitalSchedule,
 } from "@/engine/forecast/assumptions";
+import { failed } from "@/lib/actionFailed";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -26,7 +27,7 @@ export async function saveAssumptions(planId: string, input: {
     working_capital_schedule: serializeWorkingCapital(workingCapitalSchedule(input.workingCapital)),
     cash_flow_assumptions: serializeCashTiming(cashTimingSchedule(input.cashTiming)),
   }).eq("plan_id", planId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return failed(error, "save the assumptions");
   revalidatePath(`/plans/${planId}`, "layout");
   return { ok: true };
 }
@@ -50,7 +51,7 @@ export async function revertToHistoricDays(planId: string): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from("plan_settings")
     .update({ working_capital_schedule: {} }).eq("plan_id", planId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return failed(error, "go back to last year's figures");
   revalidatePath(`/plans/${planId}`, "layout");
   return { ok: true };
 }

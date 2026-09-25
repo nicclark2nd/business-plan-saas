@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { GOAL_AREAS, type GoalArea } from "@/engine/whatif/goals";
 import type { GoalStatus } from "./model";
 import { nextHref } from "@/lib/nav";
+import { failed } from "@/lib/actionFailed";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
@@ -41,7 +42,7 @@ export async function saveAnnualGoal(
     // goal with no annual goal above it has nothing to be a step towards.
     const { error } = await supabase.from("plan_goals").delete()
       .eq("plan_id", planId).eq("area", area).is("parent_id", null);
-    if (error) return { ok: false, error: `Couldn't remove: ${error.message}` };
+    if (error) return failed(error, "remove the annual goal");
     touch(planId); return { ok: true, data: { id: null } };
   }
 
@@ -52,7 +53,7 @@ export async function saveAnnualGoal(
     ? supabase.from("plan_goals").update({ title: text }).eq("id", existing.id).eq("plan_id", planId).select("id").single()
     : supabase.from("plan_goals").insert({ plan_id: planId, area, title: text, source }).select("id").single();
   const { data, error } = await q;
-  if (error) return { ok: false, error: `Couldn't save: ${error.message}` };
+  if (error) return failed(error, "save the annual goal");
   touch(planId); return { ok: true, data: { id: data.id } };
 }
 
@@ -84,13 +85,13 @@ export async function saveQuarterlyGoal(planId: string, input: QuarterlyInput): 
 
   const { data: parent, error: parentErr } = await supabase.from("plan_goals")
     .select("id").eq("plan_id", planId).eq("area", input.area).is("parent_id", null).maybeSingle();
-  if (parentErr) return { ok: false, error: parentErr.message };
+  if (parentErr) return failed(parentErr, "read the annual goal");
 
   let parentId = parent?.id as string | undefined;
   if (!parentId) {
     const { data, error } = await supabase.from("plan_goals")
       .insert({ plan_id: planId, area: input.area, title: "", source: "manual" }).select("id").single();
-    if (error) return { ok: false, error: `Couldn't create the annual goal: ${error.message}` };
+    if (error) return failed(error, "create the annual goal");
     parentId = data.id;
   }
 
@@ -107,7 +108,7 @@ export async function saveQuarterlyGoal(planId: string, input: QuarterlyInput): 
     ? supabase.from("plan_goals").update(row).eq("id", input.id).eq("plan_id", planId).select("id").single()
     : supabase.from("plan_goals").insert({ ...row, source: "manual" }).select("id").single();
   const { data, error } = await q;
-  if (error) return { ok: false, error: `Couldn't save: ${error.message}` };
+  if (error) return failed(error, "save the goal");
   touch(planId); return { ok: true, data: { id: data.id } };
 }
 
@@ -115,14 +116,14 @@ export async function saveQuarterlyGoal(planId: string, input: QuarterlyInput): 
 export async function setGoalStatus(planId: string, id: string, status: GoalStatus): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from("plan_goals").update({ status }).eq("id", id).eq("plan_id", planId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return failed(error, "change the status");
   touch(planId); return { ok: true };
 }
 
 export async function deleteGoal(planId: string, id: string): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from("plan_goals").delete().eq("id", id).eq("plan_id", planId);
-  if (error) return { ok: false, error: `Couldn't remove: ${error.message}` };
+  if (error) return failed(error, "remove the goal");
   touch(planId); return { ok: true };
 }
 

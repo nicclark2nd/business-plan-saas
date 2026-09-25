@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { nextHref } from "@/lib/nav";
 import { CAPACITY_FIELDS, DEPENDENCY, TENURE, type Capacity } from "./model";
+import { failed } from "@/lib/actionFailed";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -41,7 +42,7 @@ export async function upsertRow(planId: string, kind: RowKind, row: Record<strin
     ? supabase.from(spec.table).update(clean).eq("id", row.id).eq("plan_id", planId).select("id").single()
     : supabase.from(spec.table).insert({ ...clean, sort_order: -Math.floor(Date.now() / 1000) }).select("id").single();
   const { data, error } = await q;
-  if (error) return { ok: false, error: `Couldn't save: ${error.message}` };
+  if (error) return failed(error, "save that row");
   await touch(planId);
   return { ok: true, data: { id: data.id } };
 }
@@ -49,7 +50,7 @@ export async function upsertRow(planId: string, kind: RowKind, row: Record<strin
 export async function deleteRow(planId: string, kind: RowKind, id: string): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from(TABLES[kind].table).delete().eq("id", id).eq("plan_id", planId);
-  if (error) return { ok: false, error: `Couldn't remove it: ${error.message}` };
+  if (error) return failed(error, "remove that row");
   await touch(planId);
   return { ok: true };
 }
@@ -64,9 +65,9 @@ export async function deleteRow(planId: string, kind: RowKind, id: string): Prom
 export async function setPrimaryPremise(planId: string, id: string): Promise<Result> {
   const supabase = await createClient();
   const set = await supabase.from("plan_outlets").update({ is_primary: true }).eq("id", id).eq("plan_id", planId);
-  if (set.error) return { ok: false, error: `Couldn't set the main place: ${set.error.message}` };
+  if (set.error) return failed(set.error, "set the main place");
   const clear = await supabase.from("plan_outlets").update({ is_primary: false }).eq("plan_id", planId).neq("id", id);
-  if (clear.error) return { ok: false, error: `Couldn't clear the others: ${clear.error.message}` };
+  if (clear.error) return failed(clear.error, "clear the other places");
   await touch(planId);
   return { ok: true };
 }
@@ -76,7 +77,7 @@ export async function saveCapacity(planId: string, capacity: Capacity): Promise<
   const row: Record<string, unknown> = { plan_id: planId };
   for (const f of CAPACITY_FIELDS) row[f.key] = capacity[f.key]?.trim() || null;
   const { error } = await supabase.from("plan_operations").upsert(row, { onConflict: "plan_id" });
-  if (error) return { ok: false, error: `Couldn't save: ${error.message}` };
+  if (error) return failed(error, "save the capacity");
   await touch(planId);
   return { ok: true };
 }

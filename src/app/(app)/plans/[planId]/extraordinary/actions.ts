@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { ExtraordinaryCategory } from "@/engine/extraordinary/items";
 import { nextHref } from "@/lib/nav";
+import { failed } from "@/lib/actionFailed";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
@@ -38,7 +39,7 @@ export async function upsertExtraordinary(planId: string, x: {
     ? supabase.from("plan_extraordinary_items").update(row).eq("id", x.id).eq("plan_id", planId).select("id").single()
     : supabase.from("plan_extraordinary_items").insert({ ...row, sort_order: -Math.floor(Date.now() / 1000) }).select("id").single();
   const { data, error } = await q;
-  if (error) { console.error("extraordinary", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }
+  if (error) return failed(error, "save the one-off item");
   touch(planId);
   return { ok: true, data: { id: data.id } };
 }
@@ -46,7 +47,7 @@ export async function upsertExtraordinary(planId: string, x: {
 export async function deleteExtraordinary(planId: string, id: string): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from("plan_extraordinary_items").delete().eq("id", id).eq("plan_id", planId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return failed(error, "remove the one-off item");
   touch(planId); return { ok: true };
 }
 

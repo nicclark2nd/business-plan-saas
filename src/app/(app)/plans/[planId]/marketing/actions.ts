@@ -6,9 +6,9 @@ import { createClient } from "@/lib/supabase/server";
 import { parseMonth } from "../people/model";
 import { MARKET_FIELDS, NARRATIVE_FIELDS, POSITION_FIELDS, SPEND_KINDS, type Market, type Position } from "./model";
 import { nextHref } from "@/lib/nav";
+import { failed } from "@/lib/actionFailed";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
-const fail = (e: { message: string }, what: string): Result<never> => { console.error(what, e); return { ok: false, error: `Couldn't save ${what}: ${e.message}` }; };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
 
 export async function saveMarket(planId: string, m: Partial<Market & Position>): Promise<Result> {
@@ -16,7 +16,7 @@ export async function saveMarket(planId: string, m: Partial<Market & Position>):
   const row: Record<string, string | null> = { plan_id: planId };
   for (const f of [...MARKET_FIELDS, ...NARRATIVE_FIELDS, ...POSITION_FIELDS]) if (f.key in m) row[f.key] = (m[f.key as keyof typeof m] ?? "").trim() || null;
   const { error } = await supabase.from("plan_marketing").upsert(row, { onConflict: "plan_id" });
-  if (error) return fail(error, "market");
+  if (error) return failed(error, "save the market");
   touch(planId); return { ok: true };
 }
 
@@ -51,7 +51,7 @@ export async function upsertRow(planId: string, kind: RowKind, row: Record<strin
     ? supabase.from(spec.table).update(clean).eq("id", row.id).eq("plan_id", planId).select("id").single()
     : supabase.from(spec.table).insert({ ...clean, sort_order: -Math.floor(Date.now() / 1000) }).select("id").single();
   const { data, error } = await q;
-  if (error) return fail(error, kind);
+  if (error) return failed(error, `save the ${kind}`);
   touch(planId);
   return { ok: true, data: { id: data.id, occurred_on: clean.occurred_on as string | null | undefined } };
 }
@@ -59,7 +59,7 @@ export async function upsertRow(planId: string, kind: RowKind, row: Record<strin
 export async function deleteRow(planId: string, kind: RowKind, id: string): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from(TABLES[kind].table).delete().eq("id", id).eq("plan_id", planId);
-  if (error) return fail(error, "removal");
+  if (error) return failed(error, "remove that row");
   touch(planId); return { ok: true };
 }
 

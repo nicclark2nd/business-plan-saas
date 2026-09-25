@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { distributionValid, exactHundred, type MonthlyDistribution } from "@/engine/sales/projection";
 import { nextHref } from "@/lib/nav";
 import { normalizeCategory } from "@/engine/overheads/categories";
+import { failed } from "@/lib/actionFailed";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
@@ -44,7 +45,7 @@ export async function upsertOverhead(planId: string, o: {
     ? supabase.from("plan_overheads").update(row).eq("id", o.id).eq("plan_id", planId).eq("source", "entered").select("id").single()
     : supabase.from("plan_overheads").insert({ ...row, sort_order: -Math.floor(Date.now() / 1000) }).select("id").single();
   const { data, error } = await q;
-  if (error) { console.error("overhead", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }
+  if (error) return failed(error, "save the overhead");
   touch(planId);
   return { ok: true, data: { id: data.id } };
 }
@@ -53,7 +54,7 @@ export async function upsertOverhead(planId: string, o: {
 export async function deleteOverhead(planId: string, id: string): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from("plan_overheads").delete().eq("id", id).eq("plan_id", planId).eq("source", "entered");
-  if (error) return { ok: false, error: error.message };
+  if (error) return failed(error, "remove the overhead");
   touch(planId); return { ok: true };
 }
 
@@ -69,7 +70,7 @@ export async function saveSyncedShape(planId: string, source: "people" | "market
         plan_id: planId, source, name: source === "people" ? "Leadership Team salaries" : "Marketing spend",
         current_value: 0, yearly_change: {}, monthly_distribution: dist, sort_order: source === "people" ? -2 : -1,
       });
-  if (error) { console.error("synced overhead", error); return { ok: false, error: error.message }; }
+  if (error) return failed(error, "save how the overhead is synced");
   touch(planId); return { ok: true };
 }
 
@@ -77,7 +78,7 @@ export async function saveOnCostPct(planId: string, pct: number): Promise<Result
   const supabase = await createClient();
   const value = Math.min(100, Math.max(0, Number(pct) || 0));
   const { error } = await supabase.from("plan_settings").update({ on_cost_pct: value }).eq("plan_id", planId);
-  if (error) { console.error("on-cost", error); return { ok: false, error: error.message }; }
+  if (error) return failed(error, "save the on-cost percentage");
   touch(planId); return { ok: true };
 }
 

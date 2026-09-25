@@ -6,9 +6,9 @@ import { createClient } from "@/lib/supabase/server";
 
 import { PERSON_ROLES, CAPABILITY_KINDS, parseMonth, type Person, type Capability, type CapabilityKind } from "./model";
 import { nextHref } from "@/lib/nav";
+import { failed } from "@/lib/actionFailed";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
-const fail = (e: { message: string }, what: string): Result<never> => { console.error(what, e); return { ok: false, error: `Couldn't save ${what}: ${e.message}` }; };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
 
 // ---------- person ----------
@@ -32,7 +32,7 @@ export async function upsertPerson(planId: string, p: Partial<Person> & { id?: s
     ? supabase.from("plan_people").update(row).eq("id", p.id).eq("plan_id", planId).select("id, started_on").single()
     : supabase.from("plan_people").insert({ ...row, sort_order: -Math.floor(Date.now() / 1000) }).select("id, started_on").single();
   const { data, error } = await q;
-  if (error) return fail(error, "person");
+  if (error) return failed(error, "save the person");
   touch(planId);
   return { ok: true, data: { id: data.id, started_on: data.started_on } };
 }
@@ -40,7 +40,7 @@ export async function upsertPerson(planId: string, p: Partial<Person> & { id?: s
 export async function deletePerson(planId: string, id: string): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from("plan_people").delete().eq("id", id).eq("plan_id", planId);
-  if (error) return fail(error, "removal");
+  if (error) return failed(error, "remove the person");
   touch(planId); return { ok: true };
 }
 
@@ -54,7 +54,7 @@ export async function upsertCapability(planId: string, c: Partial<Capability> & 
     ? supabase.from("plan_people_capabilities").update(row).eq("id", c.id).eq("plan_id", planId).select("id").single()
     : supabase.from("plan_people_capabilities").insert({ ...row, sort_order: -Math.floor(Date.now() / 1000) }).select("id").single();
   const { data, error } = await q;
-  if (error) return fail(error, "capability");
+  if (error) return failed(error, "save the capability");
   touch(planId);
   return { ok: true, data: { id: data.id } };
 }
@@ -62,7 +62,7 @@ export async function upsertCapability(planId: string, c: Partial<Capability> & 
 export async function deleteCapability(planId: string, id: string): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from("plan_people_capabilities").delete().eq("id", id).eq("plan_id", planId);
-  if (error) return fail(error, "removal");
+  if (error) return failed(error, "remove the capability");
   touch(planId); return { ok: true };
 }
 

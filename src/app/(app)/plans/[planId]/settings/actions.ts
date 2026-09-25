@@ -8,6 +8,7 @@ import type { Profile, Financial, Printing, Licence } from "./model";
 import { serializeComponents } from "@/engine/plan/gst";
 import { checkLogo, logoObjectPath, LOGO_BUCKET } from "@/engine/plan/logo";
 import { checkEmail, checkWebsite } from "@/engine/plan/contact";
+import { failed } from "@/lib/actionFailed";
 
 /**
  * `field` names the control the message belongs beside (§6.98). A save that says "that does not look like an
@@ -68,7 +69,7 @@ export async function saveProfile(planId: string, p: Partial<Profile> & { establ
     }, { onConflict: "plan_id" }),
   ]);
   const error = plans.error ?? settings.error;
-  if (error) { console.error("profile", error); return { ok: false, error: `Couldn't save the profile: ${error.message}` }; }
+  if (error) return failed(error, "save the profile");
   touch(planId);
   return { ok: true, data: { date_established: established ?? null } };
 }
@@ -93,7 +94,7 @@ export async function saveFinancial(planId: string, f: Partial<Financial>): Prom
     tax_components: serializeComponents(Array.isArray(f.tax_components) ? f.tax_components : []),
     currency: (f.currency || "AUD").toUpperCase().slice(0, 3),
   }, { onConflict: "plan_id" });
-  if (error) { console.error("financial", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }
+  if (error) return failed(error, "save the financial settings");
   touch(planId);
   return { ok: true };
 }
@@ -114,7 +115,7 @@ export async function savePrinting(planId: string, p: Partial<Printing>): Promis
     print_key_people_salaries: p.print_key_people_salaries !== false,
     page_size: size,
   }, { onConflict: "plan_id" });
-  if (error) { console.error("printing", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }
+  if (error) return failed(error, "save the printing settings");
   touch(planId);
   return { ok: true };
 }
@@ -143,7 +144,7 @@ export async function saveAiConsent(planId: string, enabled: boolean): Promise<R
     ...(enabled ? { ai_enabled_at: new Date().toISOString(), ai_enabled_by: session.profile.id } : {}),
   }, { onConflict: "plan_id" });
 
-  if (error) { console.error("ai consent", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }
+  if (error) return failed(error, "save the drafting setting");
   touch(planId);
   return { ok: true };
 }
@@ -172,7 +173,7 @@ export async function uploadLogo(planId: string, form: FormData): Promise<{ ok: 
     .upload(path, file, { upsert: true, contentType: file.type, cacheControl: "3600" });
   if (upload) {
     console.error("logo upload", upload);
-    return { ok: false, error: `That logo could not be saved: ${upload.message}` };
+    return failed(upload, "save that logo");
   }
 
   const { data: was } = await supabase.from("plan_settings").select("logo_path").eq("plan_id", planId).maybeSingle();
@@ -180,7 +181,7 @@ export async function uploadLogo(planId: string, form: FormData): Promise<{ ok: 
   if (previous && previous !== path) await supabase.storage.from(LOGO_BUCKET).remove([previous]);
 
   const { error } = await supabase.from("plan_settings").upsert({ plan_id: planId, logo_path: path }, { onConflict: "plan_id" });
-  if (error) { console.error("logo path", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }
+  if (error) return failed(error, "save the logo");
   touch(planId);
   return { ok: true, path };
 }
@@ -193,7 +194,7 @@ export async function removeLogo(planId: string): Promise<Result> {
   const previous = was?.logo_path as string | null | undefined;
   if (previous) await supabase.storage.from(LOGO_BUCKET).remove([previous]);
   const { error } = await supabase.from("plan_settings").update({ logo_path: null }).eq("plan_id", planId);
-  if (error) { console.error("logo remove", error); return { ok: false, error: error.message }; }
+  if (error) return failed(error, "remove the logo");
   touch(planId);
   return { ok: true };
 }
@@ -219,7 +220,7 @@ export async function saveLicence(planId: string, l: Partial<Licence> & { id?: s
   const { data, error } = l.id
     ? await supabase.from("plan_licences").update(row).eq("id", l.id).eq("plan_id", planId).select("id").maybeSingle()
     : await supabase.from("plan_licences").insert(row).select("id").maybeSingle();
-  if (error) { console.error("licence", error); return { ok: false, error: `Couldn't save the licence: ${error.message}` }; }
+  if (error) return failed(error, "save the licence");
   /**
    * An update that RLS refuses comes back as a success with no rows (§6.58 found the same thing on delete),
    * so a missing row here is a refusal and has to be reported rather than swallowed.

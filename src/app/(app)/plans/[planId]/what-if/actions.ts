@@ -8,6 +8,7 @@ import { applyChanges, plannedChanges } from "@/engine/whatif/apply";
 import { planLevers, type DayScope, type Levers, type StartYear } from "@/engine/whatif/levers";
 import { FORECAST_YEARS, type WorkingCapitalDays } from "@/engine/forecast/model";
 import { saveAssumptions } from "../assumptions/actions";
+import { failed } from "@/lib/actionFailed";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -77,7 +78,7 @@ export async function createGoalsFromScenario(planId: string, goals: GoalToCreat
   // One lookup, not one per goal: several levers commonly land in the same area.
   const { data: existing, error: readErr } = await supabase.from("plan_goals")
     .select("id, area").eq("plan_id", planId).is("parent_id", null);
-  if (readErr) return { ok: false, error: readErr.message };
+  if (readErr) return failed(readErr, "read the scenario");
   const parents = new Map<string, string>((existing ?? []).map((g) => [g.area as string, g.id as string]));
 
   const rows: Record<string, unknown>[] = [];
@@ -88,7 +89,7 @@ export async function createGoalsFromScenario(planId: string, goals: GoalToCreat
     if (!parentId) {
       const { data, error } = await supabase.from("plan_goals")
         .insert({ plan_id: planId, area: g.area, title: "", source: "whatif" }).select("id").single();
-      if (error) return { ok: false, error: `Couldn't create the ${g.area} annual goal: ${error.message}` };
+      if (error) return failed(error, `create the ${g.area} annual goal`);
       parentId = data.id as string;
       parents.set(g.area, parentId);
     }
@@ -104,7 +105,7 @@ export async function createGoalsFromScenario(planId: string, goals: GoalToCreat
   if (!rows.length) return { ok: false, error: "Nothing to create." };
 
   const { error } = await supabase.from("plan_goals").insert(rows);
-  if (error) return { ok: false, error: `Couldn't save: ${error.message}` };
+  if (error) return failed(error, "save the goals");
   revalidatePath(`/plans/${planId}`, "layout");
   return { ok: true };
 }
@@ -161,7 +162,7 @@ export async function applyScenario(
     label: `What-If: ${planned.changes.length} record${planned.changes.length === 1 ? "" : "s"}`,
     snapshot: { levers, dayScope, from, changes: planned.changes, before },
   });
-  if (versionErr) return { ok: false, error: `Couldn't save a version first: ${versionErr.message}` };
+  if (versionErr) return failed(versionErr, "save a version first");
 
   // Products: the columns the levers can move, taken from the adjusted row so they match the list exactly.
   for (const p of after.products) {
@@ -176,7 +177,7 @@ export async function applyScenario(
       yearly_cost_increase: row.yearly_cost_increase ?? {},
       monthly_new_clients: row.monthly_new_clients ?? null,
     }).eq("id", id).eq("plan_id", planId);
-    if (error) return { ok: false, error: `Couldn't update ${String(row.name ?? "a product")}: ${error.message}` };
+    if (error) return failed(error, `update ${String(row.name ?? "a product")}`);
   }
 
   for (const o of after.overheads) {
@@ -184,7 +185,7 @@ export async function applyScenario(
     if (!touched.has(`plan_overheads:${id}`)) continue;
     const { error } = await supabase.from("plan_overheads")
       .update({ current_value: o.current_value, yearly_change: o.yearly_change ?? {} }).eq("id", id).eq("plan_id", planId);
-    if (error) return { ok: false, error: `Couldn't update ${o.name}: ${error.message}` };
+    if (error) return failed(error, `update ${o.name}`);
   }
 
   if (planned.daysMoved) {
@@ -213,7 +214,7 @@ export async function undoLastApply(planId: string): Promise<Result<{ label: str
   const { data: version, error } = await supabase.from("plan_versions")
     .select("id, label, snapshot, created_at").eq("plan_id", planId).eq("reason", "whatif_apply")
     .order("created_at", { ascending: false }).limit(1).maybeSingle();
-  if (error) return { ok: false, error: error.message };
+  if (error) return failed(error, "undo the last change");
   if (!version) return { ok: false, error: "There is nothing to undo." };
 
   const snap = version.snapshot as {
@@ -231,18 +232,18 @@ export async function undoLastApply(planId: string): Promise<Result<{ label: str
       yearly_growth: p.yearly_growth ?? {}, yearly_cost_increase: p.yearly_cost_increase ?? {},
       monthly_new_clients: p.monthly_new_clients ?? null,
     }).eq("id", String(p.id)).eq("plan_id", planId);
-    if (e) return { ok: false, error: `Couldn't restore ${String(p.name ?? "a product")}: ${e.message}` };
+    if (e) return failed(e, `restore ${String(p.name ?? "a product")}`);
   }
   for (const o of before.overheads ?? []) {
     const { error: e } = await supabase.from("plan_overheads")
       .update({ current_value: o.current_value, yearly_change: o.yearly_change ?? {} }).eq("id", String(o.id)).eq("plan_id", planId);
-    if (e) return { ok: false, error: `Couldn't restore ${String(o.name ?? "an overhead")}: ${e.message}` };
+    if (e) return failed(e, `restore ${String(o.name ?? "an overhead")}`);
   }
   if (before.workingCapital) {
     const { data: s } = await supabase.from("plan_settings").select("cash_flow_assumptions").eq("plan_id", planId).maybeSingle();
     const { error: e } = await supabase.from("plan_settings")
       .update({ working_capital_schedule: before.workingCapital }).eq("plan_id", planId);
-    if (e) return { ok: false, error: e.message };
+    if (e) return failed(e, "finish undoing");
     void s;
   }
 

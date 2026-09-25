@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { distributionValid, exactHundred, type MonthlyDistribution } from "@/engine/sales/projection";
 import { nextHref } from "@/lib/nav";
+import { failed } from "@/lib/actionFailed";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
@@ -25,7 +26,7 @@ export async function saveProductCost(planId: string, p: {
   const { error } = await supabase.from("plan_products")
     .update({ cost_per_unit: Math.max(0, Number(p.cost_per_unit) || 0), yearly_cost_increase: pctMap(p.yearly_cost_increase) })
     .eq("id", p.id).eq("plan_id", planId);
-  if (error) { console.error("product cost", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }
+  if (error) return failed(error, "save the cost");
   touch(planId);
   return { ok: true };
 }
@@ -50,7 +51,7 @@ export async function upsertFixedCogs(planId: string, f: {
     ? supabase.from("plan_fixed_cogs").update(row).eq("id", f.id).eq("plan_id", planId).select("id").single()
     : supabase.from("plan_fixed_cogs").insert({ ...row, sort_order: -Math.floor(Date.now() / 1000) }).select("id").single();
   const { data, error } = await q;
-  if (error) { console.error("fixed cogs", error); return { ok: false, error: `Couldn't save: ${error.message}` }; }
+  if (error) return failed(error, "save the fixed cost");
   touch(planId);
   return { ok: true, data: { id: data.id } };
 }
@@ -58,7 +59,7 @@ export async function upsertFixedCogs(planId: string, f: {
 export async function deleteFixedCogs(planId: string, id: string): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from("plan_fixed_cogs").delete().eq("id", id).eq("plan_id", planId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return failed(error, "remove the fixed cost");
   touch(planId); return { ok: true };
 }
 
