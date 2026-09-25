@@ -223,6 +223,33 @@ with are the people worth impressing.
 Domain is held in GoDaddy and not connected. Vercel issues the certificate; the records are pasted
 into GoDaddy. Nothing in the app changes.
 
+### 22. The 3-Year and 5-Year goals are not in the report
+
+`gather.ts` builds `goalsAnnual` from the **year1** rung only, which is exactly what the old six annual
+goals were, so the report is unchanged by §6.125 rather than broken by it. But the two long rungs a client
+now fills in appear nowhere in what a lender reads. Either the report grows a "Where this is going"
+section, or the ladder is honest that only one rung of it is printed. **Nic's call which.**
+
+### 23. Nothing happens when the 90 days end
+
+The period end date is a field on the plan. When it passes, the band still shows the same goals with the
+same statuses and nothing prompts a review, rolls the period forward, or keeps what was done as history.
+The competing product archives a cycle and starts the next. Until this exists, a client who sets the date
+once has a list that quietly goes stale, and the dashboard panel goes stale with it.
+
+### 24. SEQ has near-duplicate What-If goals and nothing dedupes them
+
+Its Financial rung carries "debtor days 46 to 42" and "46 to 35", and "30-day terms with the two main
+concrete suppliers" beside "30-day terms with suppliers, up from 6". Turning a What-If scenario into goals
+twice leaves both sets; `createGoalsFromScenario` inserts without looking for what it wrote last time.
+Raised before §6.125 and unchanged by it — the rows simply moved to the 90-day rung.
+
+### 25. A goal is still saved on blur, and that is still unverified under failure
+
+Every box on the new Goals screen commits when focus leaves it, which is the app's convention and is fine
+in a browser. What has never been driven live is what a client SEES when one of those saves fails — this
+is item 4 on twelve other modules and the ladder now adds six more places it could happen.
+
 ---
 
 ## Closed, so nobody investigates it twice

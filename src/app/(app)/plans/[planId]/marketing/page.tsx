@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { MarketingModule } from "./MarketingModule";
-import { firstProjectedYear, planQuarters, planYearEnding, quarterOf } from "@/engine/plan/calendar";
 import { ALL_MARKET_KEYS, DRAFTABLE_MARKET_KEYS, type MarketingData, type Market } from "./model";
 import { draftingFor } from "../drafting";
 import type { Goal, Person } from "../goals/model";
@@ -23,7 +22,7 @@ export default async function MarketingPage({ params, searchParams }: { params: 
      * would put one commitment in two places, which is the fault this project keeps paying for.
      */
     supabase.from("plan_goals").select("*").eq("plan_id", planId).eq("area", "marketing")
-      .not("parent_id", "is", null).order("year").order("quarter").order("sort_order"),
+      .eq("horizon", "ninety").order("year").order("quarter").order("sort_order"),
     supabase.from("plan_people").select("id, name, role").eq("plan_id", planId).order("sort_order"),
     // The sales lines, so Marketing can say what a customer costs to win (§6.61) from real figures.
     supabase.from("plan_products").select("*").eq("plan_id", planId).order("sort_order"),
@@ -48,17 +47,8 @@ export default async function MarketingPage({ params, searchParams }: { params: 
   const drafting = await draftingFor(planId, DRAFTABLE_MARKET_KEYS);
   const initialArea = ["market", "spend", "research", "brand", "sales", "actions"].includes(area ?? "") ? (area as "market") : "market";
 
-  // The PLAN's quarters, not the calendar's (§6.44) — the same two years Goals offers.
-  const fyEndMonth = Number(settings.data?.financial_year_end_month ?? 6);
-  const firstYear = firstProjectedYear(settings.data?.first_projected_year, fyEndMonth);
-  const quarters = [1, 2].flatMap((planYear) =>
-    planQuarters(fyEndMonth, planYearEnding(firstYear, planYear)).map((q) => ({
-      planYear, quarter: q.quarter, label: q.label, months: q.months,
-    })));
-
   return <MarketingModule planId={planId} initial={data} mode={mode} initialArea={initialArea}
     customerWord={(settings.data?.customer_type ?? "customer").toLowerCase()} productWord={settings.data?.product_type ?? null}
     actions={(actions.data ?? []) as unknown as Goal[]} people={(people.data ?? []) as Person[]}
-    quarters={quarters} thisQuarter={{ planYear: 1, quarter: quarterOf(fyEndMonth, new Date()) }}
     products={(products.data ?? []) as unknown as AnyProduct[]} drafting={drafting} />;
 }

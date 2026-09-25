@@ -89,7 +89,7 @@ export function SwotModule({ planId, initial, suggestions, goals, mode }: {
         <p>Weaknesses are the quadrant lenders read first. An honest one (&quot;the owner does all the estimating&quot;) with a plan to fix it beats a blank.</p>
         <h3>What you&apos;ll do about it</h3>
         <p>Under every line there is a second one: build on it, fix it, take it, guard against it. Four lists with nothing attached is a page in a report — the same four lists with &quot;hire and train a second estimator&quot; under the estimating weakness is a plan. Nothing is compulsory, but the line at the top counts the weaknesses and threats you have left blank, because that is the count a lender does.</p>
-        <p>A response is what you intend. It becomes a commitment at step {GUIDED_STEPS.find((s) => s.id === "goals")?.step}, where a goal gets an owner, a quarter and a status — and where you have the forecast in front of you. Anything already committed is tagged <b>goal</b> here.</p>
+        <p>A response is what you intend. It becomes a commitment at step {GUIDED_STEPS.find((s) => s.id === "goals")?.step}, where a goal gets an owner, a date and a status — and where you have the forecast in front of you. Anything already committed is tagged <b>goal</b> here.</p>
         <h3>Where this goes</h3>
         <p>SWOT section of every report, responses included. The AI reads all four quadrants when it drafts your Goals in step {GUIDED_STEPS.find((s) => s.id === "goals")?.step}.</p>
       </>}
@@ -146,7 +146,7 @@ export function SwotModule({ planId, initial, suggestions, goals, mode }: {
                             onChange={(e) => edit(r.id, { response: e.target.value })} />
                           {goal && (
                             <span className="mt-[5px] shrink-0 rounded border border-good/40 bg-good-soft px-1.5 py-px text-[10px] font-semibold uppercase tracking-[.05em] text-good"
-                              title={`Goal: ${goal.title}${goal.quarter ? ` — Year ${goal.year ?? 1} Q${goal.quarter}` : ""}`}>goal</span>
+                              title={`Goal: ${goal.title}${goal.milestone_date ? ` — due ${goal.milestone_date}` : ""}`}>goal</span>
                           )}
                         </div>
                       )}

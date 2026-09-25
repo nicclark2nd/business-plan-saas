@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 import { profileMissing } from "../settings/model";
-import { firstProjectedYear, planQuarters, planYearEnding, quarterOf } from "@/engine/plan/calendar";
 import { AREA_LABEL, type GoalArea } from "@/engine/whatif/goals";
 import { loadPlan } from "@/lib/planLoad";
 import { runForecast } from "@/engine/forecast/run";
@@ -35,22 +34,23 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
   const c = await getPlanCompleteness(planId);
   const supabase = await createClient();
   const { data: ps } = await supabase.from("plan_settings")
-    .select("industry, country, legal_structure, products_services_statement, financial_year_end_month, first_projected_year")
+    .select("industry, country, legal_structure, products_services_statement, financial_year_end_month, first_projected_year, ninety_day_ends_on")
     .eq("plan_id", planId).maybeSingle();
 
   /**
-   * This quarter's goals (§6.44) — the plan's quarter, not the calendar's. A goal set for "Q1" on a June
-   * year-end business belongs to July–September, and showing it against January–March would be telling the
-   * client something false about their own year.
+   * THE NEXT NINETY DAYS (§6.125), which is what this panel used to call "this quarter".
+   *
+   * The plan's quarter was the right unit while goals hung off six annual ones and the dashboard had to
+   * decide which three months a client was standing in. The ladder replaced that with a single 90-day
+   * period whose end date the client sets on the Goals screen — so there is nothing to work out here any
+   * more, and nothing that can be worked out WRONG. The fault §6.44 fixed (a June year-end plan shown its
+   * Q1 goals against January–March) is now unreachable rather than merely handled.
    */
-  const fyEndMonth = Number(ps?.financial_year_end_month ?? 6);
-  const nowQuarter = quarterOf(fyEndMonth, new Date());
-  const quarterLabel = planQuarters(fyEndMonth, planYearEnding(firstProjectedYear(ps?.first_projected_year, fyEndMonth), 1))
-    .find((q) => q.quarter === nowQuarter);
+  const ninetyEnds = ps?.ninety_day_ends_on ?? null;
   const { data: quarterGoals } = await supabase.from("plan_goals")
     .select("id, area, title, status, owner_person_id, milestone_date")
-    .eq("plan_id", planId).not("parent_id", "is", null).eq("year", 1).eq("quarter", nowQuarter)
-    .order("area");
+    .eq("plan_id", planId).eq("horizon", "ninety")
+    .order("milestone_date", { ascending: true, nullsFirst: false }).order("sort_order");
   const { data: goalPeople } = await supabase.from("plan_people").select("id, name").eq("plan_id", planId);
   const ownerOf = (id: string | null) => goalPeople?.find((p) => p.id === id)?.name ?? "";
   const DOT: Record<GoalStatus, string> = {
@@ -196,7 +196,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
             </Link>
           ))}
         </Panel>
-        <Panel title="This quarter's goals" badge={<span className="eyebrow">{quarterLabel?.label ?? "This quarter"}</span>}>
+        <Panel title="Next 90 days" badge={<span className="eyebrow">{ninetyEnds ? `ends ${ninetyEnds}` : "no end date set"}</span>}>
           {quarterGoals?.length ? (
             <>
               {quarterGoals.map((g) => (
@@ -205,7 +205,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{g.title}</span>
                     <span className="block text-xs text-muted-foreground">
-                      {AREA_LABEL[g.area as GoalArea]} · {STATUS_LABEL[g.status as GoalStatus]}
+                      {g.area ? `${AREA_LABEL[g.area as GoalArea]} · ` : ""}{STATUS_LABEL[g.status as GoalStatus]}
                       {ownerOf(g.owner_person_id) && ` · ${ownerOf(g.owner_person_id)}`}
                       {g.milestone_date && ` · by ${g.milestone_date}`}
                     </span>
@@ -215,7 +215,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
             </>
           ) : (
             <p className="text-[13px] text-muted-foreground">
-              Nothing due in {quarterLabel?.months ?? "this quarter"}. Set them at step {GUIDED_STEPS.find((s) => s.id === "goals")?.step}, or move the levers on the <Link className="font-semibold text-primary" href={`${base}/what-if`}>What-If planner</Link> and turn a scenario into goals. <Link className="font-semibold text-primary" href={`${base}/goals`}>Open Goals</Link>
+              Nothing set for the next ninety days. Set them at step {GUIDED_STEPS.find((s) => s.id === "goals")?.step}, or move the levers on the <Link className="font-semibold text-primary" href={`${base}/what-if`}>What-If planner</Link> and turn a scenario into goals. <Link className="font-semibold text-primary" href={`${base}/goals`}>Open Goals</Link>
             </p>
           )}
         </Panel>

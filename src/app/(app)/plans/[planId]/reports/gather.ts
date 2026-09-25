@@ -127,7 +127,7 @@ export async function gatherReport(planId: string) {
       purpose: text(framework?.purpose), brandPromise: text(framework?.brand_promise),
       fieldOfPlay: text(framework?.field_of_play),
     },
-    goals: goals.filter((g) => !g.parent_id).map((g) => ({ area: AREA[String(g.area)] ?? String(g.area ?? ""), title: String(g.title ?? "") })),
+    goals: goals.filter((g) => g.horizon === "year1").map((g) => ({ area: AREA[String(g.area)] ?? String(g.area ?? ""), title: String(g.title ?? "") })),
     capital: (sources.assets as unknown as Record<string, unknown>[]).map((a) => ({
       name: String(a.name ?? "Asset"), amount: n(a.purchase_price), year: n(a.start_year) || 1,
       category: text(a.category), usefulLifeMonths: n(a.useful_life_months) || null,
@@ -265,10 +265,10 @@ export async function gatherReport(planId: string) {
     swot: swotItems.map((x) => ({
       quadrant: String(x.quadrant ?? ""), text: String(x.text ?? ""), response: text(x.response),
     })).filter((x) => x.text.trim()),
-    goalsAnnual: goals.filter((g) => !g.parent_id).map((g) => ({
+    goalsAnnual: goals.filter((g) => g.horizon === "year1").map((g) => ({
       area: AREA[String(g.area)] ?? String(g.area ?? ""), title: String(g.title ?? ""), detail: text(g.detail),
     })),
-    goalsQuarterly: goals.filter((g) => g.parent_id).map((g) => ({
+    goalsQuarterly: goals.filter((g) => g.horizon === "ninety").map((g) => ({
       area: AREA[String(g.area)] ?? String(g.area ?? ""), title: String(g.title ?? ""),
       when: g.quarter ? `Q${n(g.quarter)}${g.year ? ` FY${n(g.year)}` : ""}` : null,
       due: g.milestone_date ? new Date(String(g.milestone_date)).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) : null,

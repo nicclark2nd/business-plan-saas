@@ -4,8 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { GOAL_AREAS, type GoalArea } from "@/engine/whatif/goals";
-import { AREA_HINT } from "@/app/(app)/plans/[planId]/goals/model";
+import { RUNGS } from "@/app/(app)/plans/[planId]/goals/model";
 import { parseGoals } from "@/engine/ai/goals";
 import { cn } from "@/lib/utils";
 
@@ -38,15 +37,15 @@ export function GoalsDraftDialog({
   planId: string;
   questions: GoalQuestion[];
   /** What is in the six boxes right now, so a proposal can be shown against what it would replace. */
-  existing: Partial<Record<GoalArea, string>>;
+  existing: Partial<Record<string, string>>;
   /** One goal, taken. Called once per area the client accepts — never for the set. */
-  onUse: (area: GoalArea, text: string) => void;
+  onUse: (rung: string, text: string) => void;
   onClose: () => void;
 }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [raw, setRaw] = useState("");
-  const [edited, setEdited] = useState<Partial<Record<GoalArea, string>>>({});
-  const [taken, setTaken] = useState<Partial<Record<GoalArea, true>>>({});
+  const [edited, setEdited] = useState<Partial<Record<string, string>>>({});
+  const [taken, setTaken] = useState<Partial<Record<string, true>>>({});
   const [state, setState] = useState<"asking" | "waiting" | "streaming" | "done" | "failed">(
     questions.length ? "asking" : "waiting",
   );
@@ -119,24 +118,25 @@ export function GoalsDraftDialog({
   }, [runId]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  const textOf = (a: GoalArea) => edited[a] ?? drafts[a] ?? "";
-  const offered = GOAL_AREAS.filter(({ key }) => textOf(key).trim());
+  const textOf = (a: string) => edited[a] ?? drafts[a] ?? "";
+  const offered = RUNGS.filter(({ key }) => textOf(key).trim());
   const busy = state === "waiting" || state === "streaming";
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Draft your six annual goals</DialogTitle>
+          <DialogTitle>Draft your goals</DialogTitle>
           <DialogDescription>
-            One for each part of the business, written together so they agree with each other and with your
-            forecast. They carry no owner and no quarter — those are yours to set.
+            One list for each rung of the ladder, written together so they agree with each other and with
+            your forecast. Nothing for the next 90 days — those carry a name and a date, and they are yours
+            to set.
           </DialogDescription>
         </DialogHeader>
 
         {state === "asking" ? (
           <div className="grid gap-3">
-            <p className="text-[12.5px] text-muted-foreground">A sentence each is plenty. Leave one blank and it will be left out.</p>
+            <p className="text-[12.5px] text-muted-foreground">Answer these two and the goals are written. A sentence each is plenty — leave one blank and it will be left out.</p>
             {questions.map((q) => (
               <div key={q.key}>
                 <label className="mb-[3px] block text-[11.5px] font-semibold text-muted-foreground" htmlFor={`gq-${q.key}`}>{q.question}</label>
@@ -149,7 +149,7 @@ export function GoalsDraftDialog({
           <div className="max-h-[52vh] overflow-y-auto pr-1">
             {busy && !offered.length && <p className="py-6 text-center text-[12.5px] text-muted-foreground">Writing…</p>}
             <div className="grid gap-3">
-              {GOAL_AREAS.map(({ key, label }) => {
+              {RUNGS.map(({ key, label, listHeading }) => {
                 const text = textOf(key);
                 if (!text.trim()) return null;
                 const was = existing[key]?.trim();
@@ -157,13 +157,13 @@ export function GoalsDraftDialog({
                   <div key={key} className={cn("rounded border border-border p-2.5", taken[key] && "border-good bg-good-soft/40")}>
                     <div className="mb-1 flex items-baseline gap-2">
                       <span className="text-[12.5px] font-semibold">{label}</span>
-                      <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{AREA_HINT[key]}</span>
+                      <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{listHeading} · one goal per line</span>
                       {taken[key]
                         ? <span className="flex-none text-[11px] font-semibold text-good">Taken</span>
                         : (
                           <Button type="button" size="sm" variant="outline" className="flex-none" disabled={busy}
                             onClick={() => { onUse(key, text.trim()); setTaken((t) => ({ ...t, [key]: true })); }}>
-                            {was ? "Replace" : "Use this"}
+                            {was ? "Replace the list" : "Use these"}
                           </Button>
                         )}
                     </div>
@@ -172,11 +172,11 @@ export function GoalsDraftDialog({
                       theirs, and making them take it and then fix it on the screen behind is a worse
                       version of the same two keystrokes.
                     */}
-                    <Textarea className="min-h-[54px] text-[12.5px]" value={text} disabled={busy || !!taken[key]}
+                    <Textarea className="min-h-[86px] text-[12.5px]" value={text} disabled={busy || !!taken[key]}
                       onChange={(e) => setEdited((x) => ({ ...x, [key]: e.target.value }))} />
                     {was && !taken[key] && (
                       <p className="mt-1 text-[11px] text-muted-foreground">
-                        Replaces: <span className="italic">{was}</span>
+                        Replaces the {was.split("\n").filter(Boolean).length} line(s) already at this rung.
                       </p>
                     )}
                   </div>
@@ -195,7 +195,7 @@ export function GoalsDraftDialog({
         <DialogFooter className="mt-1">
           <Button type="button" variant="outline" onClick={onClose}>{Object.keys(taken).length ? "Done" : "Cancel"}</Button>
           {state === "asking"
-            ? <Button type="button" onClick={() => setRunId((n) => n + 1)}>Write them</Button>
+            ? <Button type="button" onClick={() => setRunId((n) => n + 1)}>Write my goals</Button>
             : <Button type="button" variant="outline" disabled={busy} onClick={() => setRunId((n) => n + 1)}>Try again</Button>}
         </DialogFooter>
       </DialogContent>

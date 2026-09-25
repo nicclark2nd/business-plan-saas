@@ -39,6 +39,6 @@ export type SwotItem = {
 };
 
 /** A goal that answers a SWOT line (§6.59.1): the commitment the response turned into. */
-export type LinkedGoal = { id: string; swot_item_id: string; title: string; year: number | null; quarter: number | null; status: string };
+export type LinkedGoal = { id: string; swot_item_id: string; title: string; milestone_date: string | null; status: string };
 /** A line drawn from elsewhere in the plan. `key` is stable so a used suggestion is not offered again. */
 export type Suggestion = { key: string; quadrant: Quadrant; text: string; from: string };

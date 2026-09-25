@@ -75,29 +75,23 @@ export async function createGoalsFromScenario(planId: string, goals: GoalToCreat
   if (!goals.length) return { ok: false, error: "Nothing to create — move a lever first." };
   const supabase = await createClient();
 
-  // One lookup, not one per goal: several levers commonly land in the same area.
-  const { data: existing, error: readErr } = await supabase.from("plan_goals")
-    .select("id, area").eq("plan_id", planId).is("parent_id", null);
-  if (readErr) return failed(readErr, "read the scenario");
-  const parents = new Map<string, string>((existing ?? []).map((g) => [g.area as string, g.id as string]));
-
+  /*
+   * NO PARENT TO FIND OR CONJURE ANY MORE (§6.125).
+   *
+   * This used to look up the annual goal for each area and INSERT an empty one where none existed, purely
+   * so the goal it was writing had something to hang off. That scaffolding is why a plan ends up with
+   * blank rows nobody typed. A goal now stands on its own at a rung, so the whole dance is one insert.
+   *
+   * Everything a scenario produces lands in the NEXT 90 DAYS, which is the only honest rung for it: a
+   * lever the client just moved is something to do now, not a picture of the business in five years.
+   */
   const rows: Record<string, unknown>[] = [];
   for (const g of goals) {
     if (!isArea(g.area)) return { ok: false, error: `Unknown area: ${g.area}` };
     if (!g.title.trim()) continue;
-    let parentId = parents.get(g.area);
-    if (!parentId) {
-      const { data, error } = await supabase.from("plan_goals")
-        .insert({ plan_id: planId, area: g.area, title: "", source: "whatif" }).select("id").single();
-      if (error) return failed(error, `create the ${g.area} annual goal`);
-      parentId = data.id as string;
-      parents.set(g.area, parentId);
-    }
     rows.push({
-      plan_id: planId, parent_id: parentId, area: g.area,
+      plan_id: planId, horizon: "ninety", area: g.area,
       title: g.title.trim(), detail: g.detail.trim() || null,
-      year: Math.min(5, Math.max(1, Math.trunc(g.year) || 1)),
-      quarter: Math.min(4, Math.max(1, Math.trunc(g.quarter) || 1)),
       owner_person_id: g.ownerPersonId || null,
       status: "not_started", source: "whatif",
     });

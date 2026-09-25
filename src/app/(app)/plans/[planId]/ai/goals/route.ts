@@ -2,22 +2,21 @@ import { createClient } from "@/lib/supabase/server";
 import { gatherReport } from "../../reports/gather";
 import { buildGoalMessages, goalsReadiness } from "@/engine/ai/goals";
 import { AiUnavailable, openRouter } from "@/lib/ai/provider";
-import { GOAL_AREAS, type GoalArea } from "@/engine/whatif/goals";
 import { boundAnswers } from "@/engine/ai/limits";
 import { guardDraft } from "../guard";
 
 /**
- * SIX GOALS, ONE REQUEST (§6.115).
+ * THE WHOLE LADDER, ONE REQUEST (§6.115, §6.125).
  *
  * The same shape as `../draft` and for the same reasons — a route because the answer arrives in pieces, a
  * marker in the body because the status code is spent once the stream has started, and the model never
  * touching the database because everything it sees was assembled here.
  *
- * What is different is that ONE request returns SIX passages. They are written together on purpose: six
- * goals drafted separately do not add up, and a plan whose marketing goal ignores its sales goal is worse
- * than a plan with no goals at all.
+ * What is different is that ONE request returns THREE lists. They are written together on purpose: a
+ * five-year picture drafted without sight of this year's commitments is how a plan ends up promising to
+ * triple while its one-year goals describe standing still.
  *
- * THE OWNER, THE QUARTER AND THE DATE ARE NOT IN THE ANSWER AND NOT IN THE REQUEST. Nothing here reads
+ * NOTHING IN THE 90-DAY BAND IS DRAFTED, and no owner or date is in the answer. Nothing here reads
  * `plan_people`, and the system rules forbid naming anyone. A commitment with somebody's name on it is
  * the client's to make.
  */
@@ -27,8 +26,6 @@ export const FAIL_MARK = "[[DRAFT_FAILED]]";
 
 const bad = (message: string, status = 400) =>
   new Response(JSON.stringify({ error: message }), { status, headers: { "Content-Type": "application/json" } });
-
-const isArea = (a: string): a is GoalArea => GOAL_AREAS.some((x) => x.key === a);
 
 export async function POST(req: Request, { params }: { params: Promise<{ planId: string }> }) {
   const { planId } = await params;
@@ -60,10 +57,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ planId:
      * browser may say which areas it is asking about, but what is in them is not the browser's to assert.
      */
     const { data: rows } = await supabase.from("plan_goals")
-      .select("area, title").eq("plan_id", planId).is("parent_id", null);
-    const existing: Partial<Record<GoalArea, string>> = {};
+      .select("horizon, title").eq("plan_id", planId).neq("horizon", "ninety").order("sort_order");
+    const existing: Partial<Record<string, string>> = {};
     for (const r of rows ?? []) {
-      if (isArea(r.area) && typeof r.title === "string" && r.title.trim()) existing[r.area] = r.title;
+      const h = String(r.horizon ?? "");
+      if (!h || typeof r.title !== "string" || !r.title.trim()) continue;
+      existing[h] = existing[h] ? `${existing[h]}\n${r.title.trim()}` : r.title.trim();
     }
 
     /* Only lines the client actually planned to act on (§6.59.1) — an observation is not an intention. */

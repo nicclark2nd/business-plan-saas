@@ -3,66 +3,99 @@ import type { ReportInput } from "@/engine/report/build";
 import { GOAL_MARK, buildGoalMessages, goalsReadiness, parseGoals } from "./goals";
 
 /**
- * THE PARSER IS THE RISKY PART (§6.115).
+ * THE PARSER IS THE RISKY PART (§6.115, §6.125).
  *
- * Six passages arrive in one stream, told apart by a marker, and they are parsed WHILE THEY ARE STILL
+ * Three lists arrive in one stream, told apart by a marker, and they are parsed WHILE THEY ARE STILL
  * ARRIVING so the panel fills in as the model writes. So every state a half-finished stream can be in is a
- * state the parser has to survive, and a model that fumbles one area must cost the client that area rather
- * than the whole set.
+ * state the parser has to survive, and a model that fumbles one rung must cost the client that rung rather
+ * than the whole ladder.
  */
-describe("parsing six goals out of one stream", () => {
+describe("parsing the ladder out of one stream", () => {
   const whole = [
-    `${GOAL_MARK("financial")}`, "Lift revenue to 712,000 in year two.",
-    `${GOAL_MARK("management")}`, "Hold a monthly review with the crew leaders.",
-    `${GOAL_MARK("marketing")}`, "Be the first concreter builders in Gladstone ring.",
-    `${GOAL_MARK("sales")}`, "Win six more slab jobs a quarter.",
-    `${GOAL_MARK("operational")}`, "Add a third crew without losing the pour-date guarantee.",
-    `${GOAL_MARK("ai")}`, "Put quoting on software so a quote leaves the same day.",
+    `${GOAL_MARK("year1")}`,
+    "Turn the year one operating loss into a monthly profit.",
+    "Win six more slab jobs a quarter.",
+    `${GOAL_MARK("year3")}`,
+    "Three crews running, with the pour-date guarantee intact.",
+    `${GOAL_MARK("year5")}`,
+    "The concreter builders in the region ring first.",
   ].join("\n");
 
-  it("reads all six", () => {
+  it("reads all three rungs", () => {
     const g = parseGoals(whole);
-    expect(Object.keys(g)).toHaveLength(6);
-    expect(g.financial).toBe("Lift revenue to 712,000 in year two.");
-    expect(g.ai).toBe("Put quoting on software so a quote leaves the same day.");
+    expect(Object.keys(g)).toHaveLength(3);
+    expect(g.year1).toContain("operating loss");
+    expect(g.year5).toBe("The concreter builders in the region ring first.");
+  });
+
+  /**
+   * ONE LINE IS ONE GOAL, and that is a contract between this parser and the screen. The screen splits a
+   * rung on newlines to create a row per line, so a rung holding two goals must come back as two LINES —
+   * not as one paragraph the client would then have to break up by hand.
+   */
+  it("keeps one goal per line, so the screen can make a row of each", () => {
+    expect(parseGoals(whole).year1?.split("\n")).toEqual([
+      "Turn the year one operating loss into a monthly profit.",
+      "Win six more slab jobs a quarter.",
+    ]);
+  });
+
+  /*
+   * A RULE IN A SYSTEM MESSAGE IS A REQUEST, NOT A GUARANTEE. The prompt forbids bullets; this is what
+   * decides what the client actually sees. A stray "- " left in would be saved into the plan as part of
+   * the goal's own wording and printed that way in the report.
+   */
+  it("strips a bullet or a number the model was told not to write", () => {
+    const g = parseGoals(`${GOAL_MARK("year1")}\n- Win six more slab jobs.\n2) Hold margin at 32%.`);
+    expect(g.year1).toBe("Win six more slab jobs.\nHold margin at 32%.");
   });
 
   /* The reason the marker beats JSON: half a document is still readable. */
   it("reads what has arrived so far, and nothing it has not", () => {
-    const half = whole.slice(0, whole.indexOf("Be the first"));
+    const half = whole.slice(0, whole.indexOf("Three crews"));
     const g = parseGoals(half);
-    expect(g.financial).toBeTruthy();
-    expect(g.management).toBeTruthy();
-    expect(g.marketing).toBeUndefined();
-    expect(g.sales).toBeUndefined();
+    expect(g.year1).toBeTruthy();
+    expect(g.year3).toBeUndefined();
+    expect(g.year5).toBeUndefined();
   });
 
   it("throws away a preamble the model was told not to write", () => {
-    const g = parseGoals(`Here are the six goals for your plan:\n\n${whole}`);
-    expect(Object.keys(g)).toHaveLength(6);
-    expect(g.financial).not.toContain("Here are");
+    const g = parseGoals(`Here is the ladder for your plan:\n\n${whole}`);
+    expect(Object.keys(g)).toHaveLength(3);
+    expect(g.year1).not.toContain("Here is");
   });
 
-  it("ignores an area that is not one of the six", () => {
-    const g = parseGoals(`[[strategy]]\nSomething nobody asked for.\n${whole}`);
-    expect(Object.keys(g)).toHaveLength(6);
+  it("ignores a rung that is not one of the three", () => {
+    const g = parseGoals(`[[year10]]\nSomething nobody asked for.\n${whole}`);
+    expect(Object.keys(g)).toHaveLength(3);
     expect(JSON.stringify(g)).not.toContain("nobody asked for");
   });
 
+  /**
+   * THE 90 DAYS ARE NOT DRAFTED AT ALL (§6.125), so a model that offers them is ignored rather than
+   * obeyed. Every line on that rung carries a name and a date, which makes it a commitment — and a
+   * commitment is not a model's to invent.
+   */
+  it("refuses a 90-day list even when the model writes one", () => {
+    const g = parseGoals(`${GOAL_MARK("ninety")}\nRing every builder by Friday.\n${whole}`);
+    expect(g.ninety).toBeUndefined();
+    expect(JSON.stringify(g)).not.toContain("Ring every builder");
+  });
+
   /*
-   * A DROPPED MARKER COSTS ONE GOAL, NOT SIX. The passage merges into the one above it, which the client
-   * sees and rejects; the other five are untouched and still theirs to take.
+   * A DROPPED MARKER COSTS ONE RUNG, NOT THREE. The passage merges into the one above it, which the client
+   * sees and rejects; the others are untouched and still theirs to take.
    */
   it("survives a missing marker without losing the rest", () => {
-    const g = parseGoals(whole.replace(`${GOAL_MARK("sales")}\n`, ""));
-    expect(g.sales).toBeUndefined();
-    expect(Object.keys(g)).toHaveLength(5);
-    expect(g.operational).toBe("Add a third crew without losing the pour-date guarantee.");
+    const g = parseGoals(whole.replace(`${GOAL_MARK("year3")}\n`, ""));
+    expect(g.year3).toBeUndefined();
+    expect(Object.keys(g)).toHaveLength(2);
+    expect(g.year5).toBe("The concreter builders in the region ring first.");
   });
 
   it("returns nothing at all rather than blanks", () => {
     expect(parseGoals("")).toEqual({});
-    expect(parseGoals(`${GOAL_MARK("financial")}\n\n   \n`)).toEqual({});
+    expect(parseGoals(`${GOAL_MARK("year1")}\n\n   \n`)).toEqual({});
   });
 });
 
@@ -84,16 +117,22 @@ describe("what the drafter is told", () => {
     expect(user.content).toContain("42%");
   });
 
-  it("names all six areas and the marker each must use", () => {
+  it("names all three rungs and the marker each must use", () => {
     const [, user] = buildGoalMessages(plan());
-    for (const k of ["financial", "management", "marketing", "sales", "operational", "ai"]) {
+    for (const k of ["year1", "year3", "year5"]) {
       expect(user.content, `${k} was not offered to the model`).toContain(GOAL_MARK(k));
     }
   });
 
+  /** The 90-day rung is never offered, so the model is never in a position to fill it. */
+  it("never offers the 90-day rung", () => {
+    const [, user] = buildGoalMessages(plan());
+    expect(user.content).not.toContain(GOAL_MARK("ninety"));
+  });
+
   /* A draft that ignores what the client already wrote is not help, it is a replacement nobody asked for. */
-  it("shows the model what the owner has already written", () => {
-    const [, user] = buildGoalMessages(plan(), [], { sales: "Stop chasing tiny jobs." });
+  it("shows the model what the owner has already written at a rung", () => {
+    const [, user] = buildGoalMessages(plan(), [], { year1: "Stop chasing tiny jobs." });
     expect(user.content).toContain("Stop chasing tiny jobs.");
   });
 
@@ -107,16 +146,21 @@ describe("what the drafter is told", () => {
   it("forbids an owner and a deadline in the rules, not only in the reviewer's head", () => {
     const [system] = buildGoalMessages(plan());
     expect(system.content).toContain("NEVER name a person");
-    expect(system.content).toContain("Never set a quarter or a deadline");
+    expect(system.content).toContain("Never set a deadline");
   });
 
   /*
    * BOTH OF THESE WERE FOUND BY READING A REAL DRAFT AGAINST THE PLAN'S OWN P&L (§6.115.1), not by
-   * reading the draft on its own — which would have shown six confident, well-written goals.
+   * reading the draft on its own — which would have shown confident, well-written goals.
+   *
+   * The year rule had to CHANGE with the ladder rather than simply survive it: pinning every goal to year
+   * 1 was right when there was one rung and wrong the moment there were three, because the 5-year list is
+   * supposed to quote year 5. What the rule protects is unchanged — a figure must belong to the year it
+   * is quoted against.
    */
-  it("says the goals are for year 1, so year 2's revenue is not quoted as this year's target", () => {
+  it("pins each rung to its own year, so year 3's revenue is never quoted as this year's target", () => {
     const [system] = buildGoalMessages(plan());
-    expect(system.content).toContain("FOR YEAR 1");
+    expect(system.content).toContain("EACH RUNG IS ITS OWN YEAR");
   });
 
   it("forbids describing a loss as a profit", () => {

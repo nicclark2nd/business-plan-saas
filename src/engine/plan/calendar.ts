@@ -126,3 +126,21 @@ export function monthYearLabel(iso: string | null | undefined) {
   if (month < 1 || month > 12) return null;
   return `${MONTH_LONG[month - 1]} ${m[1]}`;
 }
+
+/**
+ * The DATE a plan year ends on, as a date rather than a label (§6.125).
+ *
+ * The Goals ladder states 1-Year, 3-Year and 5-Year against real dates, and every one of them is already
+ * decided by two answers the client gave in Settings: the month their financial year ends and the first
+ * year they are projecting. So none of the three is typed. `planYearEndLabel` gives "Jun 2027" for a
+ * heading; this gives 2027-06-30 for a date the report prints and a picker must never be offered for.
+ *
+ * The last day of the month is found by asking for day 0 of the NEXT month, which is the only spelling
+ * that gets February right in every year without a leap-year rule of its own.
+ */
+export function planYearEndDate(first: number, planYear: number, fyEndMonth: number | null | undefined) {
+  const end = Math.min(12, Math.max(1, Math.trunc(Number(fyEndMonth)) || 6));
+  const year = planYearEnding(first, planYear);
+  const d = new Date(Date.UTC(year, end, 0));
+  return d.toISOString().slice(0, 10);
+}

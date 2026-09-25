@@ -16,8 +16,8 @@ import { saveMarket, upsertRow, deleteRow, continueFromMarketing, type RowKind }
 import { MARKET_FIELDS, POSITION_ONE_LINER, BRAND_FIELDS, salesFields, SALES_KEYS, SPEND_KINDS, SPEND_LABEL, type Market, type MarketingData, type Spend, type Evidence, type SpendKind, type Segment } from "./model";
 import { acquisitionByYear } from "@/engine/marketing/acquisition";
 import type { AnyProduct } from "@/engine/sales/product";
-import { QuarterlyGoalDialog, type QuarterChoice } from "@/components/goals/QuarterlyGoalDialog";
-import { deleteGoal, saveQuarterlyGoal, setGoalStatus } from "../goals/actions";
+import { GoalDialog } from "@/components/goals/GoalDialog";
+import { deleteGoal, saveGoal, setGoalStatus } from "../goals/actions";
 import { STATUSES, type Goal, type GoalStatus, type Person } from "../goals/model";
 import { useSaveOnce } from "@/lib/saveOnce";
 import { DraftField, type Drafting } from "@/components/module/DraftField";
@@ -33,7 +33,7 @@ const TONE: Record<GoalStatus, string> = {
 type AreaKey = "market" | "spend" | "research" | "brand" | "sales" | "actions";
 type WithMeta<T> = T & { _dirty?: boolean };
 
-export function MarketingModule({ planId, initial, mode, initialArea, customerWord, productWord, actions, people, quarters, thisQuarter, products, drafting = {} }: {
+export function MarketingModule({ planId, initial, mode, initialArea, customerWord, productWord, actions, people, products, drafting = {} }: {
   planId: string; initial: MarketingData; mode: "guided" | "advanced"; initialArea: AreaKey; customerWord: string;
   /** plan_settings.product_type, for the plan's own word for one sale (§6.31.1). */
   productWord: string | null;
@@ -41,7 +41,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
    * The plan's MARKETING goals (§6.60) — not a second list. A marketing action with an owner and a date is
    * a quarterly goal, so this screen and the Goals step are two windows onto the same rows.
    */
-  actions: Goal[]; people: Person[]; quarters: QuarterChoice[]; thisQuarter: { planYear: number; quarter: number };
+  actions: Goal[]; people: Person[];
   /** The plan's sales lines, so this screen can say what a customer costs to win (§6.61). */
   products: AnyProduct[];
   /**
@@ -60,7 +60,12 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
   const [actsFrom, setActsFrom] = useState(actions);
   if (actions !== actsFrom) { setActsFrom(actions); setActs(actions); }
   const ownerName = (id: string | null) => people.find((p) => p.id === id)?.name || "";
-  const whenLabel = (g: Goal) => quarters.find((q) => q.planYear === g.year && q.quarter === g.quarter)?.label ?? `Q${g.quarter ?? ""}`;
+  /*
+   * WHEN, AS A DATE (§6.125). A marketing action used to be filed in one of the plan's quarters; the ladder
+   * replaced quarters with a single 90-day period and a due date on each goal, so this reads the date it
+   * carries rather than translating a quarter number back into months.
+   */
+  const whenLabel = (g: Goal) => g.milestone_date ?? "No date";
   const [area, setArea] = useState<AreaKey>(initialArea);
   const [kill, setKill] = useState<{ id: string; channel: string; budget: number } | null>(null);
   const [market, setMarket] = useState<Market>(initial.market);
@@ -386,7 +391,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
                     <Td wrap>
                       <button type="button" className="text-left hover:text-primary hover:underline" onClick={() => setEditing({ goal: g })}>{g.title}</button>
                     </Td>
-                    <Td className={cn(g.year === thisQuarter.planYear && g.quarter === thisQuarter.quarter && "font-semibold")}>{whenLabel(g)}</Td>
+                    <Td className={cn(!g.milestone_date && "text-muted-foreground")}>{whenLabel(g)}</Td>
                     <Td className={cn(!g.owner_person_id && "text-muted-foreground")}>{ownerName(g.owner_person_id) || "Nobody yet"}</Td>
                     {/* The one field a review meeting changes, so it saves without opening the dialog (§6.7). */}
                     <Td>
@@ -437,14 +442,14 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
         />
       )}
 
-      {/* One dialog for a quarterly goal, wherever it is written (§6.60) — the same one the Goals step opens. */}
+      {/* One dialog for a 90-day goal, wherever it is written (§6.60) — the same one the Goals step opens. */}
       {editing && (
-        <QuarterlyGoalDialog
-          area="marketing" goal={editing.goal} people={people} quarters={quarters} pending={pending}
+        <GoalDialog
+          area="marketing" goal={editing.goal} people={people} pending={pending}
           onClose={() => setEditing(null)}
           onSave={(input) => start(once(async () => {
-            const r = await saveQuarterlyGoal(planId, { ...input, id: editing.goal?.id, area: "marketing" });
-            if (!r.ok) { errors.raise({ key: "goal", message: r.error, label: "Quarterly goal" }); return; }
+            const r = await saveGoal(planId, { ...input, id: editing.goal?.id, horizon: "ninety", area: "marketing" });
+            if (!r.ok) { errors.raise({ key: "goal", message: r.error, label: "Goal" }); return; }
             errors.clear("goal"); setEditing(null); router.refresh();
           }))}
         />
