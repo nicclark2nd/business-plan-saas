@@ -50,7 +50,21 @@ export default async function PlanLayout({ children, params }: { children: React
         </form>
       </header>
       <Sidebar planId={planId} doneSteps={doneSteps} />
-      <main className="min-h-0 overflow-y-auto">{children}</main>
+      {/*
+        WHERE THE APP'S READING WIDTH IS DECIDED (§6.118).
+        
+        One place, so no page has to decide it again — which is how the dashboard came to be the only
+        screen in the app with a phantom 140px left margin.
+
+        1800px is deliberately generous: the main column is narrower than this on any normal laptop, so
+        nothing visible today moves. It bites only on a very wide monitor, where five KPI cards and a
+        twelve-month cash row stretched edge to edge stop being readable and start being a stunt.
+
+        `mx-auto` on the grid item itself rather than on an inner wrapper: a wrapper would break
+        ModuleFrame's `h-full` (percentage heights need a resolved parent) and the module bars would stop
+        spanning their own frame (§6.36).
+      */}
+      <main className="mx-auto min-h-0 w-full max-w-[1800px] overflow-y-auto">{children}</main>
     </div>
     </GstProvider>
     </VocabularyProvider>

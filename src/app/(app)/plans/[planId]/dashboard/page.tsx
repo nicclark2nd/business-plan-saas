@@ -83,7 +83,19 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
   const waiting = <Badge variant="outline" className="text-muted-foreground">Waiting for data</Badge>;
 
   return (
-    <div className="mx-auto max-w-[1180px] px-7 pt-6">
+    /*
+     * THE SAME GUTTER AS EVERY OTHER STEP (§6.118).
+     *
+     * This div used to carry `mx-auto max-w-[1180px]`, and it was the only page in the app that did. On a
+     * 1700px window the main column is 1460 wide, so clamping to 1180 left 280px of slack split evenly —
+     * and the dashboard's first pixel of content landed 168px from the sidebar while every guided step
+     * started at 28px. Nic saw the app move sideways when he clicked Dashboard, which is exactly what was
+     * happening.
+     *
+     * The cap itself was not a bad idea; declaring it HERE was. A reading width is a property of the
+     * shell, so it now lives on `<main>` in the plan layout where one decision covers all seventeen steps.
+     */
+    <div className="px-7 pt-6">
       <div className="mb-4">
         <div className="eyebrow">Dashboard</div>
         <h1 className="text-[22px] font-semibold leading-tight">{plan.business_name} — Year 1 plan</h1>
