@@ -150,6 +150,23 @@ The review read 44 migrations, which are the intent, and found RLS complete on a
 Drift between that and the running project is invisible from the repo. One query in the SQL editor settles
 it; it is in `Security_Review.md`.
 
+## Found while fixing the dashboard margin (§6.118)
+
+### 20. Two page frames, two gutters, two backgrounds — **Nic**
+
+The dashboard's phantom 140px margin is fixed. Behind it sits the same fault one layer down:
+
+| Frame | Used by | Gutter | Background |
+|---|---|---|---|
+| `StepFrame` | the guided steps (Vision, and the rest of the 1–17 path) | `px-7` | `bg-background` |
+| `ModuleFrame` | Marketing, Competitors, Operations, Sales, Goals, the financials | `px-5` | `bg-card` |
+
+Nobody notices because the two are never on screen together — you navigate from one to the other and the
+content shifts 8px and the panel colour changes. It is not broken and it is not designed either.
+
+Needs a decision before it needs work: **one gutter for the app**, and whether a module screen should keep
+its own card background or sit on the page like a step does. Then it is a five-minute change in two files.
+
 ## Waiting on the domain
 
 ### 8. A shared link previews as a blank rectangle — **Build, after the domain**
