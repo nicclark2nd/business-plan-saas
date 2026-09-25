@@ -76,6 +76,8 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
   /** Keyed failures that survive a keystroke and clear only on a save that works (§6.98). */
   const errors = useSaveErrors();
   const [pending, start] = useTransition();
+  /** What the last save changed on the way in, if anything. Cleared when another save starts. */
+  const [adjusted, setAdjusted] = useState<string>();
   const once = useSaveOnce();
 
   const lines = useMemo(() => (draft ? [...rows, draft] : rows), [rows, draft]);
@@ -108,10 +110,20 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
   };
 
   const save = (next: Row, buys = "") => {
+    setAdjusted(undefined);
         start(once(async () => {
       const res = await upsertFunding(planId, next, { assetName: buys });
       if (!res.ok) { errors.raise({ key: "funding", message: res.error, label: "Funding" }); return; }
-      const saved = { ...next, id: res.data!.id };
+      /*
+       * THE ROW ADOPTS WHAT WAS STORED (§6.123), and this screen needs it more than Fixed Assets does:
+       * it never re-seeds from the server, so a clamped value stayed on screen indefinitely.
+       *
+       * The one that bites is the facility. Enter 50,000 and draw 80,000 against it and the FACILITY is
+       * quietly raised to 80,000 — right, because the alternative is a forecast borrowing from a limit
+       * that does not exist, but the screen went on saying 50,000 while the plan modelled 80,000.
+       */
+      setAdjusted(res.saved?.note);
+      const saved = { ...next, ...res.saved?.stored, id: res.data!.id, _key: next._key } as Row;
       setRows((rs) => (rs.some((r) => r._key === next._key) ? rs.map((r) => (r._key === next._key ? saved : r)) : [...rs, saved]));
       setDraft(null); setDlg(null);
       router.refresh();
@@ -158,7 +170,7 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
         <p>Interest is a cost in the profit and loss. The principal is not — it only moves cash. What is still owed at each year end sits on the balance sheet, and equipment or vehicle finance carries its asset through to Fixed Assets.</p>
       </>}
     >
-      <PendingBridge pending={pending} />
+      <PendingBridge pending={pending} adjusted={adjusted} />
       <form id="funding-form" onSubmit={onSubmit} className="hidden" />
 
       {area === "sources" && (<>
@@ -460,10 +472,11 @@ function IconButton({ title, onClick, children }: { title: string; onClick: () =
 }
 
 /** STATUS ONLY (§6.98) — a failed save travels on its own channel and is shown in red, not in this grey. */
-function PendingBridge({ pending }: { pending: boolean }) {
+function PendingBridge({ pending, adjusted }: { pending: boolean; adjusted?: string }) {
   const { setPending, setNote } = useModule();
   useEffect(() => setPending(pending), [pending, setPending]);
-  useEffect(() => setNote(pending ? "Saving…" : undefined), [pending, setNote]);
+  /* An adjustment outranks the idle line: the save DID work, and it did not store what was typed. */
+  useEffect(() => setNote(pending ? "Saving…" : adjusted ?? undefined), [pending, adjusted, setNote]);
   return null;
 }
 

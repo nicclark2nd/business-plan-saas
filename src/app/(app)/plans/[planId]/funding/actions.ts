@@ -7,6 +7,7 @@ import type { FundingKind } from "@/engine/funding/sources";
 import type { FundingRow, LoanType } from "./model";
 import { nextHref } from "@/lib/nav";
 import { failed } from "@/lib/actionFailed";
+import { adjustments, adjustedNote, type Watched } from "@/lib/adjusted";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
@@ -22,13 +23,67 @@ const yr = (v: unknown) => Math.min(5, Math.max(1, Math.trunc(Number(v)) || 1));
 const mo = (v: unknown) => Math.min(12, Math.max(1, Math.trunc(Number(v)) || 1));
 const ASSET_BACKED = ["equipment_finance", "vehicle_finance"];
 
+/**
+ * WHAT A FUNDING ROW'S SAVE GIVES BACK (§6.123).
+ *
+ * Five kinds, five tables, and the screen's own field names are not the column names — one box called
+ * `amount` is stored as `amount_drawn`, `amount_invested`, `amount_approved` or `amount_received`
+ * depending on the kind. So the watch list is per kind and carries the mapping with it.
+ *
+ * THE CLAMP THAT MATTERS MOST HERE IS NOT A RANGE. `total_facility_amount` is `Math.max(amount, …)`: a
+ * client who enters a 50,000 facility and draws 80,000 against it has the FACILITY quietly raised to
+ * 80,000, because the alternative is a forecast that borrows money from a limit that does not exist.
+ * Right, and it was silent — the screen kept saying 50,000 while the plan modelled 80,000.
+ */
+export type FundingSaved = { stored: Record<string, unknown>; note?: string };
+
+/** column on the row -> the wording on the screen, and the field the client typed it into. */
+type FundWatch = Watched<string> & { sent?: string };
+const CLAMPED: Record<FundingKind, readonly FundWatch[]> = {
+  owner: [
+    { key: "amount", label: "Put in as" },
+    { key: "interest_rate", label: "Interest rate %" },
+    { key: "repayment_term_months", label: "Repaid over (months)", sent: "term_months" },
+    { key: "start_year", label: "Bought in" }, { key: "start_month", label: "Month" },
+  ],
+  debt: [
+    { key: "amount_drawn", label: "Amount", sent: "amount" },
+    { key: "total_facility_amount", label: "Facility" },
+    { key: "interest_rate", label: "Interest rate %" },
+    { key: "term_months", label: "Term (months)" },
+    { key: "residual_value", label: "Balloon at the end" },
+    { key: "min_repayment_pct", label: "% of balance" },
+    { key: "annual_fee", label: "Annual fee" },
+    { key: "deposit", label: "Paid up front" },
+    { key: "start_year", label: "Bought in" }, { key: "start_month", label: "Month" },
+  ],
+  equity: [
+    { key: "amount_invested", label: "Amount", sent: "amount" },
+    { key: "equity_percent", label: "Share of the business %" },
+    { key: "pre_money_valuation", label: "Valuation before the money" },
+    { key: "start_year", label: "Bought in" }, { key: "start_month", label: "Month" },
+  ],
+  grant: [
+    { key: "amount_approved", label: "Amount", sent: "amount" },
+    { key: "recognition_period_months", label: "Over (months)" },
+    { key: "start_year", label: "Bought in" }, { key: "start_month", label: "Month" },
+  ],
+  revenue_linked: [
+    { key: "amount_received", label: "Amount", sent: "amount" },
+    { key: "repayment_percent", label: "Share of sales %" },
+    { key: "cap_multiple", label: "Repayment cap (×)" },
+    { key: "min_monthly_payment", label: "Minimum a month" },
+    { key: "start_year", label: "Bought in" }, { key: "start_month", label: "Month" },
+  ],
+};
+
 /** One row of funding, whichever of the five tables it belongs to. */
 export async function upsertFunding(
   planId: string,
   r: Partial<FundingRow> & { kind: FundingKind },
   /** What to call the asset this loan buys. Fixed Assets sets it, because there the client named the thing. */
   opts?: { assetName?: string },
-): Promise<Result<{ id: string }>> {
+): Promise<Result<{ id: string }> & { saved?: FundingSaved }> {
   const supabase = await createClient();
   const name = (r.name ?? "").trim();
   if (!name) return { ok: false, error: "Give the source a name." };
@@ -76,18 +131,24 @@ export async function upsertFunding(
   }
 
   const table = TABLE[r.kind];
+  /* The whole row back, not its id (§6.123). */
   const q = r.id && !r.id.startsWith("tmp-")
-    ? supabase.from(table).update(row).eq("id", r.id).eq("plan_id", planId).select("id").single()
-    : supabase.from(table).insert(row).select("id").single();
+    ? supabase.from(table).update(row).eq("id", r.id).eq("plan_id", planId).select("*").single()
+    : supabase.from(table).insert(row).select("*").single();
   const { data, error } = await q;
   if (error) return failed(error, "save the funding");
+
+  const watch = CLAMPED[r.kind];
+  const sentKey = (k: string) => (watch.find((w) => w.key === k)?.sent ?? k) as keyof typeof r & string;
+  const stored: Record<string, unknown> = { ...(data as Record<string, unknown>) };
+  const note = adjustedNote(adjustments(r, stored, watch, sentKey), name);
 
   // Equipment and vehicle finance buy something the business then owns. The asset belongs to this loan and is
   // never editable in Fixed Assets — the same rule as a synced Overheads line (§6.19).
   if (r.kind === "debt") await syncFinancedAsset(planId, data.id, name, r, opts?.assetName);
 
   touch(planId);
-  return { ok: true, data: { id: data.id } };
+  return { ok: true, data: { id: data.id }, saved: { stored, note } };
 }
 
 /** Create, update or clear the asset a finance row carries. */

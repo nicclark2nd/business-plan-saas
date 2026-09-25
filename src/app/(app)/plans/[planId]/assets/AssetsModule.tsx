@@ -73,6 +73,8 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth,
    * list sat there unchanged until the client navigated away and back, and the thing they had just created
    * appeared to have gone nowhere.
    */
+  /** What the last save changed on the way in, if anything. Cleared when another save starts. */
+  const [adjusted, setAdjusted] = useState<string>();
   const [cameFrom, setCameFrom] = useState(initial);
   if (initial !== cameFrom) { setCameFrom(initial); setRows(initial.map((a) => ({ ...a, _key: a.id }))); }
   const [area, setArea] = useState<AreaKey>("assets");
@@ -109,7 +111,16 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth,
       } else {
         const res = await upsertAsset(planId, next);
         if (!res.ok) { errors.raise({ key: "assets", message: res.error, label: "Fixed Assets" }); return; }
-        const saved = { ...next, id: res.data!.id };
+        /*
+         * THE ROW ADOPTS WHAT WAS STORED (§6.123).
+         *
+         * This screen already re-seeds from the server when `initial` changes, so the numbers did
+         * eventually correct themselves after `router.refresh()`. Two things were still wrong: the
+         * correction arrived a beat late, and NOTHING SAID IT HAD HAPPENED — a 40,000 residual on a 30,000
+         * machine became 30,000, the depreciation schedule was built on it, and the client was never told.
+         */
+        setAdjusted(res.saved?.note);
+        const saved = { ...next, ...res.saved?.stored, id: res.data!.id, _key: next._key } as Row;
         setRows((rs) => (rs.some((r) => r._key === next._key) ? rs.map((r) => (r._key === next._key ? saved : r)) : [...rs, saved]));
         setDraft(null);
       }
@@ -180,7 +191,7 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth,
         <p>Depreciation is an expense in the profit and loss. What the assets are still worth is on the balance sheet. Neither of them touches the cash flow.</p>
       </>}
     >
-      <PendingBridge pending={pending} />
+      <PendingBridge pending={pending} adjusted={adjusted} />
       <form id="assets-form" onSubmit={onSubmit} className="hidden" />
 
       {area === "assets" && (<>
@@ -373,10 +384,11 @@ function IconButton({ title, onClick, children }: { title: string; onClick: () =
 }
 
 /** STATUS ONLY (§6.98) — a failed save travels on its own channel and is shown in red, not in this grey. */
-function PendingBridge({ pending }: { pending: boolean }) {
+function PendingBridge({ pending, adjusted }: { pending: boolean; adjusted?: string }) {
   const { setPending, setNote } = useModule();
   useEffect(() => setPending(pending), [pending, setPending]);
-  useEffect(() => setNote(pending ? "Saving…" : undefined), [pending, setNote]);
+  /* An adjustment outranks the idle line: the save DID work, and it did not store what was typed. */
+  useEffect(() => setNote(pending ? "Saving…" : adjusted ?? undefined), [pending, adjusted, setNote]);
   return null;
 }
 

@@ -9,6 +9,7 @@ import { serializeComponents } from "@/engine/plan/gst";
 import { checkLogo, logoObjectPath, LOGO_BUCKET } from "@/engine/plan/logo";
 import { checkEmail, checkWebsite } from "@/engine/plan/contact";
 import { failed } from "@/lib/actionFailed";
+import { adjustments, adjustedNote, type Watched } from "@/lib/adjusted";
 
 /**
  * `field` names the control the message belongs beside (§6.98). A save that says "that does not look like an
@@ -33,7 +34,8 @@ type Result =
  * came back different from what was sent — not to apologise, but because a number changing under your
  * hands without a word is its own kind of wrong.
  */
-export type FinancialSaved = { stored: Financial; adjusted: { label: string; from: string; to: string }[] };
+export /** `note` is the finished sentence. The action knows the wording; a screen should not have to. */
+type FinancialSaved = { stored: Financial; note?: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
 
 export async function saveProfile(planId: string, p: Partial<Profile> & { established_text?: string }): Promise<Result> {
@@ -92,12 +94,12 @@ export async function saveProfile(planId: string, p: Partial<Profile> & { establ
 }
 
 /** The clamped fields, with the wording the screen uses, so a note can name the box the client is looking at. */
-const CLAMPED: { key: keyof Financial; label: string; max?: number; min?: number }[] = [
-  { key: "financial_year_end_month", label: "Financial year ends in", min: 1, max: 12 },
-  { key: "tax_rate", label: "Company tax rate %", min: 0, max: 100 },
-  { key: "dividend_rate", label: "Dividend %", min: 0, max: 100 },
-  { key: "opening_tax_losses", label: "Tax losses brought forward", min: 0 },
-  { key: "gst_rate", label: "GST rate %", min: 0, max: 100 },
+const CLAMPED: readonly Watched<keyof Financial & string>[] = [
+  { key: "financial_year_end_month", label: "Financial year ends in" },
+  { key: "tax_rate", label: "Company tax rate %" },
+  { key: "dividend_rate", label: "Dividend %" },
+  { key: "opening_tax_losses", label: "Tax losses brought forward" },
+  { key: "gst_rate", label: "GST rate %" },
 ];
 
 export async function saveFinancial(planId: string, f: Partial<Financial>): Promise<Result & { saved?: FinancialSaved }> {
@@ -130,18 +132,10 @@ export async function saveFinancial(planId: string, f: Partial<Financial>): Prom
   if (error) return failed(error, "save the financial settings");
 
   const stored = data as unknown as Financial;
-  const num = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number(v));
-  const adjusted = CLAMPED.flatMap(({ key, label }) => {
-    const sent = num(f[key]);
-    const kept = num(stored[key]);
-    /* Only a real change, and only one the client can see: an unreadable value becoming 0 is not news. */
-    return sent !== null && kept !== null && sent !== kept
-      ? [{ label, from: String(sent), to: String(kept) }]
-      : [];
-  });
+  const note = adjustedNote(adjustments(f, stored, CLAMPED));
 
   touch(planId);
-  return { ok: true, saved: { stored, adjusted } };
+  return { ok: true, saved: { stored, note } };
 }
 
 /**

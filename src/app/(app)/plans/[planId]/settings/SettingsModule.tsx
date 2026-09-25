@@ -108,9 +108,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
        */
       if (res.saved) {
         setS((x) => ({ ...x, ...res.saved!.stored }));
-        setAdjusted(res.saved.adjusted.length
-          ? res.saved.adjusted.map((a) => `${a.label} can't be ${a.from} — saved as ${a.to}.`).join(" ")
-          : undefined);
+        setAdjusted(res.saved.note);
       }
     });
   };

@@ -175,7 +175,7 @@ its own card background or sit on the page like a step does. Then it is a five-m
 
 ## Found by Nic typing 99999 into a box (§6.121)
 
-### 21. Eleven other modules still do not reconcile after a save — **Build**
+### 21. Nine other modules still do not reconcile after a save — **Build**
 
 Plan settings now hands back the row it stored and the screen adopts it, so a clamped value corrects itself
 in front of the client and the footer names what changed. **No other module does this.**
@@ -192,14 +192,22 @@ state on success, surface anything adjusted through the footer note the frame al
 ~~**Start with Sales.**~~ **Sales is done (§6.122)** and its clamps were the ones that bit hardest — typing
 9999 into "A client stays (months)" now saves 600, says so, and the box shows 600 without a refresh.
 
-The remaining eleven are Historic, COGS, Overheads, Funding, Fixed Assets, One-off income & costs,
-Assumptions, Marketing, Operations, People and Goals. **Funding and Fixed Assets next**: both run whole
-families of clamps through shared `money`/`yr`/`mo`/`pct` helpers, so one pass covers a lot of fields, and
-both feed the forecast directly.
+**Funding and Fixed Assets are done too (§6.123)**, and the compare-and-word logic now lives once in
+`src/lib/adjusted.ts` with all four modules on it.
 
-The shape is settled now and both existing cases follow it exactly: `.select("*")` on the write, compare
-what was sent against what came back, merge the stored row into the module's state, and name anything
-adjusted through the footer note the frame already owns.
+The remaining nine are Historic, COGS, Overheads, One-off income & costs, Assumptions, Marketing,
+Operations, People and Goals. None of them is as sharp as the four already done — these are mostly row
+grids where a clamped value is visible in the row itself — so this is now maintenance rather than a fault
+worth chasing. Do them when touching those modules for other reasons.
+
+The shape: `.select("*")` on the write, `adjustments()` against what was sent, `adjustedNote()` for the
+wording, merge the stored row into the module's state, and show the note through the footer the frame
+already owns.
+
+**One thing to know before doing more of these.** A module whose dialog uses uncontrolled inputs
+(`defaultValue` + `onBlur`, as Fixed Assets does) only commits a field on blur. That is fine for a client
+clicking Save with a mouse, and it silently breaks any scripted test that clicks Save without moving focus
+first. It cost two wrong conclusions while verifying this one.
 
 ## Waiting on the domain
 

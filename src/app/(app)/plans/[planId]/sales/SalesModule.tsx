@@ -105,9 +105,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
        * else now comes from the row the database actually holds.
        */
       setRows((xs) => xs.map((x) => (x._key === key ? { ...x, ...res.saved?.stored, id: res.data!.id, _key: key } : x)));
-      setAdjusted(res.saved?.adjusted.length
-        ? `${r.name || noun.one}: ${res.saved.adjusted.map((a) => `${a.label} can't be ${a.from} — saved as ${a.to}.`).join(" ")}`
-        : undefined);
+      setAdjusted(res.saved?.note);
     });
   };
   /**

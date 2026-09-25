@@ -7,6 +7,7 @@ import { distributionValid, exactHundred, type Growth, type MonthlyDistribution 
 import { nextHref } from "@/lib/nav";
 import { failed } from "@/lib/actionFailed";
 import type { Product } from "./model";
+import { adjustments, adjustedNote, type Watched } from "@/lib/adjusted";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -18,10 +19,11 @@ type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string
  * quietly staying 600 months instead of the 9999 that was typed — moves the whole forecast without ever
  * showing on the screen it was typed into.
  */
-export type ProductSaved = { stored: Product; adjusted: { label: string; from: string; to: string }[] };
+/** `note` is the finished sentence, named with the line it is about. A screen should not have to word it. */
+export type ProductSaved = { stored: Product; note?: string };
 
 /** The clamped numbers a client can type, with the wording on the screen so a note can name the right box. */
-const CLAMPED: { key: "average_price" | "units_sold" | "start_selling_year" | "opening_clients" | "client_life_months"; label: string }[] = [
+const CLAMPED: readonly Watched<"average_price" | "units_sold" | "start_selling_year" | "opening_clients" | "client_life_months">[] = [
   { key: "average_price", label: "Average price" },
   { key: "units_sold", label: "Base units sold (per year)" },
   { key: "start_selling_year", label: "Starts selling" },
@@ -97,18 +99,10 @@ export async function upsertProduct(planId: string, p: {
   if (error) return failed(error, "save the product");
 
   const stored = { ...(data as unknown as Product), average_price: Number(data.average_price), units_sold: Number(data.units_sold) };
-  const num = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number(v));
-  const adjusted = CLAMPED.flatMap(({ key, label }) => {
-    const sent = num(p[key]);
-    const kept = num(stored[key]);
-    /* Only a change the client can see. An unreadable entry becoming 0 is not news worth a sentence. */
-    return sent !== null && kept !== null && Number.isFinite(sent) && sent !== kept
-      ? [{ label, from: String(sent), to: String(kept) }]
-      : [];
-  });
+  const note = adjustedNote(adjustments(p, stored, CLAMPED), name);
 
   touch(planId);
-  return { ok: true, data: { id: data.id }, saved: { stored, adjusted } };
+  return { ok: true, data: { id: data.id }, saved: { stored, note } };
 }
 
 /**
