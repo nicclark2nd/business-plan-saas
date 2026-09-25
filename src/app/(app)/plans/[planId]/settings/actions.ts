@@ -17,6 +17,23 @@ import { failed } from "@/lib/actionFailed";
 type Result =
   | { ok: true; data?: { date_established: string | null } }
   | { ok: false; error: string; field?: string };
+
+/**
+ * WHAT A SAVE GIVES BACK, SO THE SCREEN CANNOT DISAGREE WITH THE PLAN (§6.121).
+ *
+ * Every numeric field here is clamped on its way in, and that is right: a 99999% tax rate reaching the
+ * forecast is worse than a refusal. What was wrong is that the clamp was SILENT. The box kept showing what
+ * the client typed, the plan held something else, and nothing reconciled the two until a page refresh the
+ * client had no reason to do.
+ *
+ * > A client typed 99999 into the tax rate, the plan stored 100, and the screen went on saying 99999.
+ * > They would have gone looking at a wrecked profit line with no way to connect it back.
+ *
+ * So the save returns the row it actually wrote, and the screen adopts it. `adjusted` names the fields that
+ * came back different from what was sent — not to apologise, but because a number changing under your
+ * hands without a word is its own kind of wrong.
+ */
+export type FinancialSaved = { stored: Financial; adjusted: { label: string; from: string; to: string }[] };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
 
 export async function saveProfile(planId: string, p: Partial<Profile> & { established_text?: string }): Promise<Result> {
@@ -74,10 +91,19 @@ export async function saveProfile(planId: string, p: Partial<Profile> & { establ
   return { ok: true, data: { date_established: established ?? null } };
 }
 
-export async function saveFinancial(planId: string, f: Partial<Financial>): Promise<Result> {
+/** The clamped fields, with the wording the screen uses, so a note can name the box the client is looking at. */
+const CLAMPED: { key: keyof Financial; label: string; max?: number; min?: number }[] = [
+  { key: "financial_year_end_month", label: "Financial year ends in", min: 1, max: 12 },
+  { key: "tax_rate", label: "Company tax rate %", min: 0, max: 100 },
+  { key: "dividend_rate", label: "Dividend %", min: 0, max: 100 },
+  { key: "opening_tax_losses", label: "Tax losses brought forward", min: 0 },
+  { key: "gst_rate", label: "GST rate %", min: 0, max: 100 },
+];
+
+export async function saveFinancial(planId: string, f: Partial<Financial>): Promise<Result & { saved?: FinancialSaved }> {
   const supabase = await createClient();
   const month = Math.min(12, Math.max(1, Math.trunc(Number(f.financial_year_end_month)) || 6));
-  const { error } = await supabase.from("plan_settings").upsert({
+  const { data, error } = await supabase.from("plan_settings").upsert({
     plan_id: planId,
     financial_year_end_month: month,
     first_projected_year: f.first_projected_year ? Math.trunc(Number(f.first_projected_year)) : null,
@@ -93,10 +119,29 @@ export async function saveFinancial(planId: string, f: Partial<Financial>): Prom
     // Cleaned on the way out as well as in, so nothing unreadable can reach the engine (§6.39).
     tax_components: serializeComponents(Array.isArray(f.tax_components) ? f.tax_components : []),
     currency: (f.currency || "AUD").toUpperCase().slice(0, 3),
-  }, { onConflict: "plan_id" });
+  }, { onConflict: "plan_id" })
+    /*
+     * READ BACK WHAT THE DATABASE ACTUALLY HOLDS, not what this function thought it sent. The clamps above
+     * are one reason the two can differ; a column type or a default is another, and a screen that trusts
+     * the request rather than the row is exactly how the drift started.
+     */
+    .select("financial_year_end_month, first_projected_year, tax_rate, dividend_rate, opening_tax_losses, opening_retained_earnings, gst_registered, gst_rate, gst_frequency, tax_region, tax_components, currency")
+    .single();
   if (error) return failed(error, "save the financial settings");
+
+  const stored = data as unknown as Financial;
+  const num = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number(v));
+  const adjusted = CLAMPED.flatMap(({ key, label }) => {
+    const sent = num(f[key]);
+    const kept = num(stored[key]);
+    /* Only a real change, and only one the client can see: an unreadable value becoming 0 is not news. */
+    return sent !== null && kept !== null && sent !== kept
+      ? [{ label, from: String(sent), to: String(kept) }]
+      : [];
+  });
+
   touch(planId);
-  return { ok: true };
+  return { ok: true, saved: { stored, adjusted } };
 }
 
 /**

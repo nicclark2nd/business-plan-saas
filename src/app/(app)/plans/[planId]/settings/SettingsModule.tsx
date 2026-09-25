@@ -43,6 +43,8 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
   const [s, setS] = useState(initial);
   const [established, setEstablished] = useState(formatMonth(initial.date_established));
   const [dirty, setDirty] = useState<"profile" | "financial" | null>(null);
+  /** What the last save changed on the way in, if anything. Cleared the moment the client types again. */
+  const [adjusted, setAdjusted] = useState<string>();
   /**
    * THREE SOURCES, THREE KEYS (§6.98). Profile, licences and the logo used to race into one `error` slot
    * and overwrite each other, so a licence that would not save could be erased by a logo that would not
@@ -61,25 +63,54 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
    * same thing clears it, in `commit` below.
    */
   const edit = (changes: Partial<Settings>, which: "profile" | "financial", immediate = false) => {
-    setS((x) => ({ ...x, ...changes })); setDirty(which);
+    setS((x) => ({ ...x, ...changes })); setDirty(which); setAdjusted(undefined);
     if (immediate) queueMicrotask(() => commit(which));
   };
   const commit = (which: "profile" | "financial" | null) => {
     if (!which) return;
     setDirty(null);
     start(async () => {
-      const res = which === "profile"
-        ? await saveProfile(planId, { ...(ref.current as Profile), established_text: estRef.current })
-        : await saveFinancial(planId, ref.current as Financial);
-      if (!res.ok) {
-        errors.raise({
-          key: which, message: res.error, field: "field" in res ? res.field : undefined,
-          label: which === "profile" ? "Business profile" : "Financial year & tax",
-        });
-        setDirty(which);
-      } else {
+      /*
+       * The two saves are handled in their own branches rather than through one union (§6.121). Financial
+       * hands back the row it stored and Profile does not, and a union of the two narrows to nothing
+       * useful — so the types stay honest and the reader can see which call returns what.
+       */
+      if (which === "profile") {
+        const res = await saveProfile(planId, { ...(ref.current as Profile), established_text: estRef.current });
+        if (!res.ok) {
+          errors.raise({ key: which, message: res.error, field: res.field, label: "Business profile" });
+          setDirty(which);
+          return;
+        }
         errors.clear(which);
-        if (res.data && "date_established" in res.data) { setS((x) => ({ ...x, date_established: res.data!.date_established })); setEstablished(formatMonth(res.data.date_established)); }
+        if (res.data && "date_established" in res.data) {
+          setS((x) => ({ ...x, date_established: res.data!.date_established }));
+          setEstablished(formatMonth(res.data.date_established));
+        }
+        return;
+      }
+
+      const res = await saveFinancial(planId, ref.current as Financial);
+      if (!res.ok) {
+        errors.raise({ key: which, message: res.error, field: res.field, label: "Financial year & tax" });
+        setDirty(which);
+        return;
+      }
+      errors.clear(which);
+      /*
+       * THE SCREEN ADOPTS WHAT WAS STORED (§6.121).
+       *
+       * Every number on this tab is clamped on the way in, and silently: a client typed 99999 into the tax
+       * rate, the plan took 100, and the box went on saying 99999 until a refresh they had no reason to do.
+       * The save now hands back the row it wrote, so the two cannot disagree — and if anything came back
+       * changed, the footer names the box and what it became, because a number moving under your hands with
+       * no explanation is its own fault.
+       */
+      if (res.saved) {
+        setS((x) => ({ ...x, ...res.saved!.stored }));
+        setAdjusted(res.saved.adjusted.length
+          ? res.saved.adjusted.map((a) => `${a.label} can't be ${a.from} — saved as ${a.to}.`).join(" ")
+          : undefined);
       }
     });
   };
@@ -149,7 +180,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
         <p>Debtor, stock and creditor days, tax timing and CapEx are forecast assumptions, not settings. They live with the forecast, defaulted from your historic figures.</p>
       </>}
     >
-      <PendingBridge pending={pending || licBusy} dirty={!!dirty} />
+      <PendingBridge pending={pending || licBusy} dirty={!!dirty} adjusted={adjusted} />
 
       {area === "profile" && (
         <div onBlur={(e) => left(e) && dirty === "profile" && commit("profile")}>
@@ -398,10 +429,15 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
 }
 
 /** STATUS ONLY now (§6.98) — failure travels on its own channel and is rendered in red, not in this grey. */
-function PendingBridge({ pending, dirty }: { pending: boolean; dirty: boolean }) {
+function PendingBridge({ pending, dirty, adjusted }: { pending: boolean; dirty: boolean; adjusted?: string }) {
   const { setPending, setNote } = useModule();
   useEffect(() => setPending(pending), [pending, setPending]);
-  useEffect(() => setNote(pending ? "Saving…" : dirty ? "Unsaved — saves when you leave the field" : undefined), [pending, dirty, setNote]);
+  /* An adjustment outranks "All changes saved": the save DID work, and it did not store what was typed. */
+  useEffect(() => setNote(
+    pending ? "Saving…"
+      : dirty ? "Unsaved — saves when you leave the field"
+        : adjusted ?? undefined,
+  ), [pending, dirty, adjusted, setNote]);
   return null;
 }
 

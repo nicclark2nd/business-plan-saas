@@ -173,6 +173,26 @@ content shifts 8px and the panel colour changes. It is not broken and it is not 
 Needs a decision before it needs work: **one gutter for the app**, and whether a module screen should keep
 its own card background or sit on the page like a step does. Then it is a five-minute change in two files.
 
+## Found by Nic typing 99999 into a box (§6.121)
+
+### 21. Twelve other modules still do not reconcile after a save — **Build**
+
+Plan settings now hands back the row it stored and the screen adopts it, so a clamped value corrects itself
+in front of the client and the footer names what changed. **No other module does this.**
+
+Every one of them clamps on the way in — `Math.min(5, Math.max(1, …))` and friends appear about fifty times
+across thirteen action files — and clamping is RIGHT: a 99999% tax rate reaching the forecast is worse than
+a refusal. The fault is never the clamp. It is that the screen keeps showing what was typed and only
+learns the truth on a refresh nobody has a reason to do.
+
+The mechanism is now written once and proven. What is left is applying it, which is a per-module job
+because each keeps its own state shape: return the stored row from the action, merge it into the module's
+state on success, surface anything adjusted through the footer note the frame already owns.
+
+**Start with Sales.** Its clamps bite hardest — `start_selling_year` snaps to 1–5 and `client_life_months`
+to 1–600 — and a product line quietly starting in a different year than the client typed changes the
+forecast without ever showing on the screen they typed it on.
+
 ## Waiting on the domain
 
 ### 8. A shared link previews as a blank rectangle — **Build, after the domain**
