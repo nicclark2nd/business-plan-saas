@@ -14,7 +14,7 @@ import { runForecast } from "@/engine/forecast/run";
 import { lossMonths, monthlyProfit, monthlyProfitGap } from "@/engine/forecast/monthlyProfit";
 import { breakEvenByYear } from "@/engine/breakeven/point";
 import { FORECAST_YEARS } from "@/engine/forecast/model";
-import { MONTH_SHORT } from "@/engine/plan/calendar";
+import { planMonths } from "@/engine/plan/calendar";
 import { CashChart, ProfitChart, RevenueChart } from "./Charts";
 import { STATUS_LABEL, type GoalStatus } from "../goals/model";
 
@@ -47,6 +47,21 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
    * Q1 goals against January–March) is now unreachable rather than merely handled.
    */
   const ninetyEnds = ps?.ninety_day_ends_on ?? null;
+
+  /**
+   * THE PLAN'S OWN TWELVE MONTHS, NOT THE CALENDAR'S (§6.21, §6.126).
+   *
+   * §6.21 killed six hardcoded ["Jan" … "Dec"] arrays and left one function that answers "what is month 1
+   * of THIS plan". The dashboard was never converted, and nothing caught it because every chart still drew
+   * twelve labelled columns in the right order — they were simply the wrong twelve names.
+   *
+   * On a June year-end — which is every Australian small business, and most of this product's market —
+   * month 1 is JULY. The cash chart, the profit chart and the "lowest cash month" callout have all been
+   * six months out, and the callout is the worst of them: "Jan · month 1" states the contradiction
+   * outright and still gets believed, because the month name is the part a person reads.
+   */
+  const months = planMonths(Number(ps?.financial_year_end_month ?? 6));
+  const monthName = (m: number) => months[(m - 1) % 12];
   const { data: quarterGoals } = await supabase.from("plan_goals")
     .select("id, area, title, status, owner_person_id, milestone_date")
     .eq("plan_id", planId).eq("horizon", "ninety")
@@ -86,7 +101,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
     { label: "Gross margin", value: pct1(y1.grossMargin), sub: `${fmt.format(y1.grossProfit)} of gross profit` },
     { label: "Net profit", value: signed(y1.netProfit), sub: y1.netProfit < 0 ? "After tax \u2014 a loss in Year 1" : "After tax", bad: y1.netProfit < 0 },
     { label: "Cash at year end", value: signed(forecast.cashFlow[1].closingCash), sub: `Opened at ${fmt.format(forecast.cashFlow[1].openingCash)}`, bad: forecast.cashFlow[1].closingCash < 0 },
-    { label: "Lowest cash month", value: signed(lowMonth.closingCash), sub: `${MONTH_SHORT[(lowMonth.month - 1) % 12]} \u00b7 month ${lowMonth.month}`, bad: lowMonth.closingCash < 0 },
+    { label: "Lowest cash month", value: signed(lowMonth.closingCash), sub: `${monthName(lowMonth.month)} \u00b7 month ${lowMonth.month}`, bad: lowMonth.closingCash < 0 },
   ];
 
   const missingProfile = profileMissing({ business_name: plan.business_name, ...(ps ?? {}) });
@@ -149,9 +164,9 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
           </Badge>}>
           {hasNumbers ? (
             <>
-              <CashChart months={MONTH_SHORT.slice(0, 12)} values={monthly.months.map((m) => m.closingCash)} />
+              <CashChart months={months} values={monthly.months.map((m) => m.closingCash)} />
               <p className="mt-1 text-[12px] text-muted-foreground">
-                Lowest at <b className={cn(lowMonth.closingCash < 0 && "text-bad")}>{signed(lowMonth.closingCash)}</b> in {MONTH_SHORT[(lowMonth.month - 1) % 12]}.
+                Lowest at <b className={cn(lowMonth.closingCash < 0 && "text-bad")}>{signed(lowMonth.closingCash)}</b> in {monthName(lowMonth.month)}.
                 {" "}It is the month, not the year, that runs a business out of money.
               </p>
             </>
@@ -165,7 +180,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
           </Badge>}>
           {hasNumbers ? (
             <>
-              <ProfitChart months={MONTH_SHORT.slice(0, 12)} values={profitMonths} />
+              <ProfitChart months={months} values={profitMonths} />
               <p className="mt-1 text-[12px] text-muted-foreground">
                 {/*
                   THE TWO FIGURES ON THIS SCREEN ARE RECONCILED IN WORDS (§6.124). The tile above says

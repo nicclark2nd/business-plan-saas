@@ -252,6 +252,33 @@ Every box on the new Goals screen commits when focus leaves it, which is the app
 in a browser. What has never been driven live is what a client SEES when one of those saves fails — this
 is item 4 on twelve other modules and the ladder now adds six more places it could happen.
 
+### 26. Overheads counts two expenses on a plan that has none
+
+The module bar reads **Expenses 2** on a brand-new plan. The two are the locked derived rows — Leadership
+Team salaries and Marketing spend — both showing 0. Sales gets this right on the same screen shape
+("Products 0"). A count is a statement about the client's own work, and this one says they have entered
+two things when they have entered nothing.
+
+### 27. An overhead can be saved with no category, and the table says "Not set"
+
+Adding an expense without picking a category saves happily and prints **Not set** in the Category column.
+The report groups overheads by category, so an uncategorised line has to go somewhere. Either the field
+is required, or there is a real "Uncategorised" bucket that the report is honest about.
+
+### 28. The report says "Figures agree — Yes" on a plan with no figures
+
+An empty plan's Reports step shows **FIGURES AGREE · Yes · The statements reconcile**. Nought reconciles
+with nought, so it is not false — but it tells a client who has entered nothing that something has been
+checked. §6.92.1's rule is that comparing an output to another copy of itself is not verification; this is
+the same claim made about an absence.
+
+### 29. Goals says nothing at all when AI drafting is off
+
+§6.109 set the rule for the whole app: a draftable field with drafting switched off says so and says where
+to turn it on, because silence sends a client looking for a button that is not there. The Goals step does
+not follow it — `page.tsx` leaves `drafting` null when `ai_enabled` is false and the module renders
+nothing. Every new plan starts with drafting off, so this is what every new customer sees.
+
 ---
 
 ## Closed, so nobody investigates it twice
