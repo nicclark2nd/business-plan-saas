@@ -1,10 +1,11 @@
-import { createClient } from "@/lib/supabase/server";
 import { gatherReport } from "../../reports/gather";
 import { planDraft, type DraftableField } from "@/engine/ai/draft";
 import { buildMessages } from "@/engine/ai/prompt";
 import { AiUnavailable, openRouter } from "@/lib/ai/provider";
 import { DRAFTABLE } from "@/engine/ai/fields";
 import { subjectFor } from "@/engine/ai/subject";
+import { boundAnswers, boundRow } from "@/engine/ai/limits";
+import { guardDraft } from "../guard";
 
 /**
  * ONE DRAFT (6.106.1).
@@ -43,14 +44,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ planId:
   if (!field) return bad("That field cannot be drafted.");
 
   /*
-   * THE CONSENT IS ENFORCED HERE, NOT ON THE SCREEN (6.106). A hidden button is a courtesy; a server that
-   * refuses is the control, and it holds whatever the browser was persuaded to send.
+   * Signed in, consented, and inside the day's allowance — all three on the SERVER (6.106, 6.119). A
+   * hidden button is a courtesy; a server that refuses is the control, and it holds whatever the browser
+   * was persuaded to send.
    */
-  const supabase = await createClient();
-  const { data: settings, error } = await supabase
-    .from("plan_settings").select("ai_enabled").eq("plan_id", planId).maybeSingle();
-  if (error) return bad("Couldn't read this plan's settings.", 500);
-  if (!settings?.ai_enabled) return bad("AI drafting is switched off for this plan. Turn it on in Plan settings.", 403);
+  const gate = await guardDraft(planId, "field_draft");
+  if (!gate.ok) return gate.response;
 
   let messages;
   try {
@@ -66,12 +65,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ planId:
      */
     let subject: string | null = null;
     if (field.subject) {
-      subject = subjectFor(input, field.subject, body.row ?? "", field.key);
+      subject = subjectFor(input, field.subject, boundRow(body.row), field.key);
       if (subject === null) {
         return bad("Save this line first \u2014 a draft needs to know which one it is about.", 409);
       }
     }
-    messages = buildMessages(field, planDraft(input, field), body.answers ?? [], subject);
+    messages = buildMessages(field, planDraft(input, field), boundAnswers(body.answers), subject);
   } catch (e) {
     console.error("draft gather", e);
     return bad("Couldn't read this plan.", 500);

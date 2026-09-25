@@ -3,6 +3,8 @@ import { gatherReport } from "../../reports/gather";
 import { buildGoalMessages, goalsReadiness } from "@/engine/ai/goals";
 import { AiUnavailable, openRouter } from "@/lib/ai/provider";
 import { GOAL_AREAS, type GoalArea } from "@/engine/whatif/goals";
+import { boundAnswers } from "@/engine/ai/limits";
+import { guardDraft } from "../guard";
 
 /**
  * SIX GOALS, ONE REQUEST (§6.115).
@@ -34,12 +36,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ planId:
   let body: { answers?: { question: string; answer: string }[]; existing?: Record<string, string> };
   try { body = await req.json(); } catch { return bad("Malformed request."); }
 
-  /* The consent is enforced here, not on the screen (§6.106). A hidden button is a courtesy. */
+  /*
+   * Signed in, consented, and inside the day's allowance (§6.106, §6.119). This route spends six passages
+   * per press, so it is the one the ceiling exists for.
+   */
+  const gate = await guardDraft(planId, "goals_draft");
+  if (!gate.ok) return gate.response;
   const supabase = await createClient();
-  const { data: settings, error } = await supabase
-    .from("plan_settings").select("ai_enabled").eq("plan_id", planId).maybeSingle();
-  if (error) return bad("Couldn't read this plan's settings.", 500);
-  if (!settings?.ai_enabled) return bad("AI drafting is switched off for this plan. Turn it on in Plan settings.", 403);
 
   let messages;
   try {
@@ -70,7 +73,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ planId:
       .filter((s) => typeof s.response === "string" && s.response.trim())
       .map((s) => ({ quadrant: String(s.quadrant), text: String(s.text ?? ""), response: String(s.response) }));
 
-    messages = buildGoalMessages(input, body.answers ?? [], existing, responses);
+    messages = buildGoalMessages(input, boundAnswers(body.answers), existing, responses);
   } catch (e) {
     console.error("goals draft", e);
     return bad("Couldn't read this plan.", 500);
