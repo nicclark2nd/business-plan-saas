@@ -1,10 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
-import { firstProjectedYear, planYearEndDate } from "@/engine/plan/calendar";
 import { GoalsModule } from "./GoalsModule";
 import { PLAN_MEASURES, RUNGS, type Figures, type Goal, type Header, type Kpi, type KpiTarget, type Person, type PlanMeasureValues, type SwotResponse } from "./model";
 import { gatherReport } from "../reports/gather";
-import { workingCapitalSchedule } from "@/engine/forecast/assumptions";
+import { buildLadder } from "@/engine/plan/ladder";
 import { GOAL_ASKS, goalsReadiness } from "@/engine/ai/goals";
 
 /**
@@ -40,61 +39,45 @@ export default async function GoalsPage({ params }: { params: Promise<{ planId: 
   ]);
 
   const s = settings.data;
-  const fyEndMonth = Number(s?.financial_year_end_month ?? 6);
-  const firstYear = firstProjectedYear(s?.first_projected_year, fyEndMonth);
 
   /*
-   * ONE GATHER, USED FOR BOTH THINGS IT IS NEEDED FOR (§6.41).
+   * ONE ASSEMBLY, FOR THIS SCREEN AND FOR THE REPORT (§6.125.2).
    *
-   * The figures on the three cards and the drafter's readiness both want the assembled plan, and the
-   * assembly is the expensive call on this page. A plan too empty to gather is not a fault here: the cards
-   * show a dash where a figure would be and the drafter says why it cannot run yet.
-   */
-  /*
-   * WHAT A PLAN-HELD MEASURE READS AT EACH RUNG (§6.125.1).
+   * Every figure on the ladder used to be worked out here, which was right while this was the only screen
+   * that showed it. The report prints it now, so the calculation moved to `buildLadder` and both callers
+   * read the same answer — the one a client looks at and the one a lender reads being the two that must
+   * never disagree (§6.41).
    *
-   * Two sources, and neither of them is this screen. Gross margin and closing cash are the forecast's own
-   * output; debtor, stock and creditor days are the working-capital schedule the forecast RUNS on, read
-   * through the same `workingCapitalSchedule` the engine uses so the Goals screen and the cash flow cannot
-   * disagree about what the plan assumes (§6.41).
+   * A plan too empty to gather is not a fault: the forecast goes in as null, the days-based measures still
+   * answer from the working-capital schedule, and everything else reads as a dash.
    */
-  const days = workingCapitalSchedule(s?.working_capital_schedule);
-
-  let figures: Partial<Record<string, Figures>> = {};
-  const planMeasures: PlanMeasureValues = Object.fromEntries(PLAN_MEASURES.map((m) => [m.key, {}]));
+  let forecast = null;
   let drafting: { ready: boolean; reason?: string } | null = null;
   try {
     const { input } = await gatherReport(planId);
-    figures = Object.fromEntries(RUNGS.map(({ key, planYear }) => {
-      const p = input.forecast?.pnl?.[planYear];
-      return [key, { revenue: p?.revenue ?? null, profit: p?.netProfit ?? null }];
-    }));
-    for (const { key, planYear } of RUNGS) {
-      const p = input.forecast?.pnl?.[planYear];
-      const c = input.forecast?.cashFlow?.[planYear];
-      const d = days[planYear];
-      planMeasures.grossMargin![key] = p?.grossMargin ?? null;
-      planMeasures.closingCash![key] = c?.closingCash ?? null;
-      planMeasures.debtorDays![key] = d?.debtorDays ?? null;
-      planMeasures.stockDays![key] = d?.inventoryDays ?? null;
-      planMeasures.creditorDays![key] = d?.creditorDays ?? null;
-    }
+    forecast = input.forecast ?? null;
     if (s?.ai_enabled) drafting = goalsReadiness(input);
   } catch (e) {
     console.error("goals gather", planId, e);
-    /*
-     * A plan that will not gather still has a working-capital schedule, and three of the five measures come
-     * from it — so they are filled even here rather than all five going blank together.
-     */
-    for (const { key, planYear } of RUNGS) {
-      const d = days[planYear];
-      planMeasures.debtorDays![key] = d?.debtorDays ?? null;
-      planMeasures.stockDays![key] = d?.inventoryDays ?? null;
-      planMeasures.creditorDays![key] = d?.creditorDays ?? null;
-    }
   }
 
-  const dates = Object.fromEntries(RUNGS.map(({ key, planYear }) => [key, planYearEndDate(firstYear, planYear, fyEndMonth)]));
+  const ladder = buildLadder({
+    settings: s,
+    forecast,
+    kpis: (kpis.data ?? []) as { id: string; name: string; unit: string | null; source_key: string | null; sort_order: number }[],
+    targets: ((targets.data ?? []) as { kpi_id: string; horizon: string; target: string | number | null }[])
+      .map((t) => ({ ...t, target: t.target === null ? null : Number(t.target) })),
+    goals: (goals.data ?? []) as { horizon: string; title: string }[],
+  });
+
+  /* The screen's own shapes, mapped off the one assembly rather than computed a second time. */
+  const figures: Partial<Record<string, Figures>> = Object.fromEntries(
+    ladder.rungs.map((r) => [r.key, { revenue: r.revenue, profit: r.profit }]));
+  const dates = Object.fromEntries(ladder.rungs.map((r) => [r.key, r.endsOn]));
+  const planMeasures: PlanMeasureValues = Object.fromEntries(PLAN_MEASURES.map((m) => {
+    const row = ladder.measures.find((x) => x.fromPlan && x.name === m.name);
+    return [m.key, Object.fromEntries(RUNGS.map(({ key }, i) => [key, row?.values[i] ?? null]))];
+  }));
 
   const header: Header = {
     big_goal: s?.big_goal ?? "",

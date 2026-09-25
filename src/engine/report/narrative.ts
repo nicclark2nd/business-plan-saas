@@ -438,29 +438,107 @@ export function risksAndMitigation(i: ReportInput): Draft {
 const STATUS: Record<string, string> = { not_started: "Not started", in_progress: "In progress", done: "Done", at_risk: "At risk" };
 
 export function goalsAndMilestones(i: ReportInput): Draft {
-  if (i.goalsAnnual.length === 0 && i.goalsQuarterly.length === 0) return null;
+  const L = i.ladder;
+  const withGoals = L.rungs.filter((r) => r.goals.length);
+  const anything = has(L.bigGoal) || !!L.northStar || withGoals.length > 0 || L.ninety.length > 0
+    || L.measures.some((m) => m.values.some((v) => v !== null));
+  if (!anything) return null;
+
+  /** "30 June 2027" — a date written the way a person says it, never as 2027-06-30. */
+  const when = (iso: string) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    if (!m) return "—";
+    return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]))
+      .toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+  };
+
+  /**
+   * A LOSS IS SAID IN WORDS, IN THE DOCUMENT AS WELL AS ON THE SCREEN (§6.115.1, §6.125).
+   *
+   * The same trap caught the AI drafter and then the Goals screen: net profit through a money formatter
+   * renders a loss the way an accountant does, and a bracket is a convention a reader may or may not
+   * hold. This is the copy a lender actually reads, so the word carries the sign here too.
+   */
+  const profitCell = (r: (typeof L.rungs)[number]) =>
+    r.profit === null ? cell("—", { muted: true })
+      : cell(`${r.loss ? "Loss" : "Profit"} of ${i.money(Math.abs(r.profit))}`);
+
+  const measureValue = (m: (typeof L.measures)[number], idx: number) => {
+    const v = m.values[idx];
+    if (v === null || v === undefined) return cell("—", { muted: true });
+    if (m.money) return cell(i.money(v));
+    const rounded = Math.round(v * 10) / 10;
+    return cell(m.unit ? `${rounded} ${m.unit}` : String(rounded));
+  };
+
+  const year1 = L.rungs.find((r) => r.key === "year1");
+  const longRungs = withGoals.filter((r) => r.key !== "year1");
+
   return {
     title: "Goals and Milestones",
-    blocks: [para(COPY.goals(i.businessName))],
+    blocks: [
+      para(COPY.goals(i.businessName)),
+      /* The one sentence the whole ladder is aimed at, set apart because it is the client's own words. */
+      ...(has(L.bigGoal) ? [{ kind: "quote" as const, text: L.bigGoal.trim() }] : []),
+      ...(L.northStar
+        ? [para(has(L.northStar.value)
+            ? `The measure this business steers by is ${L.northStar.metric}, and the number it is aiming at is ${L.northStar.value}.`
+            : `The measure this business steers by is ${L.northStar.metric}.`)]
+        : []),
+      ...(L.northStar && has(L.northStar.why) ? [para(L.northStar.why.trim())] : []),
+    ],
     children: [
-      i.goalsAnnual.length === 0 ? null : {
-        title: "What the year commits to",
+      /*
+       * WHERE THIS IS GOING — the rungs as a table, which is the section §6.125 created on screen and
+       * nothing in the report carried. Every figure in it is the forecast's own; none of it was typed on
+       * the Goals screen, and a reader comparing it against the Financial Plan finds the same numbers
+       * because it IS the same run (§6.41).
+       */
+      {
+        title: "Where this is going",
         blocks: [
-          { kind: "table", columns: [{ label: "Area", width: 160 }, { label: "Goal" }],
-            rows: i.goalsAnnual.map((g) => [
-              cell(g.area, { muted: true }),
-              cell(has(g.detail) ? `${g.title.trim()} — ${g.detail!.trim()}` : g.title.trim()),
+          para(COPY.ladder),
+          { kind: "table",
+            columns: [{ label: "Horizon", width: 90 }, { label: "By", width: 130 }, { label: "Revenue" }, { label: "Result" }],
+            rows: L.rungs.map((r) => [
+              cell(r.label), cell(when(r.endsOn), { muted: true }),
+              r.revenue === null ? cell("—", { muted: true }) : num(i.money(r.revenue)),
+              profitCell(r),
             ]) },
-        ] },
-      i.goalsQuarterly.length === 0 ? null : {
-        title: "The quarters that get us there",
+          ...(L.measures.length
+            ? [{ kind: "table" as const,
+                columns: [{ label: "Measure" }, ...L.rungs.map((r) => ({ label: r.label, width: 100 }))],
+                rows: L.measures.map((m) => [
+                  /* Where a figure comes from is part of what it means: a target the client set and a
+                     figure their own plan already computes are not the same claim (§6.125.1). */
+                  cell(m.fromPlan ? `${m.name} (from the plan)` : m.name),
+                  ...L.rungs.map((_, idx) => measureValue(m, idx)),
+                ]) }]
+            : []),
+        ],
+      },
+
+      /* The long rungs, each in the client's own words. A rung nobody wrote at is absent, not an empty heading. */
+      ...listOr(longRungs, (r) => ({
+        title: r.key === "year3" ? "The business in three years" : "The business in five years",
+        blocks: [{ kind: "list" as const, items: r.goals }],
+      })),
+
+      year1 && year1.goals.length ? {
+        title: "What the year commits to",
+        blocks: [{ kind: "list" as const, items: year1.goals }],
+      } : null,
+
+      L.ninety.length === 0 ? null : {
+        title: L.ninetyEndsOn ? `The next ninety days, to ${when(L.ninetyEndsOn)}` : "The next ninety days",
         blocks: [
           para(COPY.quarters),
           { kind: "table",
-            columns: [{ label: "Quarter", width: 100 }, { label: "Goal" }, { label: "Area" }, { label: "Owner" }, { label: "Due" }, { label: "Status" }],
-            rows: i.goalsQuarterly.map((g) => [
-              cell(g.when ?? "—", { muted: !g.when }), cell(g.title.trim()),
-              cell(g.area, { muted: true }), cell(g.owner ?? "—", { muted: !g.owner }),
+            columns: [{ label: "Goal" }, { label: "Area", width: 100 }, { label: "Owner", width: 110 }, { label: "Due", width: 100 }, { label: "Status", width: 95 }],
+            rows: L.ninety.map((g) => [
+              cell(g.title),
+              cell(g.area ?? "—", { muted: !g.area }),
+              cell(g.owner ?? "—", { muted: !g.owner }),
               /* The date a commitment is due is the difference between a goal and a wish (§6.88). */
               cell(g.due ?? "—", { muted: !g.due }),
               cell(STATUS[g.status] ?? g.status, { muted: g.status === "not_started" }),

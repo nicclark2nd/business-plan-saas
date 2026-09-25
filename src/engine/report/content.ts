@@ -205,7 +205,19 @@ export const COPY = {
   threats: "What could damage the business that it does not control. Each is shown with how it is guarded against.",
 
   quarters:
-    "The annual goals above are delivered through the quarterly commitments below, each with a named owner.",
+    "The goals above are delivered through the commitments below, each with a named owner and a date.",
+
+  /*
+   * THE FIGURES IN THIS TABLE ARE NOT TARGETS AND THE SENTENCE HAS TO SAY SO (§6.125.2).
+   *
+   * A reader meeting a "3-Year" row beside a revenue figure will assume somebody typed an ambition into
+   * it. Nobody did — it is the plan's own forecast read at that year, the same run the Financial Plan is
+   * built from. Saying that here is what stops the table being read as a promise the business has not made.
+   */
+  ladder:
+    "Each horizon below is read from this plan's own forecast at that year — these are the figures the "
+    + "projections produce, not separate targets set beside them. The goals that follow are what the "
+    + "business has committed to in order to get there.",
 
   omittedLead:
     "The following parts of a full business plan are not included, because the information behind them has not been recorded. Each is a section this plan will carry once it has something to put in it.",

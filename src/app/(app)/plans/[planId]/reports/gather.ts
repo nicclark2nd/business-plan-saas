@@ -12,6 +12,7 @@ import { planYearStart, startYearFromDate, salaryForYear, SALARY_YEARS } from "@
 import { resolvePageSize } from "@/engine/report/pageSize";
 import { planOverheadLines, overheadByYear, type Overhead } from "@/engine/overheads/expenses";
 import { buildReport, type ReportInput } from "@/engine/report/build";
+import { buildLadder } from "@/engine/plan/ladder";
 import { AREA_LABEL } from "@/engine/whatif/goals";
 import { SPEND_LABEL } from "../marketing/model";
 import { ROLE_LABEL } from "../people/model";
@@ -53,7 +54,7 @@ export async function gatherReport(planId: string) {
   const salaryFyStart = planYearStart(firstProjectedYear(settings?.first_projected_year as number | null, fyEndMonth), fyEndMonth);
 
   const rows = <T,>(p: PromiseLike<{ data: T[] | null }>) => p.then((r) => r.data ?? []) as Promise<Record<string, unknown>[]>;
-  const [planRow, framework, goals, people, caps, licences, marketing, segments, evidence, spend, competitors, premises, suppliers, opSteps, opCapacity, completeness] = await Promise.all([
+  const [planRow, framework, goals, people, caps, licences, marketing, segments, evidence, spend, competitors, premises, suppliers, opSteps, opCapacity, completeness, ladderSettings, kpis, kpiTargets] = await Promise.all([
     supabase.from("plans").select("business_name, plan_year").eq("id", planId).maybeSingle().then((r) => r.data),
     supabase.from("plan_framework").select("vision, mission, purpose, brand_promise, field_of_play").eq("plan_id", planId).maybeSingle().then((r) => r.data),
     rows(supabase.from("plan_goals").select("*").eq("plan_id", planId).neq("title", "").order("year").order("quarter").order("sort_order")),
@@ -70,6 +71,18 @@ export async function gatherReport(planId: string) {
     rows(supabase.from("plan_operations_steps").select("*").eq("plan_id", planId).order("sort_order")),
     supabase.from("plan_operations").select("*").eq("plan_id", planId).maybeSingle().then((r) => r.data),
     getPlanCompleteness(planId),
+    /*
+     * THE LADDER'S OWN FIELDS (§6.125.2), asked for by name rather than added to `loadPlan`.
+     *
+     * §6.82: selecting a column a table does not have makes the whole query error, and `loadPlan` swallows
+     * its error into null — which once silently zeroed four unrelated sections of the report. A query of
+     * its own fails alone.
+     */
+    supabase.from("plan_settings")
+      .select("financial_year_end_month, first_projected_year, working_capital_schedule, big_goal, north_star_metric, north_star_value, north_star_why, ninety_day_ends_on")
+      .eq("plan_id", planId).maybeSingle().then((r) => r.data),
+    rows(supabase.from("plan_kpis").select("id, name, unit, source_key, sort_order").eq("plan_id", planId).order("sort_order")),
+    rows(supabase.from("plan_kpi_targets").select("kpi_id, horizon, target").eq("plan_id", planId)),
   ]);
   const historicRow = await supabase.from("plan_historic_periods").select("*").eq("plan_id", planId)
     .order("period_number").limit(1).maybeSingle().then((r) => r.data);
@@ -265,16 +278,22 @@ export async function gatherReport(planId: string) {
     swot: swotItems.map((x) => ({
       quadrant: String(x.quadrant ?? ""), text: String(x.text ?? ""), response: text(x.response),
     })).filter((x) => x.text.trim()),
-    goalsAnnual: goals.filter((g) => g.horizon === "year1").map((g) => ({
-      area: AREA[String(g.area)] ?? String(g.area ?? ""), title: String(g.title ?? ""), detail: text(g.detail),
-    })),
-    goalsQuarterly: goals.filter((g) => g.horizon === "ninety").map((g) => ({
-      area: AREA[String(g.area)] ?? String(g.area ?? ""), title: String(g.title ?? ""),
-      when: g.quarter ? `Q${n(g.quarter)}${g.year ? ` FY${n(g.year)}` : ""}` : null,
-      due: g.milestone_date ? new Date(String(g.milestone_date)).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) : null,
-      owner: text(people.find((p) => p.id === g.owner_person_id)?.name),
-      status: String(g.status ?? "not_started"),
-    })),
+    /*
+     * THE LADDER, FROM THE SAME ASSEMBLY THE GOALS SCREEN READS (§6.125.2).
+     *
+     * This used to shape `goalsAnnual` and `goalsQuarterly` here, out of the same rows, in a second shape.
+     * The report now takes the assembled ladder: one function decides what a plan's three-year revenue is,
+     * so the screen a client sets their goals on and the document a lender reads cannot disagree (§6.41).
+     */
+    ladder: buildLadder({
+      settings: ladderSettings,
+      forecast: checked,
+      kpis: kpis as unknown as { id: string; name: string; unit: string | null; source_key: string | null; sort_order: number }[],
+      targets: (kpiTargets as unknown as { kpi_id: string; horizon: string; target: string | number | null }[])
+        .map((t) => ({ ...t, target: t.target === null ? null : Number(t.target) })),
+      goals,
+      ownerName: (id) => text(people.find((p) => p.id === id)?.name) ?? "",
+    }),
     operations: {
       premises: premises.map((x) => ({
         name: String(x.name ?? ""), address: text(x.address), tenure: text(x.tenure),

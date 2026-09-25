@@ -223,12 +223,14 @@ with are the people worth impressing.
 Domain is held in GoDaddy and not connected. Vercel issues the certificate; the records are pasted
 into GoDaddy. Nothing in the app changes.
 
-### 22. The 3-Year and 5-Year goals are not in the report
+### ~~22. The 3-Year and 5-Year goals are not in the report~~ — **done (§6.125.2)**
 
-`gather.ts` builds `goalsAnnual` from the **year1** rung only, which is exactly what the old six annual
-goals were, so the report is unchanged by §6.125 rather than broken by it. But the two long rungs a client
-now fills in appear nowhere in what a lender reads. Either the report grows a "Where this is going"
-section, or the ladder is honest that only one rung of it is printed. **Nic's call which.**
+Closed the same day it was opened. `Goals and Milestones` now carries the big goal, the North Star, a
+horizon table (1/3/5 years with the forecast's own revenue and result), the measures with a note saying
+which ones the plan answers, the long rungs in the client's own words, the year's commitments and the
+90-day list. The assembly moved to `engine/plan/ladder.ts` so the screen and the report read one function
+— a report computing a client's three-year revenue for itself is one edit away from printing a different
+number to the screen they set it on.
 
 ### 23. Nothing happens when the 90 days end
 

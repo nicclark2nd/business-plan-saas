@@ -13,6 +13,7 @@ import { FORECAST_YEARS, type Forecast } from "../forecast/model";
 import type { ServiceProfit } from "../pnl/lines";
 import type { Strength } from "../balance/lines";
 import type { Noun } from "../plan/vocabulary";
+import type { Ladder } from "../plan/ladder";
 import { marginalCash, ratios } from "./analysis";
 import { barsChart, columnsChart, linesChart, trendChart } from "./charts";
 import { cell, num, numberSections, type Block, type Cell, type Draft, type Omission, type ReportDoc } from "./blocks";
@@ -104,8 +105,15 @@ export type ReportInput = {
    */
   capabilities: { personId: string; kind: string; description: string }[];
   swot: { quadrant: string; text: string; response: string | null }[];
-  goalsAnnual: { area: string; title: string; detail: string | null }[];
-  goalsQuarterly: { area: string; title: string; when: string | null; owner: string | null; status: string; due: string | null }[];
+  /**
+   * The goals ladder (§6.125.2) — 1, 3 and 5 years, the measures beside them and the next ninety days.
+   *
+   * It arrives ASSEMBLED rather than as rows, and from the same function the Goals screen reads. Two
+   * shapes of one fact was how the old `goalsAnnual`/`goalsQuarterly` pair worked, and a report that
+   * computes a client's three-year revenue for itself is one edit away from printing a different number
+   * to the screen they set it on (§6.41).
+   */
+  ladder: Ladder;
   operations: {
     premises: { name: string; address: string | null; tenure: string | null; isPrimary: boolean; floorArea: string | null; purpose: string | null }[];
     suppliers: { name: string; supplies: string | null; terms: string | null; dependency: string | null; alternative: string | null }[];
