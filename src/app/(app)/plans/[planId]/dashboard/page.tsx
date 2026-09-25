@@ -12,10 +12,11 @@ import { firstProjectedYear, planQuarters, planYearEnding, quarterOf } from "@/e
 import { AREA_LABEL, type GoalArea } from "@/engine/whatif/goals";
 import { loadPlan } from "@/lib/planLoad";
 import { runForecast } from "@/engine/forecast/run";
+import { lossMonths, monthlyProfit, monthlyProfitGap } from "@/engine/forecast/monthlyProfit";
 import { breakEvenByYear } from "@/engine/breakeven/point";
 import { FORECAST_YEARS } from "@/engine/forecast/model";
 import { MONTH_SHORT } from "@/engine/plan/calendar";
-import { CashChart, RevenueChart } from "./Charts";
+import { CashChart, ProfitChart, RevenueChart } from "./Charts";
 import { STATUS_LABEL, type GoalStatus } from "../goals/model";
 
 function Panel({ title, badge, children, className }: { title: string; badge?: React.ReactNode; children: React.ReactNode; className?: string }) {
@@ -61,13 +62,25 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
    * of statements that agree. The first page a client opens was the last one wired to the engine.
    */
   const { plan: planInput } = await loadPlan(planId);
-  const { forecast, monthly } = runForecast(planInput);
+  const run = runForecast(planInput);
+  const { forecast, monthly } = run;
   const y1 = forecast.pnl[1];
   const be = breakEvenByYear(forecast.pnl);
   const fmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
   const signed = (v: number) => (v < 0 ? `(${fmt.format(Math.abs(v))})` : fmt.format(v));
   const pct1 = (v: number | null) => (v === null ? "\u2014" : `${v.toFixed(1)}%`);
   const lowMonth = monthly.low;
+
+  /*
+   * PROFIT BESIDE CASH (§6.124).
+   *
+   * Arithmetic on `shapesByYear`, which `runForecast` returns precisely so a profit and loss never reads
+   * the plan a second time. Before tax, because tax is an annual figure the monthly model places rather
+   * than recomputes — and the tile above says "after tax", so the caption carries the difference.
+   */
+  const profitMonths = monthlyProfit(run.shapesByYear[1]);
+  const profitGap = monthlyProfitGap(run.shapesByYear[1], y1.profitBeforeTax);
+  const losses = lossMonths(profitMonths);
   const tiles: { label: string; value: string; sub: string; bad?: boolean }[] = [
     { label: "Revenue", value: fmt.format(y1.revenue), sub: "Year 1 of five" },
     { label: "Gross margin", value: pct1(y1.grossMargin), sub: `${fmt.format(y1.grossProfit)} of gross profit` },
@@ -121,7 +134,15 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
         ))}
       </div>
 
-      <div className="mb-3 grid grid-cols-[1.2fr_1fr_1fr] gap-3">
+      <div className="mb-3 grid grid-cols-[1.2fr_1fr_1fr] items-start gap-3">
+        {/*
+          TWO CARDS IN THE LEFT COLUMN (§6.124).
+          The row's height is set by Plan completeness and the quarter's goals, and cash alone used 233 of
+          the 578 it was given — 345px of white space in the column carrying the most important picture on
+          the page. `items-start` so neither card stretches to fill what is left; they size to their own
+          content and the column ends where they do.
+        */}
+        <div className="flex flex-col gap-3">
         <Panel title="Cash through Year 1"
           badge={<Badge variant="outline" className={cn(hasNumbers && lowMonth.closingCash < 0 ? "border-bad/40 text-bad" : "text-muted-foreground")}>
             {!hasNumbers ? "Not yet" : monthly.negative.length ? `${monthly.negative.length} month${monthly.negative.length === 1 ? "" : "s"} below zero` : "Never below zero"}
@@ -138,6 +159,34 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
             <p className="text-[13px] text-muted-foreground">Your lowest projected cash month and how long opening cash lasts. Appears once Sales and Overheads are in.</p>
           )}
         </Panel>
+        <Panel title="Profit before tax, month by month"
+          badge={<Badge variant="outline" className={cn(hasNumbers && losses.length ? "border-bad/40 text-bad" : "text-muted-foreground")}>
+            {!hasNumbers ? "Not yet" : losses.length ? `${losses.length} month${losses.length === 1 ? "" : "s"} at a loss` : "Every month profitable"}
+          </Badge>}>
+          {hasNumbers ? (
+            <>
+              <ProfitChart months={MONTH_SHORT.slice(0, 12)} values={profitMonths} />
+              <p className="mt-1 text-[12px] text-muted-foreground">
+                {/*
+                  THE TWO FIGURES ON THIS SCREEN ARE RECONCILED IN WORDS (§6.124). The tile above says
+                  "after tax"; this chart is before it. Left unsaid, a client reads two different numbers
+                  for one year and trusts neither.
+                */}
+                The twelve add to <b className={cn(y1.profitBeforeTax < 0 && "text-bad")}>{signed(y1.profitBeforeTax)}</b> before tax
+                {y1.netProfit !== y1.profitBeforeTax && <> — <b className={cn(y1.netProfit < 0 && "text-bad")}>{signed(y1.netProfit)}</b> after it, which is the figure above</>}.
+                {/*
+                  Rounding, not equality. The gap is a floating-point subtraction of two rounded figures,
+                  so it is "0.004, not 0" often enough to matter — and a sentence announcing that an asset
+                  sold added nothing is worse than no sentence.
+                */}
+                {Math.round(profitGap) !== 0 && <> An asset sold adds {signed(profitGap)} that belongs to no single month.</>}
+              </p>
+            </>
+          ) : (
+            <p className="text-[13px] text-muted-foreground">Which months make money and which do not. Appears once Sales and Overheads are in.</p>
+          )}
+        </Panel>
+        </div>
         <Panel title="Plan completeness" badge={<Badge variant="secondary" className="num bg-accent text-accent-foreground">{c.percent}%</Badge>}>
           {c.sections.map((s) => (
             <Link key={s.id} href={`${base}/${s.id}`} className="flex items-center gap-2.5 py-1 text-[13px] hover:text-primary">

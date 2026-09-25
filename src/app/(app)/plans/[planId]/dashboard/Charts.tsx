@@ -29,6 +29,29 @@ export function CashChart({ months, values }: { months: string[]; values: number
   );
 }
 
+/**
+ * PROFIT BEFORE TAX, MONTH BY MONTH (§6.124).
+ *
+ * Beside cash, because neither answers the other's question. A business can be liquid and losing money all
+ * year — SEQ Concreting never drops below zero in the bank and still loses 136,681 — and an owner who sees
+ * only the cash line has no idea.
+ *
+ * COLUMNS, NOT A LINE, and that is the whole reason this is not a second `Trend`. Profit crosses zero, and
+ * zero is a THRESHOLD, not a point on a trend: a line through it reads as a slope where what matters is
+ * which side of it each month sits on. Columns put every month on one side or the other and colour it.
+ */
+export function ProfitChart({ months, values }: { months: string[]; values: number[] }) {
+  const money = useMoney();
+  return (
+    <ChartBox title="" height={168} className={BARE}>
+      {(w) => (
+        <Columns width={w} height={168} categories={months} values={values} format={money}
+          tone={(i): Severity => (values[i] < 0 ? "bad" : "good")} />
+      )}
+    </ChartBox>
+  );
+}
+
 /** What you plan to sell, against what you have to sell. */
 export function RevenueChart({ labels, revenue, breakEven }: {
   labels: string[]; revenue: number[]; breakEven: (number | null)[];
