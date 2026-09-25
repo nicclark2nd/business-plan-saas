@@ -6,8 +6,28 @@ import { createClient } from "@/lib/supabase/server";
 import { distributionValid, exactHundred, type Growth, type MonthlyDistribution } from "@/engine/sales/projection";
 import { nextHref } from "@/lib/nav";
 import { failed } from "@/lib/actionFailed";
+import type { Product } from "./model";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
+
+/**
+ * WHAT A SAVE GIVES BACK, SO THE SCREEN CANNOT DISAGREE WITH THE PLAN (§6.121, applied here §6.122).
+ *
+ * Plan settings learned this first. Sales is where the silence costs most: `client_life_months` snaps to
+ * 1–600 and `start_selling_year` to 1–5, and a line quietly starting in a different year — or a client
+ * quietly staying 600 months instead of the 9999 that was typed — moves the whole forecast without ever
+ * showing on the screen it was typed into.
+ */
+export type ProductSaved = { stored: Product; adjusted: { label: string; from: string; to: string }[] };
+
+/** The clamped numbers a client can type, with the wording on the screen so a note can name the right box. */
+const CLAMPED: { key: "average_price" | "units_sold" | "start_selling_year" | "opening_clients" | "client_life_months"; label: string }[] = [
+  { key: "average_price", label: "Average price" },
+  { key: "units_sold", label: "Base units sold (per year)" },
+  { key: "start_selling_year", label: "Starts selling" },
+  { key: "opening_clients", label: "Clients you have" },
+  { key: "client_life_months", label: "A client stays (months)" },
+];
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
 const LIFECYCLES = ["development", "introduction", "growth", "maturity", "decline"];
 
@@ -17,7 +37,7 @@ export async function upsertProduct(planId: string, p: {
   sold_as?: string | null; opening_clients?: number | null; client_life_months?: number | null; life_mode?: string | null;
   monthly_new_clients?: Record<string, number> | null; clients_from_product_id?: string | null; gst_applies?: boolean;
   pricing_rationale?: string | null;
-}): Promise<Result<{ id: string }>> {
+}): Promise<Result<{ id: string }> & { saved?: ProductSaved }> {
   const supabase = await createClient();
   const name = (p.name ?? "").trim();
   if (!name) return { ok: false, error: "Give the product a name." };
@@ -65,13 +85,30 @@ export async function upsertProduct(planId: string, p: {
     clients_from_product_id: source,
     gst_applies: p.gst_applies !== false,
   };
+  /*
+   * READ BACK THE WHOLE ROW, not just its id (§6.122). The clamps above are one reason what was stored can
+   * differ from what was sent; a column type or a default is another. A screen that trusts the request
+   * rather than the row is how a plan and its own screen come to disagree.
+   */
   const q = p.id
-    ? supabase.from("plan_products").update(row).eq("id", p.id).eq("plan_id", planId).select("id").single()
-    : supabase.from("plan_products").insert({ ...row, sort_order: -Math.floor(Date.now() / 1000) }).select("id").single();
+    ? supabase.from("plan_products").update(row).eq("id", p.id).eq("plan_id", planId).select("*").single()
+    : supabase.from("plan_products").insert({ ...row, sort_order: -Math.floor(Date.now() / 1000) }).select("*").single();
   const { data, error } = await q;
   if (error) return failed(error, "save the product");
+
+  const stored = { ...(data as unknown as Product), average_price: Number(data.average_price), units_sold: Number(data.units_sold) };
+  const num = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number(v));
+  const adjusted = CLAMPED.flatMap(({ key, label }) => {
+    const sent = num(p[key]);
+    const kept = num(stored[key]);
+    /* Only a change the client can see. An unreadable entry becoming 0 is not news worth a sentence. */
+    return sent !== null && kept !== null && Number.isFinite(sent) && sent !== kept
+      ? [{ label, from: String(sent), to: String(kept) }]
+      : [];
+  });
+
   touch(planId);
-  return { ok: true, data: { id: data.id } };
+  return { ok: true, data: { id: data.id }, saved: { stored, adjusted } };
 }
 
 /**

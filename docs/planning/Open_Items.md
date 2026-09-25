@@ -175,7 +175,7 @@ its own card background or sit on the page like a step does. Then it is a five-m
 
 ## Found by Nic typing 99999 into a box (§6.121)
 
-### 21. Twelve other modules still do not reconcile after a save — **Build**
+### 21. Eleven other modules still do not reconcile after a save — **Build**
 
 Plan settings now hands back the row it stored and the screen adopts it, so a clamped value corrects itself
 in front of the client and the footer names what changed. **No other module does this.**
@@ -189,9 +189,17 @@ The mechanism is now written once and proven. What is left is applying it, which
 because each keeps its own state shape: return the stored row from the action, merge it into the module's
 state on success, surface anything adjusted through the footer note the frame already owns.
 
-**Start with Sales.** Its clamps bite hardest — `start_selling_year` snaps to 1–5 and `client_life_months`
-to 1–600 — and a product line quietly starting in a different year than the client typed changes the
-forecast without ever showing on the screen they typed it on.
+~~**Start with Sales.**~~ **Sales is done (§6.122)** and its clamps were the ones that bit hardest — typing
+9999 into "A client stays (months)" now saves 600, says so, and the box shows 600 without a refresh.
+
+The remaining eleven are Historic, COGS, Overheads, Funding, Fixed Assets, One-off income & costs,
+Assumptions, Marketing, Operations, People and Goals. **Funding and Fixed Assets next**: both run whole
+families of clamps through shared `money`/`yr`/`mo`/`pct` helpers, so one pass covers a lot of fields, and
+both feed the forecast directly.
+
+The shape is settled now and both existing cases follow it exactly: `.select("*")` on the write, compare
+what was sent against what came back, merge the stored row into the module's state, and name anything
+adjusted through the footer note the frame already owns.
 
 ## Waiting on the domain
 

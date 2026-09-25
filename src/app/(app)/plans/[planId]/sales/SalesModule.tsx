@@ -83,16 +83,31 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
   const [sort, setSort] = useState<Sort>(null);
   const [pending, start] = useTransition();
   const ref = useRef(rows); useEffect(() => { ref.current = rows; }, [rows]);
+  /** What the last save changed on the way in, if anything. Cleared as soon as another save starts. */
+  const [adjusted, setAdjusted] = useState<string>();
 
   /** Save one row (from a dialog's Save). New rows are appended first so the list shows them straight away. */
   const save = (r: Row) => {
+    setAdjusted(undefined);
     const key = r._key || r.id;
     const row = { ...r, _key: key };
     setRows((xs) => (xs.some((x) => x._key === key) ? xs.map((x) => (x._key === key ? row : x)) : [...xs, row]));
     start(async () => {
       const res = await upsertProduct(planId, { ...row, id: isNew(row) ? undefined : row.id });
-      if (res.ok) { errors.clear(`product:${key}`); setRows((xs) => xs.map((x) => (x._key === key ? { ...x, id: res.data!.id } : x))); }
-      else errors.raise({ key: `product:${key}`, message: res.error, label: r.name || noun.one });
+      if (!res.ok) { errors.raise({ key: `product:${key}`, message: res.error, label: r.name || noun.one }); return; }
+      errors.clear(`product:${key}`);
+      /*
+       * THE ROW ADOPTS WHAT WAS STORED (§6.122).
+       *
+       * It used to take back only the id, so every clamp on the way in was invisible: type 9999 into "A
+       * client stays" and the plan keeps 600 while the screen goes on saying 9999, and the forecast is
+       * built on a number nobody can see. `_key` is this screen's own handle and survives; everything
+       * else now comes from the row the database actually holds.
+       */
+      setRows((xs) => xs.map((x) => (x._key === key ? { ...x, ...res.saved?.stored, id: res.data!.id, _key: key } : x)));
+      setAdjusted(res.saved?.adjusted.length
+        ? `${r.name || noun.one}: ${res.saved.adjusted.map((a) => `${a.label} can't be ${a.from} — saved as ${a.to}.`).join(" ")}`
+        : undefined);
     });
   };
   /**
@@ -173,7 +188,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
         <p>Sales by year → the forecast&apos;s top line, break-even and What-If. Year 1 by month → the twelve-month cash flow. Descriptions → the {many} section of the report.</p>
       </>}
     >
-      <PendingBridge pending={pending} />
+      <PendingBridge pending={pending} adjusted={adjusted} />
       <form id="sales-form" onSubmit={onSubmit} className="hidden" />
 
       {area === "products" && (
@@ -862,9 +877,10 @@ function MonthlyDialog({ r, fyEndMonth, currency, others, onSave, onClose }: {
 }
 
 /** STATUS ONLY (§6.98) — a failed save travels on its own channel and is shown in red, not in this grey. */
-function PendingBridge({ pending }: { pending: boolean }) {
+function PendingBridge({ pending, adjusted }: { pending: boolean; adjusted?: string }) {
   const { setPending, setNote } = useModule();
   useEffect(() => setPending(pending), [pending, setPending]);
-  useEffect(() => setNote(pending ? "Saving…" : undefined), [pending, setNote]);
+  /* An adjustment outranks the idle line: the save DID work, and it did not store what was typed. */
+  useEffect(() => setNote(pending ? "Saving…" : adjusted ?? undefined), [pending, adjusted, setNote]);
   return null;
 }
