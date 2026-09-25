@@ -279,6 +279,16 @@ to turn it on, because silence sends a client looking for a button that is not t
 not follow it — `page.tsx` leaves `drafting` null when `ai_enabled` is false and the module renders
 nothing. Every new plan starts with drafting off, so this is what every new customer sees.
 
+### 30. "ZZ Test Walk" is a test plan, kept on purpose
+
+Plan `75bebd96-8935-4c40-b851-c6519147853e` on the live Supabase project is not a client. It was created
+from nothing for the §6.126 walk and holds one product (House Slab, 604,800) and one overhead (Rent,
+48,000) — the minimum that makes the forecast run, which is what its two faults needed to show themselves.
+
+It stays. The walk has to be repeatable, and a plan that starts empty is the only thing that catches a
+screen quietly reading a year off the wrong field. The name begins with ZZ so it sorts last, and anyone
+finding it in the plan list should leave it alone rather than tidy it away.
+
 ---
 
 ## Closed, so nobody investigates it twice
