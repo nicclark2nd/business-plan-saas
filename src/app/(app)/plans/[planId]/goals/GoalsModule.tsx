@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { guarded } from "@/lib/guardedStart";
+import { useSaveErrors } from "@/components/module/saveErrors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ModuleFrame, ModuleFooter } from "@/components/module/ModuleFrame";
+import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { CellInput, CellSelect, CellTextarea, LinkButton, Note, RemoveButton } from "@/components/module/DataGrid";
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { cn } from "@/lib/utils";
@@ -103,8 +105,20 @@ export function GoalsModule({
     () => initialKpis.map((k) => ({ ...k, uid: k.id })));
   const [targets, setTargets] = useState<KpiTarget[]>(initialTargets);
   const [header, setHeader] = useState<Header>(initialHeader);
-  const [pending, start] = useTransition();
-  const [err, setErr] = useState<string>();
+  const [pending, startRaw] = useTransition();
+  /*
+   * FAILURES REACH THE FOOTER AS WELL AS THE NOTE (§6.136, open item 25). The note sits at the top of a long
+   * screen; a client editing the 90-day card never saw it. The footer is where every other step says a save
+   * failed, so Goals says it there too — and a save that never reached the server is caught rather than
+   * replacing the whole screen with an error page (`guarded`).
+   */
+  const errors = useSaveErrors();
+  const [err, setErrState] = useState<string>();
+  const setErr = (m?: string) => {
+    setErrState(m);
+    if (m) errors.raise({ key: "goals", message: m, label: "Goals" }); else errors.clear("goals");
+  };
+  const start = guarded(startRaw, (m) => setErr(m));
   const [editing, setEditing] = useState<{ goal?: Goal; from?: SwotResponse } | null>(null);
   const [toRemove, setToRemove] = useState<Goal | null>(null);
   const [drafts, setDrafts] = useState(false);
@@ -191,13 +205,13 @@ export function GoalsModule({
   const addMeasure = (choice: string) => {
     if (kpis.length >= MAX_KPIS) return;
     if (choice === "custom") {
-      const id = `tmp-${Date.now()}`;
+      const id = `tmp-${crypto.randomUUID()}`;
       setKpis((xs) => [...xs, { id, uid: id, name: "", unit: null, sort_order: xs.length, source_key: null }]);
       return;
     }
     const m = MEASURE_OF[choice as MeasureKey];
     if (!m) return;
-    const id = `tmp-${Date.now()}`;
+    const id = `tmp-${crypto.randomUUID()}`;
     const row = { id, uid: id, name: m.name, unit: m.unit || null, sort_order: kpis.length, source_key: m.key };
     setKpis((xs) => [...xs, row]);
     start(async () => {
@@ -272,7 +286,8 @@ export function GoalsModule({
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const intent = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value === "later" ? "later" : "next";
-    start(async () => { await continueFromGoals(planId, intent); });
+    /* Not guarded: the action ends in a redirect, and a catch around it could swallow the navigation. */
+    startRaw(async () => { await continueFromGoals(planId, intent); });
   };
 
   /**
@@ -299,6 +314,7 @@ export function GoalsModule({
 
   return (
     <ModuleFrame
+      errors={errors}
       step={STEP} total={GUIDED_STEPS.length} group={navGroup("goals")} title="Goals"
       subtitle="Where the business is going at one, three and five years — and what happens in the next ninety days"
       mode={mode}
@@ -325,6 +341,7 @@ export function GoalsModule({
       </>}
     >
       <form id="goals-form" onSubmit={onSubmit} className="hidden" />
+      <PendingBridge pending={pending} />
       {err && <Note><span className="text-bad">{err}</span></Note>}
 
       {tab === "ladder" ? (
@@ -653,4 +670,12 @@ export function GoalsModule({
       )}
     </ModuleFrame>
   );
+}
+
+/** The footer's "Saving…" for Goals (§6.136) — it never knew about any save on this screen. */
+function PendingBridge({ pending }: { pending: boolean }) {
+  const { setPending, setNote } = useModule();
+  useEffect(() => setPending(pending), [pending, setPending]);
+  useEffect(() => setNote(pending ? "Saving…" : undefined), [pending, setNote]);
+  return null;
 }

@@ -27,6 +27,12 @@ export async function upsertOverhead(planId: string, o: {
   const supabase = await createClient();
   const name = (o.name ?? "").trim();
   if (!name) return { ok: false, error: "Give the expense a name." };
+  /*
+   * A CATEGORY IS REQUIRED (§6.136, open item 27). The report groups overheads by category, and a line with
+   * none printed "Not set" in the table and had nowhere honest to go in the plan. "Other" exists for the
+   * line nothing else describes, so there is always a right answer to pick.
+   */
+  if (!normalizeCategory(o.category)) return { ok: false, error: "Choose a category — it decides where this line sits in the plan. Use Other if none fits." };
   if (o.monthly_distribution && !distributionValid(o.monthly_distribution)) return { ok: false, error: "The monthly split must add up to 100%." };
   const row = {
     plan_id: planId, name, source: "entered" as const,

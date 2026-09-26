@@ -254,22 +254,29 @@ second "Turn into goals" updates that lever's open goal instead of inserting ano
 history, and a goal's status is never touched). SEQ's existing pairs predate the key and were not guessed
 at — which of the two debtor-day goals to keep is the client's call.
 
-### 25. A goal is still saved on blur, and that is still unverified under failure
+### ~~25. A goal is still saved on blur, and that is still unverified under failure~~ — **driven live and fixed (§6.136)**
 
-Every box on the new Goals screen commits when focus leaves it, which is the app's convention and is fine
-in a browser. What has never been driven live is what a client SEES when one of those saves fails — this
-is item 4 on twelve other modules and the ladder now adds six more places it could happen.
+Driven on ZZ Test Walk by failing the save request in the browser. A refusal from the server was always
+shown; a request that never ARRIVED (Wi-Fi drop, sleep, restart) made the action reject, the rejection
+escaped the transition, and the whole Goals screen was replaced by "Failed to fetch" — with what had been
+typed lost. Now: `guarded(start, onFail)` (src/lib/guardedStart.ts) catches it; the screen stays, the text
+stays in the box, and "Couldn't reach the server, so your last change isn't saved yet…" shows in the note
+and — new for Goals — in the footer, which also shows "Saving…" now. Clicking back into the box and out
+retried and saved. The redirect on "Save and continue" is deliberately not guarded.
+
+The same fault is on every other screen: see item 44.
 
 ### ~~26. Overheads counts two expenses on a plan that has none~~ — **done (§6.134)**
 
 The count is the entered lines plus the two locked lines only once they carry money. A new plan reads
 "Expenses 0".
 
-### 27. An overhead can be saved with no category, and the table says "Not set"
+### ~~27. An overhead can be saved with no category, and the table says "Not set"~~ — **done (§6.136)**
 
-Adding an expense without picking a category saves happily and prints **Not set** in the Category column.
-The report groups overheads by category, so an uncategorised line has to go somewhere. Either the field
-is required, or there is a real "Uncategorised" bucket that the report is honest about.
+Category is required: the dialog offers the eight categories only (no "Not set"), Save stays off until
+one is chosen, the hint says "Use Other if none fits", and the action refuses a line without one. Lines
+saved before this keep showing "Not set" until they are next edited — SEQ has none; ZZ Test Walk has one
+("Rent").
 
 ### ~~28. The report says "Figures agree — Yes" on a plan with no figures~~ — **done (§6.134)**
 
@@ -445,4 +452,13 @@ small-business multiples are on SDE.
 The dialog says goals appear "for the quarter you pick" and offers a quarter for each, but since §6.125
 every What-If goal lands on the 90-day rung and the chosen quarter is ignored by the save. Found while
 testing §6.134 on ZZ Test Walk. The picker should come out, or become the goal's due date.
+
+### 44. A save that never reaches the server takes the whole screen down — on every step but Goals
+
+Found while driving item 25. Every screen saves through `start(async () => { await someAction() })`, and
+when the request itself fails (Wi-Fi drop, laptop asleep, server restarting) the action REJECTS, the
+rejection escapes the transition, and React replaces the screen with its error page — losing whatever was
+just typed. Goals now uses `guarded` (§6.136); the other 20 screens (about 60 call sites) do not. The fix
+is mechanical — the same wrapper, with each module's own error channel as `onFail` — and should be done in
+one pass, leaving each redirecting "Save and continue" unguarded.
 

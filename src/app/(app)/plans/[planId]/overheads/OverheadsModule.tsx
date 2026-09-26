@@ -41,8 +41,8 @@ const CATEGORY_HINT: Record<string, string> = Object.fromEntries(OVERHEAD_CATEGO
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
 const box = "h-8";
 const START_OPTIONS = YEARS.map((y) => ({ value: String(y), label: y === 1 ? "Year 1" : `Year ${y}` }));
-/* "Not set" is a real answer, listed first, and it is what every line says until someone chooses (§6.93). */
-const CATEGORY_OPTIONS = [{ value: "", label: "Not set" }, ...OVERHEAD_CATEGORIES.map((c) => ({ value: c.value, label: c.label }))];
+/* Required since §6.136 (open item 27): no "Not set" to choose. "Other" is the answer for a line nothing else describes. */
+const CATEGORY_OPTIONS = OVERHEAD_CATEGORIES.map((c) => ({ value: c.value, label: c.label }));
 
 export function OverheadsModule({ planId, initial, mode, salaries, marketing, peopleCount, marketingLines, onCostPct, fyEndMonth }: {
   planId: string; initial: OverheadRow[]; mode: "guided" | "advanced";
@@ -277,7 +277,7 @@ function ExpenseDialog({ r, onSave, onClose }: { r: Row; onSave: (r: Row) => voi
     const next = { ...(d.yearly_change ?? {}) }; next[String(y)] = parseSigned(raw) ?? 0;
     setD((x) => ({ ...x, yearly_change: next })); setText((t) => ({ ...t, [y]: raw }));
   };
-  const ok = d.name.trim().length > 0;
+  const ok = d.name.trim().length > 0 && !!d.category;
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-2xl">
@@ -290,12 +290,13 @@ function ExpenseDialog({ r, onSave, onClose }: { r: Row; onSave: (r: Row) => voi
             <div className="col-span-2"><label className={label}>What it is</label><Input autoFocus value={d.name} placeholder="e.g. Rent" onChange={(e) => setD((x) => ({ ...x, name: e.target.value }))} className={box} /></div>
             <div><label className={label}>Cost in {(d.start_year || 1) === 1 ? "Year 1" : `Year ${d.start_year}`}</label><Input inputMode="decimal" value={d.current_value ? num(d.current_value) : ""} placeholder="0" onChange={(e) => setD((x) => ({ ...x, current_value: parseNum(e.target.value) }))} className={cn(box, "num text-right")} /></div>
             <div><label className={label}>Starts in</label><FieldSelect value={String(d.start_year || 1)} options={START_OPTIONS} onValueChange={(v) => setD((x) => ({ ...x, start_year: Number(v) }))} /></div>
-            {/* Optional, and it stays optional. The plan groups its overheads table only once a client has
-                set some; until then it prints the flat list it always printed (§6.93). */}
+            {/* Required (§6.136): the report groups overheads by it, and "Other" is there for the line nothing else fits. */}
             <div className="col-span-2"><label className={label}>Category</label>
-              <FieldSelect value={d.category ?? ""} options={CATEGORY_OPTIONS}
+              <FieldSelect value={d.category ?? ""} options={CATEGORY_OPTIONS} placeholder="Choose one"
                 onValueChange={(v) => setD((x) => ({ ...x, category: normalizeCategory(v) }))} /></div>
-            <div className="col-span-2 self-end pb-1.5 text-[11.5px] text-muted-foreground">{CATEGORY_HINT[d.category ?? ""] ?? "Groups this expense in the business plan. Leave it if none fits."}</div>
+            <div className={cn("col-span-2 self-end pb-1.5 text-[11.5px]", d.category ? "text-muted-foreground" : "text-warn")}>
+              {d.category ? CATEGORY_HINT[d.category] ?? "Groups this expense in the business plan." : "Choose one to save — it decides where this line sits in the plan. Use Other if none fits."}
+            </div>
           </div>
           <label className="flex items-center gap-2 text-[13px]">
             <input type="checkbox" checked={d.on_cost} onChange={(e) => setD((x) => ({ ...x, on_cost: e.target.checked }))} className="size-3.5 accent-primary" />
