@@ -376,7 +376,6 @@ function SaleInputs({ sale, onSale, metrics, input, money }: {
     next[i] = v;
     set({ transfer: next });
   };
-  const scored = sale.transfer.filter((v) => v > 0).length;
 
   return (
     <>
@@ -397,6 +396,35 @@ function SaleInputs({ sale, onSale, metrics, input, money }: {
           <CellInput numeric className="mt-1.5 w-full" value={sale.multipleHigh}
             onChange={(e) => set({ multipleHigh: num(e.target.value) })} />
         </StatTile>
+        {/*
+          THE SIX JUDGEMENTS ARE DATA ENTRY, SO THEY LIVE WHERE THE DATA ENTRY LIVES (§6.128.5).
+          Twice now they have been given a section of their own between the tiles and the cards — first as
+          a six-row form, then as a compressed strip — and both times this tab read as a different kind of
+          screen. Nic, on the second attempt: *"This does not happen on the other two pages and must not
+          happen on this page."* He is right, and the answer was never to shrink the block: every tab is
+          tiles, then one range bar, then cards, and a seventh thing in the middle breaks that whatever
+          height it is. They are tiles now. The strip simply has more of them.
+        */}
+        {TRANSFER_FACTORS.map((f, i) => {
+          const v = sale.transfer[i] ?? 0;
+          return (
+            /* The hint is a tooltip, not a subtitle: six of them printed in the strip made every tile in
+               it taller, including the four that had nothing to say (§6.128.5). */
+            <StatTile key={f.key} label={f.label} value={v ? `${v} / 5` : "Not scored"}
+              tone={v === 0 ? undefined : v <= 2 ? "bad" : v === 3 ? "warn" : "good"}>
+              <div className="mt-1.5 flex gap-1" role="group" aria-label={`${f.label}. ${f.hint}`} title={f.hint}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button key={n} type="button" aria-pressed={v === n} title={`${f.label}: ${n} of 5`}
+                    onClick={() => scoreFactor(i, n)}
+                    className={cn("h-6 flex-1 rounded border text-[11px] font-semibold tabular-nums",
+                      v === n ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:border-input")}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </StatTile>
+          );
+        })}
       </TileRow>
 
       {/*
@@ -406,43 +434,6 @@ function SaleInputs({ sale, onSale, metrics, input, money }: {
       */}
       <ValuationRange sale={sale} metrics={metrics} input={input} money={money} />
 
-      {/*
-        THE ASSESSMENT AS A STRIP, NOT A FORM (§6.128.4).
-        Built first as six rows of label, hint and five buttons, it took a third of the tab before a
-        single dial and made this page read as a different kind of screen from the other two. Nic, on the
-        built thing: *"Capability To Sell seems to be vastly visually different."* Same six judgements,
-        same five points, one line each — the weight of Borrow's stress row, which is what it is.
-        The hint moves to the label's tooltip: it earns its place on hover, not in the layout.
-      */}
-      <section className="border-b border-border px-5 py-3">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span className="text-[12.5px] font-semibold">Would it survive a change of owner?</span>
-          <span className="text-[11.5px] text-muted-foreground">1 weak, 5 strong — your judgement, not saved</span>
-          <span className="ml-auto text-[11.5px] text-muted-foreground">
-            {scored === TRANSFER_FACTORS.length ? "All six scored" : `${scored} of ${TRANSFER_FACTORS.length} scored`}
-          </span>
-        </div>
-        <div className="mt-1.5 grid gap-x-6 gap-y-1 @[700px]:grid-cols-2 @[1100px]:grid-cols-3">
-          {TRANSFER_FACTORS.map((f, i) => {
-            const v = sale.transfer[i] ?? 0;
-            return (
-              <div key={f.key} className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 truncate text-[12px]" title={f.hint}>{f.label}</span>
-                <div className="flex shrink-0 gap-0.5" role="group" aria-label={`${f.label}. ${f.hint}`}>
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <button key={n} type="button" aria-pressed={v === n} title={`${f.label}: ${n} of 5`}
-                      onClick={() => scoreFactor(i, n)}
-                      className={cn("size-[18px] rounded-sm border text-[10px] font-semibold leading-none tabular-nums",
-                        v === n ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:border-input")}>
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
     </>
   );
 }
@@ -518,9 +509,7 @@ function ValuationRange({ sale, metrics, input, money }: {
     return (
       <section className="border-b border-border px-5 py-4">
         <span className="text-[12.5px] font-semibold">What the earnings support</span>
-        <Note>
-          {y1 ? "This plan's Year 1 earnings are not positive, so there is no multiple to apply. A buyer prices a loss on assets, not on earnings." : "No forecast yet, so there is nothing to value."}
-        </Note>
+        <Note>{y1 ? "Year 1 earnings are not positive, so there is no multiple to apply." : "No forecast yet, so there is nothing to value."}</Note>
       </section>
     );
   }
