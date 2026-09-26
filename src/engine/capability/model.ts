@@ -164,6 +164,16 @@ export type CapabilityInput = {
   /** Year 1 revenue that comes from products sold as an ongoing client rather than a one-off job. */
   recurringShare: number | null;
   /**
+   * The biggest single product or service as a share of Year 1 revenue.
+   *
+   * NOT customer concentration, which is what a buyer actually asks and which this app cannot answer —
+   * it records products and segments, not who buys. It is the nearest thing the plan honestly holds, and
+   * the card that shows it says so rather than letting it be mistaken for the real measure (§6.128.4).
+   */
+  largestProductShare: number | null;
+  /** What the leadership team is paid in Year 1 — the wage bill a buyer inherits or has to replace. */
+  leadershipPay: number | null;
+  /**
    * What the business is being offered at, and the judgements that go with it. Null until the client
    * prices it — same reasoning as the loan below: somebody wondering what their business is worth has not
    * sold it, and an asking price is a position in a negotiation rather than a fact about the plan.

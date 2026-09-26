@@ -60,6 +60,10 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
   const transfer = scored.length === TRANSFER_FACTORS.length
     ? r1(scored.reduce((a, b) => a + b, 0) / scored.length) : null;
 
+  const leadershipShare = i.leadershipPay !== null && normalised && normalised > 0
+    ? over(i.leadershipPay, normalised) : null;
+  const intensity = bs1 && y1?.revenue ? over(bs1.fixedAssets, y1.revenue) : null;
+
   const high = sale?.multipleHigh ?? 0;
   const low = sale?.multipleLow ?? 0;
 
@@ -141,20 +145,73 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       missing: i.recurringShare === null ? "Products on the Sales step, marked one-off or ongoing." : undefined,
     },
     {
-      key: "largestCustomer", name: "Largest customer share", unit: "pct",
-      value: null, display: "—", min: 0, max: 50,
-      bands: [{ to: 10, s: "good" }, { to: 20, s: "watch" }, { to: 50, s: "bad" }],
-      note: "",
-      bench: "Buyers get uneasy above 15% to 20% from one customer",
-      formula: "Revenue from the largest customer ÷ total revenue",
-      reveals: "What happens to the earnings a buyer is paying for if one customer leaves after settlement.",
-      confidence: "—",
       /*
-       * NAMED RATHER THAN OMITTED. This is the first thing a buyer's advisor asks and the app cannot
-       * answer it. Leaving the card off the page would let the tab read as complete when it is not —
-       * a valuation that silently skips concentration risk is the omission a client would most want back.
+       * WHAT REPLACED THE PERMANENTLY-BLANK CUSTOMER CARD (§6.128.4).
+       *
+       * §6.128.2 put an unanswerable "largest customer share" on this tab, reasoning that naming the gap
+       * beat hiding it. Seen on a real screen, it was one of four grey cards clustered where the eye
+       * lands first, and the honesty cost more than it bought.
+       *
+       * This is the concentration the plan genuinely holds. It is not the same question — a business can
+       * sell one product to four hundred customers — so the card says which question it is answering and
+       * where the other one has to come from.
        */
-      missing: "This app records products and segments, not customers, so nothing here can answer it. Work it out from your own sales ledger and read the band below against it.",
+      key: "largestProduct", name: "Largest product share", unit: "pct",
+      value: i.largestProductShare === null ? null : r1(i.largestProductShare * 100),
+      display: i.largestProductShare === null ? "—" : pct(i.largestProductShare * 100),
+      min: 0, max: 100, bands: [{ to: 35, s: "good" }, { to: 60, s: "watch" }, { to: 100, s: "bad" }],
+      note: i.largestProductShare === null ? "Needs products on the Sales step."
+        : i.largestProductShare * 100 > 60 ? "Most of the revenue rests on one line. A buyer will ask what happens if it stops selling."
+        : "Revenue is spread across enough of the range that no single line carries the business.",
+      bench: "Above 60% from one line and a buyer is buying that line, not the business",
+      formula: "Year 1 revenue from the largest product or service ÷ total Year 1 revenue",
+      reveals: "How much of the earnings depend on one thing continuing to sell.",
+      confidence: "High for products — but this is NOT customer concentration, which is what a buyer asks first. This app holds no customers; work that one out from your sales ledger.",
+      missing: i.largestProductShare === null ? "Products on the Sales step." : undefined,
+    },
+    {
+      key: "leadershipPay", name: "Leadership pay against earnings", unit: "pct",
+      value: leadershipShare === null ? null : r1(leadershipShare * 100),
+      display: leadershipShare === null ? "—" : pct(leadershipShare * 100),
+      min: 0, max: 150, bands: [{ to: 40, s: "good" }, { to: 80, s: "watch" }, { to: 150, s: "bad" }],
+      sub: i.leadershipPay !== null && normalised ? `${m(i.leadershipPay)} against ${m(normalised)}` : undefined,
+      /*
+       * TWO REASONS TO BE BLANK, AND THEY ARE NOT THE SAME SENTENCE (§6.128.4).
+       *
+       * Caught on SEQ, which HAS a leadership team: the card read "needs people on the Leadership Team
+       * step" while two of them sat on that step with salaries. It was blank because the earnings are
+       * negative and a share of a negative number means nothing. A missing-data message that names the
+       * wrong cause sends a client to fix something that is not broken — worse than saying nothing.
+       */
+      note: leadershipShare === null && i.leadershipPay !== null
+        ? "The earnings are negative, so there is no share to express this as. The wage bill is real; the profit it has to come out of is not there yet."
+        : leadershipShare === null ? "Needs people on the Leadership Team step and a Year 1 forecast."
+        : leadershipShare * 100 > 80 ? "The wage bill for the people running it is most of what the business earns. A buyer has to keep paying that, and will price accordingly."
+        : "The earnings survive paying the people who run the business, which is what a buyer is checking.",
+      bench: "Under 40% of earnings leaves a buyer room; over 80% and there is little left",
+      formula: "Year 1 leadership salaries ÷ normalised EBITDA",
+      reveals: "Whether the earnings survive paying people to run the business once the owner has gone.",
+      confidence: "High — read from the Leadership Team step. A below-market owner salary will flatter it, which is what add-backs are for.",
+      missing: leadershipShare === null
+        ? (i.leadershipPay !== null
+            ? `${m(i.leadershipPay)} of leadership pay, against earnings that are not positive.`
+            : "People on the Leadership Team step.")
+        : undefined,
+    },
+    {
+      key: "assetIntensity", name: "Assets behind each dollar of sales", unit: "cents",
+      value: intensity === null ? null : r2(intensity),
+      display: intensity === null ? "—" : `${Math.round(intensity * 100)}¢`,
+      min: 0, max: 1.2, bands: [{ to: 0.3, s: "good" }, { to: 0.6, s: "watch" }, { to: 1.2, s: "bad" }],
+      sub: bs1 && y1?.revenue ? `${m(bs1.fixedAssets)} of assets on ${m(y1.revenue)}` : undefined,
+      note: intensity === null ? "Needs a Year 1 forecast with a balance sheet."
+        : intensity > 0.6 ? "Capital-heavy. A buyer is funding plant as well as earnings, and will want to know what has to be replaced and when."
+        : "Light on assets, so most of what a buyer pays for is the earnings rather than the equipment.",
+      bench: "Under 30¢ is light; above 60¢ a buyer is buying a plant list",
+      formula: "Fixed assets at the end of Year 1 ÷ Year 1 revenue",
+      reveals: "How much plant a buyer has to fund to keep the revenue coming.",
+      confidence: "High — from the forecast balance sheet. It does not say how old the assets are.",
+      missing: intensity === null ? "A Year 1 forecast with a balance sheet." : undefined,
     },
     {
       key: "cashConversion", name: "Operating cash conversion", unit: "pct",
@@ -222,6 +279,6 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
  */
 export const SELL_WEIGHTS: Record<string, number> = {
   priceMultiple: 3, transferability: 2, normalisedMargin: 2, fcfYield: 2,
-  recurringShare: 1.5, cashConversion: 1.5, largestCustomer: 1.5,
-  freeCashFlow: 1, roic: 1, revenueGrowth: 1,
+  recurringShare: 1.5, cashConversion: 1.5, largestProduct: 1.5, leadershipPay: 1.5,
+  freeCashFlow: 1, roic: 1, revenueGrowth: 1, assetIntensity: 1,
 };

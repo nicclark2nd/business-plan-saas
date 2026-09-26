@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { loadPlan } from "@/lib/planLoad";
+import { loadSalariesByYear } from "@/lib/planSources";
 import { runForecast } from "@/engine/forecast/run";
 import { monthlyProfit } from "@/engine/forecast/monthlyProfit";
 import { productYears, sourceOf, recurring, type AnyProduct } from "@/engine/sales/product";
@@ -40,11 +41,11 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
   let input: PlanFacts = {
     pnl: {}, cashFlow: {}, balanceSheet: {}, days: {},
     monthlyCash: [], monthlyProfit: [], debtService: {}, capex: {},
-    recurringShare: null,
+    recurringShare: null, largestProductShare: null, leadershipPay: null,
   };
 
   try {
-    const { plan } = await loadPlan(planId);
+    const { plan, fyEndMonth, firstYear } = await loadPlan(planId);
     const run = runForecast(plan);
     const f = run.checked ?? run.forecast;
 
@@ -73,16 +74,26 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
      * asked a second time for something the plan already knows (§6.41).
      */
     const products = (plan.sources.products ?? []) as unknown as AnyProduct[];
-    let recurringRevenue = 0, totalRevenue = 0;
+    let recurringRevenue = 0, totalRevenue = 0, biggest = 0;
     for (const prod of products) {
       const y1 = productYears(prod, sourceOf(prod, products))[0]?.revenue ?? 0;
       totalRevenue += y1;
+      biggest = Math.max(biggest, y1);
       if (recurring(prod)) recurringRevenue += y1;
     }
+
+    /*
+     * The leadership wage bill a buyer inherits (§6.128.4). `loadSalariesByYear` is what Overheads shows
+     * as its locked line and what the forecast costs — so this is the same figure, not a second count of
+     * the same people (§6.19).
+     */
+    const salaries = await loadSalariesByYear(planId, firstYear, fyEndMonth).catch(() => []);
 
     input = {
       ...input,
       recurringShare: totalRevenue > 0 ? recurringRevenue / totalRevenue : null,
+      largestProductShare: totalRevenue > 0 ? biggest / totalRevenue : null,
+      leadershipPay: salaries[0] ?? null,
       pnl: f.pnl ?? {},
       cashFlow: f.cashFlow ?? {},
       balanceSheet: f.balanceSheet ?? {},

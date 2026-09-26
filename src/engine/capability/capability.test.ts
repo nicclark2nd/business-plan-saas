@@ -22,7 +22,7 @@ const empty: CapabilityInput = {
   money: (v) => `$${Math.round(v).toLocaleString("en-AU")}`,
   pnl: {}, cashFlow: {}, balanceSheet: {}, days: {},
   monthlyCash: [], monthlyProfit: [], debtService: {}, capex: {},
-  growth: DEFAULT_GROWTH, proposal: null, stress: DEFAULT_STRESS, sale: null, recurringShare: null,
+  growth: DEFAULT_GROWTH, proposal: null, stress: DEFAULT_STRESS, sale: null, recurringShare: null, largestProductShare: null, leadershipPay: null,
 };
 
 const pnl = (revenue: number, over_: Partial<Record<string, number>> = {}) => ({
@@ -332,14 +332,24 @@ describe("selling", () => {
   });
 
   /**
-   * THE CARD THAT CAN NEVER ANSWER, AND MUST STILL APPEAR (§6.128.2). Concentration is the first thing a
-   * buyer's advisor asks and this app holds no customers. Dropping the card would let the tab read as a
-   * complete valuation when it has skipped the largest risk in most small businesses.
+   * THE CARD THAT REPLACED THE ONE THAT COULD NEVER ANSWER (§6.128.4).
+   *
+   * §6.128.2 put an unanswerable customer-concentration card on this tab on the reasoning that naming a
+   * gap beats hiding it. On a real screen it was one of four grey cards where the eye lands first. Product
+   * concentration is the question the plan can actually answer — and because it is NOT the question a
+   * buyer asks, the card has to say so itself, or it is a worse lie than the blank one was.
    */
-  it("shows the customer concentration card unanswered rather than hiding it", () => {
-    const m = sellMetrics(priced()).find((x) => x.key === "largestCustomer")!;
-    expect(m.value).toBeNull();
-    expect(m.missing).toContain("records products and segments, not customers");
-    expect(m.bench).toBeTruthy();
+  it("answers product concentration and refuses to be mistaken for customer concentration", () => {
+    const m = sellMetrics(full({ largestProductShare: 0.71, sale: null })).find((x) => x.key === "largestProduct")!;
+    expect(m.value).toBe(71);
+    expect(statusOf(m.value, m.bands)).toBe("bad");
+    expect(m.confidence).toContain("NOT customer concentration");
+    expect(sellMetrics(full()).find((x) => x.key === "largestCustomer")).toBeUndefined();
+  });
+
+  it("reads the leadership wage bill against the earnings a buyer inherits", () => {
+    const m = sellMetrics(full({ leadershipPay: 400_000 })).find((x) => x.key === "leadershipPay")!;
+    expect(m.value).not.toBeNull();
+    expect(m.formula).toContain("leadership salaries");
   });
 });

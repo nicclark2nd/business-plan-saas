@@ -406,29 +406,33 @@ function SaleInputs({ sale, onSale, metrics, input, money }: {
       */}
       <ValuationRange sale={sale} metrics={metrics} input={input} money={money} />
 
-      <section className="border-b border-border px-5 py-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+      {/*
+        THE ASSESSMENT AS A STRIP, NOT A FORM (§6.128.4).
+        Built first as six rows of label, hint and five buttons, it took a third of the tab before a
+        single dial and made this page read as a different kind of screen from the other two. Nic, on the
+        built thing: *"Capability To Sell seems to be vastly visually different."* Same six judgements,
+        same five points, one line each — the weight of Borrow's stress row, which is what it is.
+        The hint moves to the label's tooltip: it earns its place on hover, not in the layout.
+      */}
+      <section className="border-b border-border px-5 py-3">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <span className="text-[12.5px] font-semibold">Would it survive a change of owner?</span>
-          <span className="text-[11.5px] text-muted-foreground">
-            {scored === TRANSFER_FACTORS.length
-              ? "All six scored"
-              : `${scored} of ${TRANSFER_FACTORS.length} scored — the measure waits for all six`}
+          <span className="text-[11.5px] text-muted-foreground">1 weak, 5 strong — your judgement, not saved</span>
+          <span className="ml-auto text-[11.5px] text-muted-foreground">
+            {scored === TRANSFER_FACTORS.length ? "All six scored" : `${scored} of ${TRANSFER_FACTORS.length} scored`}
           </span>
         </div>
-        <div className="mt-2 grid gap-x-8 gap-y-2 @[760px]:grid-cols-2">
+        <div className="mt-1.5 grid gap-x-6 gap-y-1 @[700px]:grid-cols-2 @[1100px]:grid-cols-3">
           {TRANSFER_FACTORS.map((f, i) => {
             const v = sale.transfer[i] ?? 0;
             return (
-              <div key={f.key} className="flex items-center gap-3 border-b border-border py-1.5 last:border-b-0">
-                <div className="min-w-0 flex-1">
-                  <div className="text-[12.5px] font-medium">{f.label}</div>
-                  <div className="text-[11px] text-muted-foreground">{f.hint}</div>
-                </div>
-                <div className="flex shrink-0 gap-1" role="group" aria-label={f.label}>
+              <div key={f.key} className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-[12px]" title={f.hint}>{f.label}</span>
+                <div className="flex shrink-0 gap-0.5" role="group" aria-label={`${f.label}. ${f.hint}`}>
                   {[1, 2, 3, 4, 5].map((n) => (
                     <button key={n} type="button" aria-pressed={v === n} title={`${f.label}: ${n} of 5`}
                       onClick={() => scoreFactor(i, n)}
-                      className={cn("size-6 rounded border text-[11px] font-semibold tabular-nums",
+                      className={cn("size-[18px] rounded-sm border text-[10px] font-semibold leading-none tabular-nums",
                         v === n ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:border-input")}>
                       {n}
                     </button>
@@ -438,9 +442,6 @@ function SaleInputs({ sale, onSale, metrics, input, money }: {
             );
           })}
         </div>
-        <p className="mt-2 text-[11.5px] text-muted-foreground">
-          1 is weak, 5 is strong. These are your judgement, not the plan&apos;s — and they are not saved.
-        </p>
       </section>
     </>
   );
