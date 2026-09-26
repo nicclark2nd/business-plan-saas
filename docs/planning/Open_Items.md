@@ -372,11 +372,14 @@ dialog and no stale numbers — it needs LibreOffice running somewhere off Verce
 refresh the document's indexes explicitly or the contents page comes out blank — and was judged too much
 machinery for a second copy of a document that already works. **Word stays the only export.**
 
-### 35. The dashboard cash chart still judges against zero
+### ~~35. The dashboard cash chart still judges against zero~~ — **done (§6.133)**
 
-`plan_settings.cash_floor` exists now (§6.129) and only Financial Capabilities reads it. The dashboard
-charts twelve months of closing cash with no line on it, which is the same weaker test the growth dial
-used to run. One prop and one line.
+The dashboard reads `cash_floor` through `readGrowth`, the reader the growth dial uses. With a floor set, the
+cash chart draws it as a dashed line ("Your floor 50,000"), the badge counts months below it, the sentence
+says how far the lowest month is under or over it, and the "Lowest cash month" and "Cash at year end" tiles
+turn red against it. Unset keeps the zero test, says so, and offers "Set the lowest balance you'll accept →"
+to Assumptions. A floor of 0 reads as zero because it is the same test. Checked live on ZZ Test Walk with
+a temporary 50,000 floor (then cleared).
 
 ### 36. Nothing reads `intended_exit_year`
 

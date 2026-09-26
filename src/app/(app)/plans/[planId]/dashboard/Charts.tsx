@@ -20,11 +20,12 @@ import { useMoney } from "@/components/MoneyProvider";
 const BARE = "border-b-0 px-0 py-0";
 
 /** Closing cash, month by month through Year 1 — the line an owner actually worries about. */
-export function CashChart({ months, values }: { months: string[]; values: number[] }) {
+export function CashChart({ months, values, floor }: { months: string[]; values: number[]; floor?: number | null }) {
   const money = useMoney();
   return (
     <ChartBox title="" height={168} className={BARE}>
-      {(w) => <Trend width={w} height={168} categories={months} values={values} format={money} />}
+      {(w) => <Trend width={w} height={168} categories={months} values={values} format={money}
+        reference={floor != null && floor > 0 ? { value: floor, label: `Your floor ${money(floor)}` } : undefined} />}
     </ChartBox>
   );
 }

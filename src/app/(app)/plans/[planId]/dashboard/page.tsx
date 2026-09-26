@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { readGrowth } from "@/engine/capability/judgements";
 import { getSession } from "@/lib/plan";
 import { getPlanCompleteness } from "@/lib/planCompleteness";
 import { GUIDED_STEPS } from "@/lib/nav";
@@ -34,7 +35,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
   const c = await getPlanCompleteness(planId);
   const supabase = await createClient();
   const { data: ps } = await supabase.from("plan_settings")
-    .select("industry, country, legal_structure, products_services_statement, financial_year_end_month, first_projected_year, ninety_day_ends_on")
+    .select("industry, country, legal_structure, products_services_statement, financial_year_end_month, first_projected_year, ninety_day_ends_on, cash_floor")
     .eq("plan_id", planId).maybeSingle();
 
   /**
@@ -85,6 +86,19 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
   const signed = (v: number) => (v < 0 ? `(${fmt.format(Math.abs(v))})` : fmt.format(v));
   const pct1 = (v: number | null) => (v === null ? "\u2014" : `${v.toFixed(1)}%`);
   const lowMonth = monthly.low;
+  /*
+   * THE CLIENT'S OWN FLOOR, NOT ZERO (§6.133, open item 35).
+   *
+   * Assumptions asks for the lowest balance the client will let the business reach, and until now only
+   * Financial Capabilities read it — the dashboard went on judging every month against nought, the weaker
+   * test the growth dial ran before §6.129. Read through `readGrowth`, the same reader the dial uses, so the
+   * two cannot disagree. Unset stays zero, said as zero, with a way to set it; a floor of 0 is a real answer
+   * ("just don't go negative") and reads the same as unset because it IS the same test.
+   */
+  const floor = readGrowth(ps).cashBuffer;
+  const bar = floor ?? 0;
+  const ownFloor = floor !== null && floor > 0;
+  const belowBar = monthly.months.filter((m) => m.closingCash < bar).length;
 
   /*
    * PROFIT BESIDE CASH (§6.124).
@@ -100,8 +114,8 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
     { label: "Revenue", value: fmt.format(y1.revenue), sub: "Year 1 of five" },
     { label: "Gross margin", value: pct1(y1.grossMargin), sub: `${fmt.format(y1.grossProfit)} of gross profit` },
     { label: "Net profit", value: signed(y1.netProfit), sub: y1.netProfit < 0 ? "After tax \u2014 a loss in Year 1" : "After tax", bad: y1.netProfit < 0 },
-    { label: "Cash at year end", value: signed(forecast.cashFlow[1].closingCash), sub: `Opened at ${fmt.format(forecast.cashFlow[1].openingCash)}`, bad: forecast.cashFlow[1].closingCash < 0 },
-    { label: "Lowest cash month", value: signed(lowMonth.closingCash), sub: `${monthName(lowMonth.month)} \u00b7 month ${lowMonth.month}`, bad: lowMonth.closingCash < 0 },
+    { label: "Cash at year end", value: signed(forecast.cashFlow[1].closingCash), sub: `Opened at ${fmt.format(forecast.cashFlow[1].openingCash)}`, bad: forecast.cashFlow[1].closingCash < bar },
+    { label: "Lowest cash month", value: signed(lowMonth.closingCash), sub: `${monthName(lowMonth.month)} \u00b7 month ${lowMonth.month}`, bad: lowMonth.closingCash < bar },
   ];
 
   const missingProfile = profileMissing({ business_name: plan.business_name, ...(ps ?? {}) });
@@ -159,15 +173,25 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
         */}
         <div className="flex flex-col gap-3">
         <Panel title="Cash through Year 1"
-          badge={<Badge variant="outline" className={cn(hasNumbers && lowMonth.closingCash < 0 ? "border-bad/40 text-bad" : "text-muted-foreground")}>
-            {!hasNumbers ? "Not yet" : monthly.negative.length ? `${monthly.negative.length} month${monthly.negative.length === 1 ? "" : "s"} below zero` : "Never below zero"}
+          badge={<Badge variant="outline" className={cn(hasNumbers && belowBar > 0 ? "border-bad/40 text-bad" : "text-muted-foreground")}>
+            {!hasNumbers ? "Not yet"
+              : belowBar ? `${belowBar} month${belowBar === 1 ? "" : "s"} below ${ownFloor ? "floor" : "zero"}`
+              : ownFloor ? "Never below floor" : "Never below zero"}
           </Badge>}>
           {hasNumbers ? (
             <>
-              <CashChart months={months} values={monthly.months.map((m) => m.closingCash)} />
+              <CashChart months={months} values={monthly.months.map((m) => m.closingCash)} floor={floor} />
               <p className="mt-1 text-[12px] text-muted-foreground">
-                Lowest at <b className={cn(lowMonth.closingCash < 0 && "text-bad")}>{signed(lowMonth.closingCash)}</b> in {monthName(lowMonth.month)}.
+                Lowest at <b className={cn(lowMonth.closingCash < bar && "text-bad")}>{signed(lowMonth.closingCash)}</b> in {monthName(lowMonth.month)}
+                {ownFloor
+                  ? lowMonth.closingCash < bar
+                    ? <>, <b className="text-bad">{fmt.format(bar - lowMonth.closingCash)}</b> under the {fmt.format(bar)} you set as your floor.</>
+                    : <>, {fmt.format(lowMonth.closingCash - bar)} above the {fmt.format(bar)} you set as your floor.</>
+                  : "."}
                 {" "}It is the month, not the year, that runs a business out of money.
+                {floor === null && (
+                  <> <Link href={`${base}/assumptions?area=cash`} className="font-semibold text-primary hover:underline">Set the lowest balance you&apos;ll accept →</Link></>
+                )}
               </p>
             </>
           ) : (

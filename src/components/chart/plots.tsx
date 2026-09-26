@@ -93,14 +93,19 @@ export function Columns({ width, height = 260, categories, values, threshold, th
  * One series over time, with the point it crosses nil called out. Area beneath, because a single series
  * reading against a baseline is easier to judge filled than as a bare stroke.
  */
-export function Trend({ width, height = 260, categories, values, cross, format }: {
+export function Trend({ width, height = 260, categories, values, cross, format, reference }: {
   width: number; height?: number; categories: string[]; values: number[];
   /** 1-based index of the month the line crosses, if it does. */
   cross?: number | null;
   format: (v: number) => string;
+  /**
+   * A level the line is judged against — the client's cash floor on the dashboard (§6.133). Drawn the way
+   * `Lines` draws its reference, and always inside the scale, so a floor above every month still shows.
+   */
+  reference?: { value: number; label: string };
 }) {
   const [hover, setHover] = useState<number | null>(null);
-  const scale = niceScale(Math.min(...values, 0), Math.max(...values, 0));
+  const scale = niceScale(Math.min(...values, 0, reference?.value ?? 0), Math.max(...values, 0, reference?.value ?? 0));
   const h = height - PLOT.top - PLOT.bottom;
   const inner = Math.max(0, width - PLOT.left - PLOT.right);
   const step = inner / Math.max(1, values.length);
@@ -114,6 +119,14 @@ export function Trend({ width, height = 260, categories, values, cross, format }
     <Frame width={width} height={height} scale={scale} categories={categories} band={band}>
       <path d={area} fill="var(--primary)" opacity={0.08} />
       <path d={line} fill="none" stroke="var(--primary)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      {reference && (
+        <g>
+          <line x1={PLOT.left} x2={width - PLOT.right} y1={py(reference.value)} y2={py(reference.value)}
+            stroke="var(--foreground)" strokeWidth={1.5} strokeDasharray="4 3" strokeLinecap="round" opacity={0.55} />
+          <text x={width - PLOT.right} y={py(reference.value) - 5} textAnchor="end"
+            className="fill-foreground text-[10.5px] font-semibold">{reference.label}</text>
+        </g>
+      )}
       {cross != null && values[cross - 1] !== undefined && (
         <g>
           <line x1={px(cross - 1)} x2={px(cross - 1)} y1={PLOT.top} y2={PLOT.top + h} stroke="var(--good)" strokeWidth={1} />
