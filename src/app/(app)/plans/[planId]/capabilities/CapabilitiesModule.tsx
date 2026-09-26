@@ -9,17 +9,19 @@ import { navGroup } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { moneyFormatter } from "@/engine/plan/money";
 import {
-  DEFAULT_STRESS, LENDER_MIN_DSCR, SCORE_BANDS, SEVERITY_LABEL, borrowingCapacity, score, statusOf,
-  type CapabilityInput, type Metric, type Proposal, type Severity, type Stress,
+  DEFAULT_SALE, DEFAULT_STRESS, LENDER_MIN_DSCR, SCORE_BANDS, SEVERITY_LABEL, TRANSFER_FACTORS,
+  borrowingCapacity, score, statusOf,
+  type CapabilityInput, type Metric, type Proposal, type Sale, type Severity, type Stress,
 } from "@/engine/capability/model";
 import { GROW_WEIGHTS, growMetrics } from "@/engine/capability/grow";
 import { BORROW_WEIGHTS, borrowMetrics, stressedCash } from "@/engine/capability/borrow";
+import { SELL_WEIGHTS, sellMetrics } from "@/engine/capability/sell";
 import { verdict } from "@/engine/capability/verdict";
 
 /** Everything the server can serialise. The formatter and the scenario are the client's own. */
-export type PlanFacts = Omit<CapabilityInput, "money" | "proposal" | "stress">;
+export type PlanFacts = Omit<CapabilityInput, "money" | "proposal" | "stress" | "sale">;
 
-type Tab = "grow" | "borrow";
+type Tab = "grow" | "borrow" | "sell";
 
 /** The engine's three states, in the four the chart primitives speak. */
 const TONE: Record<Severity, ChartSeverity> = { good: "good", watch: "warn", bad: "bad" };
@@ -27,10 +29,14 @@ const TONE: Record<Severity, ChartSeverity> = { good: "good", watch: "warn", bad
 /**
  * FINANCIAL CAPABILITIES (§6.128).
  *
- * Two questions an owner asks that a plan can answer: can I afford to grow this, and can I borrow against
- * it. A third — can I sell it — is deliberately absent, because half of what it needs (an asking price,
- * owner add-backs, who holds the customer relationships) has never been collected, and a dial drawn
- * without them is an opinion with a needle on it.
+ * The three questions an owner asks about their own business: can I afford to grow it, can I borrow
+ * against it, and could I sell it.
+ *
+ * Selling was held back in §6.128 on the reasoning that half of it wanted facts the app had never
+ * collected. That was half right, and the half that was wrong is the interesting one: an asking price,
+ * the add-backs behind it and the comparable multiples are not facts about the plan at all — they are a
+ * position in a negotiation, and they belong exactly where the proposed loan belongs. One card still
+ * cannot be answered, customer concentration, and it stays on the page saying so.
  *
  * NOTHING HERE IS SAVED. The loan being considered lives in this component and dies with the page, which
  * is the honest shape for a scenario: a client wondering about a loan has not taken one, and writing it
@@ -42,32 +48,37 @@ export function CapabilitiesModule({ planId, mode, currency, facts }: {
   const [tab, setTab] = useState<Tab>("grow");
   const [proposal, setProposal] = useState<Proposal>({ amount: 0, ratePct: 8.5, termYears: 7, undrawn: 0, collateral: null });
   const [stress, setStress] = useState<Stress>(DEFAULT_STRESS);
+  const [sale, setSale] = useState<Sale>(DEFAULT_SALE);
   const money = useMemo(() => moneyFormatter(currency), [currency]);
 
   const input: CapabilityInput = useMemo(() => ({
     ...facts, money,
     /* A loan of nothing is not a loan: until an amount is entered, every test that needs one stays blank. */
     proposal: proposal.amount > 0 ? proposal : null,
-    stress,
-  }), [facts, money, proposal, stress]);
+    stress, sale,
+  }), [facts, money, proposal, stress, sale]);
 
   const grow = useMemo(() => growMetrics(input), [input]);
   const borrow = useMemo(() => borrowMetrics(input), [input]);
+  const sell = useMemo(() => sellMetrics(input), [input]);
   const growScore = useMemo(() => score(grow, GROW_WEIGHTS), [grow]);
   const borrowScore = useMemo(() => score(borrow, BORROW_WEIGHTS), [borrow]);
+  const sellScore = useMemo(() => score(sell, SELL_WEIGHTS), [sell]);
 
-  const metrics = tab === "grow" ? grow : borrow;
-  const s = tab === "grow" ? growScore : borrowScore;
-  const v = verdict(tab, metrics, tab === "grow" ? GROW_WEIGHTS : BORROW_WEIGHTS, s.value);
+  const WEIGHTS = { grow: GROW_WEIGHTS, borrow: BORROW_WEIGHTS, sell: SELL_WEIGHTS }[tab];
+  const metrics = { grow, borrow, sell }[tab];
+  const s = { grow: growScore, borrow: borrowScore, sell: sellScore }[tab];
+  const v = verdict(tab, metrics, WEIGHTS, s.value);
   const band = s.value === null ? null : statusOf(s.value, SCORE_BANDS);
 
   return (
     <ModuleFrame
       group={navGroup("capabilities")} title="Financial Capabilities"
-      subtitle="What your own forecast says about growing the business and borrowing against it" mode={mode}
+      subtitle="What your own forecast says about growing this business, borrowing against it and selling it" mode={mode}
       areas={[
         { key: "grow", label: "Capability to grow", count: growScore.value ?? undefined },
         { key: "borrow", label: "Capability to borrow", count: borrowScore.value ?? undefined },
+        { key: "sell", label: "Capability to sell", count: sellScore.value ?? undefined },
       ]}
       area={tab} onArea={(k) => setTab(k as Tab)}
       scope={{ label: "Year 1" }}
@@ -76,7 +87,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts }: {
         <h3>Nothing here is typed</h3>
         <p>Every figure on this page is read from the forecast your plan already produces — the same run behind your Profit &amp; Loss, your dashboard and your report. If a number looks wrong, it is wrong on those screens too, and the fix is in the step that owns it.</p>
         <h3>The one exception</h3>
-        <p>The loan on the borrowing tab. A loan you are <em>considering</em> is not in your plan by definition, so you enter it here and it is gone when you leave. Nothing on this page writes to your plan.</p>
+        <p>The loan on the borrowing tab, and the asking price, add-backs and transferability judgements on the selling tab. A loan you are <em>considering</em> and a price you are <em>asking</em> are not facts about your plan — they are positions in a negotiation. You enter them here and they are gone when you leave. Nothing on this page writes to your plan.</p>
         <h3>The score</h3>
         <p>Each measure is judged against its band and the judgements are averaged, weighted by how much each matters to the question. <b>A measure the plan cannot answer is left out rather than scored nought</b> — so an unfinished plan gets a score from what it does hold, and the tab says how many measures that was.</p>
         <h3>Where the bands come from</h3>
@@ -140,6 +151,8 @@ export function CapabilitiesModule({ planId, mode, currency, facts }: {
       </section>
 
       {/* ---------- the loan being considered ---------- */}
+      {tab === "sell" && <SaleInputs sale={sale} onSale={setSale} money={money} />}
+
       {tab === "borrow" && (
         <BorrowInputs
           proposal={proposal} onProposal={setProposal}
@@ -314,6 +327,91 @@ function BorrowInputs({ proposal, onProposal, stress, onStress, input, money }: 
               onChange={(e) => onStress({ ...stress, debtorDaysAdded: num(e.target.value) })} />days later
           </label>
         </div>
+      </section>
+    </>
+  );
+}
+
+/**
+ * THE PRICE, AND THE SIX JUDGEMENTS BEHIND IT.
+ *
+ * Same shape as the loan on the borrowing tab and for the same reason: an asking price is a position in a
+ * negotiation, not a fact about the plan. It is typed here, it drives the arithmetic, and it is gone when
+ * the client leaves.
+ *
+ * THE TRANSFERABILITY SCORES ARE THE SOFTEST THING ON THE PAGE, so they are the most plainly labelled.
+ * Each factor carries the question it is really asking — "could the business trade for a month if the
+ * owner vanished?" — because "owner dependence: 3" means whatever the person scoring it decided, and a
+ * number nobody can reconstruct is worse than no number.
+ */
+function SaleInputs({ sale, onSale, money }: {
+  sale: Sale; onSale: (s: Sale) => void; money: (v: number) => string;
+}) {
+  const num = (v: string) => Number(v.replace(/[^0-9.-]/g, "")) || 0;
+  const set = (patch: Partial<Sale>) => onSale({ ...sale, ...patch });
+  const scoreFactor = (i: number, v: number) => {
+    const next = [...(sale.transfer.length ? sale.transfer : new Array(TRANSFER_FACTORS.length).fill(0))];
+    next[i] = v;
+    set({ transfer: next });
+  };
+  const scored = sale.transfer.filter((v) => v > 0).length;
+
+  return (
+    <>
+      <TileRow>
+        <StatTile label="Asking price" value={sale.askingPrice ? money(sale.askingPrice) : "—"} sub="Enterprise value">
+          <CellInput numeric className="mt-1.5 w-full" placeholder="0"
+            value={sale.askingPrice || ""} onChange={(e) => set({ askingPrice: num(e.target.value) })} />
+        </StatTile>
+        <StatTile label="Owner add-backs" value={money(sale.addBacks)} sub="Costs a buyer would not inherit">
+          <CellInput numeric className="mt-1.5 w-full" placeholder="0"
+            value={sale.addBacks || ""} onChange={(e) => set({ addBacks: num(e.target.value) })} />
+        </StatTile>
+        <StatTile label="Comparable deals, low" value={`${sale.multipleLow}×`} sub="Of normalised EBITDA">
+          <CellInput numeric className="mt-1.5 w-full" value={sale.multipleLow}
+            onChange={(e) => set({ multipleLow: num(e.target.value) })} />
+        </StatTile>
+        <StatTile label="Comparable deals, high" value={`${sale.multipleHigh}×`} sub="Of normalised EBITDA">
+          <CellInput numeric className="mt-1.5 w-full" value={sale.multipleHigh}
+            onChange={(e) => set({ multipleHigh: num(e.target.value) })} />
+        </StatTile>
+      </TileRow>
+
+      <section className="border-b border-border px-5 py-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <span className="text-[12.5px] font-semibold">Would it survive a change of owner?</span>
+          <span className="text-[11.5px] text-muted-foreground">
+            {scored === TRANSFER_FACTORS.length
+              ? "All six scored"
+              : `${scored} of ${TRANSFER_FACTORS.length} scored — the measure waits for all six`}
+          </span>
+        </div>
+        <div className="mt-2 grid gap-x-8 gap-y-2 @[760px]:grid-cols-2">
+          {TRANSFER_FACTORS.map((f, i) => {
+            const v = sale.transfer[i] ?? 0;
+            return (
+              <div key={f.key} className="flex items-center gap-3 border-b border-border py-1.5 last:border-b-0">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[12.5px] font-medium">{f.label}</div>
+                  <div className="text-[11px] text-muted-foreground">{f.hint}</div>
+                </div>
+                <div className="flex shrink-0 gap-1" role="group" aria-label={f.label}>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button key={n} type="button" aria-pressed={v === n} title={`${f.label}: ${n} of 5`}
+                      onClick={() => scoreFactor(i, n)}
+                      className={cn("size-6 rounded border text-[11px] font-semibold tabular-nums",
+                        v === n ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:border-input")}>
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-[11.5px] text-muted-foreground">
+          1 is weak, 5 is strong. These are your judgement, not the plan&apos;s — and they are not saved.
+        </p>
       </section>
     </>
   );

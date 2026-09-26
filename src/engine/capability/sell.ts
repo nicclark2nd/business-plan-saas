@@ -1,0 +1,227 @@
+import type { CapabilityInput, Metric } from "./model";
+import { TRANSFER_FACTORS, ebitda, over, r1, r2 } from "./model";
+
+/**
+ * CAPABILITY TO SELL (§6.128.2).
+ *
+ * The question: would the earnings and the customers survive a change of owner, and is the price being
+ * asked one a buyer could justify?
+ *
+ * WHY THIS TAB WAS HELD BACK, AND WHAT CHANGED. §6.128 left it out because half of it seemed to want
+ * facts the app has never collected. That was half right. The asking price, the owner add-backs and the
+ * comparable multiples are not plan facts at all — they are a POSITION IN A NEGOTIATION, and they belong
+ * where the proposed loan belongs: typed on the screen, feeding the arithmetic, gone when the client
+ * leaves. Once that was seen, eight of the ten measures needed no new storage whatever.
+ *
+ * TWO THINGS ARE STILL MISSING AND SAY SO. Nothing in this app holds customers, so the concentration
+ * measure a buyer cares most about cannot be answered at all — it sits on the screen dark, with the
+ * sentence saying what would answer it, because a valuation page that quietly omits the largest risk in
+ * most small businesses is worse than one that names it (§6.89). And maintenance capex is proxied by
+ * depreciation, which is a convention rather than a fact, so the card says that out loud.
+ */
+
+const pct = (v: number) => `${r1(v)}%`;
+
+export function sellMetrics(i: CapabilityInput): Metric[] {
+  const y1 = i.pnl[1], y2 = i.pnl[2];
+  const bs1 = i.balanceSheet[1];
+  const cf1 = i.cashFlow[1];
+  const m = i.money;
+  const sale = i.sale;
+
+  const e1 = ebitda(y1);
+  /* Normalised: what a buyer would inherit, once the seller's own costs are put back. */
+  const normalised = e1 === null ? null : r2(e1 + (sale?.addBacks ?? 0));
+  const normalisedMargin = y1?.revenue ? over(normalised, y1.revenue) : null;
+
+  const conversion = cf1 && e1 ? over(cf1.netOperating, e1) : null;
+
+  /*
+   * MAINTENANCE CAPEX, PROXIED BY DEPRECIATION. A business that spends its depreciation keeps its assets
+   * standing still, which is the definition being reached for. It is a convention, not a measurement, and
+   * the confidence line on the card says so rather than letting it pass as fact.
+   */
+  const maintenance = y1?.depreciation ?? null;
+  const fcf = cf1 && maintenance !== null ? r2(cf1.netOperating - maintenance) : null;
+  const fcfMargin = y1?.revenue ? over(fcf, y1.revenue) : null;
+
+  const revGrowth = y1 && y2 ? over(y2.revenue - y1.revenue, y1.revenue) : null;
+
+  /* After-tax operating profit over the capital the business actually uses. */
+  const taxRate = y1 && y1.profitBeforeTax ? Math.max(0, Math.min(0.5, y1.tax / y1.profitBeforeTax)) : 0.25;
+  const invested = bs1 ? bs1.equity + bs1.debtCurrent + bs1.debtNonCurrent : null;
+  const roic = y1 && invested && invested > 0 ? over(y1.operatingProfit * (1 - taxRate), invested) : null;
+
+  const price = sale && sale.askingPrice > 0 ? sale.askingPrice : null;
+  const multiple = price && normalised && normalised > 0 ? over(price, normalised) : null;
+  const yieldOnPrice = price && fcf !== null ? over(fcf, price) : null;
+
+  const scored = sale?.transfer?.filter((v) => v > 0) ?? [];
+  const transfer = scored.length === TRANSFER_FACTORS.length
+    ? r1(scored.reduce((a, b) => a + b, 0) / scored.length) : null;
+
+  const high = sale?.multipleHigh ?? 0;
+  const low = sale?.multipleLow ?? 0;
+
+  return [
+    {
+      key: "priceMultiple", name: "Asking price ÷ normalised EBITDA", unit: "x",
+      value: multiple === null ? null : r2(multiple),
+      display: multiple === null ? "—" : `${r2(multiple)}×`,
+      min: 0, max: Math.max(8, high * 1.6),
+      bands: [{ to: high, s: "good" }, { to: high + 0.4, s: "watch" }, { to: Number.MAX_SAFE_INTEGER, s: "bad" }],
+      sub: price && normalised ? `${m(price)} against ${m(normalised)} of normalised earnings` : undefined,
+      note: multiple === null ? "The one number a buyer decides on."
+        : multiple > high ? `Above every comparable deal you have entered. At ${high}× the price would be ${m(normalised! * high)}.`
+        : multiple < low ? "Below the range comparable businesses have sold for — you may be leaving money on the table."
+        : "Inside the range you have said comparable businesses sell for.",
+      bench: sale ? `Comparable deals ${low}× to ${high}×` : "Set the comparable range above",
+      formula: "Asking price ÷ (EBITDA + the owner add-backs entered above)",
+      reveals: "Whether the price can be justified against what similar businesses actually changed hands for.",
+      confidence: "The arithmetic is exact; the comparable range is your judgement, and it is the part a buyer will argue with.",
+      missing: multiple === null ? "An asking price above, and a forecast with earnings in it." : undefined,
+    },
+    {
+      key: "normalisedMargin", name: "Normalised EBITDA margin", unit: "pct",
+      value: normalisedMargin === null ? null : r1(normalisedMargin * 100),
+      display: normalisedMargin === null ? "—" : pct(normalisedMargin * 100),
+      min: 0, max: 30, bands: [{ to: 8, s: "bad" }, { to: 12, s: "watch" }, { to: 30, s: "good" }],
+      sub: normalised !== null && y1 ? `${m(normalised)} on ${m(y1.revenue)}` : undefined,
+      note: normalisedMargin === null ? "Needs a Year 1 forecast."
+        : sale?.addBacks ? `Includes ${m(sale.addBacks)} of add-backs — every one of those will be tested by a buyer's accountant.`
+        : "No add-backs entered, so this is the plan's own EBITDA. Most owner-run businesses have some.",
+      bench: "8% to 12% is ordinary for a small business; above that is a selling point",
+      formula: "(EBITDA + owner add-backs) ÷ revenue",
+      reveals: "The operating profit a buyer might reasonably expect to inherit.",
+      confidence: "Medium once add-backs are entered — they are a claim, not a measurement.",
+      missing: normalisedMargin === null ? "A Year 1 forecast with sales and costs." : undefined,
+    },
+    {
+      key: "fcfYield", name: "Cash return on the asking price", unit: "pct",
+      value: yieldOnPrice === null ? null : r1(yieldOnPrice * 100),
+      display: yieldOnPrice === null ? "—" : pct(yieldOnPrice * 100),
+      min: 0, max: 30, bands: [{ to: 8, s: "bad" }, { to: 12, s: "watch" }, { to: 30, s: "good" }],
+      sub: price ? `Against ${m(price)}` : undefined,
+      note: yieldOnPrice === null ? "What a buyer's money would earn at this price."
+        : yieldOnPrice * 100 < 10 ? "A buyer could do better elsewhere with less work. Expect the price to be pushed down."
+        : "A return a buyer would take seriously against the risk of running a business.",
+      bench: "Buyers of small businesses generally want 12% or better",
+      formula: "Free cash flow ÷ asking price",
+      reveals: "The cash return the price implies, before financing and deal costs.",
+      confidence: "Medium — it inherits the maintenance-capex assumption below.",
+      missing: yieldOnPrice === null ? "An asking price above." : undefined,
+    },
+    {
+      key: "transferability", name: "Survives a change of owner", unit: "plain",
+      value: transfer, display: transfer === null ? "—" : `${transfer} / 5`,
+      min: 1, max: 5, bands: [{ to: 2.5, s: "bad" }, { to: 3.5, s: "watch" }, { to: 5, s: "good" }],
+      sub: transfer === null ? undefined : `Average of ${TRANSFER_FACTORS.length} judgements`,
+      note: transfer === null ? "Score the six factors above and this answers."
+        : transfer < 2.5 ? "Most of what makes this business work would walk out with the owner. That is the thing that kills sales, more often than price."
+        : transfer < 3.5 ? "Transferable with work. Each weak factor is something to fix before going to market, not during."
+        : "The business would keep running under someone else, which is what a buyer is actually buying.",
+      bench: "Below 3 and a buyer is buying a job, not a business",
+      formula: `The average of the ${TRANSFER_FACTORS.length} scores above, each 1 to 5`,
+      reveals: "Whether there is a business here or an owner with customers.",
+      confidence: "It is a judgement, yours or your client's. It is the softest thing on this page and often the most important.",
+      missing: transfer === null ? `All ${TRANSFER_FACTORS.length} factors scored above.` : undefined,
+    },
+    {
+      key: "recurringShare", name: "Revenue from ongoing clients", unit: "pct",
+      value: i.recurringShare === null ? null : r1(i.recurringShare * 100),
+      display: i.recurringShare === null ? "—" : pct(i.recurringShare * 100),
+      min: 0, max: 100, bands: [{ to: 30, s: "bad" }, { to: 55, s: "watch" }, { to: 100, s: "good" }],
+      note: i.recurringShare === null ? "Needs products on the Sales step."
+        : i.recurringShare * 100 < 30 ? "Almost everything has to be won again next year, which a buyer prices down."
+        : "A useful share of next year's revenue is already spoken for.",
+      bench: "Above 55% and a buyer can see next year from here",
+      formula: "Year 1 revenue from products marked Ongoing client ÷ total Year 1 revenue",
+      reveals: "How much of the revenue a buyer inherits rather than has to go and win.",
+      confidence: "High — it reads how you marked each product on the Sales step.",
+      missing: i.recurringShare === null ? "Products on the Sales step, marked one-off or ongoing." : undefined,
+    },
+    {
+      key: "largestCustomer", name: "Largest customer share", unit: "pct",
+      value: null, display: "—", min: 0, max: 50,
+      bands: [{ to: 10, s: "good" }, { to: 20, s: "watch" }, { to: 50, s: "bad" }],
+      note: "",
+      bench: "Buyers get uneasy above 15% to 20% from one customer",
+      formula: "Revenue from the largest customer ÷ total revenue",
+      reveals: "What happens to the earnings a buyer is paying for if one customer leaves after settlement.",
+      confidence: "—",
+      /*
+       * NAMED RATHER THAN OMITTED. This is the first thing a buyer's advisor asks and the app cannot
+       * answer it. Leaving the card off the page would let the tab read as complete when it is not —
+       * a valuation that silently skips concentration risk is the omission a client would most want back.
+       */
+      missing: "This app records products and segments, not customers, so nothing here can answer it. Work it out from your own sales ledger and read the band below against it.",
+    },
+    {
+      key: "cashConversion", name: "Operating cash conversion", unit: "pct",
+      value: conversion === null ? null : r1(conversion * 100),
+      display: conversion === null ? "—" : pct(conversion * 100),
+      min: 0, max: 130, bands: [{ to: 70, s: "bad" }, { to: 85, s: "watch" }, { to: 130, s: "good" }],
+      note: conversion === null ? "Needs a Year 1 forecast."
+        : conversion * 100 < 70 ? "Earnings are not arriving as cash, and a buyer's accountant will find that in the first week."
+        : "Reported earnings turn into cash, which is what makes them believable.",
+      bench: "85% or better",
+      formula: "Year 1 cash from operations ÷ EBITDA",
+      reveals: "Whether the profit being sold is real.",
+      confidence: "High.",
+      missing: conversion === null ? "A Year 1 forecast." : undefined,
+    },
+    {
+      key: "freeCashFlow", name: "Free cash flow", unit: "pct",
+      value: fcfMargin === null ? null : r1(fcfMargin * 100),
+      display: fcf === null ? "—" : m(fcf),
+      min: 0, max: 20, bands: [{ to: 3, s: "bad" }, { to: 6, s: "watch" }, { to: 20, s: "good" }],
+      sub: fcfMargin === null ? undefined : `${pct(fcfMargin * 100)} of revenue`,
+      note: fcf === null ? "Needs a Year 1 forecast."
+        : "Cash left after keeping the assets standing still — the money a buyer would actually see.",
+      bench: "5% to 7% of revenue is respectable for a small business",
+      formula: "Year 1 cash from operations − maintenance capital spending",
+      reveals: "The cash a buyer could take out without running the business down.",
+      confidence: "Medium — maintenance capex is taken as equal to depreciation, which is a convention, not a measurement of what the assets actually need.",
+      missing: fcf === null ? "A Year 1 forecast." : undefined,
+    },
+    {
+      key: "roic", name: "Return on invested capital", unit: "pct",
+      value: roic === null ? null : r1(roic * 100),
+      display: roic === null ? "—" : pct(roic * 100),
+      min: 0, max: 40, bands: [{ to: 8, s: "bad" }, { to: 14, s: "watch" }, { to: 40, s: "good" }],
+      note: roic === null ? "Needs a Year 1 forecast with a balance sheet."
+        : roic * 100 < 8 ? "The business earns less on its capital than a buyer could get elsewhere without the work."
+        : "The business earns a strong return on the capital it ties up.",
+      bench: "Above what the money costs — call it 10% to 12%",
+      formula: "After-tax operating profit ÷ (equity + debt)",
+      reveals: "Whether this is a good business, separately from whether it is a good price.",
+      confidence: "Medium — it uses the forecast's own effective tax rate.",
+      missing: roic === null ? "A Year 1 forecast with a balance sheet." : undefined,
+    },
+    {
+      key: "revenueGrowth", name: "Revenue growth", unit: "pct",
+      value: revGrowth === null ? null : r1(revGrowth * 100),
+      display: revGrowth === null ? "—" : pct(revGrowth * 100),
+      min: -10, max: 30, bands: [{ to: 0, s: "bad" }, { to: 4, s: "watch" }, { to: 30, s: "good" }],
+      note: revGrowth === null ? "Needs two forecast years."
+        : revGrowth <= 0 ? "A buyer pays less for a business that is not growing, and asks why."
+        : "Growth a buyer can see in the forecast they are being handed.",
+      bench: "A buyer discounts flat revenue and pays up for consistent growth",
+      formula: "(Year 2 revenue − Year 1 revenue) ÷ Year 1 revenue",
+      reveals: "Whether the earnings being sold are rising or drifting.",
+      confidence: "High.",
+      missing: revGrowth === null ? "Sales lines for Year 1 and Year 2." : undefined,
+    },
+  ];
+}
+
+/**
+ * Price decides the deal, so it is decisive: a business priced above every comparable is not ready to
+ * sell, however good it is. Transferability is next, because it is what makes the earnings survive
+ * settlement — and it is the one most sellers have never thought about.
+ */
+export const SELL_WEIGHTS: Record<string, number> = {
+  priceMultiple: 3, transferability: 2, normalisedMargin: 2, fcfYield: 2,
+  recurringShare: 1.5, cashConversion: 1.5, largestCustomer: 1.5,
+  freeCashFlow: 1, roic: 1, revenueGrowth: 1,
+};

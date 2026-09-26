@@ -157,6 +157,14 @@ export type CapabilityInput = {
   capex: Partial<Record<number, number>>;
   /** The lowest the client said cash should go. Null when they have not said. */
   cashBuffer: number | null;
+  /** Year 1 revenue that comes from products sold as an ongoing client rather than a one-off job. */
+  recurringShare: number | null;
+  /**
+   * What the business is being offered at, and the judgements that go with it. Null until the client
+   * prices it — same reasoning as the loan below: somebody wondering what their business is worth has not
+   * sold it, and an asking price is a position in a negotiation rather than a fact about the plan.
+   */
+  sale: Sale | null;
   /**
    * The loan being considered. Null until the client enters one — every borrowing metric that depends on
    * it then reports itself unanswerable rather than quietly pretending the loan is zero.
@@ -165,6 +173,36 @@ export type CapabilityInput = {
   /** How hard to push the downside. Defaults are stated on screen, not hidden in here. */
   stress: Stress;
 };
+
+export type Sale = {
+  /** Enterprise value being asked. Zero means not priced yet. */
+  askingPrice: number;
+  /**
+   * Owner costs a buyer would not inherit — an above-market salary, the family car, one-off legal fees.
+   * Added back to EBITDA, and every dollar of it is a dollar a buyer's accountant will argue about.
+   */
+  addBacks: number;
+  /** What businesses like this one have actually changed hands for, as a multiple of normalised EBITDA. */
+  multipleLow: number;
+  multipleHigh: number;
+  /**
+   * Will it survive a change of owner? Six judgements, 1 (weak) to 5 (strong), in TRANSFER_FACTORS order.
+   * Empty until somebody scores them — a blank assessment is not a score of zero (§6.89).
+   */
+  transfer: number[];
+};
+
+/** The six things a buyer's advisor actually tests. Fixed, because a moving list cannot be compared. */
+export const TRANSFER_FACTORS = [
+  { key: "owner", label: "Runs without the owner", hint: "Could the business trade for a month if the owner vanished?" },
+  { key: "customers", label: "Customer relationships held by the team", hint: "Do customers deal with the business, or with one person?" },
+  { key: "processes", label: "Written-down processes", hint: "Could a new owner find out how the work is actually done?" },
+  { key: "staff", label: "Key staff likely to stay", hint: "Would the people who matter still be there in a year?" },
+  { key: "contracts", label: "Contracts a buyer can inherit", hint: "Are they assignable, or do they end at a change of control?" },
+  { key: "systems", label: "Systems and records", hint: "Are the books and the systems something a buyer could rely on?" },
+] as const;
+
+export const DEFAULT_SALE: Sale = { askingPrice: 0, addBacks: 0, multipleLow: 3.5, multipleHigh: 4.8, transfer: [] };
 
 export type Proposal = {
   amount: number;

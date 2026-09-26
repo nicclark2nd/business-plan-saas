@@ -3,6 +3,7 @@ import { getSession } from "@/lib/plan";
 import { loadPlan } from "@/lib/planLoad";
 import { runForecast } from "@/engine/forecast/run";
 import { monthlyProfit } from "@/engine/forecast/monthlyProfit";
+import { productYears, sourceOf, recurring, type AnyProduct } from "@/engine/sales/product";
 import { FORECAST_YEARS } from "@/engine/forecast/model";
 import { CapabilitiesModule } from "./CapabilitiesModule";
 import type { PlanFacts } from "./CapabilitiesModule";
@@ -39,6 +40,7 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
   let input: PlanFacts = {
     pnl: {}, cashFlow: {}, balanceSheet: {}, days: {},
     monthlyCash: [], monthlyProfit: [], debtService: {}, capex: {}, cashBuffer: null,
+    recurringShare: null,
   };
 
   try {
@@ -63,8 +65,24 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
       capex[y] = Math.abs(cf.capex);
     }
 
+    /*
+     * HOW MUCH OF NEXT YEAR IS ALREADY SPOKEN FOR (§6.128.2).
+     *
+     * Read from the products themselves — each one is already marked "One-off job" or "Ongoing client" on
+     * the Sales step, and `productYears` is the same revenue projection the forecast runs on. Nobody is
+     * asked a second time for something the plan already knows (§6.41).
+     */
+    const products = (plan.sources.products ?? []) as unknown as AnyProduct[];
+    let recurringRevenue = 0, totalRevenue = 0;
+    for (const prod of products) {
+      const y1 = productYears(prod, sourceOf(prod, products))[0]?.revenue ?? 0;
+      totalRevenue += y1;
+      if (recurring(prod)) recurringRevenue += y1;
+    }
+
     input = {
       ...input,
+      recurringShare: totalRevenue > 0 ? recurringRevenue / totalRevenue : null,
       pnl: f.pnl ?? {},
       cashFlow: f.cashFlow ?? {},
       balanceSheet: f.balanceSheet ?? {},

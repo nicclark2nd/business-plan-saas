@@ -5,6 +5,8 @@ import {
 } from "./model";
 import { growMetrics, GROW_WEIGHTS } from "./grow";
 import { borrowMetrics, stressedCash, BORROW_WEIGHTS } from "./borrow";
+import { sellMetrics, SELL_WEIGHTS } from "./sell";
+import { TRANSFER_FACTORS } from "./model";
 
 /**
  * WHAT THESE TESTS ARE FOR (§6.128).
@@ -20,7 +22,7 @@ const empty: CapabilityInput = {
   money: (v) => `$${Math.round(v).toLocaleString("en-AU")}`,
   pnl: {}, cashFlow: {}, balanceSheet: {}, days: {},
   monthlyCash: [], monthlyProfit: [], debtService: {}, capex: {},
-  cashBuffer: null, proposal: null, stress: DEFAULT_STRESS,
+  cashBuffer: null, proposal: null, stress: DEFAULT_STRESS, sale: null, recurringShare: null,
 };
 
 const pnl = (revenue: number, over_: Partial<Record<string, number>> = {}) => ({
@@ -173,7 +175,7 @@ describe("an empty plan", () => {
    * that cannot answer carries the sentence that would make it answerable.
    */
   it("answers nothing, and says what is wanted for each", () => {
-    for (const metric of [...growMetrics(empty), ...borrowMetrics(empty)]) {
+    for (const metric of [...growMetrics(empty), ...borrowMetrics(empty), ...sellMetrics(empty)]) {
       expect(metric.value, `${metric.key} invented a value`).toBeNull();
       expect(metric.display).toBe("—");
       expect(metric.missing, `${metric.key} has no sentence saying what is missing`).toBeTruthy();
@@ -183,6 +185,7 @@ describe("an empty plan", () => {
   it("produces no score at all rather than a bad one", () => {
     expect(score(growMetrics(empty), GROW_WEIGHTS).value).toBeNull();
     expect(score(borrowMetrics(empty), BORROW_WEIGHTS).value).toBeNull();
+    expect(score(sellMetrics(empty), SELL_WEIGHTS).value).toBeNull();
   });
 });
 
@@ -274,5 +277,69 @@ describe("borrowing, with and without a loan in mind", () => {
     const cap = b.find((x) => x.key === "capacity")!;
     expect(statusOf(cap.value, cap.bands)).toBe("bad");
     expect(cap.note).toContain("larger than");
+  });
+});
+
+
+describe("selling", () => {
+  const priced = (over_ = {}) => full({
+    recurringShare: 0.62,
+    sale: { askingPrice: 3_000_000, addBacks: 80_000, multipleLow: 3.5, multipleHigh: 4.8, transfer: [], ...over_ },
+  });
+
+  it("waits for a price before judging one", () => {
+    const m = sellMetrics(full({ recurringShare: 0.62 })).find((x) => x.key === "priceMultiple")!;
+    expect(m.value).toBeNull();
+    expect(m.missing).toContain("asking price");
+  });
+
+  it("still answers what the forecast knows without a price", () => {
+    const m = sellMetrics(full({ recurringShare: 0.62 }));
+    expect(m.find((x) => x.key === "recurringShare")!.value).toBe(62);
+    expect(m.find((x) => x.key === "cashConversion")!.value).not.toBeNull();
+    expect(m.find((x) => x.key === "roic")!.value).not.toBeNull();
+  });
+
+  /*
+   * A PRICE ABOVE EVERY COMPARABLE IS THE ONE THING THAT STOPS A SALE, so it is weighted decisively and
+   * must hold the whole tab in the at-risk band however good the business is underneath it (§6.128.1).
+   */
+  it("caps the score when the price is above every comparable deal", () => {
+    const m = sellMetrics(priced({ askingPrice: 40_000_000 }));
+    const mult = m.find((x) => x.key === "priceMultiple")!;
+    expect(statusOf(mult.value, mult.bands)).toBe("bad");
+    expect(mult.note).toContain("Above every comparable deal");
+    const s = score(m, SELL_WEIGHTS);
+    expect(s.capped).toContain("priceMultiple");
+    expect(s.value!).toBeLessThan(50);
+  });
+
+  it("adds the add-backs to the earnings the multiple is struck on", () => {
+    const without = sellMetrics(priced({ addBacks: 0 })).find((x) => x.key === "priceMultiple")!.value!;
+    const withBacks = sellMetrics(priced({ addBacks: 200_000 })).find((x) => x.key === "priceMultiple")!.value!;
+    /* More add-backs, bigger earnings, so the same price is a LOWER multiple. */
+    expect(withBacks).toBeLessThan(without);
+  });
+
+  it("will not average a half-finished transferability assessment", () => {
+    const partial = sellMetrics(priced({ transfer: [4, 5, 3] })).find((x) => x.key === "transferability")!;
+    expect(partial.value).toBeNull();
+    expect(partial.missing).toContain("scored");
+
+    const whole = sellMetrics(priced({ transfer: new Array(TRANSFER_FACTORS.length).fill(4) }))
+      .find((x) => x.key === "transferability")!;
+    expect(whole.value).toBe(4);
+  });
+
+  /**
+   * THE CARD THAT CAN NEVER ANSWER, AND MUST STILL APPEAR (§6.128.2). Concentration is the first thing a
+   * buyer's advisor asks and this app holds no customers. Dropping the card would let the tab read as a
+   * complete valuation when it has skipped the largest risk in most small businesses.
+   */
+  it("shows the customer concentration card unanswered rather than hiding it", () => {
+    const m = sellMetrics(priced()).find((x) => x.key === "largestCustomer")!;
+    expect(m.value).toBeNull();
+    expect(m.missing).toContain("records products and segments, not customers");
+    expect(m.bench).toBeTruthy();
   });
 });

@@ -289,13 +289,17 @@ It stays. The walk has to be repeatable, and a plan that starts empty is the onl
 screen quietly reading a year off the wrong field. The name begins with ZZ so it sorts last, and anyone
 finding it in the plan list should leave it alone rather than tidy it away.
 
-### 31. Capability to sell is not built, and needs a data-collection step first
+### ~~31. Capability to sell is not built~~ — **done (§6.128.2)**, one card short
 
-§6.128 built Grow and Borrow. Sell was left out because over half of it asks for facts the app has never
-collected: an asking price, the owner add-backs behind a normalised EBITDA, who the largest customer is
-and what share they are, which contracts can be assigned to a buyer, and a transferability assessment.
-Four of its ten measures (cash conversion, revenue growth, gross margin, return on capital) already
-compute. The rest is a step in its own right, not a screen.
+Built the same day it was opened, and the scoping was wrong rather than the work being large: the asking
+price, the owner add-backs and the comparable multiples are not plan facts, they are a position in a
+negotiation, and they belong where the proposed loan belongs. Eight of ten measures needed no storage at
+all, and recurring revenue share came free from `sold_as` on the Sales step.
+
+**What is still missing: largest-customer share.** Nothing in this app records customers — products and
+market segments, but not who buys. It is the first thing a buyer's advisor asks. The card is on the page,
+unanswered, telling the client to work it out from their own sales ledger. Giving the app customers is a
+real piece of work and probably wants to serve more than this one measure.
 
 ### 32. The capability bands are general, not per-industry
 

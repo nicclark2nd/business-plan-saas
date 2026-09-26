@@ -18,6 +18,8 @@ import { statusOf, type Metric, type Severity } from "./model";
  * The rules are simple on purpose: the worst thing first, then the next, then what to do about each.
  */
 
+export type CapabilityKind = "grow" | "borrow" | "sell";
+
 export type Verdict = {
   headline: string;
   /** One per problem worth naming, in the order a reader should meet them. Already sentences. */
@@ -65,6 +67,15 @@ const ACTIONS: Record<string, string> = {
   quickRatio: "Short-term bills depend on shifting stock. Collect faster, or hold less.",
   currentRatio: "Short-term obligations are close to short-term assets. Watch it before taking on more.",
   interestCover: "Interest is eating the operating profit. Refinance or reduce before borrowing more.",
+  /* Sell */
+  priceMultiple: "Reset the price to the top of your comparable range, or wait and sell stronger numbers.",
+  transferability: "Fix the weakest transferability factor before going to market. A buyer discounts for it far harder than you would.",
+  normalisedMargin: "The margin is thin for a sale. Either improve it for a year, or expect the multiple to reflect it.",
+  fcfYield: "At this price a buyer's money earns too little. The price is the thing to move.",
+  recurringShare: "Convert repeat customers onto something contracted before you go to market — it is the cheapest value you can add.",
+  largestCustomer: "Work out your largest customer's share from your sales ledger. If it is above 20%, secure that contract on assignable terms before a buyer asks.",
+  freeCashFlow: "Thin free cash flow after keeping the assets going. A buyer will notice the capital this business needs.",
+  roic: "The business earns little on the capital it ties up, which caps what anyone will pay for it.",
 };
 
 const HEAD = {
@@ -80,15 +91,22 @@ const HEAD = {
     watch: "Repays in the base case, with little cushion",
     good: "The business can carry this loan",
   },
+  sell: {
+    none: "Not enough of the plan is filled in to judge a sale",
+    bad: "Not ready to sell at this price",
+    watch: "Saleable, with work to do first",
+    good: "This would stand up to a buyer",
+  },
 } as const;
 
 const QUESTION = {
   grow: "Can the business increase profit while funding the cash, people and assets that growth needs?",
   borrow: "Can the business repay this loan on time, including if trading gets worse?",
+  sell: "Would the earnings and the customers survive a change of owner, and is the price justified?",
 } as const;
 
 export function verdict(
-  kind: "grow" | "borrow",
+  kind: CapabilityKind,
   metrics: Metric[],
   weights: Record<string, number>,
   score: number | null,
