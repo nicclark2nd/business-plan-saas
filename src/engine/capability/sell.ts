@@ -1,5 +1,6 @@
 import type { CapabilityInput, Metric } from "./model";
-import { TRANSFER_FACTORS, ebitda, over, r1, r2 } from "./model";
+import { ebitda, over, r1, r2 } from "./model";
+import { TRANSFER_FACTORS } from "./judgements";
 
 /**
  * CAPABILITY TO SELL (§6.128.2).
@@ -7,11 +8,17 @@ import { TRANSFER_FACTORS, ebitda, over, r1, r2 } from "./model";
  * The question: would the earnings and the customers survive a change of owner, and is the price being
  * asked one a buyer could justify?
  *
- * WHY THIS TAB WAS HELD BACK, AND WHAT CHANGED. §6.128 left it out because half of it seemed to want
- * facts the app has never collected. That was half right. The asking price, the owner add-backs and the
- * comparable multiples are not plan facts at all — they are a POSITION IN A NEGOTIATION, and they belong
- * where the proposed loan belongs: typed on the screen, feeding the arithmetic, gone when the client
- * leaves. Once that was seen, eight of the ten measures needed no new storage whatever.
+ * WHERE THE SOFT FIGURES LIVE, AND WHY NOT HERE (§6.129).
+ *
+ * §6.128.2 got this half right and half wrong. The asking price, the owner add-backs and the comparable
+ * multiples are indeed not plan facts — they are a POSITION IN A NEGOTIATION — but the conclusion drawn from
+ * that was "so type them on the dashboard and throw them away", which meant the sale score changed between
+ * two visits and nothing could print it. They are beliefs, and a plan is allowed to store a belief: the four
+ * numbers are now in Plan settings → Exit & sale, and the six change-of-owner judgements are scored on
+ * Leadership Team → Risk & Succession, where they are also the key-person risk a lender asks about.
+ *
+ * So this file reads and judges. It collects nothing, and a measure with no figure behind it names the box
+ * that would fill it rather than growing one.
  *
  * TWO THINGS ARE STILL MISSING AND SAY SO. Nothing in this app holds customers, so the concentration
  * measure a buyer cares most about cannot be answered at all — it sits on the screen dark, with the
@@ -28,10 +35,13 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
   const cf1 = i.cashFlow[1];
   const m = i.money;
   const sale = i.sale;
+  const FIX_PRICE = { label: "Set the asking price", to: "settings?area=exit" };
+  const FIX_RANGE = { label: "Set the comparable range", to: "settings?area=exit" };
+  const FIX_TRANSFER = { label: "Score the six factors", to: "people?area=risk" };
 
   const e1 = ebitda(y1);
   /* Normalised: what a buyer would inherit, once the seller's own costs are put back. */
-  const normalised = e1 === null ? null : r2(e1 + (sale?.addBacks ?? 0));
+  const normalised = e1 === null ? null : r2(e1 + (sale.addBacks ?? 0));
   const normalisedMargin = y1?.revenue ? over(normalised, y1.revenue) : null;
 
   const conversion = cf1 && e1 ? over(cf1.netOperating, e1) : null;
@@ -52,38 +62,57 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
   const invested = bs1 ? bs1.equity + bs1.debtCurrent + bs1.debtNonCurrent : null;
   const roic = y1 && invested && invested > 0 ? over(y1.operatingProfit * (1 - taxRate), invested) : null;
 
-  const price = sale && sale.askingPrice > 0 ? sale.askingPrice : null;
+  const price = sale.askingPrice !== null && sale.askingPrice > 0 ? sale.askingPrice : null;
   const multiple = price && normalised && normalised > 0 ? over(price, normalised) : null;
   const yieldOnPrice = price && fcf !== null ? over(fcf, price) : null;
 
-  const scored = sale?.transfer?.filter((v) => v > 0) ?? [];
+  /*
+   * ALL SIX OR NOTHING (§6.89). An average over four of the six factors is not a partial answer, it is a
+   * flattering one — whichever two were skipped are the two a seller was least comfortable scoring. Rows only
+   * exist for factors actually judged, so counting them is the check.
+   */
+  const scored = i.transfer.filter((t) => t.score > 0).map((t) => t.score);
   const transfer = scored.length === TRANSFER_FACTORS.length
     ? r1(scored.reduce((a, b) => a + b, 0) / scored.length) : null;
+  /* Named in the sentence below, because "3 of 6 scored" is more use than "not answered". */
+  const transferNote = i.transfer.find((t) => t.score > 0 && (t.note ?? "").trim())?.note ?? null;
 
   const leadershipShare = i.leadershipPay !== null && normalised && normalised > 0
     ? over(i.leadershipPay, normalised) : null;
   const intensity = bs1 && y1?.revenue ? over(bs1.fixedAssets, y1.revenue) : null;
 
-  const high = sale?.multipleHigh ?? 0;
-  const low = sale?.multipleLow ?? 0;
+  /* Both or neither: a range with one end is not a range, and the price dial needs a top to judge against. */
+  const ranged = sale.multipleLow !== null && sale.multipleHigh !== null;
+  const high = sale.multipleHigh ?? 0;
+  const low = sale.multipleLow ?? 0;
 
   return [
     {
       key: "priceMultiple", name: "Asking price ÷ normalised EBITDA", unit: "x",
-      value: multiple === null ? null : r2(multiple),
+      /*
+       * THIS IS THE DECISIVE MEASURE, so it is the one that must not be judged on half its inputs. A price
+       * with no comparable range has nothing to be too high against, so the value waits — and because the
+       * weight is 3, guessing a range here would cap a perfectly sound plan at 49 on a number the app made up.
+       */
+      value: multiple === null || !ranged ? null : r2(multiple),
       display: multiple === null ? "—" : `${r2(multiple)}×`,
       min: 0, max: Math.max(8, high * 1.6),
-      bands: [{ to: high, s: "good" }, { to: high + 0.4, s: "watch" }, { to: Number.MAX_SAFE_INTEGER, s: "bad" }],
+      bands: ranged
+        ? [{ to: high, s: "good" }, { to: high + 0.4, s: "watch" }, { to: Number.MAX_SAFE_INTEGER, s: "bad" }]
+        : [{ to: Number.MAX_SAFE_INTEGER, s: "good" }],
       sub: price && normalised ? `${m(price)} against ${m(normalised)} of normalised earnings` : undefined,
       note: multiple === null ? "The one number a buyer decides on."
+        : !ranged ? `The price is ${r2(multiple)}× normalised earnings. Whether that is high or low needs a comparable range to sit it against.`
         : multiple > high ? `Above every comparable deal you have entered. At ${high}× the price would be ${m(normalised! * high)}.`
         : multiple < low ? "Below the range comparable businesses have sold for — you may be leaving money on the table."
         : "Inside the range you have said comparable businesses sell for.",
-      bench: sale ? `Comparable deals ${low}× to ${high}×` : "Set the comparable range above",
-      formula: "Asking price ÷ (EBITDA + the owner add-backs entered above)",
+      bench: ranged ? `Comparable deals ${low}× to ${high}×` : "Set the comparable range in Plan settings",
+      formula: "Asking price ÷ (EBITDA + owner add-backs), both from Plan settings → Exit & sale",
       reveals: "Whether the price can be justified against what similar businesses actually changed hands for.",
       confidence: "The arithmetic is exact; the comparable range is your judgement, and it is the part a buyer will argue with.",
-      missing: multiple === null ? "An asking price above, and a forecast with earnings in it." : undefined,
+      missing: multiple === null ? "An asking price in Plan settings, and a forecast with earnings in it."
+        : !ranged ? "What comparable businesses sold for, in Plan settings." : undefined,
+      fix: multiple === null ? FIX_PRICE : !ranged ? FIX_RANGE : undefined,
     },
     {
       key: "normalisedMargin", name: "Normalised EBITDA margin", unit: "pct",
@@ -91,11 +120,17 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       display: normalisedMargin === null ? "—" : pct(normalisedMargin * 100),
       min: 0, max: 30, bands: [{ to: 8, s: "bad" }, { to: 12, s: "watch" }, { to: 30, s: "good" }],
       sub: normalised !== null && y1 ? `${m(normalised)} on ${m(y1.revenue)}` : undefined,
+      /*
+       * A LOSS IS SAID IN WORDS, NOT LEFT TO A MINUS SIGN (§6.115.1). On SEQ this card read "−3.5%" over the
+       * sentence "No add-backs entered, so this is the plan's own EBITDA" — a note about bookkeeping on a
+       * business that has nothing to sell. The worst fact goes first, always.
+       */
       note: normalisedMargin === null ? "Needs a Year 1 forecast."
-        : sale?.addBacks ? `Includes ${m(sale.addBacks)} of add-backs — every one of those will be tested by a buyer's accountant.`
+        : normalisedMargin < 0 ? `The business makes a loss of ${m(Math.abs(normalised ?? 0))} before interest, tax and depreciation. Nobody buys a multiple of a loss${sale.addBacks ? ", and the add-backs already entered do not close it" : " — add-backs, if you have any, are the first thing to put in"}.`
+        : sale.addBacks ? `Includes ${m(sale.addBacks)} of add-backs — every one of those will be tested by a buyer's accountant.`
         : "No add-backs entered, so this is the plan's own EBITDA. Most owner-run businesses have some.",
       bench: "8% to 12% is ordinary for a small business; above that is a selling point",
-      formula: "(EBITDA + owner add-backs) ÷ revenue",
+      formula: "(EBITDA + owner add-backs from Plan settings) ÷ revenue",
       reveals: "The operating profit a buyer might reasonably expect to inherit.",
       confidence: "Medium once add-backs are entered — they are a claim, not a measurement.",
       missing: normalisedMargin === null ? "A Year 1 forecast with sales and costs." : undefined,
@@ -113,22 +148,27 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       formula: "Free cash flow ÷ asking price",
       reveals: "The cash return the price implies, before financing and deal costs.",
       confidence: "Medium — it inherits the maintenance-capex assumption below.",
-      missing: yieldOnPrice === null ? "An asking price above." : undefined,
+      missing: yieldOnPrice === null ? "An asking price, in Plan settings → Exit & sale." : undefined,
+      fix: yieldOnPrice === null ? FIX_PRICE : undefined,
     },
     {
       key: "transferability", name: "Survives a change of owner", unit: "plain",
       value: transfer, display: transfer === null ? "—" : `${transfer} / 5`,
       min: 1, max: 5, bands: [{ to: 2.5, s: "bad" }, { to: 3.5, s: "watch" }, { to: 5, s: "good" }],
-      sub: transfer === null ? undefined : `Average of ${TRANSFER_FACTORS.length} judgements`,
-      note: transfer === null ? "Score the six factors above and this answers."
+      sub: transfer === null
+        ? `${scored.length} of ${TRANSFER_FACTORS.length} scored`
+        : `Average of ${TRANSFER_FACTORS.length} judgements`,
+      note: transfer === null
+        ? `Six judgements on Leadership Team → Risk & Succession, ${scored.length} of them made so far. The average waits for all six, because the two left out would be the two least comfortable to score.`
         : transfer < 2.5 ? "Most of what makes this business work would walk out with the owner. That is the thing that kills sales, more often than price."
-        : transfer < 3.5 ? "Transferable with work. Each weak factor is something to fix before going to market, not during."
+        : transfer < 3.5 ? `Transferable with work. Each weak factor is something to fix before going to market, not during.${transferNote ? ` Your own note: “${transferNote}”.` : ""}`
         : "The business would keep running under someone else, which is what a buyer is actually buying.",
       bench: "Below 3 and a buyer is buying a job, not a business",
-      formula: `The average of the ${TRANSFER_FACTORS.length} scores above, each 1 to 5`,
+      formula: `The average of the ${TRANSFER_FACTORS.length} judgements scored on Leadership Team → Risk & Succession, each 1 to 5`,
       reveals: "Whether there is a business here or an owner with customers.",
       confidence: "It is a judgement, yours or your client's. It is the softest thing on this page and often the most important.",
-      missing: transfer === null ? `All ${TRANSFER_FACTORS.length} factors scored above.` : undefined,
+      missing: transfer === null ? `All ${TRANSFER_FACTORS.length} factors scored on Leadership Team → Risk & Succession.` : undefined,
+      fix: transfer === null ? FIX_TRANSFER : undefined,
     },
     {
       key: "recurringShare", name: "Revenue from ongoing clients", unit: "pct",
@@ -143,6 +183,7 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       reveals: "How much of the revenue a buyer inherits rather than has to go and win.",
       confidence: "High — it reads how you marked each product on the Sales step.",
       missing: i.recurringShare === null ? "Products on the Sales step, marked one-off or ongoing." : undefined,
+      fix: i.recurringShare === null ? { label: "Add products", to: "sales" } : undefined,
     },
     {
       /*
@@ -168,13 +209,16 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       reveals: "How much of the earnings depend on one thing continuing to sell.",
       confidence: "High for products — but this is NOT customer concentration, which is what a buyer asks first. This app holds no customers; work that one out from your sales ledger.",
       missing: i.largestProductShare === null ? "Products on the Sales step." : undefined,
+      fix: i.largestProductShare === null ? { label: "Add products", to: "sales" } : undefined,
     },
     {
       key: "leadershipPay", name: "Leadership pay against earnings", unit: "pct",
       value: leadershipShare === null ? null : r1(leadershipShare * 100),
       display: leadershipShare === null ? "—" : pct(leadershipShare * 100),
       min: 0, max: 150, bands: [{ to: 40, s: "good" }, { to: 80, s: "watch" }, { to: 150, s: "bad" }],
-      sub: i.leadershipPay !== null && normalised ? `${m(i.leadershipPay)} against ${m(normalised)}` : undefined,
+      /* No "141,400 against −76,054": a share of a negative number is not a comparison, so the sub goes. */
+      sub: i.leadershipPay !== null && normalised !== null && normalised > 0
+        ? `${m(i.leadershipPay)} against ${m(normalised)}` : undefined,
       /*
        * TWO REASONS TO BE BLANK, AND THEY ARE NOT THE SAME SENTENCE (§6.128.4).
        *
@@ -197,6 +241,8 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
             ? `${m(i.leadershipPay)} of leadership pay, against earnings that are not positive.`
             : "People on the Leadership Team step.")
         : undefined,
+      /* No pencil when the earnings are the problem: there is no box on any screen that fixes a loss. */
+      fix: leadershipShare === null && i.leadershipPay === null ? { label: "Add the leadership team", to: "people" } : undefined,
     },
     {
       key: "assetIntensity", name: "Assets behind each dollar of sales", unit: "cents",
@@ -234,6 +280,7 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       min: 0, max: 20, bands: [{ to: 3, s: "bad" }, { to: 6, s: "watch" }, { to: 20, s: "good" }],
       sub: fcfMargin === null ? undefined : `${pct(fcfMargin * 100)} of revenue`,
       note: fcf === null ? "Needs a Year 1 forecast."
+        : fcf < 0 ? `The business consumes ${m(Math.abs(fcf))} a year once the assets are kept standing still. A buyer would be funding it, not drawing from it.`
         : "Cash left after keeping the assets standing still — the money a buyer would actually see.",
       bench: "5% to 7% of revenue is respectable for a small business",
       formula: "Year 1 cash from operations − maintenance capital spending",
@@ -276,9 +323,16 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
  * Price decides the deal, so it is decisive: a business priced above every comparable is not ready to
  * sell, however good it is. Transferability is next, because it is what makes the earnings survive
  * settlement — and it is the one most sellers have never thought about.
+ *
+ * NORMALISED MARGIN IS NOW DECISIVE TOO (§6.129.1), and it is the same argument §6.128.1 made about growth.
+ * SEQ scored 58 and read "Saleable, with work to do first" on a business losing 76,000 a year, because the
+ * one measure that could have capped it — the price against comparables — was unanswerable for want of an
+ * asking price, and eight tidy measures carried the rest. A business with no earnings is not saleable with
+ * work to do first; there is nothing to apply a multiple to. Weighted decisively, the loss holds the whole
+ * tab in the at-risk band and the screen names which measure did it.
  */
 export const SELL_WEIGHTS: Record<string, number> = {
-  priceMultiple: 3, transferability: 2, normalisedMargin: 2, fcfYield: 2,
+  priceMultiple: 3, normalisedMargin: 3, transferability: 2, fcfYield: 2,
   recurringShare: 1.5, cashConversion: 1.5, largestProduct: 1.5, leadershipPay: 1.5,
   freeCashFlow: 1, roic: 1, revenueGrowth: 1, assetIntensity: 1,
 };

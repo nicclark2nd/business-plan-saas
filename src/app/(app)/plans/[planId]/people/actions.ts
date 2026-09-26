@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
 import { PERSON_ROLES, CAPABILITY_KINDS, parseMonth, type Person, type Capability, type CapabilityKind } from "./model";
+import { TRANSFER_FACTORS, type TransferFactor } from "@/engine/capability/judgements";
 import { nextHref } from "@/lib/nav";
 import { failed } from "@/lib/actionFailed";
 
@@ -63,6 +64,50 @@ export async function deleteCapability(planId: string, id: string): Promise<Resu
   const supabase = await createClient();
   const { error } = await supabase.from("plan_people_capabilities").delete().eq("id", id).eq("plan_id", planId);
   if (error) return failed(error, "remove the capability");
+  touch(planId); return { ok: true };
+}
+
+// ---------- risk & succession: would it survive a change of owner? ----------
+/**
+ * One of the six judgements (§6.129).
+ *
+ * A SCORE OF NULL DELETES THE ROW rather than storing a nought. The average is taken over what was actually
+ * scored, and the screen says "4 of 6 scored" — both of which need "unjudged" to be the absence of a row,
+ * not a value in one. Scoring something 0 out of 5 would drag the average down and claim a finding nobody
+ * made (§6.89).
+ *
+ * A NOTE WITHOUT A SCORE IS KEPT, because somebody typing "every quote still goes through Dave" before they
+ * have decided on a number has done the useful half of the work. That row carries a note and no score, so
+ * the count and the average still exclude it.
+ */
+export async function saveTransferRating(planId: string, factor: TransferFactor, score: number | null, note: string | null): Promise<Result> {
+  if (!TRANSFER_FACTORS.some((f) => f.key === factor)) return { ok: false, error: "That is not one of the six factors." };
+  const supabase = await createClient();
+  const text = (note ?? "").trim() || null;
+
+  if (score === null && !text) {
+    const { error } = await supabase.from("plan_transfer_ratings").delete().eq("plan_id", planId).eq("factor", factor);
+    if (error) return failed(error, "clear that judgement");
+    touch(planId); return { ok: true };
+  }
+
+  const n = score === null ? null : Math.min(5, Math.max(1, Math.round(score)));
+  /*
+   * The column is NOT NULL, so a note-without-a-score cannot be stored as a null score. It is stored with
+   * the score column absent from the patch on an update, and — on an insert, where something must go in —
+   * the row simply is not written until a score exists. The screen keeps the typed note in state meanwhile
+   * and saves it the moment a number is chosen, which is the behaviour a client expects anyway.
+   */
+  if (n === null) {
+    const { error } = await supabase.from("plan_transfer_ratings").update({ note: text })
+      .eq("plan_id", planId).eq("factor", factor);
+    if (error) return failed(error, "save that note");
+    touch(planId); return { ok: true };
+  }
+
+  const { error } = await supabase.from("plan_transfer_ratings")
+    .upsert({ plan_id: planId, factor, score: n, note: text }, { onConflict: "plan_id,factor" });
+  if (error) return failed(error, "save that judgement");
   touch(planId); return { ok: true };
 }
 

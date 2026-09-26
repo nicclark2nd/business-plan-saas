@@ -41,6 +41,8 @@ export default async function AssetsPage({ params }: { params: Promise<{ planId:
     start_month: Number(a.start_month ?? 1) || 1,
     already_owned: a.already_owned === true,
     sold_in_month: sold[a.id as string] ?? null,
+    /* Nullable all the way through: Number(null) is 0, and 0 is a different claim from silence (§6.89). */
+    security_value: a.security_value === null || a.security_value === undefined ? null : Number(a.security_value),
   })) as AssetRow[];
 
   // A financed asset carries the name of the loan that bought it, so the chain can say where to look.

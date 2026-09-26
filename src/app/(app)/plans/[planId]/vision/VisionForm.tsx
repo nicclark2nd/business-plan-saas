@@ -8,7 +8,7 @@ import { useStep } from "@/components/guided/StepFrame";
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { saveVision } from "./actions";
-import { VISION_FIELDS, type VisionValues } from "./fields";
+import { VISION_FIELDS, visionDraftable, type VisionValues } from "./fields";
 import { DraftField, type Drafting } from "@/components/module/DraftField";
 
 export function VisionForm({ planId, initial, drafting = {} }: { planId: string; initial: VisionValues; drafting?: Drafting }) {
@@ -21,7 +21,13 @@ export function VisionForm({ planId, initial, drafting = {} }: { planId: string;
 
   return (
     <>
-      {/* n-of-6 strip: every multi-field step shows what's on the page and how far along you are */}
+      {/*
+        * n-of-n strip: every multi-field step shows what's on the page and how far along you are.
+        *
+        * COUNTED, NOT WRITTEN OUT. Both numbers were the literal 6, and adding a seventh statement (§6.129)
+        * would have left a page of seven fields reporting "5 of 6 written · all six on this page" — one fact
+        * written down twice, which is the fault this project keeps finding in new costumes (§6.41).
+        */}
       <div className="mb-4 flex flex-wrap items-center gap-1.5">
         {VISION_FIELDS.map((f) => (
           <a key={f.key} href={`#${f.key}`}
@@ -30,7 +36,7 @@ export function VisionForm({ planId, initial, drafting = {} }: { planId: string;
             {f.n} {f.label}
           </a>
         ))}
-        <span className="ml-auto text-xs text-muted-foreground">{written} of 6 written · all six on this page</span>
+        <span className="ml-auto text-xs text-muted-foreground">{written} of {VISION_FIELDS.length} written · all {VISION_FIELDS.length} on this page</span>
       </div>
 
       <form id="vision-form" action={formAction} className="space-y-4">
@@ -48,9 +54,12 @@ export function VisionForm({ planId, initial, drafting = {} }: { planId: string;
 
               The button itself is DraftField now (6.109), shared with every other step that grows one.
             */}
-            <DraftField planId={planId} field={{ key: f.key, label: f.label, sub: f.sub, hint: "hint" in f ? f.hint : undefined }}
-              offer={drafting[f.key]} value={values[f.key]}
-              onUse={(text) => setValues((v) => ({ ...v, [f.key]: text }))} />
+            {/* A field that refuses drafting grows no button at all — absent, not disabled (§6.106). */}
+            {visionDraftable(f) && (
+              <DraftField planId={planId} field={{ key: f.key, label: f.label, sub: f.sub, hint: "hint" in f ? f.hint : undefined }}
+                offer={drafting[f.key]} value={values[f.key]}
+                onUse={(text) => setValues((v) => ({ ...v, [f.key]: text }))} />
+            )}
           </div>
         ))}
         <FormError>{state?.error}</FormError>

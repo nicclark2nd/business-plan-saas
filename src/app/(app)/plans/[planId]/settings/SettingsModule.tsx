@@ -10,7 +10,8 @@ import { currentFinancialYear, firstProjectedYear, planYearEnding, planYearLabel
 import { taxComponents, taxHeading } from "@/engine/plan/gst";
 import { needsRegion, regimeFor, regionLabel, regionsFor, type TaxComponent } from "@/engine/plan/taxRegimes";
 import { formatMonth } from "../people/model";
-import { saveProfile, saveFinancial, savePrinting, saveAiConsent } from "./actions";
+import { FORECAST_YEARS } from "@/engine/forecast/model";
+import { saveProfile, saveFinancial, savePrinting, saveAiConsent, saveExit } from "./actions";
 import { Button } from "@/components/ui/button";
 import { DraftDialog, type DraftQuestion } from "@/components/module/DraftDialog";
 import { DRAFTABLE } from "@/engine/ai/fields";
@@ -22,7 +23,16 @@ import { legalStructuresFor, CUSTOMER_TYPES, PRODUCT_TYPES, COUNTRIES, CURRENCIE
 import { navGroup } from "@/lib/nav";
 import { governingLawNote } from "@/engine/plan/jurisdiction";
 
-type AreaKey = "profile" | "financial" | "printing" | "ai" | "branding" | "lifecycle";
+type AreaKey = "profile" | "financial" | "printing" | "exit" | "ai" | "branding" | "lifecycle";
+type ExitKey = "asking_price" | "owner_add_backs" | "multiple_low" | "multiple_high";
+/** A stored figure into a box, and back. Empty is null, never nought (§6.89). */
+const exStr = (v: number | null) => (v === null || v === undefined ? "" : String(v));
+const exNum = (raw: string): number | null => {
+  const t = raw.trim();
+  if (!t) return null;
+  const x = Number(t.replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(x) ? x : null;
+};
 const opts = (xs: string[]) => xs.map((x) => ({ value: x, label: x }));
 
 export function SettingsModule({ planId, initial, mode, initialArea, licences, logoUrl, archivedAt, inventory, drafting = {}}: {
@@ -140,6 +150,43 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
    * The licence list saves on its own schedule, so it reports its own state up rather than sharing `dirty`.
    * One PendingBridge per module: two of them race and the footer flickers between "Saving" and "Saved".
    */
+  /**
+   * EXIT & SALE, RAW STRINGS, PARSED ON BLUR (§6.129). The same shape as every other nullable numeric box in
+   * the app and for the same two reasons: a decimal point cannot be typed into a box that re-parses on every
+   * keystroke, and a cleared box has to be able to mean "not priced" rather than "priced at nothing".
+   */
+  const [ex, setEx] = useState<Record<ExitKey, string>>({
+    asking_price: exStr(initial.asking_price), owner_add_backs: exStr(initial.owner_add_backs),
+    multiple_low: exStr(initial.multiple_low), multiple_high: exStr(initial.multiple_high),
+  });
+  const [exitYear, setExitYear] = useState<number | null>(initial.intended_exit_year ?? null);
+  /*
+   * THE REF IS WRITTEN ON THE EDIT, NOT AFTER THE RENDER (§6.129). Spreading the closure's `ex` means two
+   * boxes filled in quick succession build the second patch from a state that has not caught up, and the
+   * first figure is silently dropped. Found on the built Assumptions screen; fixed in both places.
+   */
+  const exRef = useRef(ex);
+  const editEx = (k: ExitKey, v: string) => {
+    const next = { ...exRef.current, [k]: v };
+    exRef.current = next;
+    setEx(next);
+  };
+  const yrRef = useRef(exitYear); useEffect(() => { yrRef.current = exitYear; }, [exitYear]);
+  /*
+   * ONE SAVE FOR THE WHOLE TAB, not one per box, because the low/high check is a relationship between two of
+   * them: sending a low on its own cannot know what it will be compared against. Fired on blur and on a
+   * choice, which is the same policy as everywhere else (§6.10).
+   */
+  const commitExit = () => start(async () => {
+    const res = await saveExit(planId, {
+      asking_price: exNum(exRef.current.asking_price), owner_add_backs: exNum(exRef.current.owner_add_backs),
+      multiple_low: exNum(exRef.current.multiple_low), multiple_high: exNum(exRef.current.multiple_high),
+      intended_exit_year: yrRef.current,
+    });
+    if (!res.ok) errors.raise({ key: "exit", message: res.error, field: res.field, label: "Exit & sale" });
+    else errors.clear("exit");
+  });
+
   const [licBusy, setLicBusy] = useState(false);
   const raise = errors.raise, clear = errors.clear;
   /** Licences and the logo report under their own keys, so neither can erase the other (§6.98). */
@@ -160,6 +207,12 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
         { key: "profile", label: "Business profile", ...(missing.length ? { count: missing.length } : {}) },
         { key: "financial", label: "Financial year & tax" },
         { key: "printing", label: "How the plan prints" },
+        /*
+         * EXIT & SALE (§6.129). Here rather than on the capability dashboard that reads it, because a
+         * dashboard that collects data is a form wearing a disguise — and because these five figures were
+         * typed there, unsaved, and gone on refresh, so the sale score changed every visit.
+         */
+        { key: "exit", label: "Exit & sale" },
         { key: "ai", label: "AI drafting" },
         { key: "branding", label: "Branding" },
         { key: "lifecycle", label: "Archive & delete" },
@@ -355,6 +408,79 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
         </>
         );
       })()}
+
+      {/*
+        * EXIT & SALE (§6.129) — five figures the forecast cannot produce, and an explanation of two of them,
+        * because Nic did not know what owner add-backs or comparable multiples were and neither will most
+        * clients. A field whose meaning has to be guessed at collects noise.
+        */}
+      {area === "exit" && (
+        <>
+          <Toolbar><Meta className="ml-0">
+            What you would want for the business, and what businesses like it have actually sold for. None of
+            this changes a forecast figure — it is what the <b>Capability to sell</b> dials measure the plan against.
+          </Meta></Toolbar>
+          <Section title="The price">
+            <FieldGrid>
+              <Field label="Asking price" span={2} error={errors.forField("asking_price")}
+                hint="Enterprise value — the business, not the business plus your house. Leave it empty until you have a number in mind.">
+                <FieldInput numeric placeholder="Not priced" disabled={pending}
+                  value={ex.asking_price} onChange={(e) => editEx("asking_price", e.target.value)}
+                  onBlur={commitExit} />
+              </Field>
+              <Field label="Owner add-backs" span={2}
+                hint="Costs in the books that a new owner would not inherit. A year's worth, not five.">
+                <FieldInput numeric placeholder="0" disabled={pending}
+                  value={ex.owner_add_backs} onChange={(e) => editEx("owner_add_backs", e.target.value)}
+                  onBlur={commitExit} />
+              </Field>
+              <Field label="Comparable deals, low" span={1} error={errors.forField("multiple_low")}
+                hint="× EBITDA">
+                <FieldInput numeric placeholder="—" disabled={pending}
+                  value={ex.multiple_low} onChange={(e) => editEx("multiple_low", e.target.value)}
+                  onBlur={commitExit} />
+              </Field>
+              <Field label="Comparable deals, high" span={1} hint="× EBITDA">
+                <FieldInput numeric placeholder="—" disabled={pending}
+                  value={ex.multiple_high} onChange={(e) => editEx("multiple_high", e.target.value)}
+                  onBlur={commitExit} />
+              </Field>
+              <Field label="Aiming to sell in" span={2} hint="Optional. Which year of the plan the sale is pointed at.">
+                <FieldSelect value={exitYear === null ? "" : String(exitYear)}
+                  options={[{ value: "", label: "Not decided" }, ...FORECAST_YEARS.map((y) => ({ value: String(y), label: `Year ${y}` }))]}
+                  onValueChange={(v) => { setExitYear(v ? Number(v) : null); yrRef.current = v ? Number(v) : null; commitExit(); }} />
+              </Field>
+            </FieldGrid>
+          </Section>
+          <Section title="What those two words mean">
+            <div className="grid gap-2.5 text-[12.5px] leading-relaxed text-muted-foreground max-w-[86ch]">
+              <p>
+                <b className="text-foreground">Owner add-backs</b> are costs sitting in the accounts that only exist because
+                <i> you</i> run the business, and which a new owner would not pay: your salary above what a hired manager
+                would cost, a spouse on the books, the family car, personal travel, one-off legal fees. A buyer values the
+                business on what it would earn under ordinary management, so those costs are added back to the earnings
+                before a multiple is applied. Every dollar of it is a dollar a buyer&apos;s accountant will argue about, so
+                put in what you could actually defend with a document.
+              </p>
+              <p>
+                <b className="text-foreground">Comparable deal multiples</b> are what businesses like this one have actually
+                changed hands for, expressed as a multiple of those normalised earnings. A small trade business with the
+                owner in the truck might be 2.5–3.5×; the same revenue with recurring contracts and a manager running it,
+                4–5×. The low and high give a range to sit the asking price inside. A broker&apos;s report, industry
+                benchmarking data or the client&apos;s accountant is where the figures come from — the app does not know them,
+                and a number it invented would be worse than none.
+              </p>
+            </div>
+          </Section>
+          <Section title="Would it survive a change of owner?">
+            <p className="max-w-[86ch] text-[12.5px] leading-relaxed text-muted-foreground">
+              That question is six judgements about the people and the systems, and it is scored under{" "}
+              <b className="text-foreground">Leadership Team → Risk &amp; Succession</b> rather than here, because it is the
+              same thing a lender calls key-person risk and it should only be answered once.
+            </p>
+          </Section>
+        </>
+      )}
 
       {area === "ai" && (
         <>

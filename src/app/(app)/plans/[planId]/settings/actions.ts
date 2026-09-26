@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { parseMonth } from "../people/model";
-import type { Profile, Financial, Printing, Licence } from "./model";
+import type { Profile, Financial, Printing, Exit, Licence } from "./model";
 import { serializeComponents } from "@/engine/plan/gst";
 import { checkLogo, logoObjectPath, LOGO_BUCKET } from "@/engine/plan/logo";
 import { checkEmail, checkWebsite } from "@/engine/plan/contact";
@@ -155,6 +155,36 @@ export async function savePrinting(planId: string, p: Partial<Printing>): Promis
     page_size: size,
   }, { onConflict: "plan_id" });
   if (error) return failed(error, "save the printing settings");
+  touch(planId);
+  return { ok: true };
+}
+
+/**
+ * Exit & sale (§6.129).
+ *
+ * NOTHING IS COERCED TO A NUMBER HERE. Every other numeric save on this screen clamps, because every other
+ * figure has a range the plan can defend — a tax rate cannot exceed 100. These five have no such range, and
+ * the only thing that would be lost by clamping is the distinction the screen depends on: an empty box is
+ * NULL, and null is how "this business has not been priced" is stored (§6.89).
+ *
+ * The one check is that the low multiple is not above the high one, which is a typo rather than an opinion —
+ * the database carries the same constraint, and this catches it before the round trip so the message can name
+ * the box. Nothing here has a view on whether 4x is right for a concreter (open item 32).
+ */
+export async function saveExit(planId: string, e: Partial<Exit>): Promise<Result> {
+  const lo = e.multiple_low ?? null, hi = e.multiple_high ?? null;
+  if (lo !== null && hi !== null && lo > hi) {
+    return { ok: false, error: "The low multiple is above the high one.", field: "multiple_low" };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.from("plan_settings").upsert({
+    plan_id: planId,
+    asking_price: e.asking_price ?? null,
+    owner_add_backs: e.owner_add_backs ?? null,
+    multiple_low: lo, multiple_high: hi,
+    intended_exit_year: e.intended_exit_year ?? null,
+  }, { onConflict: "plan_id" });
+  if (error) return failed(error, "save the sale figures");
   touch(planId);
   return { ok: true };
 }

@@ -64,3 +64,29 @@ export async function revertToHistoricDays(planId: string): Promise<Result> {
 export async function continueFromAssumptions(planId: string, intent: "next" | "later") {
   redirect(intent === "next" ? nextHref(planId, "assumptions") : `/plans/${planId}/dashboard`);
 }
+
+/**
+ * The cash floor, the cost of capital and the downside case (§6.129).
+ *
+ * Five figures that used to be typed on the Financial Capabilities dashboard and lost on refresh. They are
+ * assumptions about how the business is run and how bad a year it is asked to survive, so they belong on
+ * this screen with the days — and being stored, they can print in a funding report and mean the same thing
+ * next week.
+ *
+ * NULL IS SAVED AS NULL. A client who clears the cash-floor box has not said "zero", they have unsaid their
+ * answer, and the growth dial has to be able to tell the difference (§6.89). So the patch carries nulls
+ * through rather than coercing a blank box to a number.
+ */
+export async function saveCapitalAssumptions(planId: string, patch: {
+  cash_floor?: number | null;
+  cost_of_capital?: number | null;
+  stress_sales_pct?: number | null;
+  stress_margin_pts?: number | null;
+  stress_debtor_days?: number | null;
+}): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("plan_settings").update(patch).eq("plan_id", planId);
+  if (error) return failed(error, "save these assumptions");
+  revalidatePath(`/plans/${planId}`, "layout");
+  return { ok: true };
+}

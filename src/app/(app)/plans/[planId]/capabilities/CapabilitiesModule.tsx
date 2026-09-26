@@ -1,25 +1,29 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { ModuleFrame, ModuleFooter } from "@/components/module/ModuleFrame";
-import { CellInput, Note } from "@/components/module/DataGrid";
-import { StatTile, TileRow, useWidth, type Severity as ChartSeverity } from "@/components/chart/core";
+import { Note } from "@/components/module/DataGrid";
+import { useWidth, type Severity as ChartSeverity } from "@/components/chart/core";
 import { MiniDial, RangeBar, ScoreDial } from "@/components/chart/plots";
 import { navGroup } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { moneyFormatter } from "@/engine/plan/money";
 import {
-  DEFAULT_GROWTH, DEFAULT_SALE, DEFAULT_STRESS, LENDER_MIN_DSCR, SCORE_BANDS, SEVERITY_LABEL, TRANSFER_FACTORS,
-  borrowingCapacity, score, statusOf,
-  type CapabilityInput, type Growth, type Metric, type Proposal, type Sale, type Severity, type Stress,
+  SCORE_BANDS, SEVERITY_LABEL, borrowingCapacity, score, statusOf,
+  type CapabilityInput, type Metric, type Severity,
 } from "@/engine/capability/model";
+import { LENDER_MIN_DSCR } from "@/engine/capability/judgements";
 import { GROW_WEIGHTS, growMetrics } from "@/engine/capability/grow";
-import { BORROW_WEIGHTS, borrowMetrics, stressedCash } from "@/engine/capability/borrow";
+import { BORROW_WEIGHTS, CAPACITY_TERM_YEARS, borrowMetrics, stressedCash } from "@/engine/capability/borrow";
 import { SELL_WEIGHTS, sellMetrics } from "@/engine/capability/sell";
 import { verdict } from "@/engine/capability/verdict";
 
-/** Everything the server can serialise. The formatter and the scenario are the client's own. */
-export type PlanFacts = Omit<CapabilityInput, "money" | "proposal" | "stress" | "sale" | "growth">;
+/**
+ * Everything the server hands down. Only the money formatter is built here, because a function cannot cross
+ * the boundary — every FIGURE now comes from the plan, including the judgements (§6.129).
+ */
+export type PlanFacts = Omit<CapabilityInput, "money">;
 
 type Tab = "grow" | "borrow" | "sell";
 
@@ -27,37 +31,37 @@ type Tab = "grow" | "borrow" | "sell";
 const TONE: Record<Severity, ChartSeverity> = { good: "good", watch: "warn", bad: "bad" };
 
 /**
- * FINANCIAL CAPABILITIES (§6.128).
+ * FINANCIAL CAPABILITIES (§6.128, rebuilt §6.129).
  *
- * The three questions an owner asks about their own business: can I afford to grow it, can I borrow
- * against it, and could I sell it.
+ * The three questions an owner asks about their own business: can I afford to grow it, can I borrow against
+ * it, and could I sell it.
  *
- * Selling was held back in §6.128 on the reasoning that half of it wanted facts the app had never
- * collected. That was half right, and the half that was wrong is the interesting one: an asking price,
- * the add-backs behind it and the comparable multiples are not facts about the plan at all — they are a
- * position in a negotiation, and they belong exactly where the proposed loan belongs. One card still
- * cannot be answered, customer concentration, and it stays on the page saying so.
+ * THIS SCREEN COLLECTS NOTHING, AND THAT IS THE WHOLE REBUILD.
  *
- * NOTHING HERE IS SAVED. The loan being considered lives in this component and dies with the page, which
- * is the honest shape for a scenario: a client wondering about a loan has not taken one, and writing it
- * into Funding would put debt on their balance sheet because they were curious.
+ * §6.128 put the inputs on the tabs — a cash floor in a tile on the growth tab, a loan proposal in five
+ * boxes on the borrowing tab, an asking price and six scoring strips on the selling tab. Three attempts were
+ * then made to make the three tabs look alike, each treating it as a layout problem: shrink the form, move
+ * the scores into tiles, cut the height. Nic, after the third:
+ *
+ * > "You keep mixing in data entry with visual dials. And you are now getting confused and producing low
+ * > quality UI/UX. THESE THREE TABS ARE FOR DISPLAY - NOT FOR COLLECTING DATA."
+ *
+ * The tabs looked different because they WERE different: each had a different amount of form on it, and no
+ * amount of shrinking makes a form into a dashboard. Worse, none of it saved — every figure was gone on
+ * refresh, so the score changed between two visits and no report could print any of it.
+ *
+ * So every tab is now exactly three things: the verdict, one picture, and the cards. Nothing on the page has
+ * an input in it. A card with no figure behind it draws greyed, with no needle, and carries a PENCIL to the
+ * box on the step that owns the figure — Assumptions for the cash floor and the downside, Plan settings for
+ * the price, Leadership Team for owner dependence, Fixed Assets for security, Funding for the borrowing.
  */
 export function CapabilitiesModule({ planId, mode, currency, facts }: {
   planId: string; mode: "guided" | "advanced"; currency: string; facts: PlanFacts;
 }) {
   const [tab, setTab] = useState<Tab>("grow");
-  const [proposal, setProposal] = useState<Proposal>({ amount: 0, ratePct: 8.5, termYears: 7, undrawn: 0, collateral: null });
-  const [stress, setStress] = useState<Stress>(DEFAULT_STRESS);
-  const [sale, setSale] = useState<Sale>(DEFAULT_SALE);
-  const [growth, setGrowth] = useState<Growth>(DEFAULT_GROWTH);
   const money = useMemo(() => moneyFormatter(currency), [currency]);
 
-  const input: CapabilityInput = useMemo(() => ({
-    ...facts, money,
-    /* A loan of nothing is not a loan: until an amount is entered, every test that needs one stays blank. */
-    proposal: proposal.amount > 0 ? proposal : null,
-    stress, sale, growth,
-  }), [facts, money, proposal, stress, sale, growth]);
+  const input: CapabilityInput = useMemo(() => ({ ...facts, money }), [facts, money]);
 
   const grow = useMemo(() => growMetrics(input), [input]);
   const borrow = useMemo(() => borrowMetrics(input), [input]);
@@ -75,7 +79,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts }: {
   return (
     <ModuleFrame
       group={navGroup("capabilities")} title="Financial Capabilities"
-      subtitle="What your own forecast says about growing this business, borrowing against it and selling it" mode={mode}
+      subtitle="What your own plan says about growing this business, borrowing against it and selling it" mode={mode}
       areas={[
         { key: "grow", label: "Capability to grow", count: growScore.value ?? undefined },
         { key: "borrow", label: "Capability to borrow", count: borrowScore.value ?? undefined },
@@ -85,10 +89,10 @@ export function CapabilitiesModule({ planId, mode, currency, facts }: {
       scope={{ label: "Year 1" }}
       footer={<ModuleFooter planId={planId} moduleId="capabilities" formId="capabilities-form" />}
       help={<>
-        <h3>Nothing here is typed</h3>
-        <p>Every figure on this page is read from the forecast your plan already produces — the same run behind your Profit &amp; Loss, your dashboard and your report. If a number looks wrong, it is wrong on those screens too, and the fix is in the step that owns it.</p>
-        <h3>The one exception</h3>
-        <p>The loan on the borrowing tab, and the asking price, add-backs and transferability judgements on the selling tab. A loan you are <em>considering</em> and a price you are <em>asking</em> are not facts about your plan — they are positions in a negotiation. You enter them here and they are gone when you leave. Nothing on this page writes to your plan.</p>
+        <h3>Nothing is typed on this screen</h3>
+        <p>Every figure here is read from your plan — the same forecast run behind your Profit &amp; Loss, your dashboard and your report. If a number looks wrong, it is wrong on those screens too, and the fix is in the step that owns it.</p>
+        <h3>A grey dial is a question, not a bad score</h3>
+        <p>Some measures need a judgement the forecast cannot make: how low you will let cash go, what your money costs, what you would want for the business, whether it would run without you. Those live on the steps that own them, and a measure waiting on one shows greyed with a <b>pencil</b> that takes you straight to the box.</p>
         <h3>The score</h3>
         <p>Each measure is judged against its band and the judgements are averaged, weighted by how much each matters to the question. <b>A measure the plan cannot answer is left out rather than scored nought</b> — so an unfinished plan gets a score from what it does hold, and the tab says how many measures that was.</p>
         <h3>Where the bands come from</h3>
@@ -97,7 +101,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts }: {
     >
       <form id="capabilities-form" className="hidden" />
 
-      {/* ---------- the verdict ---------- */}
+      {/* ---------- the verdict: identical on all three tabs ---------- */}
       <section className="grid gap-0 border-b border-border @container md:grid-cols-[minmax(220px,300px)_minmax(0,1fr)_minmax(230px,320px)]">
         <div className="flex flex-col items-center justify-center border-b border-border bg-secondary/40 px-5 py-5 text-center md:border-b-0 md:border-r">
           <Dial value={s.value} />
@@ -151,22 +155,21 @@ export function CapabilitiesModule({ planId, mode, currency, facts }: {
         </aside>
       </section>
 
-      {/* ---------- the loan being considered ---------- */}
-      {tab === "grow" && <GrowInputs growth={growth} onGrowth={setGrowth} metrics={grow} money={money} />}
+      {/*
+        ---------- one picture, and every tab has exactly one ----------
 
-      {tab === "sell" && <SaleInputs sale={sale} onSale={setSale} metrics={sell} input={input} money={money} />}
-
-      {tab === "borrow" && (
-        <BorrowInputs
-          proposal={proposal} onProposal={setProposal}
-          stress={stress} onStress={setStress}
-          input={input} money={money}
-        />
-      )}
+        THIS IS WHERE THE THREE TABS USED TO DIVERGE. The growth tab had two tiles and a bar, borrowing had
+        five tiles, a bar and three inline boxes, selling had ten tiles and a bar. Now each tab has a single
+        band showing the one argument it is making: where the worst month falls against the floor, how much
+        borrowing the cash flow carries, where the asking price falls against what the earnings support.
+      */}
+      {tab === "grow" && <WorstMonth planId={planId} metrics={grow} input={input} money={money} />}
+      {tab === "borrow" && <BorrowingRoom planId={planId} input={input} money={money} />}
+      {tab === "sell" && <ValuationRange planId={planId} metrics={sell} input={input} money={money} />}
 
       {/* ---------- the measures ---------- */}
       <div className="grid gap-px bg-border @container sm:grid-cols-2 xl:grid-cols-3">
-        {metrics.map((m) => <Card key={m.key} m={m} />)}
+        {metrics.map((m) => <Card key={m.key} m={m} planId={planId} />)}
       </div>
     </ModuleFrame>
   );
@@ -195,10 +198,32 @@ function Pill({ s }: { s: Severity }) {
 }
 
 /**
+ * THE PENCIL (§6.129).
+ *
+ * A dashboard that cannot be edited has to be able to say where the editing happens, or a grey dial is a
+ * dead end. This is the whole affordance: the word for what is missing, and a link to the tab that holds the
+ * box — not a dialog that writes the figure from here, because a figure entered on a dashboard is how this
+ * feature went wrong the first time.
+ */
+function Pencil({ planId, fix }: { planId: string; fix: { label: string; to: string } }) {
+  return (
+    <Link href={`/plans/${planId}/${fix.to}`}
+      className="mt-1.5 inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-primary no-underline hover:underline">
+      <svg viewBox="0 0 16 16" aria-hidden className="size-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M11.5 2.5l2 2-7.5 7.5-2.5.5.5-2.5z" />
+        <path d="M2.5 14h11" />
+      </svg>
+      {fix.label}
+    </Link>
+  );
+}
+
+/**
  * ONE MEASURE.
  *
- * The track rather than a dial, for the three reasons `Meter` gives — and the value is printed at full
- * size beside it, because the number is the thing and the bar is the context (§6.49.2).
+ * The dial and the numeral side by side (§6.128.3): the arc shows how far through its range the value sits
+ * and which band caught it, and the numeral is what a reader actually compares between cards. Neither on its
+ * own does both jobs.
  *
  * The expander is the reason a client can argue with the card. It carries the formula in the plan's own
  * terms, what the measure is actually for, and how much the app trusts the inputs — which is the sentence
@@ -218,7 +243,7 @@ function Gauge({ m, s }: { m: Metric; s: Severity | null }) {
   );
 }
 
-function Card({ m }: { m: Metric }) {
+function Card({ m, planId }: { m: Metric; planId: string }) {
   const s = statusOf(m.value, m.bands);
   return (
     <article className="bg-card px-5 py-4">
@@ -227,11 +252,6 @@ function Card({ m }: { m: Metric }) {
         {s ? <Pill s={s} /> : <span className="eyebrow shrink-0 text-muted-foreground">Not yet</span>}
       </div>
 
-      {/*
-        THE DIAL AND THE NUMERAL, SIDE BY SIDE (§6.128.3). The arc shows how far through its range the
-        value sits and which band caught it; the numeral is what a reader actually compares between cards.
-        Neither on its own does both jobs.
-      */}
       <div className="mt-1 flex items-center gap-3">
         <Gauge m={m} s={s} />
         <div className="min-w-0 flex-1">
@@ -243,7 +263,9 @@ function Card({ m }: { m: Metric }) {
       </div>
 
       <p className="mt-2.5 text-[12.5px] leading-relaxed">{m.missing ?? m.note}</p>
-      {!m.missing && <p className="mt-1 text-[11.5px] text-muted-foreground">{m.bench}</p>}
+      {m.missing
+        ? m.fix && <Pencil planId={planId} fix={m.fix} />
+        : <p className="mt-1 text-[11.5px] text-muted-foreground">{m.bench}</p>}
 
       <details className="mt-2.5 border-t border-dashed border-border pt-2">
         <summary className="cursor-pointer list-none text-[11.5px] font-semibold text-primary marker:hidden">
@@ -259,227 +281,34 @@ function Card({ m }: { m: Metric }) {
   );
 }
 
-/**
- * THE LOAN, AND THE BAD YEAR.
- *
- * Six numbers, none of them stored. The range beneath them is the whole borrowing question in one
- * picture: what a stressed year carries, what the base case carries, and where the loan the client has in
- * mind falls against both.
- */
-function BorrowInputs({ proposal, onProposal, stress, onStress, input, money }: {
-  proposal: Proposal; onProposal: (p: Proposal) => void;
-  stress: Stress; onStress: (s: Stress) => void;
-  input: CapabilityInput; money: (v: number) => string;
-}) {
-  const num = (v: string) => Number(v.replace(/[^0-9.-]/g, "")) || 0;
-  const set = (patch: Partial<Proposal>) => onProposal({ ...proposal, ...patch });
-
-  const cf1 = input.cashFlow[1];
-  const base = cf1 ? cf1.netOperating + cf1.interestPaid : null;
-  const stressedNow = stressedCash(input);
-  const existing = input.debtService[1] ?? 0;
-  const capBase = base === null ? null : borrowingCapacity(base, existing, proposal.ratePct, proposal.termYears, LENDER_MIN_DSCR);
-  const capStress = stressedNow === null ? null : borrowingCapacity(stressedNow, existing, proposal.ratePct, proposal.termYears, LENDER_MIN_DSCR);
-  const top = Math.max(capBase ?? 0, proposal.amount, 1) * 1.25;
-
+/** The shell every picture sits in, so the three tabs cannot drift apart again. */
+function Picture({ title, aside, children }: { title: string; aside: React.ReactNode; children: React.ReactNode }) {
   return (
-    <>
-      <TileRow>
-        <StatTile label="Loan you are considering" value={money(proposal.amount)}>
-          <CellInput numeric className="mt-1.5 w-full" placeholder="0"
-            value={proposal.amount || ""} onChange={(e) => set({ amount: num(e.target.value) })} />
-        </StatTile>
-        <StatTile label="Interest rate" value={`${proposal.ratePct}%`}>
-          <CellInput numeric className="mt-1.5 w-full" value={proposal.ratePct}
-            onChange={(e) => set({ ratePct: num(e.target.value) })} />
-        </StatTile>
-        <StatTile label="Term" value={`${proposal.termYears} years`}>
-          <CellInput numeric className="mt-1.5 w-full" value={proposal.termYears}
-            onChange={(e) => set({ termYears: num(e.target.value) })} />
-        </StatTile>
-        <StatTile label="Undrawn overdraft" value={money(proposal.undrawn)} sub="Committed only">
-          <CellInput numeric className="mt-1.5 w-full" placeholder="0"
-            value={proposal.undrawn || ""} onChange={(e) => set({ undrawn: num(e.target.value) })} />
-        </StatTile>
-        <StatTile label="Security offered" value={proposal.collateral === null ? "—" : money(proposal.collateral)}>
-          <CellInput numeric className="mt-1.5 w-full" placeholder="Not valued"
-            value={proposal.collateral ?? ""} onChange={(e) => set({ collateral: e.target.value.trim() ? num(e.target.value) : null })} />
-        </StatTile>
-      </TileRow>
-
-      <section className="border-b border-border px-5 py-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <span className="text-[12.5px] font-semibold">What this cash flow supports</span>
-          <span className="text-[11.5px] text-muted-foreground">
-            At {LENDER_MIN_DSCR}× cover, {proposal.ratePct}% over {proposal.termYears} years
-          </span>
-        </div>
-        {capBase === null ? (
-          <Note>There is no forecast yet, so there is nothing to lend against. Fill in your sales and costs first.</Note>
-        ) : (
-          <RangeBar
-            min={0} max={top}
-            zones={[
-              { from: 0, to: capStress ?? 0, severity: "good" },
-              { from: capStress ?? 0, to: capBase, severity: "warn" },
-              { from: capBase, to: top, severity: "bad" },
-            ]}
-            marks={[
-              { at: capStress ?? 0, label: `Stressed ${money(capStress ?? 0)}`, below: true },
-              { at: capBase, label: `Base ${money(capBase)}`, below: true },
-              ...(proposal.amount > 0
-                ? [{ at: Math.min(proposal.amount, top), label: `Wanted ${money(proposal.amount)}`, tone: "bad" as const }]
-                : []),
-            ]}
-            ticks={[0, top / 2, top]} format={(t) => money(t)}
-          />
-        )}
-        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11.5px] text-muted-foreground">
-          <span className="font-semibold text-foreground">The bad year:</span>
-          <label className="flex items-center gap-1.5">Sales down
-            <CellInput numeric className="w-[62px]" value={stress.salesPct}
-              onChange={(e) => onStress({ ...stress, salesPct: num(e.target.value) })} />%
-          </label>
-          <label className="flex items-center gap-1.5">Margin down
-            <CellInput numeric className="w-[62px]" value={stress.marginPts}
-              onChange={(e) => onStress({ ...stress, marginPts: num(e.target.value) })} />pts
-          </label>
-          <label className="flex items-center gap-1.5">Paid
-            <CellInput numeric className="w-[62px]" value={stress.debtorDaysAdded}
-              onChange={(e) => onStress({ ...stress, debtorDaysAdded: num(e.target.value) })} />days later
-          </label>
-        </div>
-      </section>
-    </>
+    <section className="border-b border-border px-5 py-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-[12.5px] font-semibold">{title}</span>
+        <span className="text-[11.5px] text-muted-foreground">{aside}</span>
+      </div>
+      {children}
+    </section>
   );
 }
 
-/**
- * THE PRICE, AND THE SIX JUDGEMENTS BEHIND IT.
- *
- * Same shape as the loan on the borrowing tab and for the same reason: an asking price is a position in a
- * negotiation, not a fact about the plan. It is typed here, it drives the arithmetic, and it is gone when
- * the client leaves.
- *
- * THE TRANSFERABILITY SCORES ARE THE SOFTEST THING ON THE PAGE, so they are the most plainly labelled.
- * Each factor carries the question it is really asking — "could the business trade for a month if the
- * owner vanished?" — because "owner dependence: 3" means whatever the person scoring it decided, and a
- * number nobody can reconstruct is worse than no number.
- */
-function SaleInputs({ sale, onSale, metrics, input, money }: {
-  sale: Sale; onSale: (s: Sale) => void; metrics: Metric[]; input: CapabilityInput; money: (v: number) => string;
+/** Growth's picture: the year in one line — the worst month against the floor, and against zero. */
+function WorstMonth({ planId, metrics, input, money }: {
+  planId: string; metrics: Metric[]; input: CapabilityInput; money: (v: number) => string;
 }) {
-  const num = (v: string) => Number(v.replace(/[^0-9.-]/g, "")) || 0;
-  const set = (patch: Partial<Sale>) => onSale({ ...sale, ...patch });
-  const scoreFactor = (i: number, v: number) => {
-    const next = [...(sale.transfer.length ? sale.transfer : new Array(TRANSFER_FACTORS.length).fill(0))];
-    next[i] = v;
-    set({ transfer: next });
-  };
+  const lowCash = metrics.find((x) => x.key === "lowestCash")?.value ?? null;
+  const floor = input.growth.cashBuffer;
+  const floorAt = floor !== null && floor > 0 ? floor : 0;
+  const top = Math.max(floorAt * 3, Math.abs(lowCash ?? 0) * 2, 100_000);
 
   return (
-    <>
-      <TileRow>
-        <StatTile label="Asking price" value={sale.askingPrice ? money(sale.askingPrice) : "—"} sub="Enterprise value">
-          <CellInput numeric className="mt-1.5 w-full" placeholder="0"
-            value={sale.askingPrice || ""} onChange={(e) => set({ askingPrice: num(e.target.value) })} />
-        </StatTile>
-        <StatTile label="Owner add-backs" value={money(sale.addBacks)} sub="Costs a buyer would not inherit">
-          <CellInput numeric className="mt-1.5 w-full" placeholder="0"
-            value={sale.addBacks || ""} onChange={(e) => set({ addBacks: num(e.target.value) })} />
-        </StatTile>
-        <StatTile label="Comparable deals, low" value={`${sale.multipleLow}×`} sub="Of normalised EBITDA">
-          <CellInput numeric className="mt-1.5 w-full" value={sale.multipleLow}
-            onChange={(e) => set({ multipleLow: num(e.target.value) })} />
-        </StatTile>
-        <StatTile label="Comparable deals, high" value={`${sale.multipleHigh}×`} sub="Of normalised EBITDA">
-          <CellInput numeric className="mt-1.5 w-full" value={sale.multipleHigh}
-            onChange={(e) => set({ multipleHigh: num(e.target.value) })} />
-        </StatTile>
-        {/*
-          THE SIX JUDGEMENTS ARE DATA ENTRY, SO THEY LIVE WHERE THE DATA ENTRY LIVES (§6.128.5).
-          Twice now they have been given a section of their own between the tiles and the cards — first as
-          a six-row form, then as a compressed strip — and both times this tab read as a different kind of
-          screen. Nic, on the second attempt: *"This does not happen on the other two pages and must not
-          happen on this page."* He is right, and the answer was never to shrink the block: every tab is
-          tiles, then one range bar, then cards, and a seventh thing in the middle breaks that whatever
-          height it is. They are tiles now. The strip simply has more of them.
-        */}
-        {TRANSFER_FACTORS.map((f, i) => {
-          const v = sale.transfer[i] ?? 0;
-          return (
-            /* The hint is a tooltip, not a subtitle: six of them printed in the strip made every tile in
-               it taller, including the four that had nothing to say (§6.128.5). */
-            <StatTile key={f.key} label={f.label} value={v ? `${v} / 5` : "Not scored"}
-              tone={v === 0 ? undefined : v <= 2 ? "bad" : v === 3 ? "warn" : "good"}>
-              <div className="mt-1.5 flex gap-1" role="group" aria-label={`${f.label}. ${f.hint}`} title={f.hint}>
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <button key={n} type="button" aria-pressed={v === n} title={`${f.label}: ${n} of 5`}
-                    onClick={() => scoreFactor(i, n)}
-                    className={cn("h-6 flex-1 rounded border text-[11px] font-semibold tabular-nums",
-                      v === n ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:border-input")}>
-                    {n}
-                  </button>
-                ))}
-              </div>
-            </StatTile>
-          );
-        })}
-      </TileRow>
-
-      {/*
-        THE PRICE ARGUMENT AS A PICTURE (§6.128.3). "5.2× is above your range" is a sentence a client can
-        disagree with; the same fact as a band with their asking price standing outside it is one they can
-        see. Built from the multiples they entered, against the earnings their own forecast produced.
-      */}
-      <ValuationRange sale={sale} metrics={metrics} input={input} money={money} />
-
-    </>
-  );
-}
-
-
-/**
- * WHAT THE GROWTH QUESTION NEEDS AND THE PLAN DOES NOT HOLD (§6.128.3).
- *
- * Two numbers, and both are a tolerance rather than a fact: how low the owner is willing to let cash go,
- * and what their money costs. The forecast can say what cash does; only the owner can say what is too
- * low. Before these existed the lowest-month card graded itself against "above zero", which is a much
- * weaker test than the card's own wording described.
- *
- * The range beneath them is the year in one line: the worst month against the floor and against nothing.
- */
-function GrowInputs({ growth, onGrowth, metrics, money }: {
-  growth: Growth; onGrowth: (g: Growth) => void; metrics: Metric[]; money: (v: number) => string;
-}) {
-  const num = (v: string) => Number(v.replace(/[^0-9.-]/g, "")) || 0;
-  const low = metrics.find((x) => x.key === "lowestCash");
-  const lowCash = low?.value ?? null;
-  const top = Math.max(growth.cashBuffer * 3, Math.abs(lowCash ?? 0) * 2, 100_000);
-  const floorAt = Math.max(growth.cashBuffer, 0);
-
-  return (
-    <>
-      <TileRow>
-        <StatTile label="Cash floor" value={growth.cashBuffer ? money(growth.cashBuffer) : "Not set"}
-          sub="How low you will let the bank balance go">
-          <CellInput numeric className="mt-1.5 w-full" placeholder="0"
-            value={growth.cashBuffer || ""} onChange={(e) => onGrowth({ ...growth, cashBuffer: num(e.target.value) })} />
-        </StatTile>
-        <StatTile label="Cost of capital" value={`${growth.costOfCapital}%`} sub="What the money funding this costs">
-          <CellInput numeric className="mt-1.5 w-full" value={growth.costOfCapital}
-            onChange={(e) => onGrowth({ ...growth, costOfCapital: num(e.target.value) })} />
-        </StatTile>
-      </TileRow>
-
-      <section className="border-b border-border px-5 py-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <span className="text-[12.5px] font-semibold">The worst month of Year 1</span>
-          <span className="text-[11.5px] text-muted-foreground">Closing bank balance at its lowest point</span>
-        </div>
-        {lowCash === null ? (
-          <Note>No monthly cash forecast yet. Fill in your sales and costs and this draws itself.</Note>
-        ) : (
+    <Picture title="The worst month of Year 1" aside="Closing bank balance at its lowest point">
+      {lowCash === null ? (
+        <Note>No monthly cash forecast yet. Fill in your sales and costs and this draws itself.</Note>
+      ) : (
+        <>
           <RangeBar
             min={Math.min(0, lowCash) - (lowCash < 0 ? Math.abs(lowCash) * 0.2 : 0)} max={top}
             zones={[
@@ -493,56 +322,147 @@ function GrowInputs({ growth, onGrowth, metrics, money }: {
             ]}
             ticks={[Math.min(0, lowCash), top / 2, top]} format={(t) => money(t)}
           />
-        )}
-      </section>
-    </>
+          {/* Without a floor the band is only "above or below zero", and the picture says so rather than
+              drawing a line the client never drew. */}
+          {floor === null && (
+            <p className="mt-2 text-[12px] text-muted-foreground">
+              No cash floor set, so the only line here is zero — which is a weaker test than any business
+              actually runs to.
+              <span className="ml-2 inline-block align-middle"><Pencil planId={planId} fix={{ label: "Set a cash floor", to: "assumptions?area=cash" }} /></span>
+            </p>
+          )}
+        </>
+      )}
+    </Picture>
   );
 }
 
+/**
+ * Borrowing's picture: what the plan already repays, what a stressed year would carry, and what the base
+ * case would. No "wanted" mark any more — there is no loan being typed, so there is nothing to want (§6.129).
+ */
+function BorrowingRoom({ planId, input, money }: {
+  planId: string; input: CapabilityInput; money: (v: number) => string;
+}) {
+  const cf1 = input.cashFlow[1];
+  const base = cf1 ? cf1.netOperating + cf1.interestPaid : null;
+  const stressed = stressedCash(input);
+  const service = input.debtService[1] ?? 0;
+  const coc = input.growth.costOfCapital;
+  const capBase = base === null || coc === null ? null : borrowingCapacity(base, service, coc, CAPACITY_TERM_YEARS, LENDER_MIN_DSCR);
+  const capStress = stressed === null || coc === null ? null : borrowingCapacity(stressed, service, coc, CAPACITY_TERM_YEARS, LENDER_MIN_DSCR);
+  const top = Math.max(capBase ?? 0, 1) * 1.25;
 
-function ValuationRange({ sale, metrics, input, money }: {
-  sale: Sale; metrics: Metric[]; input: CapabilityInput; money: (v: number) => string;
+  return (
+    <Picture title="How much more this cash flow would carry"
+      aside={coc === null ? "Needs a rate to price it at" : `At ${LENDER_MIN_DSCR}× cover, ${coc}% over ${CAPACITY_TERM_YEARS} years`}>
+      {base === null ? (
+        <Note>There is no forecast yet, so there is nothing to lend against. Fill in your sales and costs first.</Note>
+      ) : coc === null ? (
+        <>
+          <Note>Headroom has to be priced at a rate. Set what your money costs and this draws itself.</Note>
+          <Pencil planId={planId} fix={{ label: "Set the cost of capital", to: "assumptions?area=cash" }} />
+        </>
+      ) : capStress === null ? (
+        <>
+          <Note>
+            {(capBase ?? 0) > 0
+              ? <>The base case supports about {money(capBase ?? 0)} more. What a BAD year supports is the figure that matters, and that needs a downside to be described.</>
+              : <>Even the base case supports nothing further — what this business already repays uses the cover up. Describe a bad year and the picture can show how far short it falls.</>}
+          </Note>
+          <Pencil planId={planId} fix={{ label: "Set the downside", to: "assumptions?area=downside" }} />
+        </>
+      ) : (
+        <>
+          <RangeBar
+            min={0} max={top}
+            zones={[
+              { from: 0, to: Math.max(capStress, 0), severity: "good" },
+              { from: Math.max(capStress, 0), to: capBase ?? 0, severity: "warn" },
+              { from: capBase ?? 0, to: top, severity: "bad" },
+            ]}
+            marks={[
+              { at: Math.max(capStress, 0), label: `Bad year ${money(Math.max(capStress, 0))}`, below: true },
+              { at: capBase ?? 0, label: `Base case ${money(capBase ?? 0)}`, below: true },
+            ]}
+            ticks={[0, top / 2, top]} format={(t) => money(t)}
+          />
+          <p className="mt-2 text-[12px] text-muted-foreground">
+            {service > 0
+              ? <>Already repaying <b className="font-semibold text-foreground">{money(service)}</b> a year. This is room on top of that.</>
+              : <>The plan carries no borrowing yet, so all of this is room.</>}
+            {" "}Borrow what the bad year carries, not what the good one allows.
+          </p>
+        </>
+      )}
+    </Picture>
+  );
+}
+
+/**
+ * Selling's picture (§6.128.3): "5.2× is above your range" is a sentence a client can disagree with; the
+ * same fact as a band with their asking price standing outside it is one they can see. Built from the
+ * multiples and the price in Plan settings, against the earnings their own forecast produced.
+ */
+function ValuationRange({ planId, metrics, input, money }: {
+  planId: string; metrics: Metric[]; input: CapabilityInput; money: (v: number) => string;
 }) {
   const y1 = input.pnl[1];
-  const e = y1 ? y1.operatingProfit + y1.depreciation + sale.addBacks : null;
+  const sale = input.sale;
+  const e = y1 ? y1.operatingProfit + y1.depreciation + (sale.addBacks ?? 0) : null;
+  const ranged = sale.multipleLow !== null && sale.multipleHigh !== null;
+  const price = sale.askingPrice ?? 0;
+
   if (e === null || e <= 0) {
     return (
-      <section className="border-b border-border px-5 py-4">
-        <span className="text-[12.5px] font-semibold">What the earnings support</span>
-        <Note>{y1 ? "Year 1 earnings are not positive, so there is no multiple to apply." : "No forecast yet, so there is nothing to value."}</Note>
-      </section>
+      <Picture title="What the earnings support" aside="Normalised EBITDA × comparable multiples">
+        <Note>{y1
+          ? "Year 1 earnings are not positive, so there is no multiple to apply. Nothing about the price can be judged until the business makes money."
+          : "No forecast yet, so there is nothing to value."}</Note>
+      </Picture>
     );
   }
-  const lowV = e * sale.multipleLow, highV = e * sale.multipleHigh;
-  const top = Math.max(highV, sale.askingPrice) * 1.2;
+
+  if (!ranged) {
+    return (
+      <Picture title="What the earnings support" aside={`${money(e)} of normalised earnings`}>
+        <Note>A range needs a low and a high multiple — what businesses like this one have actually sold for.</Note>
+        <Pencil planId={planId} fix={{ label: "Set the comparable range", to: "settings?area=exit" }} />
+      </Picture>
+    );
+  }
+
+  const lowV = e * (sale.multipleLow ?? 0), highV = e * (sale.multipleHigh ?? 0);
+  const top = Math.max(highV, price) * 1.2;
   const mult = metrics.find((x) => x.key === "priceMultiple")?.value ?? null;
 
   return (
-    <section className="border-b border-border px-5 py-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="text-[12.5px] font-semibold">What the earnings support</span>
-        <span className="text-[11.5px] text-muted-foreground">
-          {money(e)} of normalised earnings at {sale.multipleLow}× to {sale.multipleHigh}×
-        </span>
-      </div>
+    <Picture title="What the earnings support"
+      aside={`${money(e)} of normalised earnings at ${sale.multipleLow}× to ${sale.multipleHigh}×`}>
       <RangeBar
         min={0} max={top}
         zones={[{ from: lowV, to: highV, severity: "good" }, { from: highV, to: top, severity: "bad" }]}
         marks={[
           { at: (lowV + highV) / 2, label: `Midpoint ${money((lowV + highV) / 2)}`, below: true },
-          ...(sale.askingPrice > 0
-            ? [{ at: Math.min(sale.askingPrice, top), label: `Asking ${money(sale.askingPrice)}`,
-                 tone: sale.askingPrice > highV ? ("bad" as const) : undefined }]
+          ...(price > 0
+            ? [{ at: Math.min(price, top), label: `Asking ${money(price)}`,
+                 tone: price > highV ? ("bad" as const) : undefined }]
             : []),
         ]}
         ticks={[0, top / 2, top]} format={(t) => money(t)}
       />
-      {sale.askingPrice > highV && (
+      {price === 0 && (
         <p className="mt-2 text-[12px] text-muted-foreground">
-          <b className="font-semibold text-foreground">{money(sale.askingPrice - highV)}</b> above the top of the range
+          The business has not been priced, so there is nothing standing against the range.
+          <span className="ml-2 inline-block align-middle"><Pencil planId={planId} fix={{ label: "Set the asking price", to: "settings?area=exit" }} /></span>
+        </p>
+      )}
+      {price > highV && (
+        <p className="mt-2 text-[12px] text-muted-foreground">
+          <b className="font-semibold text-foreground">{money(price - highV)}</b> above the top of the range
           {mult ? ` — ${mult}× against a ceiling of ${sale.multipleHigh}×` : ""}.
         </p>
       )}
-    </section>
+    </Picture>
   );
 }

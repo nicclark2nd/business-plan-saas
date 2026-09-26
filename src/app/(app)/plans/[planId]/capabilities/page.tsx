@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { readCollateral, readGrowth, readSale, readStress, readUndrawn, type TransferRating } from "@/engine/capability/judgements";
 import { getSession } from "@/lib/plan";
 import { loadPlan } from "@/lib/planLoad";
 import { loadSalariesByYear } from "@/lib/planSources";
@@ -10,11 +11,16 @@ import { CapabilitiesModule } from "./CapabilitiesModule";
 import type { PlanFacts } from "./CapabilitiesModule";
 
 /**
- * FINANCIAL CAPABILITIES (§6.128) — a tool, not a step.
+ * FINANCIAL CAPABILITIES (§6.128, rebuilt §6.129) — a tool, not a step.
  *
- * It asks nothing of the client that the plan does not already hold, which is why it sits in Tools beside
- * the What-If planner rather than in the numbered path. Nothing on it is saved and nothing it shows moves
- * the plan.
+ * It asks nothing of the client at all, which is why it sits in Tools beside the What-If planner rather than
+ * in the numbered path. Nothing on it is saved because nothing on it is entered: every judgement it needs is
+ * now collected on the step that owns the subject, and this page is the one place that gathers them.
+ *
+ * SIX SOURCES, ONE READER EACH. The forecast for the arithmetic; `readGrowth`, `readStress` and `readSale`
+ * for the figures on Assumptions and Plan settings; `plan_transfer_ratings` for the six judgements scored on
+ * Leadership Team; `readCollateral` for the security values on Fixed Assets; `readUndrawn` for the facility
+ * headroom already recorded on Funding. Nothing is asked for twice (§6.41).
  *
  * THE SAME FORECAST RUN AS EVERY OTHER SCREEN (§6.67). `loadPlan` then `runForecast`, exactly as the
  * dashboard and the statements do — so a cash conversion cycle here cannot disagree with the Assumptions
@@ -24,12 +30,12 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
   const { planId } = await params;
   const supabase = await createClient();
 
-  const [session, settings] = await Promise.all([
+  const [session, ratings] = await Promise.all([
     getSession(),
-    supabase.from("plan_settings").select("currency").eq("plan_id", planId).maybeSingle(),
+    supabase.from("plan_transfer_ratings").select("factor, score, note").eq("plan_id", planId),
   ]);
 
-  const currency = settings.data?.currency ?? "AUD";
+  let currency = "AUD";
 
   /*
    * THE FACTS CROSS THE WIRE; THE FORMATTER DOES NOT.
@@ -41,11 +47,22 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
   let input: PlanFacts = {
     pnl: {}, cashFlow: {}, balanceSheet: {}, days: {},
     monthlyCash: [], monthlyProfit: [], debtService: {}, capex: {},
+    /*
+     * EVERY JUDGEMENT STARTS ABSENT, never at a default (§6.89). A plan too empty to forecast should show
+     * nine grey dials each naming the box that would answer it — not nine dials judged against figures the
+     * app chose on the client's behalf.
+     */
+    growth: { cashBuffer: null, costOfCapital: null },
+    stress: { salesPct: null, marginPts: null, debtorDaysAdded: null },
+    sale: { askingPrice: null, addBacks: null, multipleLow: null, multipleHigh: null, exitYear: null },
+    transfer: (ratings.data ?? []) as TransferRating[],
     recurringShare: null, largestProductShare: null, leadershipPay: null,
+    collateral: null, undrawn: 0,
   };
 
   try {
-    const { plan, fyEndMonth, firstYear } = await loadPlan(planId);
+    const { plan, fyEndMonth, firstYear, settings } = await loadPlan(planId);
+    currency = (settings?.currency as string | undefined) ?? "AUD";
     const run = runForecast(plan);
     const f = run.checked ?? run.forecast;
 
@@ -101,6 +118,15 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
       monthlyCash: run.monthly?.months?.map((m) => m.closingCash) ?? [],
       monthlyProfit: run.shapesByYear?.[1] ? monthlyProfit(run.shapesByYear[1]) : [],
       debtService, capex,
+      /*
+       * The stored judgements, through the one reader each (§6.129). `plan.sources.funding` is the same
+       * funding shape the forecast itself runs on, so the undrawn facility here cannot disagree with the
+       * facility on the Funding screen — and the security values come off the very assets the balance sheet
+       * is carrying.
+       */
+      growth: readGrowth(settings), stress: readStress(settings), sale: readSale(settings),
+      collateral: readCollateral((plan.sources.assets ?? []) as { security_value?: unknown }[]),
+      undrawn: readUndrawn(plan.sources.funding),
     };
   } catch (e) {
     /*

@@ -57,20 +57,25 @@ const ACTIONS: Record<string, string> = {
   incrementalMargin: "Put a floor under the margin on new work, or the growth makes the business bigger and no better off.",
   operatingLeverage: "Overheads are growing with sales. Find the costs that should not have to rise before you add more volume.",
   revenueGrowth: "There is no growth in the forecast to fund. Revisit the sales lines before using this page.",
-  /* Borrow */
-  dscr: "The loan is too large for this cash flow. Reduce it, lengthen the term, or wait until earnings support it.",
-  dscrStressed: "Ask for interest-only for the first six to twelve months, so a soft year does not breach the cover.",
-  capacity: "Fund the gap another way — asset finance against the equipment, owner equity, or staging the spend.",
-  runway: "Build the cash buffer before drawing the loan. An overdraft costs little unused and is the cheapest insurance here.",
+  /*
+   * Borrow. REWRITTEN FOR THE DEBT THE PLAN CARRIES (§6.129) — every one of these used to instruct the
+   * client about a loan they had typed into the dashboard, and on a plan with real borrowing in it that read
+   * as advice about a loan that did not exist. "Reduce it, lengthen the term" is not something you do to
+   * debt you have already drawn.
+   */
+  dscr: "The debt already in the plan is more than this cash flow covers. Refinance it longer, pay some down, or raise the earnings before adding to it.",
+  dscrStressed: "The cover holds today and not in a bad year. Ask for interest-only, or build a buffer that carries the repayments through a soft quarter.",
+  runway: "Build the cash buffer. An overdraft costs little unused and is the cheapest insurance here.",
   leverage: "Total debt is heavy against earnings. Pay something down, or raise the earnings, before adding more.",
-  lvr: "There is not enough security behind the loan. Offer more, or expect the lender to lend less.",
+  lvr: "Most of the security is already spoken for. There is little left to offer a lender for anything further.",
   quickRatio: "Short-term bills depend on shifting stock. Collect faster, or hold less.",
   currentRatio: "Short-term obligations are close to short-term assets. Watch it before taking on more.",
-  interestCover: "Interest is eating the operating profit. Refinance or reduce before borrowing more.",
+  /* True whether the operating profit is thin or absent — the old wording assumed there was one. */
+  interestCover: "Interest is heavy against what the business earns. Refinance it or pay some down before borrowing more.",
   /* Sell */
   priceMultiple: "Reset the price to the top of your comparable range, or wait and sell stronger numbers.",
   transferability: "Fix the weakest transferability factor before going to market. A buyer discounts for it far harder than you would.",
-  normalisedMargin: "The margin is thin for a sale. Either improve it for a year, or expect the multiple to reflect it.",
+  normalisedMargin: "There is no earnings figure to sell on. Get the business into profit and hold it there for a year — nothing else on this tab matters until then.",
   fcfYield: "At this price a buyer's money earns too little. The price is the thing to move.",
   recurringShare: "Convert repeat customers onto something contracted before you go to market — it is the cheapest value you can add.",
   largestCustomer: "Work out your largest customer's share from your sales ledger. If it is above 20%, secure that contract on assignable terms before a buyer asks.",
@@ -87,9 +92,9 @@ const HEAD = {
   },
   borrow: {
     none: "Not enough of the plan is filled in to judge the borrowing",
-    bad: "This loan is more than the business can carry",
+    bad: "The debt is more than this business can carry",
     watch: "Repays in the base case, with little cushion",
-    good: "The business can carry this loan",
+    good: "The business carries its debt, with room to spare",
   },
   sell: {
     none: "Not enough of the plan is filled in to judge a sale",
@@ -101,7 +106,7 @@ const HEAD = {
 
 const QUESTION = {
   grow: "Can the business increase profit while funding the cash, people and assets that growth needs?",
-  borrow: "Can the business repay this loan on time, including if trading gets worse?",
+  borrow: "Can the business repay what it owes on time, including if trading gets worse — and would a lender add to it?",
   sell: "Would the earnings and the customers survive a change of owner, and is the price justified?",
 } as const;
 

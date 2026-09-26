@@ -11,18 +11,26 @@ import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { SALARY_YEARS, planYearStart, startYearFromDate, tenureLabel, salarySchedule, scheduleChangeFromFirstYear, totalSalariesByYear } from "@/engine/people/salary";
 import { useMoney } from "@/components/MoneyProvider";
-import { upsertPerson, deletePerson, upsertCapability, deleteCapability, continueFromPeople } from "./actions";
+import { TRANSFER_FACTORS, type TransferFactor, type TransferRating } from "@/engine/capability/judgements";
+import { upsertPerson, deletePerson, upsertCapability, deleteCapability, saveTransferRating, continueFromPeople } from "./actions";
 import { PERSON_ROLES, ROLE_LABEL, CAPABILITY_KINDS, KIND_LABEL, formatMonth, type Person, type Capability, type CapabilityKind, type PeopleData } from "./model";
 
 type Row = Person & { _key: string; started_text: string; _dirty?: boolean; _state?: "saving" | "saved" };
 type Cap = Capability & { _key: string; _dirty?: boolean };
 type AreaKey = "people" | "salary" | "cap" | "risk";
 
-export function PeopleModule({ planId, initial, mode, cap, currency, planYear, fyEndMonth }: {
+export function PeopleModule({ planId, initial, mode, cap, currency, planYear, fyEndMonth, ratings, initialArea }: {
   planId: string; initial: PeopleData; mode: "guided" | "advanced";
   /** The whole business's ownership, composed once (§6.54) — this screen holds only part of it. */
   cap: CapTable;
   currency: string; planYear: number; fyEndMonth: number;
+  /**
+   * The six change-of-owner judgements (§6.129). Scored here because owner dependence IS key-person risk,
+   * and read by the Capability to Sell dashboard rather than asked for twice (§6.41).
+   */
+  ratings: TransferRating[];
+  /** Which tab to open on, so a pencil from Financial Capabilities lands on the box it promised. */
+  initialArea: AreaKey;
 }) {
   const num = useMoney();
   void currency;
@@ -38,7 +46,41 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
     ...initial.capabilities.map((c) => ({ ...c, _key: c.id })),
     ...initial.people.filter((p) => !initial.capabilities.some((c) => c.person_id === p.id)).map((p) => blankCap(p.id)),
   ]);
-  const [area, setArea] = useState<AreaKey>("people");
+  const [area, setArea] = useState<AreaKey>(initialArea);
+  /*
+   * Scores and notes, keyed by factor. Local because the note is typed and saves on blur while the score
+   * saves on the click (§6.10) — and because a note being written before a number is chosen has to survive
+   * on screen until there is a row to put it in.
+   */
+  const [rate, setRate] = useState<Record<string, { score: number | null; note: string }>>(() =>
+    Object.fromEntries(TRANSFER_FACTORS.map((f) => {
+      const r = ratings.find((x) => x.factor === f.key);
+      return [f.key, { score: r?.score ?? null, note: r?.note ?? "" }];
+    })));
+  const rateRef = useRef(rate);
+  /* Built from the ref, never from the closure, so a note typed straight after a score is not lost (§6.129). */
+  const editRate = (factor: TransferFactor, patch: Partial<{ score: number | null; note: string }>) => {
+    const next = { ...rateRef.current, [factor]: { ...rateRef.current[factor], ...patch } };
+    rateRef.current = next;
+    setRate(next);
+  };
+  const commitRating = (factor: TransferFactor) => {
+    const v = rateRef.current[factor];
+    start(async () => {
+      const res = await saveTransferRating(planId, factor, v.score, v.note);
+      if (!res.ok) errors.raise({ key: `transfer-${factor}`, message: res.error, label: "Risk & Succession" });
+      else errors.clear(`transfer-${factor}`);
+    });
+  };
+  /** Clicking the number already chosen unsays it, which is the only way back to "not judged". */
+  const setScore = (factor: TransferFactor, n: number) => {
+    editRate(factor, { score: rateRef.current[factor].score === n ? null : n });
+    commitRating(factor);
+  };
+  const scored = TRANSFER_FACTORS.filter((f) => rate[f.key].score !== null);
+  const transferAvg = scored.length === TRANSFER_FACTORS.length
+    ? Math.round((scored.reduce((a, f) => a + (rate[f.key].score ?? 0), 0) / scored.length) * 10) / 10
+    : null;
   const [scope, setScope] = useState<string | null>(null);        // a person's _key, or everyone
   /** Keyed per person, so two who will not save are two messages (§6.98). */
   const errors = useSaveErrors();
@@ -133,7 +175,12 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
     { key: "people", label: "People" },
     { key: "salary", label: "Salaries" },
     { key: "cap", label: "Roles & Capability", count: capCount },
-    { key: "risk", label: "Risk & Succession", tag: "Phase 2" },
+    /*
+     * THE TAG COMES OFF (§6.129). The tab has carried "Phase 2" since §6.11 while the help text on this very
+     * screen promised it "feeds key-person risk in funding, SBA and sale reports". It now does something, so
+     * it stops claiming to be unbuilt.
+     */
+    { key: "risk", label: "Risk & Succession", count: scored.length || undefined },
   ];
 
   return (
@@ -150,7 +197,8 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
         <p>Salaries feed Overheads as a locked line — Overheads keeps its own &quot;Other wages&quot; input, and on-costs (super, payroll tax) are one % rate applied there. Contractors have no salary row; they are costed in COGS or Overheads. A $0 owner salary flatters the profit and every bank knows it.</p>
         <div className="mb-4 mt-2 rounded-r border-l-[3px] border-primary bg-card px-2.5 py-1.5 text-xs text-muted-foreground">Shareholding should add to 100%. If it doesn&apos;t, the ownership table in the report will look wrong to an investor.</div>
         <h3>Where this goes</h3>
-        <p><b>People</b> → ownership table and management team. <b>Salaries</b> → Overheads, in full or summarised depending on the report. <b>Roles &amp; Capability</b> → management bios (development areas stay internal). <b>Risk &amp; Succession</b> → key-person risk in funding, SBA and sale reports.</p>
+        <p><b>People</b> → ownership table and management team. <b>Salaries</b> → Overheads, in full or summarised depending on the report. <b>Roles &amp; Capability</b> → management bios (development areas stay internal). <b>Risk &amp; Succession</b> → key-person risk in funding, SBA and sale reports, and the &ldquo;survives a change of owner&rdquo; measure on <b>Financial Capabilities</b>.</p>
+        <p>Score all six risk factors or none of them counts: the measure is an average, and an average over four of six would flatter whichever two were skipped.</p>
         <p>12-month focus for each person lives under <b>Goals</b>, where every goal has an owner.</p>
       </>}
     >
@@ -263,13 +311,76 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
 
       {area === "cap" && <CapabilityArea people={visible} caps={caps} onScope={setScope} onAdd={addCap} onEdit={editCap} onCommit={commitCap} onRemove={removeCap} left={left} />}
 
+      {/*
+        * RISK & SUCCESSION, BUILT (§6.129).
+        *
+        * WHAT WAS HERE BEFORE was a table of every person's name with "Phase 2 — after the forecast is live"
+        * printed across four empty columns. A grid of real names and no data is the §6.87 fault at its
+        * plainest: a client reads it as a screen they have failed to fill in. It is gone rather than added to.
+        *
+        * WHAT REPLACES IT is the question a lender and a buyer both actually ask, and they ask it about the
+        * BUSINESS rather than person by person: if the owner stopped turning up, would this still work? Six
+        * fixed judgements, because a list that moves cannot be compared between two plans or between this
+        * year's plan and last year's — and because these six were buttons on the Capability to Sell dashboard,
+        * unsaved, gone on refresh, and therefore a score that changed every visit.
+        */}
       {area === "risk" && (
         <>
-          <Toolbar><Meta className="ml-0">What happens to the business if this person is unavailable for six months. Used in funding, SBA and sale reports.</Meta></Toolbar>
+          <Toolbar><Meta className="ml-0">
+            If the owner stopped turning up, would the business still work? Six judgements, 1 weak to 5 strong.{" "}
+            {transferAvg === null
+              ? <span className="text-warn">{scored.length} of {TRANSFER_FACTORS.length} scored — the sale measure waits for all six.</span>
+              : <>All six scored, averaging <b className={cn("num", transferAvg < 2.5 ? "text-bad" : transferAvg < 3.5 ? "text-warn" : "text-good")}>{transferAvg}</b> out of 5.</>}
+          </Meta></Toolbar>
           <Grid>
-            <thead><tr><Th style={{ width: "18%" }}>Name</Th><Th style={{ width: 120 }}>Dependency</Th><Th style={{ width: 170 }}>Successor</Th><Th style={{ width: 150 }}>Key-person cover</Th><Th>Notes</Th></tr></thead>
-            <tbody>{visible.map((r) => <Row key={r._key}><Td><NameLink onClick={() => setScope(r._key)}>{r.name || r.first_name}</NameLink></Td><Td colSpan={4} className="text-muted-foreground">Phase 2 — after the forecast is live.</Td></Row>)}</tbody>
+            <thead><tr>
+              <Th style={{ width: "34%" }}>What a buyer or lender tests</Th>
+              <Th style={{ width: 200 }}>1 weak &rarr; 5 strong</Th>
+              <Th>What makes you say that</Th>
+            </tr></thead>
+            <tbody>
+              {TRANSFER_FACTORS.map((f) => (
+                <Row key={f.key}>
+                  <Td wrap>
+                    <b>{f.label}</b>
+                    <div className="mt-px max-w-[52ch] text-[11.5px] leading-snug text-muted-foreground">{f.hint}</div>
+                  </Td>
+                  <Td>
+                    <div className="flex gap-1" role="group" aria-label={f.label}>
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <button key={n} type="button" disabled={pending}
+                          aria-pressed={rate[f.key].score === n}
+                          title={rate[f.key].score === n ? `${f.label}: ${n} of 5 — click again to unset` : `${f.label}: ${n} of 5`}
+                          onClick={() => setScore(f.key, n)}
+                          className={cn("size-7 rounded border text-[11.5px] font-semibold tabular-nums",
+                            rate[f.key].score === n
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border text-muted-foreground hover:border-input")}>
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </Td>
+                  <Td>
+                    {/*
+                      * THE NOTE IS THE HALF THAT SURVIVES INTO A REPORT. "Runs without the owner: 2" is a
+                      * number nobody can reconstruct in six months; "2 — every quote still goes through Dave"
+                      * is a finding, and it is what the sale and funding sections print.
+                      */}
+                    <CellInput className="w-full" placeholder="Optional — the reason, in a line"
+                      value={rate[f.key].note}
+                      onChange={(e) => editRate(f.key, { note: e.target.value })}
+                      onBlur={() => commitRating(f.key)} />
+                  </Td>
+                </Row>
+              ))}
+            </tbody>
           </Grid>
+          <Note>
+            These are your judgement, not the plan&apos;s, and they are the ones that decide whether a sale
+            happens — more often than the price does. Clicking a number a second time unsets it; a factor left
+            unscored is left out of the average rather than counted as nought.
+          </Note>
         </>
       )}
       {killPerson && (

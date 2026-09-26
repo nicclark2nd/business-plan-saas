@@ -31,6 +31,14 @@ A column with no editor is not data (§6.89). The table exists, nothing writes t
 weakness that §6.94 deleted comes back the moment it does — a plan that names no successor for a
 key person has a real weakness, and the app should say so rather than quietly not asking.
 
+**§6.129 changed what this is next to, not what it is.** Leadership Team → Risk & Succession is now a
+built tab, but what it holds is the six BUSINESS-level change-of-owner judgements (`plan_transfer_ratings`),
+not per-person succession. The placeholder grid that printed every person's name over four empty columns
+was deleted rather than added to — a table of real names holding no data reads as a screen the client has
+failed to fill in. So this item is unchanged and slightly sharper: the missing thing is a successor,
+a dependency level and a key-person cover figure PER PERSON, and it now has an obvious home to be built
+into.
+
 ### 3. The Assets group is three stubs — **Build**
 
 `social`, `memberships` and `ip` all carry `tag: "soon"` in the nav. A client sees three menu items
@@ -289,7 +297,7 @@ It stays. The walk has to be repeatable, and a plan that starts empty is the onl
 screen quietly reading a year off the wrong field. The name begins with ZZ so it sorts last, and anyone
 finding it in the plan list should leave it alone rather than tidy it away.
 
-### ~~31. Capability to sell is not built~~ — **done (§6.128.2)**, one card short
+### ~~31. Capability to sell is not built~~ — **done (§6.128.2)**, rebuilt as display-only (§6.129), one card short
 
 Built the same day it was opened, and the scoping was wrong rather than the work being large: the asking
 price, the owner add-backs and the comparable multiples are not plan facts, they are a position in a
@@ -308,13 +316,16 @@ a software business do not share a sensible cash cycle, debtor days or margin. T
 industry and the screen says out loud that the bands do not — which is honest but not right. Either the
 bands come from somewhere real per industry, or the consultant sets them per client.
 
-### ~~33. Nothing holds a plan's cash buffer~~ — **answered on the screen (§6.128.3)**
+### ~~33. Nothing holds a plan's cash buffer~~ — **stored (§6.129)**
 
-The Grow tab now asks for a cash floor and a cost of capital, beside the loan and the asking price, and
-the lowest-month card is graded against the floor rather than against zero. It is a scenario input like
-the others, so it is not saved — which is right while it is only this screen's question. **If anything
-else ever needs a cash floor** (the dashboard's cash chart is the obvious candidate) it should be promoted
-to a plan setting rather than asked for twice.
+§6.128.3 answered this on the capability screen itself and this entry predicted exactly how that would
+fail: *"if anything else ever needs a cash floor it should be promoted to a plan setting rather than asked
+for twice."* What actually happened was worse and sooner — nothing on that screen was ever saved, so the
+floor was gone on refresh and the growth score changed between two visits.
+
+It is now `plan_settings.cash_floor`, collected on **Assumptions → Cash & capital** with the cost of
+capital beside it, nullable so that a floor of zero and a floor nobody has set stay different things. The
+dashboard's own cash chart is still the obvious next reader and does not read it yet.
 
 ### 34. A plan's own child rows are invisible to the report but visible to its screens — unexplained
 
@@ -357,3 +368,29 @@ Nic's decision: keep the dialog, keep the working contents. A PDF export was sco
 dialog and no stale numbers — it needs LibreOffice running somewhere off Vercel, and the conversion must
 refresh the document's indexes explicitly or the contents page comes out blank — and was judged too much
 machinery for a second copy of a document that already works. **Word stays the only export.**
+
+### 35. The dashboard cash chart still judges against zero
+
+`plan_settings.cash_floor` exists now (§6.129) and only Financial Capabilities reads it. The dashboard
+charts twelve months of closing cash with no line on it, which is the same weaker test the growth dial
+used to run. One prop and one line.
+
+### 36. Nothing reads `intended_exit_year`
+
+Plan settings → Exit & sale collects which forecast year a sale is aimed at, and no measure uses it. Every
+sale figure on the capability tab is struck on Year 1. Either the tab lets the client read the sale
+against their chosen year, or the field comes out — a field on a screen is a promise (§6.87).
+
+### 37. The sale figures do not print in any report
+
+The asking price, the add-backs, the comparable range and the six change-of-owner judgements are stored
+(§6.129) and read by one dashboard. The reason for storing rather than typing them was that a report can
+print them and they mean the same thing next week — the first half of that is done and the second is not.
+The People help text has promised "key-person risk in funding, SBA and sale reports" since §6.11.
+
+### 38. Security values are per asset and the opening balance sheet is not
+
+`plan_fixed_assets.security_value` sums only the assets somebody listed. SEQ's last balance sheet puts its
+plant at 129,294 with none of it itemised, so loan-to-value on that plan measures the whole debt against
+the 9,000 of one listed machine and reads 2500%. Correct arithmetic on an incomplete list. The same
+already-known gap that the Fixed Assets screen warns about in its own words, now with a second consequence.

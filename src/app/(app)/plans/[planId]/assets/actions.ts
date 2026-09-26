@@ -11,6 +11,16 @@ import { adjustments, adjustedNote, type Watched } from "@/lib/adjusted";
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
 const money = (v: unknown) => Math.max(0, Number(v) || 0);
+/**
+ * Money that is allowed to be absent (§6.129). `money` above turns null into 0, which is right for a price
+ * — an asset with no cost is free — and wrong for a security value, where 0 says "a lender would advance
+ * nothing against this" and null says nobody has been asked.
+ */
+const moneyOrNull = (v: unknown) => {
+  if (v === null || v === undefined || v === "") return null;
+  const x = Number(v);
+  return Number.isFinite(x) ? Math.max(0, x) : null;
+};
 const yr = (v: unknown) => Math.min(5, Math.max(1, Math.trunc(Number(v)) || 1));
 const mo = (v: unknown) => Math.min(12, Math.max(1, Math.trunc(Number(v)) || 1));
 
@@ -38,7 +48,7 @@ const CLAMPED: readonly Watched<string>[] = [
 export async function upsertAsset(planId: string, a: {
   id?: string; name: string; category?: string | null; purchase_price: number; residual_value?: number;
   useful_life_months?: number; method?: DepreciationMethod; start_year?: number; start_month?: number; notes?: string | null;
-  gst_applies?: boolean; already_owned?: boolean;
+  gst_applies?: boolean; already_owned?: boolean; security_value?: number | null;
 }): Promise<Result<{ id: string }> & { saved?: AssetSaved }> {
   const supabase = await createClient();
   const name = (a.name ?? "").trim();
@@ -57,6 +67,8 @@ export async function upsertAsset(planId: string, a: {
     // Already owned: no cash ever leaves for it, so the tax on a purchase is not a question that applies.
     already_owned: a.already_owned === true,
     gst_applies: a.already_owned === true ? true : a.gst_applies !== false,
+    /* Not clamped to the purchase price: a lender's valuation is their own and can exceed what was paid. */
+    security_value: moneyOrNull(a.security_value),
   };
   /* The whole row back, not its id (§6.123): the clamps above are why the two can differ. */
   const q = a.id && !a.id.startsWith("tmp-")
@@ -84,12 +96,17 @@ export async function deleteAsset(planId: string, id: string): Promise<Result> {
 }
 
 /** What a financed asset is called, and how it is written off, are real choices — what it cost is not. */
-export async function saveFinancedShape(planId: string, id: string, m: { name?: string; method: DepreciationMethod; useful_life_months: number }): Promise<Result> {
+export async function saveFinancedShape(planId: string, id: string, m: { name?: string; method: DepreciationMethod; useful_life_months: number; security_value?: number | null }): Promise<Result> {
   const supabase = await createClient();
   const name = (m.name ?? "").trim();
   if (!name) return { ok: false, error: "Give the asset a name." };
   const { error } = await supabase.from("plan_fixed_assets")
-    .update({ name, method: m.method, useful_life_months: Math.max(1, Math.trunc(Number(m.useful_life_months) || 60)) })
+    /*
+     * Security value is editable on a financed asset too, and usually SMALLER than on a cash-bought one:
+     * the lender who financed it already holds it. What a second lender would advance is the client's
+     * judgement either way, so the field is theirs and nothing here guesses at it.
+     */
+    .update({ name, method: m.method, useful_life_months: Math.max(1, Math.trunc(Number(m.useful_life_months) || 60)), security_value: moneyOrNull(m.security_value) })
     .eq("id", id).eq("plan_id", planId).eq("source", "finance");
   if (error) return failed(error, "save how the asset is financed");
   touch(planId); return { ok: true };

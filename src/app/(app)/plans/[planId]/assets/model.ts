@@ -13,6 +13,13 @@ export type AssetRow = {
   already_owned: boolean;
   /** The month it was sold, 0-based across the five plan years, from the one-off that names it (§6.56). */
   sold_in_month?: number | null;
+  /**
+   * What a lender would actually advance against it (§6.129) — NOT its book value, which the balance sheet
+   * already holds and which is the wrong number: a bank lends a fraction of what plant is worth and nothing
+   * at all against a fit-out. Null means nobody has said, and loan-to-value stays unanswerable rather than
+   * reading zero across a shed full of machinery (§6.89).
+   */
+  security_value: number | null;
   notes: string | null; gst_applies: boolean; sort_order: number;
 };
 

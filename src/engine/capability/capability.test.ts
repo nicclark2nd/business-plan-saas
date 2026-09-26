@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_GROWTH, DEFAULT_STRESS, LENDER_MIN_DSCR, annualRepayment, borrowingCapacity, over, score, statusOf,
+  annualRepayment, borrowingCapacity, over, score, statusOf,
   type CapabilityInput, type Metric,
 } from "./model";
 import { growMetrics, GROW_WEIGHTS } from "./grow";
-import { borrowMetrics, stressedCash, BORROW_WEIGHTS } from "./borrow";
+import { borrowMetrics, stressedCash, BORROW_WEIGHTS, CAPACITY_TERM_YEARS } from "./borrow";
 import { sellMetrics, SELL_WEIGHTS } from "./sell";
-import { TRANSFER_FACTORS } from "./model";
+import {
+  LENDER_MIN_DSCR, TRANSFER_FACTORS, readCollateral, readGrowth, readSale, readStress, readUndrawn,
+  type TransferFactor,
+} from "./judgements";
 
 /**
  * WHAT THESE TESTS ARE FOR (§6.128).
@@ -22,8 +25,22 @@ const empty: CapabilityInput = {
   money: (v) => `$${Math.round(v).toLocaleString("en-AU")}`,
   pnl: {}, cashFlow: {}, balanceSheet: {}, days: {},
   monthlyCash: [], monthlyProfit: [], debtService: {}, capex: {},
-  growth: DEFAULT_GROWTH, proposal: null, stress: DEFAULT_STRESS, sale: null, recurringShare: null, largestProductShare: null, leadershipPay: null,
+  /*
+   * NOTHING IS DEFAULTED (§6.129). `empty` used to carry DEFAULT_GROWTH and DEFAULT_STRESS, which meant the
+   * "empty plan" tests below were run against a plan that had silently been given a cost of capital and a
+   * downside case. A test fixture that is more complete than a real new plan cannot catch what a real new
+   * plan does.
+   */
+  growth: { cashBuffer: null, costOfCapital: null },
+  stress: { salesPct: null, marginPts: null, debtorDaysAdded: null },
+  sale: { askingPrice: null, addBacks: null, multipleLow: null, multipleHigh: null, exitYear: null },
+  transfer: [], collateral: null, undrawn: 0,
+  recurringShare: null, largestProductShare: null, leadershipPay: null,
 };
+
+/** The six judgements, as rows, the way Leadership Team stores them. */
+const rate = (...scores: number[]): { factor: TransferFactor; score: number; note: string | null }[] =>
+  scores.map((n, idx) => ({ factor: TRANSFER_FACTORS[idx].key, score: n, note: null }));
 
 const pnl = (revenue: number, over_: Partial<Record<string, number>> = {}) => ({
   revenue, variableCogs: 0, fixedCogs: 0, cogs: revenue * 0.68, grossProfit: revenue * 0.32,
@@ -62,6 +79,7 @@ const full = (o: Partial<CapabilityInput> = {}): CapabilityInput => ({
   monthlyProfit: new Array(12).fill(20_000),
   debtService: { 1: 120_000 }, capex: { 1: 40_000, 2: 300_000 },
   growth: { cashBuffer: 100_000, costOfCapital: 11 },
+  stress: { salesPct: 10, marginPts: 1.5, debtorDaysAdded: 10 },
   ...o,
 });
 
@@ -167,6 +185,19 @@ describe("the downside", () => {
   it("cannot be computed without a forecast", () => {
     expect(stressedCash(empty)).toBeNull();
   });
+
+  /*
+   * ALL THREE OR NONE (§6.89, §6.129). A downside with two of the three answered is not a milder downside,
+   * it is an incomplete one — and a stressed cover figure built on it would be quoted to a lender as though
+   * the whole test had been run.
+   */
+  it("refuses a half-described bad year rather than testing a milder one", () => {
+    const half = full({ stress: { salesPct: 10, marginPts: null, debtorDaysAdded: 10 } });
+    expect(stressedCash(half)).toBeNull();
+    const b = borrowMetrics(half).find((x) => x.key === "dscrStressed")!;
+    expect(b.value).toBeNull();
+    expect(b.fix?.to).toBe("assumptions?area=downside");
+  });
 });
 
 describe("an empty plan", () => {
@@ -213,6 +244,33 @@ describe("growth, on a plan that has a forecast", () => {
     expect(statusOf(fine.find((x) => x.key === "lowestCash")!.value, fine.find((x) => x.key === "lowestCash")!.bands)).toBe("good");
   });
 
+  /*
+   * WITHOUT A FLOOR THE ONLY LINE IS ZERO (§6.129), and the card has to say so rather than let a plan whose
+   * worst month holds sixty thousand dollars pass a test nobody set.
+   */
+  it("still reports the worst month with no floor set, judged only against zero", () => {
+    const g2 = growMetrics(full({ growth: { cashBuffer: null, costOfCapital: 11 } }));
+    const low = g2.find((x) => x.key === "lowestCash")!;
+    expect(low.value).toBe(60_000);
+    expect(statusOf(low.value, low.bands)).toBe("good");
+    expect(low.bench).toContain("No floor set");
+    expect(low.fix?.to).toContain("assumptions");
+  });
+
+  /*
+   * A RETURN WITH NO BAR IS NOT A PASS. The percentage is computable without a cost of capital and is printed
+   * in the sentence, but scoring it would hand a plan a good mark against a bar nobody set.
+   */
+  it("withholds the return on the growth plan until the cost of capital is set", () => {
+    const g2 = growMetrics(full({ growth: { cashBuffer: 100_000, costOfCapital: null } }));
+    const r = g2.find((x) => x.key === "returnOnPlan")!;
+    expect(r.value).toBeNull();
+    expect(r.missing).toContain("money costs");
+    expect(r.note).toMatch(/%/);                         // the figure is still told to the client
+    expect(r.fix?.to).toBe("assumptions?area=cash");
+    expect(score(g2, GROW_WEIGHTS).covered).toBe(score(g2.filter((x) => x.key !== "returnOnPlan"), GROW_WEIGHTS).covered);
+  });
+
   it("says a plan that runs out of money runs out of money", () => {
     const broke = growMetrics(full({ monthlyCash: [100_000, -40_000, 20_000] }));
     const low = broke.find((x) => x.key === "lowestCash")!;
@@ -250,33 +308,99 @@ describe("growth, on a plan that has a forecast", () => {
   });
 });
 
-describe("borrowing, with and without a loan in mind", () => {
-  it("waits for the loan rather than assuming there is none", () => {
+describe("borrowing, on the debt the plan already carries", () => {
+  /*
+   * THE PROPOSED LOAN IS GONE (§6.129), and these tests are the record of what replaced it. The old suite
+   * asserted that every cover figure waited for a loan to be TYPED into the dashboard — which is exactly the
+   * behaviour Nic rejected, and which meant the tab could say nothing at all about a plan that already had
+   * half a million dollars of borrowing in it.
+   */
+  it("reads cover off the repayments the plan actually makes", () => {
     const b = borrowMetrics(full());
     const dscr = b.find((x) => x.key === "dscr")!;
-    expect(dscr.value).toBeNull();
-    expect(dscr.missing).toContain("loan you are considering");
+    /* 240,000 operating + 40,000 interest = 280,000, against the 120,000 the plan repays. */
+    expect(dscr.value).toBeCloseTo(2.33, 2);
+    expect(statusOf(dscr.value, dscr.bands)).toBe("good");
+    expect(dscr.formula).toContain("the plan repays");
   });
 
-  it("still answers the balance-sheet questions, which do not need a loan", () => {
+  it("says a plan with no borrowing has nothing to cover, and points at Funding", () => {
+    const b = borrowMetrics(full({ debtService: {} }));
+    const dscr = b.find((x) => x.key === "dscr")!;
+    expect(dscr.value).toBeNull();
+    expect(dscr.missing).toContain("no borrowing");
+    expect(dscr.fix?.to).toBe("funding");
+  });
+
+  it("still answers the balance-sheet questions, which need no judgement at all", () => {
     const b = borrowMetrics(full());
     expect(b.find((x) => x.key === "currentRatio")!.value).toBeCloseTo(1.62, 2);
     expect(b.find((x) => x.key === "quickRatio")!.value).toBeCloseTo(1.19, 2);
   });
 
-  it("tests the loan once one is entered", () => {
-    const b = borrowMetrics(full({ proposal: { amount: 400_000, ratePct: 8.5, termYears: 7, undrawn: 0, collateral: 800_000 } }));
-    const dscr = b.find((x) => x.key === "dscr")!;
-    expect(dscr.value).not.toBeNull();
-    expect(b.find((x) => x.key === "lvr")!.value).toBe(50);
+  /*
+   * LOAN TO VALUE IS NOW ABOUT SECURITY ALREADY SPOKEN FOR, from the figures on Fixed Assets — which is a
+   * question the plan can answer, unlike "would a loan nobody has applied for be secured".
+   */
+  it("measures the debt against the security recorded on Fixed Assets", () => {
+    const none = borrowMetrics(full()).find((x) => x.key === "lvr")!;
+    expect(none.value).toBeNull();
+    expect(none.fix?.to).toBe("assets");
+
+    /* 90,000 current + 410,000 non-current = 500,000 of debt against 1,000,000 of security. */
+    const some = borrowMetrics(full({ collateral: 1_000_000 })).find((x) => x.key === "lvr")!;
+    expect(some.value).toBe(50);
+    expect(statusOf(some.value, some.bands)).toBe("good");
   });
 
-  /* The sentence a client acts on has to be the one the arithmetic supports. */
-  it("names the shortfall when the loan is bigger than the cash flow carries", () => {
-    const b = borrowMetrics(full({ proposal: { amount: 5_000_000, ratePct: 8.5, termYears: 7, undrawn: 0, collateral: null } }));
+  it("counts an undrawn facility towards runway without being asked for it twice", () => {
+    const without = borrowMetrics(full()).find((x) => x.key === "runway")!.value!;
+    const withFacility = borrowMetrics(full({ undrawn: 240_000 })).find((x) => x.key === "runway")!.value!;
+    expect(withFacility).toBeGreaterThan(without);
+    expect(borrowMetrics(full({ undrawn: 240_000 })).find((x) => x.key === "runway")!.sub).toContain("undrawn");
+  });
+
+  /*
+   * HEADROOM, NOT A VERDICT. The old capacity metric was pass/fail against a typed loan and carried weight
+   * for it. As "how much more would this carry" it has no failing band, and must therefore carry no weight —
+   * otherwise it adds the same points to every plan and tells the score nothing.
+   */
+  it("prices the headroom at the client's own cost of capital, and stays out of the score", () => {
+    const b = borrowMetrics(full());
     const cap = b.find((x) => x.key === "capacity")!;
-    expect(statusOf(cap.value, cap.bands)).toBe("bad");
-    expect(cap.note).toContain("larger than");
+    expect(cap.value).not.toBeNull();
+    expect(cap.formula).toContain(String(CAPACITY_TERM_YEARS));
+    expect(statusOf(cap.value, cap.bands)).toBe("good");
+    expect(BORROW_WEIGHTS.capacity).toBeUndefined();
+  });
+
+  it("cannot price the headroom with no cost of capital, and points at the box", () => {
+    const cap = borrowMetrics(full({ growth: { cashBuffer: 100_000, costOfCapital: null } }))
+      .find((x) => x.key === "capacity")!;
+    expect(cap.value).toBeNull();
+    expect(cap.fix?.to).toBe("assumptions?area=cash");
+  });
+
+  /*
+   * WHAT THE FIXTURE ITSELF SAYS, and it is worth an assertion of its own: this plan's bad year leaves cover
+   * at 1.16× on the debt it already has, which is below the minimum — so there is no room for a dollar more.
+   * "Nothing further" is a reading, not a failure to read (§6.89).
+   */
+  it("reports no headroom at all when the bad year already uses the cover up", () => {
+    const cap = borrowMetrics(full()).find((x) => x.key === "capacity")!;
+    expect(cap.value).toBe(0);
+    expect(cap.note).toContain("no room");
+  });
+
+  /* The round trip §6.41 asks for: the headroom figure, borrowed, lands on the cover it promised. */
+  it("leaves cover exactly on the minimum once the headroom is borrowed", () => {
+    const i = full({ cashFlow: { 1: cf(600_000), 2: cf(620_000) } });
+    const stressed = stressedCash(i)!;
+    const service = i.debtService[1]!;
+    const cap = borrowMetrics(i).find((x) => x.key === "capacity")!.value!;
+    expect(cap).toBeGreaterThan(0);
+    const cover = stressed / (service + annualRepayment(cap, 11, CAPACITY_TERM_YEARS)!);
+    expect(cover).toBeCloseTo(LENDER_MIN_DSCR, 4);
   });
 });
 
@@ -284,13 +408,28 @@ describe("borrowing, with and without a loan in mind", () => {
 describe("selling", () => {
   const priced = (over_ = {}) => full({
     recurringShare: 0.62,
-    sale: { askingPrice: 3_000_000, addBacks: 80_000, multipleLow: 3.5, multipleHigh: 4.8, transfer: [], ...over_ },
+    sale: { askingPrice: 3_000_000, addBacks: 80_000, multipleLow: 3.5, multipleHigh: 4.8, exitYear: null, ...over_ },
   });
 
-  it("waits for a price before judging one", () => {
+  it("waits for a price before judging one, and says where the price is entered", () => {
     const m = sellMetrics(full({ recurringShare: 0.62 })).find((x) => x.key === "priceMultiple")!;
     expect(m.value).toBeNull();
     expect(m.missing).toContain("asking price");
+    expect(m.fix?.to).toBe("settings?area=exit");
+  });
+
+  /*
+   * THE DECISIVE MEASURE MUST NOT BE JUDGED ON HALF ITS INPUTS (§6.129). A price with no comparable range has
+   * nothing to be too high against — and because this metric is weighted 3, inventing a range would cap a
+   * perfectly sound plan at 49 on a number the app made up.
+   */
+  it("will not call a price high with no comparable range to call it high against", () => {
+    const m = sellMetrics(priced({ multipleLow: null, multipleHigh: null }))
+      .find((x) => x.key === "priceMultiple")!;
+    expect(m.value).toBeNull();
+    expect(m.display).not.toBe("—");                     // the multiple is still shown
+    expect(m.missing).toContain("comparable");
+    expect(m.fix?.to).toBe("settings?area=exit");
   });
 
   it("still answers what the forecast knows without a price", () => {
@@ -321,14 +460,32 @@ describe("selling", () => {
     expect(withBacks).toBeLessThan(without);
   });
 
-  it("will not average a half-finished transferability assessment", () => {
-    const partial = sellMetrics(priced({ transfer: [4, 5, 3] })).find((x) => x.key === "transferability")!;
+  /*
+   * THE SIX JUDGEMENTS ARE READ, NOT ASKED FOR (§6.129) — they are scored on Leadership Team → Risk &
+   * Succession, where they are also the key-person risk a lender asks about. A partial assessment stays
+   * unanswered, because the two factors somebody skipped are the two they were least comfortable scoring.
+   */
+  it("reads the six judgements from the People step and will not average a partial set", () => {
+    const partial = sellMetrics({ ...priced(), transfer: rate(4, 5, 3) }).find((x) => x.key === "transferability")!;
     expect(partial.value).toBeNull();
-    expect(partial.missing).toContain("scored");
+    expect(partial.sub).toBe(`3 of ${TRANSFER_FACTORS.length} scored`);
+    expect(partial.missing).toContain("Risk & Succession");
+    expect(partial.fix?.to).toBe("people?area=risk");
 
-    const whole = sellMetrics(priced({ transfer: new Array(TRANSFER_FACTORS.length).fill(4) }))
+    const whole = sellMetrics({ ...priced(), transfer: rate(4, 4, 4, 4, 4, 4) })
       .find((x) => x.key === "transferability")!;
     expect(whole.value).toBe(4);
+  });
+
+  /* The note is the half that survives into a report, so the card has to be able to quote it back. */
+  it("quotes the client's own note back when the assessment is middling", () => {
+    const withNote = [
+      { factor: "owner" as const, score: 2, note: "every quote still goes through Dave" },
+      ...rate(3, 3, 3, 3, 3, 3).slice(1),
+    ];
+    const m = sellMetrics({ ...priced(), transfer: withNote }).find((x) => x.key === "transferability")!;
+    expect(m.value).toBeCloseTo(2.8, 1);
+    expect(m.note).toContain("Dave");
   });
 
   /**
@@ -340,7 +497,7 @@ describe("selling", () => {
    * buyer asks, the card has to say so itself, or it is a worse lie than the blank one was.
    */
   it("answers product concentration and refuses to be mistaken for customer concentration", () => {
-    const m = sellMetrics(full({ largestProductShare: 0.71, sale: null })).find((x) => x.key === "largestProduct")!;
+    const m = sellMetrics(full({ largestProductShare: 0.71 })).find((x) => x.key === "largestProduct")!;
     expect(m.value).toBe(71);
     expect(statusOf(m.value, m.bands)).toBe("bad");
     expect(m.confidence).toContain("NOT customer concentration");
@@ -351,5 +508,128 @@ describe("selling", () => {
     const m = sellMetrics(full({ leadershipPay: 400_000 })).find((x) => x.key === "leadershipPay")!;
     expect(m.value).not.toBeNull();
     expect(m.formula).toContain("leadership salaries");
+  });
+});
+
+/**
+ * THE READERS (§6.129).
+ *
+ * Every figure on this screen now comes out of a stored row, and the one thing that must not be lost on the
+ * way is the difference between a nought and a silence. `Number(null)` is 0 in JavaScript, which is how a
+ * client who has never been asked about their cash floor would end up being told they run to zero.
+ */
+describe("reading the stored judgements", () => {
+  it("keeps a nought and a silence apart", () => {
+    expect(readGrowth({ cash_floor: 0, cost_of_capital: 11 })).toEqual({ cashBuffer: 0, costOfCapital: 11 });
+    expect(readGrowth({ cash_floor: null, cost_of_capital: null })).toEqual({ cashBuffer: null, costOfCapital: null });
+    expect(readGrowth(null)).toEqual({ cashBuffer: null, costOfCapital: null });
+    expect(readGrowth({ cash_floor: "" }).cashBuffer).toBeNull();
+  });
+
+  it("reads the downside and the sale figures the same way", () => {
+    expect(readStress({ stress_sales_pct: 10, stress_margin_pts: 0, stress_debtor_days: null }))
+      .toEqual({ salesPct: 10, marginPts: 0, debtorDaysAdded: null });
+    expect(readSale({ asking_price: 3_000_000, multiple_low: 3.5 }))
+      .toEqual({ askingPrice: 3_000_000, addBacks: null, multipleLow: 3.5, multipleHigh: null, exitYear: null });
+  });
+
+  /*
+   * A TOTAL OF NOUGHT ACROSS A SHED FULL OF MACHINERY IS A WORSE ANSWER THAN NO ANSWER, so the collateral
+   * total is null until at least one asset has been valued — and sums only the ones that have.
+   */
+  it("totals only the assets somebody has actually valued", () => {
+    expect(readCollateral([{ security_value: null }, { security_value: null }])).toBeNull();
+    expect(readCollateral([])).toBeNull();
+    expect(readCollateral([{ security_value: 400_000 }, { security_value: null }, { security_value: 150_000 }])).toBe(550_000);
+    /* Valued at nothing IS an answer — a fit-out a bank would not lend a dollar against. */
+    expect(readCollateral([{ security_value: 0 }])).toBe(0);
+  });
+
+  /*
+   * THE UNDRAWN FACILITY WAS THE CLEAREST CASE OF A FACT WRITTEN TWICE (§6.41): Funding already records the
+   * facility total and how much has been drawn, and the dashboard asked for the difference in its own box.
+   */
+  it("works the undrawn facility out of the funding rows rather than asking for it", () => {
+    const loan = (facility: number, drawn: number) => ({
+      id: "x", kind: "debt" as const, name: "Bank", amount: drawn, start_year: 1, start_month: 1,
+      loan: { total_facility_amount: facility, amount_drawn: drawn } as never,
+      rbf: null, grant: null, equity_percent: null,
+    });
+    expect(readUndrawn([loan(250_000, 100_000)])).toBe(150_000);
+    /* Fully drawn is not headroom, and neither is a term loan repaid below its original limit. */
+    expect(readUndrawn([loan(250_000, 250_000)])).toBe(0);
+    expect(readUndrawn([])).toBe(0);
+  });
+});
+
+/**
+ * RATIOS ON A BUSINESS THAT LOSES MONEY (§6.129.1).
+ *
+ * Every one of these was found by putting the rebuilt screen in front of SEQ Concreting, which forecasts a
+ * loss — and every one printed a CHEERFUL answer. This is the §6.128.1 argument in its third costume: a
+ * ratio whose denominator has gone negative does not become a small ratio, it stops being a ratio, and a
+ * dial that does not know the difference tells a bank the opposite of the truth.
+ */
+describe("a plan that loses money cannot be flattered by its own ratios", () => {
+  const losing = (o: Partial<CapabilityInput> = {}) => full({
+    pnl: { 1: pnl(2_000_000, { operatingProfit: -140_000 }), 2: pnl(2_200_000, { operatingProfit: -120_000 }) },
+    ...o,
+  });
+
+  /* SEQ read "−1.85× · Healthy" on net debt ÷ EBITDA, which sailed under the "under 2.5× is good" band. */
+  it("will not call negative leverage healthy", () => {
+    const lev = borrowMetrics(losing()).find((x) => x.key === "leverage")!;
+    expect(lev.value).toBeNull();
+    expect(statusOf(lev.value, lev.bands)).toBeNull();
+    /* And §6.115.1: the loss is said in words, never left to a minus sign in front of a dollar figure. */
+    expect(lev.missing).toContain("no earnings for the debt to be measured against");
+    expect(lev.missing).toContain("loses $80,000");
+    expect(lev.missing).not.toContain("$-");
+  });
+
+  /* And "13.18× · profit is growing faster than sales" on a plan whose loss merely got smaller. */
+  it("will not call a shrinking loss operating leverage", () => {
+    const lev = growMetrics(losing()).find((x) => x.key === "operatingLeverage")!;
+    expect(lev.value).toBeNull();
+    expect(lev.missing).toContain("no leverage on a loss");
+  });
+
+  /* A cover of −10.38× is read as a small number by anyone scanning a column of multiples. */
+  it("reports nil cover, not negative cover, when operations consume cash", () => {
+    const b = borrowMetrics(losing({ cashFlow: { 1: cf(-180_000), 2: cf(-160_000) } }));
+    const dscr = b.find((x) => x.key === "dscr")!;
+    expect(dscr.value).toBe(0);
+    expect(statusOf(dscr.value, dscr.bands)).toBe("bad");
+    expect(dscr.note).toContain("consume");
+  });
+
+  it("says the interest is being paid out of a loss rather than 'barely covered'", () => {
+    const ic = borrowMetrics(losing()).find((x) => x.key === "interestCover")!;
+    expect(statusOf(ic.value, ic.bands)).toBe("bad");
+    expect(ic.note).toContain("out of a loss");
+  });
+
+  /*
+   * THE ONE THAT MATTERS MOST HERE. SEQ scored 58 on the selling tab and read "Saleable, with work to do
+   * first" while losing 76,000 a year — because the decisive measure, price against comparables, was
+   * unanswerable for want of an asking price, and eight tidy measures carried the rest.
+   */
+  it("cannot score a loss-making business as saleable, priced or not", () => {
+    const m = sellMetrics(losing({ recurringShare: 0.62 }));
+    const margin = m.find((x) => x.key === "normalisedMargin")!;
+    expect(statusOf(margin.value, margin.bands)).toBe("bad");
+    expect(margin.note).toContain("multiple of a loss");
+
+    const s2 = score(m, SELL_WEIGHTS);
+    expect(s2.capped).toContain("normalisedMargin");
+    expect(s2.value!, "a business losing money reached the saleable band").toBeLessThan(50);
+  });
+
+  /* A share of a negative number is not a comparison, so the card does not print one. */
+  it("does not print leadership pay against negative earnings as though it were a ratio", () => {
+    const m = sellMetrics(losing({ leadershipPay: 141_400 })).find((x) => x.key === "leadershipPay")!;
+    expect(m.value).toBeNull();
+    expect(m.sub).toBeUndefined();
+    expect(m.missing).toContain("not positive");
   });
 });

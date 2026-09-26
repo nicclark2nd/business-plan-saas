@@ -98,6 +98,7 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth,
       id: key, _key: key, source: "entered", funding_debt_id: null, name: "", category: null,
       purchase_price: 0, residual_value: 0, useful_life_months: 60, method: "straight_line",
       start_year: 1, start_month: 1, already_owned: false, notes: null, gst_applies: true, sort_order: 0,
+      security_value: null,
     });
     setDlg({ key });
   };
@@ -105,7 +106,7 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth,
   const save = (next: Row) => {
         start(once(async () => {
       if (next.source === "finance") {
-        const res = await saveFinancedShape(planId, next.id, { name: next.name, method: next.method, useful_life_months: next.useful_life_months });
+        const res = await saveFinancedShape(planId, next.id, { name: next.name, method: next.method, useful_life_months: next.useful_life_months, security_value: next.security_value });
         if (!res.ok) { errors.raise({ key: "assets", message: res.error, label: "Fixed Assets" }); return; }
         setRows((rs) => rs.map((r) => (r._key === next._key ? next : r)));
       } else {
@@ -509,6 +510,7 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
    */
   const ownedNow = d.already_owned === true;
   const [paidWith, setPaidWith] = useState<"cash" | "finance">("cash");
+  const [sec, setSec] = useState(row.security_value === null ? "" : String(row.security_value));
   const [fin, setFin] = useState<Finance>({ lender: "", deposit: 0, rate: 0, term: 60 });
   const financing = isNew && !ownedNow && paidWith === "finance";
   const borrowed = Math.max(0, d.purchase_price - fin.deposit);
@@ -635,6 +637,29 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
             <div>
               <span className={label}>How</span>
               <FieldSelect value={d.method} onValueChange={(v) => set({ method: v as Row["method"] })} options={METHODS} />
+            </div>
+          </div>
+
+          {/*
+            * WHAT A LENDER WOULD ADVANCE (§6.129). Optional, and deliberately not defaulted from the book
+            * value: the balance sheet already carries what the asset is worth, and a bank lends a fraction of
+            * that on plant and nothing at all on a fit-out. Copying the book value in would produce a
+            * loan-to-value nobody agreed to, on a screen a bank reads.
+            *
+            * A RAW STRING, PARSED ON BLUR, because the box has to be able to be EMPTIED. Feeding a parsed
+            * number back on every keystroke turns a cleared box into 0, and 0 here is a claim — "a lender
+            * would advance nothing against this" — not an absence (§6.89).
+            */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <span className={label}>What a lender would advance</span>
+              <Input inputMode="decimal" value={sec} onChange={(e) => setSec(e.target.value)}
+                onBlur={() => set({ security_value: sec.trim() === "" ? null : Math.max(0, parseNum(sec)) })}
+                placeholder="Not set" className={cn(box, "num text-right")} />
+              <p className="mt-1 text-[11.5px] text-muted-foreground">
+                Optional, and not the same as what it is worth. Feeds loan-to-value on Financial Capabilities;
+                leave it empty and that measure stays unanswered rather than reading nothing.
+              </p>
             </div>
           </div>
 

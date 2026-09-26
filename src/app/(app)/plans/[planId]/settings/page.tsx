@@ -8,6 +8,9 @@ import { SettingsModule } from "./SettingsModule";
 import type { Settings, Licence } from "./model";
 import { LOGO_BUCKET, LOGO_URL_TTL_SECONDS } from "@/engine/plan/logo";
 
+/** A nullable numeric column, kept nullable: null means nobody has said, and that is not nought (§6.89). */
+const nOrNull = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number(v));
+
 export default async function SettingsPage({ params, searchParams }: { params: Promise<{ planId: string }>; searchParams: Promise<{ area?: string }> }) {
   const { planId } = await params;
   const { area } = await searchParams;
@@ -74,6 +77,13 @@ export default async function SettingsPage({ params, searchParams }: { params: P
     ai_enabled_at: s.ai_enabled_at ?? null,
     ai_enabled_by: s.ai_enabled_by ?? null,
     page_size: (s.page_size === "a4" || s.page_size === "letter" ? s.page_size : null),
+    /*
+     * Nullable through every layer (§6.129). `Number(null)` is 0 and 0 is a claim — a business priced at
+     * nothing — so each of these is read as null-or-a-number rather than coerced like the figures above.
+     */
+    asking_price: nOrNull(s.asking_price), owner_add_backs: nOrNull(s.owner_add_backs),
+    multiple_low: nOrNull(s.multiple_low), multiple_high: nOrNull(s.multiple_high),
+    intended_exit_year: nOrNull(s.intended_exit_year),
   };
   /**
    * A SIGNED URL, minted per request (§6.94). The bucket is private, so there is no permanent address to
@@ -85,7 +95,7 @@ export default async function SettingsPage({ params, searchParams }: { params: P
     ? (await supabase.storage.from(LOGO_BUCKET).createSignedUrl(logoPath, LOGO_URL_TTL_SECONDS)).data?.signedUrl ?? null
     : null;
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
-  const initialArea = area === "financial" || area === "printing" || area === "branding" || area === "lifecycle" ? area : "profile";
+  const initialArea = area === "financial" || area === "printing" || area === "exit" || area === "branding" || area === "lifecycle" ? area : "profile";
   return <SettingsModule planId={planId} initial={initial} mode={mode} initialArea={initialArea} drafting={drafting}
     licences={(licences.data ?? []) as Licence[]} logoUrl={logoUrl}
     archivedAt={plan.data?.archived_at ?? null} inventory={inventory} />;

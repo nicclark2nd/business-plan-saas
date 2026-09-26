@@ -1,17 +1,31 @@
 import type { BalanceSheetYear, CashFlowYear, PnlYear, WorkingCapitalDays } from "@/engine/forecast/model";
+import type { Growth, Sale, Stress, TransferRating } from "./judgements";
 
 /**
- * FINANCIAL CAPABILITIES — the shared shape (§6.128).
+ * FINANCIAL CAPABILITIES — the shared shape (§6.128, rebuilt §6.129).
  *
  * Three questions a business owner actually asks: could I sell this, could I borrow against it, can I
- * afford to grow it. Two of them are built here; selling needs facts this app has never collected — an
- * asking price, owner add-backs, who holds the customer relationships — and a dial drawn without them
- * would be an opinion with a needle on it.
+ * afford to grow it.
  *
- * EVERY NUMBER COMES FROM THE FORECAST THE REST OF THE APP RUNS. Nothing on these screens is typed twice.
- * The one exception is the loan being CONSIDERED, which by definition is not in the plan yet — it is a
- * scenario, the same way What-If's levers are, and it is held by the module rather than written into the
- * plan until the client decides to fund it.
+ * THE THREE TABS ARE DASHBOARDS. THEY COLLECT NOTHING.
+ *
+ * §6.128 built them with their inputs on them — an asking price beside the dial it drives, six
+ * transferability scores in a grid under the gauge, a loan proposal in a row of boxes. Nic, seeing it built:
+ * "THESE THREE TABS ARE FOR DISPLAY - NOT FOR COLLECTING DATA." The complaint reads as being about layout
+ * and is not. Nothing typed on those tabs was ever saved, so every figure was gone on refresh, no report
+ * could print any of it, and a score that changes between two visits is not a measurement. A dashboard that
+ * collects data is a form wearing a disguise.
+ *
+ * So every figure now has a home on the step whose subject it is — the cash floor and the downside with the
+ * other assumptions, the price in Plan settings → Exit & sale, owner dependence with the people it depends
+ * on — and this engine is handed all of them, already stored. `Metric.fix` carries where each one lives, so
+ * an unanswered dial can point at the box that answers it instead of growing one.
+ *
+ * THE PROPOSED LOAN IS GONE ENTIRELY, and its absence is the clearest gain. The borrowing tab used to ask
+ * for an amount, a rate and a term for a loan the client was contemplating. The two questions worth asking
+ * — is the debt this plan already carries covered, and what would the earnings support on top — are both
+ * answered by the plan itself. A loan actually being considered belongs on Funding or in What-If, where the
+ * whole forecast moves with it (§6.41).
  *
  * A METRIC THAT CANNOT BE COMPUTED SAYS SO AND SAYS WHY. `value: null` is a first-class answer with a
  * `missing` sentence attached, because the alternative — a zero, or a dash with no explanation — is the
@@ -48,6 +62,14 @@ export type Metric = {
   confidence: string;
   /** Present only when `value` is null: the plain-English thing that would make this answerable. */
   missing?: string;
+  /**
+   * WHERE THE MISSING FIGURE IS ENTERED (§6.129) — the pencil's destination on a greyed dial.
+   *
+   * `to` is a path under the plan, area included, so the client lands on the tab that holds the box rather
+   * than on the step's first tab to go hunting. Absent when what is missing is a forecast rather than a
+   * field: "needs a Year 1 forecast" has no single box to send anybody to.
+   */
+  fix?: { label: string; to: string };
   /** Year 1 to 5, or three historic points — whatever the metric is honestly a series of. */
   trend?: number[];
   trendLabel?: string;
@@ -156,11 +178,20 @@ export type CapabilityInput = {
   /** Capex per year from Fixed Assets, so growth spending can be told from keeping the lights on. */
   capex: Partial<Record<number, number>>;
   /**
-   * The two judgements the growth question needs and the plan does not hold: how low the client is willing
-   * to let cash go, and what their money costs. Typed on the screen like the loan and the asking price —
-   * both are the client's own tolerance, not a fact the forecast produces.
+   * The judgements the forecast cannot make, ALL OF THEM STORED (§6.129) and every field nullable.
+   *
+   * `growth` is the cash floor and the cost of capital, from Assumptions → Cash & capital. `stress` is the
+   * downside case, from Assumptions → Downside. `sale` is the price and the comparables, from Plan settings →
+   * Exit & sale. `transfer` is the six change-of-owner judgements, from Leadership Team → Risk & Succession.
+   *
+   * Nothing here is defaulted on the way in. A null cost of capital greys the return dial and points at the
+   * box; it does not quietly become 11% and hand the client a judgement nobody made (§6.89).
    */
   growth: Growth;
+  stress: Stress;
+  sale: Sale;
+  /** Only the factors actually scored. Six rows means all six answered; fewer means the measure waits. */
+  transfer: TransferRating[];
   /** Year 1 revenue that comes from products sold as an ongoing client rather than a one-off job. */
   recurringShare: number | null;
   /**
@@ -174,82 +205,16 @@ export type CapabilityInput = {
   /** What the leadership team is paid in Year 1 — the wage bill a buyer inherits or has to replace. */
   leadershipPay: number | null;
   /**
-   * What the business is being offered at, and the judgements that go with it. Null until the client
-   * prices it — same reasoning as the loan below: somebody wondering what their business is worth has not
-   * sold it, and an asking price is a position in a negotiation rather than a fact about the plan.
+   * What a lender could advance against, summed from Fixed Assets. Null until at least one asset carries a
+   * figure — a total of nought across a shed full of machinery is a worse answer than no answer.
    */
-  sale: Sale | null;
-  /**
-   * The loan being considered. Null until the client enters one — every borrowing metric that depends on
-   * it then reports itself unanswerable rather than quietly pretending the loan is zero.
-   */
-  proposal: Proposal | null;
-  /** How hard to push the downside. Defaults are stated on screen, not hidden in here. */
-  stress: Stress;
-};
-
-export type Sale = {
-  /** Enterprise value being asked. Zero means not priced yet. */
-  askingPrice: number;
-  /**
-   * Owner costs a buyer would not inherit — an above-market salary, the family car, one-off legal fees.
-   * Added back to EBITDA, and every dollar of it is a dollar a buyer's accountant will argue about.
-   */
-  addBacks: number;
-  /** What businesses like this one have actually changed hands for, as a multiple of normalised EBITDA. */
-  multipleLow: number;
-  multipleHigh: number;
-  /**
-   * Will it survive a change of owner? Six judgements, 1 (weak) to 5 (strong), in TRANSFER_FACTORS order.
-   * Empty until somebody scores them — a blank assessment is not a score of zero (§6.89).
-   */
-  transfer: number[];
-};
-
-/** The six things a buyer's advisor actually tests. Fixed, because a moving list cannot be compared. */
-export const TRANSFER_FACTORS = [
-  { key: "owner", label: "Runs without the owner", hint: "Could the business trade for a month if the owner vanished?" },
-  { key: "customers", label: "Customer relationships held by the team", hint: "Do customers deal with the business, or with one person?" },
-  { key: "processes", label: "Written-down processes", hint: "Could a new owner find out how the work is actually done?" },
-  { key: "staff", label: "Key staff likely to stay", hint: "Would the people who matter still be there in a year?" },
-  { key: "contracts", label: "Contracts a buyer can inherit", hint: "Are they assignable, or do they end at a change of control?" },
-  { key: "systems", label: "Systems and records", hint: "Are the books and the systems something a buyer could rely on?" },
-] as const;
-
-export const DEFAULT_SALE: Sale = { askingPrice: 0, addBacks: 0, multipleLow: 3.5, multipleHigh: 4.8, transfer: [] };
-
-export type Growth = {
-  /** The floor the client wants cash to stay above. Zero means "just don't go negative". */
-  cashBuffer: number;
-  /** What the money funding the growth costs, as a percentage. Sets the bar the return has to clear. */
-  costOfCapital: number;
-};
-
-export const DEFAULT_GROWTH: Growth = { cashBuffer: 0, costOfCapital: 11 };
-
-export type Proposal = {
-  amount: number;
-  ratePct: number;
-  termYears: number;
-  /** Committed but undrawn — an overdraft counts towards runway only if the bank cannot withdraw it. */
-  undrawn: number;
-  /** What the lender can actually take security over. Null when nobody has valued it. */
   collateral: number | null;
+  /**
+   * Committed but undrawn facility, from the funding rows the plan already holds — facility total less what
+   * has been drawn. Never a field anybody types: Funding records both halves of it already (§6.41).
+   */
+  undrawn: number;
 };
-
-export type Stress = {
-  /** Sales fall by this much, as a percentage. */
-  salesPct: number;
-  /** Gross margin falls by this many percentage points. */
-  marginPts: number;
-  /** Customers pay this many days later. */
-  debtorDaysAdded: number;
-};
-
-export const DEFAULT_STRESS: Stress = { salesPct: 10, marginPts: 1.5, debtorDaysAdded: 10 };
-
-/** The cover a lender will not go below. Stated once, shown on screen, used by every calculation. */
-export const LENDER_MIN_DSCR = 1.25;
 
 /* ------------------------------------------------------------------ *
  * Small shared arithmetic                                             *

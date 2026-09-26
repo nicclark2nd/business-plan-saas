@@ -27,8 +27,14 @@ export function growMetrics(i: CapabilityInput): Metric[] {
   const revGrowth = y1 && y2 ? over(y2.revenue - y1.revenue, y1.revenue) : null;
   const gpGrowth = y1 && y2 ? (y2.revenue - y2.cogs) - (y1.revenue - y1.cogs) : null;
   const incMargin = y1 && y2 && y2.revenue !== y1.revenue ? over(gpGrowth, y2.revenue - y1.revenue) : null;
-  const opLev = y1 && y2 && y1.operatingProfit !== 0 && revGrowth
-    ? over(over(y2.operatingProfit - y1.operatingProfit, Math.abs(y1.operatingProfit)), revGrowth) : null;
+  /*
+   * OPERATING LEVERAGE NEEDS A PROFIT TO BE LEVERAGED (§6.129.1). The denominator is `Math.abs(...)`, so a
+   * plan whose LOSS shrinks between two years produced a big cheerful multiple — SEQ read "13.18× · Healthy ·
+   * profit is growing faster than sales" on a plan that loses money in both years. A loss getting smaller is
+   * worth knowing and is not operating leverage.
+   */
+  const opLev = y1 && y2 && y1.operatingProfit > 0 && revGrowth
+    ? over(over(y2.operatingProfit - y1.operatingProfit, y1.operatingProfit), revGrowth) : null;
 
   /** Operating working capital: what trading ties up, ignoring cash and debt. */
   const owc = (b?: typeof bs1) => b ? b.accountsReceivable + b.inventory - b.accountsPayable : null;
@@ -46,10 +52,22 @@ export function growMetrics(i: CapabilityInput): Metric[] {
     ? (i.capex[2] as number) + Math.max(0, owc2 - owc1) : null;
   const extraProfit = y1 && y2 ? (y2.operatingProfit - y1.operatingProfit) : null;
   const returnOnPlan = invested && invested > 0 ? over(extraProfit, invested) : null;
+  /* Computable and judgeable are different things: `judged` is the return only once a bar exists for it. */
+  const judged = returnOnPlan !== null && i.growth.costOfCapital !== null ? returnOnPlan : null;
 
   const lowCash = i.monthlyCash.length ? Math.min(...i.monthlyCash) : null;
   const lowMonth = lowCash === null ? null : i.monthlyCash.indexOf(lowCash) + 1;
+  /*
+   * BOTH JUDGEMENTS ARE NULLABLE NOW (§6.129), and the two are treated differently on purpose.
+   *
+   * The cash floor is a THRESHOLD: the lowest month is a fact with or without it, so the value still shows
+   * and only the band it is judged against waits. The cost of capital is a BAR: a return on the growth plan
+   * means nothing until somebody says what the money costs, so that dial withholds its judgement and points
+   * at the box — while still printing the figure in its sentence, because the arithmetic is not the problem.
+   */
   const buffer = i.growth.cashBuffer;
+  const coc = i.growth.costOfCapital;
+  const CASH_FIX = { label: "Set a cash floor", to: "assumptions?area=cash" };
 
   /*
    * IS THERE A PROFIT TO GROW? (§6.128.1)
@@ -129,28 +147,40 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       formula: "% change in operating profit ÷ % change in revenue, Year 1 to Year 2",
       reveals: "Whether growth improves profit or simply needs costs to rise with it.",
       confidence: "High.",
-      missing: opLev === null ? "A Year 1 operating profit and some forecast growth." : undefined,
+      missing: opLev === null
+        ? (y1 && y1.operatingProfit <= 0
+            ? "A Year 1 operating profit. There is no leverage on a loss — only a loss that gets bigger or smaller."
+            : "A Year 1 operating profit and some forecast growth.")
+        : undefined,
     },
     {
       key: "returnOnPlan", name: "Return on the growth plan", unit: "pct",
-      value: returnOnPlan === null ? null : r1(returnOnPlan * 100),
-      display: returnOnPlan === null ? "—" : pct(returnOnPlan * 100),
       /* The bar is what the money costs, which the client sets — not a number this app picked for them. */
-      min: 0, max: Math.max(40, i.growth.costOfCapital * 2),
-      bands: [
-        { to: i.growth.costOfCapital, s: "bad" },
-        { to: i.growth.costOfCapital * 1.3, s: "watch" },
-        { to: Number.MAX_SAFE_INTEGER, s: "good" },
-      ],
+      value: judged === null ? null : r1(judged * 100),
+      display: judged === null ? "—" : pct(judged * 100),
+      min: 0, max: Math.max(40, (coc ?? 20) * 2),
+      bands: coc === null
+        ? [{ to: Number.MAX_SAFE_INTEGER, s: "good" }]
+        : [{ to: coc, s: "bad" }, { to: coc * 1.3, s: "watch" }, { to: Number.MAX_SAFE_INTEGER, s: "good" }],
       sub: invested ? `${m(extraProfit ?? 0)} more profit on ${m(invested)} invested` : undefined,
       note: returnOnPlan === null ? "Needs Year 2 capital spending recorded on the Fixed Assets step."
-        : returnOnPlan * 100 < i.growth.costOfCapital ? `The extra profit does not clear the ${i.growth.costOfCapital}% the money costs. The plan spends more than the growth returns.`
+        : coc === null ? `The plan returns ${pct(returnOnPlan * 100)} on what the growth costs. Whether that is enough depends on what your money costs, which nobody has said yet.`
+        : returnOnPlan * 100 < coc ? `The extra profit does not clear the ${coc}% the money costs. The plan spends more than the growth returns.`
         : "The extra profit clears the cost of capital you set.",
-      bench: `Has to beat the ${i.growth.costOfCapital}% you said the money costs`,
+      bench: coc === null ? "It has to beat what the money costs — set that on Assumptions" : `Has to beat the ${coc}% you said the money costs`,
       formula: "Extra operating profit in Year 2 ÷ (Year 2 capex + the extra working capital growth ties up)",
       reveals: "Whether the money the growth plan needs earns an adequate return.",
       confidence: "Medium — it assumes Year 2's capex is what buys Year 2's extra profit, which is rarely exactly true.",
-      missing: returnOnPlan === null ? "Capital spending for Year 2 on the Fixed Assets step." : undefined,
+      /*
+       * A RETURN WITH NO BAR IS NOT A PASS (§6.89). The percentage is computable and is printed in the note
+       * above, but the SCORE must not treat an unjudged return as a good one — so the value is withheld, the
+       * metric drops out of both sides of the score, and the pencil points at the box that would settle it.
+       */
+      missing: returnOnPlan === null ? "Capital spending for Year 2 on the Fixed Assets step."
+        : coc === null ? "What your money costs, on the Assumptions step." : undefined,
+      fix: returnOnPlan !== null && coc === null
+        ? { label: "Set the cost of capital", to: "assumptions?area=cash" }
+        : returnOnPlan === null ? { label: "Add Year 2 capex", to: "assets" } : undefined,
     },
     {
       key: "cashCycle", name: "Cash conversion cycle", unit: "days",
@@ -199,19 +229,30 @@ export function growMetrics(i: CapabilityInput): Metric[] {
     {
       key: "lowestCash", name: "Lowest month in Year 1", unit: "money",
       value: lowCash, display: lowCash === null ? "—" : m(lowCash),
-      min: buffer > 0 ? -buffer : -(Math.abs(lowCash ?? 100_000) + 100_000),
-      max: buffer > 0 ? buffer * 4 : Math.max(Math.abs(lowCash ?? 0) * 2, 200_000),
-      bands: [{ to: 0, s: "bad" }, { to: Math.max(buffer, 1), s: "watch" }, { to: Number.MAX_SAFE_INTEGER, s: "good" }],
+      min: buffer && buffer > 0 ? -buffer : -(Math.abs(lowCash ?? 100_000) + 100_000),
+      max: buffer && buffer > 0 ? buffer * 4 : Math.max(Math.abs(lowCash ?? 0) * 2, 200_000),
+      /*
+       * WITHOUT A FLOOR THE ONLY LINE IS ZERO, and that is an honest reading rather than a softer one: a plan
+       * whose worst month is a thousand dollars in the bank passes a test it should not, and the bench line
+       * says so instead of the dial pretending a floor was set.
+       */
+      bands: buffer && buffer > 0
+        ? [{ to: 0, s: "bad" }, { to: buffer, s: "watch" }, { to: Number.MAX_SAFE_INTEGER, s: "good" }]
+        : [{ to: 0, s: "bad" }, { to: Number.MAX_SAFE_INTEGER, s: "good" }],
       sub: lowMonth ? `Month ${lowMonth} of Year 1` : undefined,
       note: lowCash === null ? "Needs a monthly cash forecast."
         : lowCash < 0 ? "The plan runs out of money before the year ends. Nothing else on this page matters until that is fixed."
-        : buffer > 0 && lowCash < buffer ? `Cash stays positive but dips below the ${m(buffer)} floor you set.`
+        : buffer !== null && buffer > 0 && lowCash < buffer ? `Cash stays positive but dips below the ${m(buffer)} floor you set.`
+        : buffer === null ? "Cash stays above water every month of Year 1 — though nobody has said how far above water it needs to stay."
         : "Cash stays above water every month of Year 1.",
-      bench: buffer > 0 ? `Your floor is ${m(buffer)} — it is the month, not the year, that runs a business out of money` : "Set a cash floor above and this is judged against it",
+      bench: buffer !== null && buffer > 0
+        ? `Your floor is ${m(buffer)} — it is the month, not the year, that runs a business out of money`
+        : "No floor set, so this is only judged against zero",
       formula: "The lowest closing balance in the twelve-month cash forecast",
       reveals: "Whether the growth can be funded out of the year as it is planned.",
       confidence: "High — the same monthly figures the dashboard charts.",
       missing: lowCash === null ? "Sales and costs, so the monthly cash forecast can run." : undefined,
+      fix: lowCash !== null && buffer === null ? CASH_FIX : undefined,
       trend: i.monthlyCash.length ? i.monthlyCash : undefined, trendLabel: "Year 1, month by month",
     },
   ];

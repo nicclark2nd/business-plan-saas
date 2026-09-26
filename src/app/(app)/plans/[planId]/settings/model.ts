@@ -142,7 +142,34 @@ export type Ai = {
   ai_enabled_by: string | null;
 };
 
-export type Settings = Profile & Financial & Printing & Ai & { logo_path: string | null };
+/**
+ * EXIT & SALE (§6.129) — four numbers and a year, and not one of them is a fact about the forecast.
+ *
+ * An asking price is a POSITION IN A NEGOTIATION. A comparable multiple is somebody else's completed deal.
+ * Owner add-backs are an argument a buyer's accountant will have with you line by line. The engine cannot
+ * derive any of them and must not pretend to, so they are stored as what the client believes — but they ARE
+ * stored, because a price nobody wrote down cannot be argued with, and because these were typed on the
+ * Financial Capabilities dashboard and lost on every refresh.
+ *
+ * All nullable. A blank asking price means the business has not been priced, which is a different state from
+ * a price of nothing (§6.89), and the dial that reads it stays grey rather than reporting a business worth $0.
+ */
+export type Exit = {
+  /** Enterprise value being asked. */
+  asking_price: number | null;
+  /**
+   * Costs in the accounts that exist only because THIS owner runs it — an above-market salary, the family
+   * car, one-off legal fees. Added back to EBITDA before a multiple is applied.
+   */
+  owner_add_backs: number | null;
+  /** What businesses like this one have actually changed hands for, as a multiple of normalised EBITDA. */
+  multiple_low: number | null;
+  multiple_high: number | null;
+  /** Which forecast year a sale is aimed at, if the client has said. */
+  intended_exit_year: number | null;
+};
+
+export type Settings = Profile & Financial & Printing & Ai & Exit & { logo_path: string | null };
 
 /** The fields a report's business overview cannot do without. */
 /** What a report cannot open without. The products & services statement moved to Sales (§6.34). */

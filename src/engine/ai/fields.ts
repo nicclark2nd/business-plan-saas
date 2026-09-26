@@ -1,5 +1,5 @@
 import type { DraftableField } from "./draft";
-import { VISION_FIELDS } from "@/app/(app)/plans/[planId]/vision/fields";
+import { VISION_FIELDS, visionDraftable } from "@/app/(app)/plans/[planId]/vision/fields";
 import { POSITION_ONE_LINER, BRAND_FIELDS, POSITION_FIELDS, COMPETITOR_PROSE } from "@/app/(app)/plans/[planId]/marketing/model";
 import { CAPACITY_FIELDS, STEP_DETAIL } from "@/app/(app)/plans/[planId]/operations/model";
 import { PRODUCT_PROSE } from "@/app/(app)/plans/[planId]/sales/model";
@@ -364,8 +364,14 @@ const fromRows = (): DraftableField[] => [
   },
 ];
 
+/*
+ * NOT EVERY STATEMENT ON THE VISION STEP IS DRAFTABLE (§6.129). "Selling the business" is a statement about
+ * what the owner wants, and a model that invented one would be putting words in their mouth in a document a
+ * buyer reads. The field itself declares the refusal; this filter honours it, so nothing here has to keep a
+ * second list of which keys are allowed.
+ */
 const fromVision = (): DraftableField[] =>
-  VISION_FIELDS.map((f) => ({
+  VISION_FIELDS.filter(visionDraftable).map((f) => ({
     key: f.key,
     label: f.label,
     sub: f.sub,
