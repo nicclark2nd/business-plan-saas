@@ -452,6 +452,36 @@ industry or a smaller country will often get "couldn't find" instead. If that is
 next step is an SDE-to-EBITDA path using the leadership pay the plan already holds, since most published
 small-business multiples are on SDE.
 
+**Measured 26 Sep 2026** — nine more searches on ZZ Test Walk (industry and country changed per run, then put
+back; AI switched off again afterwards):
+
+| Industry, country | Sites | Range | Set aside (SDE/revenue) |
+|---|---|---|---|
+| Cafe, Australia | 3 | 2× – 3× | 0 |
+| Plumbing, Australia | 5 | 2.9× – 5× | 1 |
+| Accounting practice, Australia | 5 | 4× – 6× | 1 |
+| Landscaping, Australia | 2 | 2.8× – 4× | 0 |
+| Physiotherapy clinic, Australia | 2 | 1.8× – 3.8× | 2 |
+| Mobile dog grooming, Australia | miss | — | 0 |
+| Electrical contracting, New Zealand | miss | — | 0 |
+| Cafe, New Zealand | miss | — | 0 |
+| IT managed services, United Kingdom | 5 | 5× – 9× | 0 |
+
+What it shows:
+- **Misses come from country and niche, not from SDE.** All three misses had nothing set aside, so an
+  SDE-to-EBITDA path would not have rescued one of them. It drops down the list.
+- **New Zealand missed twice out of two**, including a cafe, which Australia answers easily.
+- **Quality, not only count.** Physiotherapy counted a LinkedIn post as one of its two sites. The UK IT
+  range included a mid-market M&A report (9×–12×), which is not a small-business sale. CT Acquisitions
+  supplied one of the sites in four of the six hits, so many ranges lean on one acquirer's marketing pages.
+- The set-aside count is already shown on the card ("One other figure was quoted on owner earnings…").
+
+Candidate next steps, in order: (1) on a miss, one broader search clearly labelled as broader — a
+neighbouring market (New Zealand → Australia) or the parent industry — never passed off as a close
+comparable; (2) tighten what counts as a site: drop social and forum hosts (LinkedIn, Facebook, Medium,
+Reddit, Quora) and ask for small-business figures only; (3) SDE-to-EBITDA, only if misses with SDE set
+aside start to show up.
+
 ### ~~43. The What-If "Turn into goals" dialog still offers a quarter~~ — **done (§6.139)**
 
 The quarter pickers are gone. In their place a due date — once at the top for all, then per goal — which
@@ -485,3 +515,12 @@ Checked live on ZZ Test Walk: Operating margin 95 / 98 turned the card and summa
 plan's sentence; "Use general" put back Healthy, the original sentence and a grow score of 78. ZZ has no
 security value, so the loan-to-value change rests on its unit test.
 
+### 46. A profile edit is lost when the State box is left next — **open**
+
+Business profile tracks unsaved work in one slot (`dirty`: "profile" | "financial"). The "Main state of
+operation" box sits on the profile tab but saves through the financial saver, and leaving it calls
+`commit("financial")`, which clears the slot. Anything typed into the profile just before (industry,
+name, tagline, email) is never sent, and the footer says "All changes saved". Reproduced on ZZ Test Walk
+26 Sep 2026: typed an industry, clicked into State, pressed Tab — the only request was the financial save,
+and the industry was gone after a reload. Choosing a state from the list (`edit(…, "financial", true)`)
+takes the same path. Fix: track the two as separate flags so one save cannot clear the other's.
