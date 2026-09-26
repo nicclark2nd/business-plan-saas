@@ -12,8 +12,8 @@ import { cn } from "@/lib/utils";
 import { useMoney } from "@/components/MoneyProvider";
 import { customerNoun, productNoun } from "@/engine/plan/vocabulary";
 import { formatMonth } from "../people/model";
-import { saveMarket, upsertRow, deleteRow, continueFromMarketing, type RowKind } from "./actions";
-import { MARKET_FIELDS, POSITION_ONE_LINER, BRAND_FIELDS, salesFields, SALES_KEYS, SPEND_KINDS, SPEND_LABEL, type Market, type MarketingData, type Spend, type Evidence, type SpendKind, type Segment } from "./model";
+import { saveMarket, saveMarketFigures, upsertRow, deleteRow, continueFromMarketing, type RowKind } from "./actions";
+import { MARKET_FIELDS, POSITION_ONE_LINER, BRAND_FIELDS, salesFields, SALES_KEYS, SPEND_KINDS, SPEND_LABEL, type Market, type MarketingData, type Spend, type Evidence, type SpendKind, type Segment, type Customer, MAX_CUSTOMERS } from "./model";
 import { acquisitionByYear } from "@/engine/marketing/acquisition";
 import type { AnyProduct } from "@/engine/sales/product";
 import { GoalDialog } from "@/components/goals/GoalDialog";
@@ -75,11 +75,22 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
   const blankSpend = (id = "tmp-new-spend"): WithMeta<Spend> => ({ id, kind: "advertising", approach: "", annual_budget: 0, sort_order: 0 });
   const blankEvidence = (id = "tmp-new-evidence"): WithMeta<Evidence & { when_text: string }> => ({ id, source: "", method: "", finding: "", decision: "", occurred_on: null, when_text: "", sort_order: 0 });
   const blankSegment = (id = "tmp-new-segment"): WithMeta<Segment> => ({ id, name: "", profile: "", cares_about: "", revenue_share: null, sort_order: 0 });
-  const [rows, setRows] = useState<{ spend: WithMeta<Spend>[]; evidence: WithMeta<Evidence & { when_text: string }>[]; segments: WithMeta<Segment>[] }>({
+  const blankCustomer = (id = "tmp-new-customer"): WithMeta<Customer & { ends_text: string }> => ({ id, name: "", revenue_share: null, contract_ends_on: null, assignable: null, ends_text: "", sort_order: 0 });
+  const [rows, setRows] = useState<{ spend: WithMeta<Spend>[]; evidence: WithMeta<Evidence & { when_text: string }>[]; segments: WithMeta<Segment>[]; customers: WithMeta<Customer & { ends_text: string }>[] }>({
     spend: initial.spend.length ? initial.spend : [blankSpend()],
     evidence: initial.evidence.length ? initial.evidence.map((e) => ({ ...e, when_text: formatMonth(e.occurred_on) })) : [blankEvidence()],
     segments: initial.segments.length ? initial.segments : [blankSegment()],
+    customers: initial.customers.length ? initial.customers.map((c) => ({ ...c, ends_text: formatMonth(c.contract_ends_on) })) : [blankCustomer()],
   });
+  /*
+   * RETENTION AND PIPELINE (§6.129.3). Raw strings, parsed on the way out, with the ref written on every
+   * edit — the fault that dropped one of two quickly-filled boxes on Assumptions is not being rebuilt here.
+   */
+  const pctStr = (v: number | null) => (v === null ? "" : String(v));
+  const [figs, setFigs] = useState({ retention: pctStr(initial.figures.customer_retention_pct), pipeline: pctStr(initial.figures.weighted_pipeline) });
+  const figsRef = useRef(figs);
+  const editFig = (k: "retention" | "pipeline", v: string) => { const next = { ...figsRef.current, [k]: v }; figsRef.current = next; setFigs(next); };
+  const figNum = (raw: string) => { const t = raw.trim(); if (!t) return null; const x = Number(t.replace(/[^0-9.]/g, "")); return Number.isFinite(x) ? x : null; };
   /** Keyed per row and per area, so several failures are several messages (§6.98). */
   const errors = useSaveErrors();
   const [pending, start] = useTransition();
@@ -98,6 +109,13 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
     });
   };
 
+  const commitFig = (k: "retention" | "pipeline") => start(async () => {
+    const v = figNum(figsRef.current[k]);
+    const r = await saveMarketFigures(planId, k === "retention" ? { customer_retention_pct: v } : { weighted_pipeline: v });
+    if (!r.ok) errors.raise({ key: `fig:${k}`, message: r.error, label: k === "retention" ? "Customer retention" : "Pipeline" });
+    else errors.clear(`fig:${k}`);
+  });
+
   // ----- row grids: one request per row, when focus leaves it; selects save at once -----
   type AnyRow = { id: string; _dirty?: boolean } & Record<string, unknown>;
   type GridKind = Exclude<RowKind, "competitors">;
@@ -113,15 +131,20 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
     setList(k, (xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: false } : x)));
     const payload: Record<string, unknown> = { ...row, id: id.startsWith("tmp-") ? undefined : id };
     if (k === "evidence") payload.occurred_on = row.when_text;      // the action parses "Mar 2026"
+    if (k === "customers") payload.contract_ends_on = row.ends_text;
     start(async () => {
       const r = await upsertRow(planId, k, payload);
       if (!r.ok) {
-        errors.raise({ key: `${k}:${id}`, message: r.error, label: k === "spend" ? "Marketing spend" : k === "evidence" ? "Evidence" : "Segment" });
+        errors.raise({ key: `${k}:${id}`, message: r.error, label: k === "spend" ? "Marketing spend" : k === "evidence" ? "Evidence" : k === "customers" ? "Customer" : "Segment" });
         setList(k, (xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: true } : x)));
         return;
       }
       errors.clear(`${k}:${id}`);
-      setList(k, (xs) => xs.map((x) => (x.id === id ? { ...x, id: r.data!.id, ...(k === "evidence" && r.data!.occurred_on !== undefined ? { occurred_on: r.data!.occurred_on, when_text: formatMonth(r.data!.occurred_on) } : {}) } : x)));
+      setList(k, (xs) => xs.map((x) => (x.id === id ? {
+        ...x, id: r.data!.id,
+        ...(k === "evidence" && r.data!.occurred_on !== undefined ? { occurred_on: r.data!.occurred_on, when_text: formatMonth(r.data!.occurred_on) } : {}),
+        ...(k === "customers" && r.data!.occurred_on !== undefined ? { contract_ends_on: r.data!.occurred_on, ends_text: formatMonth(r.data!.occurred_on) } : {}),
+      } : x)));
     });
   };
   const add = (k: GridKind, blank: Record<string, unknown>) => {
@@ -141,10 +164,15 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
   };
   const remove = (k: GridKind, id: string) => {
     setKill(null);
-    setList(k, (xs) => { const rest = xs.filter((x) => x.id !== id); return rest.length ? rest : [k === "spend" ? blankSpend(`tmp-${crypto.randomUUID()}`) as unknown as AnyRow : blankEvidence(`tmp-${crypto.randomUUID()}`) as unknown as AnyRow]; });
+    /* The blank that replaces the last row is THIS grid's blank — it used to hand segments an evidence row. */
+    const blankFor = (g: GridKind): AnyRow => {
+      const tmp = `tmp-${crypto.randomUUID()}`;
+      return (g === "spend" ? blankSpend(tmp) : g === "evidence" ? blankEvidence(tmp) : g === "segments" ? blankSegment(tmp) : blankCustomer(tmp)) as unknown as AnyRow;
+    };
+    setList(k, (xs) => { const rest = xs.filter((x) => x.id !== id); return rest.length ? rest : [blankFor(k)]; });
     if (!id.startsWith("tmp-")) start(async () => { await deleteRow(planId, k, id); });
   };
-  const flush = () => { commitMarket(); (["spend", "evidence", "segments"] as GridKind[]).forEach((k) => list(k).forEach((r) => r._dirty && commit(k, r.id))); };
+  const flush = () => { commitMarket(); (["spend", "evidence", "segments", "customers"] as GridKind[]).forEach((k) => list(k).forEach((r) => r._dirty && commit(k, r.id))); };
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const intent = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value === "later" ? "later" : "next";
@@ -169,7 +197,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
   /** What a customer costs to win — the plan's own spend over the plan's own count (§6.61). */
   const spendTotal = rows.spend.reduce((a, s) => a + (Number(s.annual_budget) || 0), 0);
   const acquisition = acquisitionByYear(products, Array(5).fill(spendTotal));
-  const anyDirty = marketDirty || (["spend", "evidence"] as GridKind[]).some((k) => (rows[k] as AnyRow[]).some((r) => r._dirty));
+  const anyDirty = marketDirty || (["spend", "evidence", "segments", "customers"] as GridKind[]).some((k) => (rows[k] as AnyRow[]).some((r) => r._dirty));
   const plural = customerNoun(customerWord).many.toLowerCase();
   /** What this plan calls one sale (§6.31.1): a job, a treatment, a client. Nobody wins a "job" in software. */
   const one = productNoun(productWord).one.toLowerCase();
@@ -275,6 +303,62 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
           </Grid>
           <Note>Share of sales is optional — it is a rough split, not a forecast. The forecast comes from your Sales lines.</Note>
 
+          {/*
+            THE LARGEST CUSTOMERS BY NAME (§6.129.3). The segments above say what KIND of buyer; a buyer's
+            adviser asks WHICH ones, and what share each holds, before anything else. Five at most — this is
+            concentration, not a customer list, and a sixth customer is by definition not a concentration risk.
+          */}
+          <Toolbar>
+            <Meta className="ml-0">
+              Your largest {plural}, up to {MAX_CUSTOMERS}. A buyer asks who they are, what share of sales each holds, and
+              whether their contracts pass to a new owner. Read on Financial Capabilities.
+            </Meta>
+            <Button size="sm" variant="outline" type="button" className="ml-auto"
+              disabled={rows.customers.filter((c) => !c.id.startsWith("tmp-") || c.name.trim()).length >= MAX_CUSTOMERS}
+              onClick={() => add("customers", { name: "", revenue_share: null, contract_ends_on: null, assignable: null, ends_text: "" })}>
+              + Customer
+            </Button>
+          </Toolbar>
+          <Grid>
+            <thead><tr>
+              <Th>Customer</Th>
+              <Th right style={{ width: 120 }}>Share of sales</Th>
+              <Th style={{ width: 150 }}>Contract ends</Th>
+              <Th style={{ width: 190 }}>Passes to a new owner?</Th>
+              <Th style={{ width: 36 }} />
+            </tr></thead>
+            <tbody>
+              {rows.customers.map((c) => (
+                <Row key={c.id} data-row={c.id} onBlur={(e) => left(e) && commit("customers", c.id)}
+                  className={cn(errors.forKey(`customers:${c.id}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`customers:${c.id}`)}>
+                  <Td><CellInput value={c.name} placeholder="e.g. Metricon Homes" onChange={(e) => edit("customers", c.id, { name: e.target.value })} /></Td>
+                  <Td right><CellInput numeric suffix="%" value={c.revenue_share === null ? "" : String(c.revenue_share)} placeholder="—"
+                    onChange={(e) => edit("customers", c.id, { revenue_share: e.target.value.trim() === "" ? null : Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} /></Td>
+                  <Td><CellInput value={c.ends_text} placeholder="e.g. Mar 2027, or blank"
+                    onChange={(e) => edit("customers", c.id, { ends_text: e.target.value })} /></Td>
+                  <Td>
+                    <CellSelect value={c.assignable === true ? "yes" : c.assignable === false ? "no" : "unknown"}
+                      options={[{ value: "unknown", label: "Not checked" }, { value: "yes", label: "Yes, it can be assigned" }, { value: "no", label: "No — ends on a sale" }]}
+                      onValueChange={(v) => edit("customers", c.id, { assignable: v === "yes" ? true : v === "no" ? false : null }, !!c.name.trim())} />
+                  </Td>
+                  <Td><RemoveButton onClick={() => remove("customers", c.id)} /></Td>
+                </Row>
+              ))}
+            </tbody>
+          </Grid>
+
+          <div className="mt-2">
+            <Section title="Keeping them">
+              <FieldGrid>
+                <Field label="Customer retention %" span={2} error={errors.forKey("fig:retention")}
+                  hint={`Of the ${plural} you had a year ago, how many are still buying. Leave it empty if you do not know — a guess here is read as a fact.`}>
+                  <CellInput numeric suffix="%" value={figs.retention} placeholder="Not said"
+                    onChange={(e) => editFig("retention", e.target.value)} onBlur={() => commitFig("retention")} />
+                </Field>
+              </FieldGrid>
+            </Section>
+          </div>
+
           <div onBlur={(e) => left(e) && commitMarket()} className="mt-4">
             <Section title="The market">{narrative(MARKET_FIELDS)}</Section>
             <Section title="Position">{narrative([POSITION_ONE_LINER])}</Section>
@@ -293,6 +377,20 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
         <div onBlur={(e) => left(e) && commitMarket()}>
           <Toolbar><Meta className="ml-0">Marketing brings them to the door. This is what happens next — and it is the half most plans leave out.</Meta></Toolbar>
           <Section title="Winning the work">{narrative(salesFields(one))}</Section>
+          {/*
+            THE PIPELINE, AS ONE NUMBER (§6.129.3). Weighted, because a list of quotes at face value is a wish
+            list: a $200,000 quote you will probably lose is worth less than a $50,000 one you will probably win.
+            Read against next year's growth on Financial Capabilities.
+          */}
+          <Section title="Work in the pipeline">
+            <FieldGrid>
+              <Field label="Weighted value of quoted work" span={2} error={errors.forKey("fig:pipeline")}
+                hint="Each open quote times your honest chance of winning it, added up. A $100,000 quote at a one-in-four chance counts as $25,000.">
+                <CellInput numeric value={figs.pipeline} placeholder="Not said"
+                  onChange={(e) => editFig("pipeline", e.target.value)} onBlur={() => commitFig("pipeline")} />
+              </Field>
+            </FieldGrid>
+          </Section>
         </div>
       )}
 

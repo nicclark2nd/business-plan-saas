@@ -184,6 +184,8 @@ export function buyerQuestions(
     addBacks: number | null;
     transfer: { key: string; label: string; score: number | null }[];
     knowsCustomers: boolean;
+    /** The largest customers, once the plan records them (§6.129.3). */
+    customers?: { name: string; share: number | null; assignable: boolean | null; endsWithinYear: boolean }[];
   },
 ): string[] {
   const m = facts.money;
@@ -221,6 +223,21 @@ export function buyerQuestions(
   if (facts.transfer.every((t) => t.score === null)) {
     q.push("Would the business keep trading if the owner stopped turning up? It has not been assessed yet.");
   }
+
+  /*
+   * ONCE THE CUSTOMERS ARE KNOWN, THE QUESTIONS GET NAMES (§6.129.3). "What happens if your largest customer
+   * leaves" is a question; "what happens if Metricon stops buying" is the one a buyer actually asks.
+   */
+  const cs = facts.customers ?? [];
+  const top = [...cs].filter((c) => c.share !== null).sort((a, b) => (b.share ?? 0) - (a.share ?? 0))[0];
+  if (top && (top.share ?? 0) > 20) {
+    q.push(`What happens to the earnings if ${top.name} — ${Math.round((top.share ?? 0) * 10) / 10}% of sales — stops buying?`);
+  }
+  if (cs.some((c) => c.assignable === false)) {
+    q.push("Which customer contracts end on a change of ownership, and can they be renegotiated before the sale?");
+  }
+  const ending = cs.find((c) => c.endsWithinYear);
+  if (ending) q.push(`${ending.name}'s contract ends within the year. Has it been renewed, and on what terms?`);
 
   /*
    * THE ONE QUESTION THIS APP CANNOT ANSWER FOR THE CLIENT, asked every time until it can. Customer

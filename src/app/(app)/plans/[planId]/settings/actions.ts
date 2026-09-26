@@ -180,11 +180,38 @@ export async function saveExit(planId: string, e: Partial<Exit>): Promise<Result
   const { error } = await supabase.from("plan_settings").upsert({
     plan_id: planId,
     asking_price: e.asking_price ?? null,
-    owner_add_backs: e.owner_add_backs ?? null,
     multiple_low: lo, multiple_high: hi,
     intended_exit_year: e.intended_exit_year ?? null,
   }, { onConflict: "plan_id" });
   if (error) return failed(error, "save the sale figures");
+  touch(planId);
+  return { ok: true };
+}
+
+/**
+ * One add-back line (§6.129.3). A label is required — an unexplained dollar is exactly what a buyer strikes
+ * out first — and the amount is a year's worth, never negative. The whole row comes back so the screen shows
+ * what was stored rather than what was typed (§6.121).
+ */
+export async function upsertAddBack(planId: string, a: { id?: string; label: string; amount: number }):
+  Promise<{ ok: true; data: { id: string; label: string; amount: number } } | { ok: false; error: string }> {
+  const label = (a.label ?? "").trim();
+  if (!label) return { ok: false, error: "Say what the add-back is — an unexplained figure is the first one a buyer strikes out." };
+  const amount = Math.max(0, Math.round((Number(a.amount) || 0) * 100) / 100);
+  const supabase = await createClient();
+  const q = a.id
+    ? supabase.from("plan_add_backs").update({ label, amount }).eq("id", a.id).eq("plan_id", planId).select("id, label, amount").single()
+    : supabase.from("plan_add_backs").insert({ plan_id: planId, label, amount, sort_order: Math.floor(Date.now() / 1000) }).select("id, label, amount").single();
+  const { data, error } = await q;
+  if (error) return failed(error, "save that add-back");
+  touch(planId);
+  return { ok: true, data: { id: data.id as string, label: data.label as string, amount: Number(data.amount) } };
+}
+
+export async function deleteAddBack(planId: string, id: string): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("plan_add_backs").delete().eq("id", id).eq("plan_id", planId);
+  if (error) return failed(error, "remove that add-back");
   touch(planId);
   return { ok: true };
 }

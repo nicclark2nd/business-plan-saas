@@ -107,4 +107,15 @@ export type Evidence = {
   /** How the question was answered, and what the business will DO about the answer (§6.61). */
   method: string | null; decision: string | null;
 };
-export type MarketingData = { market: Market; spend: Spend[]; evidence: Evidence[]; segments: Segment[] };
+/**
+ * ONE OF THE LARGEST CUSTOMERS (§6.129.3). Segments say what KIND of buyer; this says WHICH one — the first
+ * thing a buyer's adviser asks, and the one question the plan could not answer. `assignable` is three-valued:
+ * yes, no, and null for "nobody has read the contract", which is the commonest true answer.
+ */
+export type Customer = { id: string; name: string; revenue_share: number | null; contract_ends_on: string | null; assignable: boolean | null; sort_order: number };
+export const MAX_CUSTOMERS = 5;
+
+/** Two figures on the marketing record, nullable: blank is "not said", never nought (§6.89). */
+export type MarketFigures = { customer_retention_pct: number | null; weighted_pipeline: number | null };
+
+export type MarketingData = { market: Market; spend: Spend[]; evidence: Evidence[]; segments: Segment[]; customers: Customer[]; figures: MarketFigures };

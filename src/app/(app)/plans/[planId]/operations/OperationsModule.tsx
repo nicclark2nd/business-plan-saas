@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { CAPACITY_FIELDS, STEP_DETAIL, DEPENDENCY, TENURE, type Capacity, type OpStep, type Premise, type Supplier } from "./model";
 import { DraftField, type Drafting } from "@/components/module/DraftField";
 import { continueFromOperations, deleteRow, saveCapacity, setPrimaryPremise, upsertRow, type RowKind } from "./actions";
+import { CapacityMeasures, type CapacityMeasure } from "./CapacityMeasures";
 
 type AreaKey = "premises" | "suppliers" | "process" | "capacity";
 type Dirty = { _dirty?: boolean };
@@ -36,9 +37,11 @@ const proseLabel = "mb-0.5 pl-1.5 text-[10.5px] font-semibold uppercase tracking
  *   **Capacity** is the part that connects the operation to the money. "What limits it" is asked for the
  *   binding constraint rather than a list, because a list is not a constraint.
  */
-export function OperationsModule({ planId, mode, initialArea, initialPremises, initialSuppliers, initialSteps, initialCapacity, noun, drafting = {} }: {
+export function OperationsModule({ planId, mode, initialArea, initialPremises, initialSuppliers, initialSteps, initialCapacity, initialMeasures, noun, drafting = {} }: {
   planId: string; mode: "guided" | "advanced"; initialArea: AreaKey;
   initialPremises: Premise[]; initialSuppliers: Supplier[]; initialSteps: OpStep[]; initialCapacity: Capacity;
+  /** What the business depends on, and how much of it is used (§6.129.3). */
+  initialMeasures: CapacityMeasure[];
   noun: { one: string; many: string };
   /** What the server decided each capacity box may offer (§6.109). Two of the five are absent (§6.111). */
   drafting?: Drafting;
@@ -331,6 +334,13 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
               ))}
             </FieldGrid>
           </Section>
+          {/* Its own save path, so it sits outside the prose's onBlur — see CapacityMeasures (§6.129.3). */}
+          <div onBlur={(e) => e.stopPropagation()}>
+            <CapacityMeasures planId={planId} initial={initialMeasures}
+              onError={(key, message) => message
+                ? errors.raise({ key, message, label: "Capacity measures" })
+                : errors.clear(key)} />
+          </div>
           <Note>
             A plan whose sales grow past its own stated capacity is the first thing a careful reader notices.
             If the forecast on <b>Sales</b> needs more than this says you can deliver, <b>how we lift it</b>

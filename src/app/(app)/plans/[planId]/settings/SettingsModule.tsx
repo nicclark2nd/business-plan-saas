@@ -11,7 +11,7 @@ import { taxComponents, taxHeading } from "@/engine/plan/gst";
 import { needsRegion, regimeFor, regionLabel, regionsFor, type TaxComponent } from "@/engine/plan/taxRegimes";
 import { formatMonth } from "../people/model";
 import { FORECAST_YEARS } from "@/engine/forecast/model";
-import { saveProfile, saveFinancial, savePrinting, saveAiConsent, saveExit } from "./actions";
+import { saveProfile, saveFinancial, savePrinting, saveAiConsent, saveExit, upsertAddBack, deleteAddBack } from "./actions";
 import { Button } from "@/components/ui/button";
 import { DraftDialog, type DraftQuestion } from "@/components/module/DraftDialog";
 import { DRAFTABLE } from "@/engine/ai/fields";
@@ -19,12 +19,15 @@ import { PAGE_SIZE_LABEL, defaultPageSizeFor } from "@/engine/report/pageSize";
 import { DangerArea, type PlanInventory } from "./DangerArea";
 import { LicenceSection } from "./LicenceSection";
 import { LogoSection } from "./LogoSection";
-import { legalStructuresFor, CUSTOMER_TYPES, PRODUCT_TYPES, COUNTRIES, CURRENCIES, MONTHS, profileMissing, type Settings, type Profile, type Financial, type Licence } from "./model";
+import { legalStructuresFor, CUSTOMER_TYPES, PRODUCT_TYPES, COUNTRIES, CURRENCIES, MONTHS, profileMissing, type Settings, type Profile, type Financial, type Licence, type AddBack } from "./model";
+import { CellInput, RemoveButton, FootRow } from "@/components/module/DataGrid";
+import { useMoney } from "@/components/MoneyProvider";
+import { useSerialSave } from "@/lib/serialSave";
 import { navGroup } from "@/lib/nav";
 import { governingLawNote } from "@/engine/plan/jurisdiction";
 
 type AreaKey = "profile" | "financial" | "printing" | "exit" | "ai" | "branding" | "lifecycle";
-type ExitKey = "asking_price" | "owner_add_backs" | "multiple_low" | "multiple_high";
+type ExitKey = "asking_price" | "multiple_low" | "multiple_high";
 /** A stored figure into a box, and back. Empty is null, never nought (§6.89). */
 const exStr = (v: number | null) => (v === null || v === undefined ? "" : String(v));
 const exNum = (raw: string): number | null => {
@@ -35,7 +38,7 @@ const exNum = (raw: string): number | null => {
 };
 const opts = (xs: string[]) => xs.map((x) => ({ value: x, label: x }));
 
-export function SettingsModule({ planId, initial, mode, initialArea, licences, logoUrl, archivedAt, inventory, drafting = {}}: {
+export function SettingsModule({ planId, initial, mode, initialArea, licences, logoUrl, archivedAt, inventory, addBacks, drafting = {}}: {
   planId: string; initial: Settings; mode: "guided" | "advanced"; initialArea: AreaKey;
   drafting?: Record<string, { caption: string; questions: DraftQuestion[] }>;
   /** What the business itself is licensed, registered or insured to do (§6.64). */
@@ -46,6 +49,8 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
   archivedAt: string | null;
   /** What the plan holds, so deleting it can say so rather than asking "are you sure?". */
   inventory: PlanInventory;
+  /** Exit & sale's add-backs, itemised (§6.129.3). */
+  addBacks: AddBack[];
 }) {
   const [area, setArea] = useState<AreaKey>(initialArea);
   /* Which field's draft dialog is open. Null when AI is off, because then no button exists. */
@@ -156,7 +161,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
    * keystroke, and a cleared box has to be able to mean "not priced" rather than "priced at nothing".
    */
   const [ex, setEx] = useState<Record<ExitKey, string>>({
-    asking_price: exStr(initial.asking_price), owner_add_backs: exStr(initial.owner_add_backs),
+    asking_price: exStr(initial.asking_price),
     multiple_low: exStr(initial.multiple_low), multiple_high: exStr(initial.multiple_high),
   });
   const [exitYear, setExitYear] = useState<number | null>(initial.intended_exit_year ?? null);
@@ -179,13 +184,52 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
    */
   const commitExit = () => start(async () => {
     const res = await saveExit(planId, {
-      asking_price: exNum(exRef.current.asking_price), owner_add_backs: exNum(exRef.current.owner_add_backs),
+      asking_price: exNum(exRef.current.asking_price),
       multiple_low: exNum(exRef.current.multiple_low), multiple_high: exNum(exRef.current.multiple_high),
       intended_exit_year: yrRef.current,
     });
     if (!res.ok) errors.raise({ key: "exit", message: res.error, field: res.field, label: "Exit & sale" });
     else errors.clear("exit");
   });
+
+  /*
+   * ADD-BACKS AS ROWS (§6.129.3). Keyed by a `uid` given once, never by the database id — an id that
+   * changes from nothing to a real one on first save made React rebuild the row mid-typing on the Goals
+   * ladder, and the unit typed next was lost (§6.125). Amounts are raw strings until the row is left.
+   */
+  const num = useMoney();
+  type AB = { uid: string; id?: string; label: string; amount: string };
+  const [abs, setAbs] = useState<AB[]>(() => addBacks.map((a) => ({ uid: a.id, id: a.id, label: a.label, amount: String(a.amount) })));
+  const absRef = useRef(abs);
+  const editAb = (uid: string, patch: Partial<AB>) => {
+    const next = absRef.current.map((a) => (a.uid === uid ? { ...a, ...patch } : a));
+    absRef.current = next; setAbs(next);
+  };
+  const serial = useSerialSave();
+  /* Saved as each box is left, queued per line, so the second save finds the id the first created (§6.129.3). */
+  const commitAb = (uid: string) => start(() => serial(uid, async () => {
+    const a = absRef.current.find((x) => x.uid === uid);
+    if (!a || !a.label.trim()) return;                        // no label yet: nothing to save, and no error to show
+    const res = await upsertAddBack(planId, { id: a.id, label: a.label, amount: Number(a.amount.replace(/[^0-9.]/g, "")) || 0 });
+    if (!res.ok) { errors.raise({ key: `addback:${uid}`, message: res.error, label: "Add-backs" }); return; }
+    errors.clear(`addback:${uid}`);
+    /* Adopt the id; keep what is in the boxes, which may have moved on while this was in flight. */
+    editAb(uid, { id: res.data.id });
+  }));
+  const removeAb = (uid: string) => {
+    const a = absRef.current.find((x) => x.uid === uid);
+    const next = absRef.current.filter((x) => x.uid !== uid);
+    absRef.current = next; setAbs(next);
+    if (a?.id) start(async () => {
+      const res = await deleteAddBack(planId, a.id!);
+      if (!res.ok) errors.raise({ key: `addback:${uid}`, message: res.error, label: "Add-backs" });
+    });
+  };
+  const addAb = () => {
+    const next = [...absRef.current, { uid: crypto.randomUUID(), label: "", amount: "" }];
+    absRef.current = next; setAbs(next);
+  };
+  const abTotal = abs.reduce((t, a) => t + (Number(a.amount.replace(/[^0-9.]/g, "")) || 0), 0);
 
   const [licBusy, setLicBusy] = useState(false);
   const raise = errors.raise, clear = errors.clear;
@@ -428,12 +472,6 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
                   value={ex.asking_price} onChange={(e) => editEx("asking_price", e.target.value)}
                   onBlur={commitExit} />
               </Field>
-              <Field label="Owner add-backs" span={2}
-                hint="Costs in the books that a new owner would not inherit. A year's worth, not five.">
-                <FieldInput numeric placeholder="0" disabled={pending}
-                  value={ex.owner_add_backs} onChange={(e) => editEx("owner_add_backs", e.target.value)}
-                  onBlur={commitExit} />
-              </Field>
               <Field label="Comparable deals, low" span={1} error={errors.forField("multiple_low")}
                 hint="× EBITDA">
                 <FieldInput numeric placeholder="—" disabled={pending}
@@ -451,6 +489,38 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
                   onValueChange={(v) => { setExitYear(v ? Number(v) : null); yrRef.current = v ? Number(v) : null; commitExit(); }} />
               </Field>
             </FieldGrid>
+          </Section>
+          {/*
+            ADD-BACKS, ONE LINE EACH (§6.129.3). A buyer's accountant does not accept "85,000 of add-backs";
+            they accept or strike each line. Listing them is what lets the Capability to sell tab draw the
+            bridge from reported to normalised earnings, one step per line.
+          */}
+          <Section title="Owner add-backs"
+            tail={<Button size="sm" variant="outline" type="button" onClick={addAb} disabled={pending}>+ Add-back</Button>}>
+            <p className="mb-2 max-w-[86ch] text-[12px] text-muted-foreground">
+              Costs in the books that a new owner would not pay. One line each, a year&apos;s worth. Put in only what
+              you could back with a document.
+            </p>
+            {abs.length ? (
+              /* `min-w-0` overrides the grid's 900px floor, which is for full-width data grids, not a two-column list (§6.89). */
+              <Grid className="min-w-0">
+                <thead><tr><Th>What it is</Th><Th right style={{ width: 160 }}>A year</Th><Th style={{ width: 36 }} /></tr></thead>
+                <tbody>
+                  {abs.map((a) => (
+                    <GridRow key={a.uid} title={errors.forKey(`addback:${a.uid}`)}>
+                      <Td><CellInput value={a.label} placeholder="e.g. Owner's salary above a manager's market rate"
+                        onChange={(e) => editAb(a.uid, { label: e.target.value })} onBlur={() => commitAb(a.uid)} /></Td>
+                      <Td right><CellInput numeric value={a.amount} placeholder="0"
+                        onChange={(e) => editAb(a.uid, { amount: e.target.value })} onBlur={() => commitAb(a.uid)} /></Td>
+                      <Td><RemoveButton onClick={() => removeAb(a.uid)} /></Td>
+                    </GridRow>
+                  ))}
+                </tbody>
+                <FootRow><Td>Total added back to earnings</Td><Td right className="num">{num(abTotal)}</Td><Td /></FootRow>
+              </Grid>
+            ) : (
+              <p className="text-[12.5px] text-muted-foreground">None yet. Most owner-run businesses have at least one.</p>
+            )}
           </Section>
           <Section title="What those two words mean">
             <div className="grid gap-2.5 text-[12.5px] leading-relaxed text-muted-foreground max-w-[86ch]">

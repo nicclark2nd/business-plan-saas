@@ -10,7 +10,7 @@ export default async function MarketingPage({ params, searchParams }: { params: 
   const { planId } = await params;
   const { area } = await searchParams;
   const supabase = await createClient();
-  const [session, market, spend, evidence, settings, actions, people, products, segments] = await Promise.all([
+  const [session, market, spend, evidence, settings, actions, people, products, segments, customers] = await Promise.all([
     getSession(),
     supabase.from("plan_marketing").select("*").eq("plan_id", planId).maybeSingle(),
     supabase.from("plan_marketing_spend").select("*").eq("plan_id", planId).order("sort_order").order("created_at"),
@@ -28,11 +28,18 @@ export default async function MarketingPage({ params, searchParams }: { params: 
     supabase.from("plan_products").select("*").eq("plan_id", planId).order("sort_order"),
     // One row per kind of buyer (§6.62).
     supabase.from("plan_market_segments").select("*").eq("plan_id", planId).order("sort_order").order("created_at"),
+    // The largest customers by name (§6.129.3).
+    supabase.from("plan_customers").select("*").eq("plan_id", planId).order("sort_order").order("created_at"),
   ]);
   const data: MarketingData = {
     market: Object.fromEntries(ALL_MARKET_KEYS.map((k) => [k, (market.data?.[k] as string | null) ?? ""])) as Market,
     spend: (spend.data ?? []).map((s) => ({ ...s, annual_budget: Number(s.annual_budget) })), evidence: evidence.data ?? [],
     segments: (segments.data ?? []).map((g) => ({ ...g, revenue_share: g.revenue_share === null ? null : Number(g.revenue_share) })),
+    customers: (customers.data ?? []).map((c) => ({ ...c, revenue_share: c.revenue_share === null ? null : Number(c.revenue_share) })),
+    figures: {
+      customer_retention_pct: market.data?.customer_retention_pct == null ? null : Number(market.data.customer_retention_pct),
+      weighted_pipeline: market.data?.weighted_pipeline == null ? null : Number(market.data.weighted_pipeline),
+    },
   };
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
 

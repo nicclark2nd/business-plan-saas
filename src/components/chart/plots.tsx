@@ -162,7 +162,14 @@ export function BarRows({ width, rows, format, height, labelShare = 0.3 }: {
   const fits = Math.max(12, Math.floor((LABEL - 12) / 6.3));
   const h = height ?? rows.length * ROW + 8;
   const max = Math.max(...rows.map((r) => Math.abs(r.value)), 1);
-  const inner = Math.max(10, width - LABEL - 96);
+  /*
+   * ROOM FOR THE LONGEST FIGURE, NOT A FIXED 96px (§6.129.3). "28% · ends within a year" beside a full-width
+   * bar ran off the edge of the chart and was cut to "ends withi". The tail is sized from what will be
+   * written in it.
+   */
+  const longest = Math.max(...rows.map((r) => (r.display ?? format(r.value)).length), 4);
+  const TAIL = Math.min(Math.round(width * 0.4), Math.max(96, Math.round(longest * 6.6) + 14));
+  const inner = Math.max(10, width - LABEL - TAIL);
   return (
     <svg width={width} height={h} role="presentation" className="block">
       {rows.map((r, i) => {

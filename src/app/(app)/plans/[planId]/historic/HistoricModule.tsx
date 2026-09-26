@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { DebtorAgeing } from "./DebtorAgeing";
 import { Button } from "@/components/ui/button";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { useSaveErrors } from "@/components/module/saveErrors";
@@ -142,6 +143,18 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
               </tfoot>
             </table>
           </div>
+          {/*
+            THE AGEING OF THE MOST RECENT DEBTORS (§6.129.3). Only when that period exists — a split of a figure
+            nobody has entered is a split of nothing.
+          */}
+          {area === "bs" && cols[0].present && (
+            <DebtorAgeing planId={planId}
+              receivables={typeof cols[0].input.accounts_receivable === "number" ? cols[0].input.accounts_receivable : null}
+              initial={(() => { const p = initial.find((x) => x.period_number === 1) as unknown as Record<string, unknown> | undefined;
+                const v = (k: string) => (p?.[k] === null || p?.[k] === undefined ? null : Number(p[k]));
+                return { ar_current: v("ar_current"), ar_30: v("ar_30"), ar_60: v("ar_60"), ar_90: v("ar_90") }; })()}
+              onError={(message) => message ? errors.raise({ key: "ageing", message, label: "Debtor ageing" }) : errors.clear("ageing")} />
+          )}
           <Note>{area === "bs" ? <>Equity is assets minus liabilities, so the sheet always balances. If your accountant&apos;s equity figure differs, one of the lines above is different from theirs. Period 1 debtor / inventory / creditor days ({latest && presentCount ? `${periodRatios(latest, cols[0].period_length).debtorDays} / ${periodRatios(latest, cols[0].period_length).inventoryDays} / ${periodRatios(latest, cols[0].period_length).creditorDays}` : "—"}) become the forecast&apos;s working-capital defaults.</> : <>Extraordinary items: positive for one-off income, negative for a one-off expense. Dividends include owner drawings taken from profit.</>}</Note>
         </>
       )}

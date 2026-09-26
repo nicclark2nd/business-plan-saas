@@ -133,3 +133,28 @@ a ratio whose denominator has gone negative does not become a small ratio, it st
   carried the rest. Normalised margin is now decisive too.
 
 All five are covered by tests in `capability.test.ts`.
+
+## 9. The panels (§6.129.2) and the four that needed new fields (§6.129.3)
+
+| Panel | Tab | Reads |
+|---|---|---|
+| Cash month by month, against the floor | Grow | forecast + Assumptions |
+| Cash cycle by year | Grow | Assumptions |
+| Keeping it standing vs growing it | Grow | forecast |
+| Where Year 2's growth comes from / margin by product | Grow | Sales + COGS per product |
+| **Can the business execute it?** | Grow | Operations → Capacity (table), People (hires, worked out), Marketing → Sales process (pipeline), Marketing → Market (retention) |
+| Debt cover over five years | Borrow | forecast + Assumptions → Downside |
+| Cash available against repayments | Borrow | forecast |
+| **How overdue are the invoices?** | Borrow | Historic → Balance sheet (ageing, latest year) |
+| **What the lender checks beyond the numbers** | Borrow | Plan settings (years trading), People (tenure), Historic (last year), Fixed Assets (security), Marketing (customers), Funding → Lender history |
+| The borrowing the plan carries | Borrow | Funding + opening bank debt from Historic |
+| Revenue / margins over five years | Sell | forecast |
+| Would it survive a change of owner? | Sell | People → Risk & Succession |
+| Revenue by product | Sell | Sales |
+| **Who the customers are** | Sell | Marketing → Market (largest customers) |
+| **From reported to normalised earnings** | Sell | Plan settings → Exit & sale (add-backs, itemised) |
+| Questions a buyer will ask | Sell | rules over the weak measures, customers and ratings |
+
+Every panel is display only. An unanswered line draws greyed with a pencil to its box; it never carries a
+status. Migration 0049 moved each plan's single add-backs total into the list as its first line before
+dropping the old column.

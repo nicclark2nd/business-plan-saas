@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { nextHref } from "@/lib/nav";
 import { CAPACITY_FIELDS, DEPENDENCY, TENURE, type Capacity } from "./model";
@@ -84,4 +85,46 @@ export async function saveCapacity(planId: string, capacity: Capacity): Promise<
 
 export async function continueFromOperations(planId: string, intent: "next" | "later") {
   redirect(intent === "next" ? nextHref(planId, "operations") : `/plans/${planId}/dashboard`);
+}
+
+/**
+ * WHAT THE BUSINESS DEPENDS ON, AND HOW MUCH OF IT IS USED (§6.129.3).
+ *
+ * Named by the client — a concreter's pumps and crews, a café's seats, a distributor's warehouse — because a
+ * fixed list fits one industry and misleads the rest. Six at most, checked here where the message can say
+ * why: a seventh measure is not more information, it is the first six diluted.
+ *
+ * `pct_used` is nullable: a thing named and not yet measured is not a thing sitting idle (§6.89). It may run
+ * above 100, because "the crew is at 110% on overtime" is a real answer and the most important one.
+ */
+/* Not exported: a "use server" file may export only async functions, and this broke the page when it did. */
+const MAX_CAPACITY_MEASURES = 6;
+
+export async function upsertCapacityMeasure(planId: string, m: { id?: string; name: string; pct_used: number | null }):
+  Promise<{ ok: true; data: { id: string } } | { ok: false; error: string }> {
+  const name = (m.name ?? "").trim();
+  if (!name) return { ok: false, error: "Say what it is — premises, a machine, a crew, a system." };
+  const pct = m.pct_used === null || m.pct_used === undefined ? null : Math.max(0, Math.round(m.pct_used * 100) / 100);
+  const supabase = await createClient();
+  if (!m.id) {
+    const { count } = await supabase.from("plan_capacity_measures").select("id", { count: "exact", head: true }).eq("plan_id", planId);
+    if ((count ?? 0) >= MAX_CAPACITY_MEASURES) return { ok: false, error: `Six is the most — pick the ${MAX_CAPACITY_MEASURES} the business would hit first.` };
+  }
+  const q = m.id
+    ? supabase.from("plan_capacity_measures").update({ name, pct_used: pct }).eq("id", m.id).eq("plan_id", planId).select("id").single()
+    : supabase.from("plan_capacity_measures").insert({ plan_id: planId, name, pct_used: pct, sort_order: Math.floor(Date.now() / 1000) }).select("id").single();
+  const { data, error } = await q;
+  if (error) return failed(error, "save that measure");
+  await touch(planId);
+  revalidatePath(`/plans/${planId}`, "layout");
+  return { ok: true, data: { id: data.id as string } };
+}
+
+export async function deleteCapacityMeasure(planId: string, id: string): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("plan_capacity_measures").delete().eq("id", id).eq("plan_id", planId);
+  if (error) return failed(error, "remove that measure");
+  await touch(planId);
+  revalidatePath(`/plans/${planId}`, "layout");
+  return { ok: true };
 }

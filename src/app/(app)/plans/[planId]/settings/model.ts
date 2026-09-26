@@ -157,17 +157,18 @@ export type Ai = {
 export type Exit = {
   /** Enterprise value being asked. */
   asking_price: number | null;
-  /**
-   * Costs in the accounts that exist only because THIS owner runs it — an above-market salary, the family
-   * car, one-off legal fees. Added back to EBITDA before a multiple is applied.
-   */
-  owner_add_backs: number | null;
   /** What businesses like this one have actually changed hands for, as a multiple of normalised EBITDA. */
   multiple_low: number | null;
   multiple_high: number | null;
   /** Which forecast year a sale is aimed at, if the client has said. */
   intended_exit_year: number | null;
 };
+
+/**
+ * ONE ADD-BACK (§6.129.3). The single "owner add-backs" figure became a list: a buyer's accountant tests
+ * add-backs line by line, and a total gave them nothing to test and the profit bridge nothing to draw.
+ */
+export type AddBack = { id: string; label: string; amount: number; sort_order: number };
 
 export type Settings = Profile & Financial & Printing & Ai & Exit & { logo_path: string | null };
 

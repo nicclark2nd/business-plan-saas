@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { useSaveErrors } from "@/components/module/saveErrors";
+import { LenderHistory, type LenderHistoryValues } from "./LenderHistory";
 import { Grid, Th, Td, Row as GridRow, FootRow, Toolbar, Meta, Note, NameLink, LinkMark, RemoveButton } from "@/components/module/DataGrid";
 import { FieldSelect } from "@/components/module/FieldGrid";
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
@@ -39,7 +40,7 @@ const signedWith = (num: Num) => (v: number) => (v < 0 ? `(${num(Math.abs(v))})`
 const parseNum = (s: string) => { const n = Number(s.replace(/[,\s$%]/g, "")); return Number.isFinite(n) ? n : 0; };
 
 type Row = FundingRow & { _key: string };
-type AreaKey = "sources" | "monthly";
+type AreaKey = "sources" | "monthly" | "lender";
 type Dlg = { kind: "picker" } | { kind: "edit"; key: string } | null;
 const STEP = GUIDED_STEPS.find((s) => s.id === "funding")?.step ?? 10;
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
@@ -50,7 +51,7 @@ const monthOptions = (fyEndMonth: number) => planMonths(fyEndMonth).map((m, i) =
 
 export type CashInput = { revenueMonths: number[]; cogsMonths: number[]; overheadsMonths: number[]; capexMonths: number[] };
 
-export function FundingModule({ planId, initial, mode, openingCash, openingFromHistory, bought, cap, cash, year1, fyEndMonth, saidNone }: {
+export function FundingModule({ planId, initial, mode, openingCash, openingFromHistory, bought, cap, cash, year1, fyEndMonth, saidNone, initialArea = "sources", lender }: {
   planId: string; initial: FundingRow[]; mode: "guided" | "advanced";
   openingCash: number; openingFromHistory: boolean;
   /** What each asset-backed loan bought, by loan id — the thing's own name (§6.52.2). */
@@ -62,6 +63,9 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
   /** The client has said the business raises nothing (§6.57.1) — read only while the list is empty. */
   saidNone: boolean;
   fyEndMonth: number;
+  initialArea?: AreaKey;
+  /** What a lender checks beyond the numbers (§6.129.3). */
+  lender: LenderHistoryValues;
 }) {
   const num = useMoney();
   const MONTHS = planMonths(fyEndMonth);
@@ -69,7 +73,7 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
   const [rows, setRows] = useState<Row[]>(initial.map((r) => ({ ...r, _key: r.id })));
   const [opening, setOpening] = useState(openingCash);
   const [openingText, setOpeningText] = useState<string | null>(null);
-  const [area, setArea] = useState<AreaKey>("sources");
+  const [area, setArea] = useState<AreaKey>(initialArea);
   const [dlg, setDlg] = useState<Dlg>(null);
   const [draft, setDraft] = useState<Row | null>(null);
   const [confirmKey, setConfirm] = useState<string | null>(null);
@@ -156,7 +160,12 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group={navGroup("funding")} title="Funding" subtitle="Where the money comes from, and whether it is enough" mode={mode}
       errors={errors}
-      areas={[{ key: "sources", label: "Sources", count: lines.length }, { key: "monthly", label: "Monthly projections" }]}
+      areas={[
+        { key: "sources", label: "Sources", count: lines.length },
+        { key: "monthly", label: "Monthly projections" },
+        /* §6.129.3 — beside the loans it is about, and read by the lender checklist on Financial Capabilities. */
+        { key: "lender", label: "Lender history", tag: lender.repayments_on_time === null && lender.guarantee_offered === null && !lender.covenant_history ? "not set" : undefined },
+      ]}
       area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "This plan" }}
       primaryAction={area === "sources" ? <Button size="sm" type="button" onClick={() => setDlg({ kind: "picker" })}>+ Funding</Button> : undefined}
       footer={<ModuleFooter planId={planId} moduleId="funding" formId="funding-form" />}
@@ -261,6 +270,11 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
         <CashRow check={check} opening={opening} year1={year1} onAdd={() => setDlg({ kind: "picker" })} fyEndMonth={fyEndMonth} />
       </div>
       </>)}
+
+      {area === "lender" && (
+        <LenderHistory planId={planId} initial={lender}
+          onError={(message) => message ? errors.raise({ key: "lender", message, label: "Lender history" }) : errors.clear("lender")} />
+      )}
 
       {area === "monthly" && (() => {
         /* Money in, and money back out, month by month — the twelve the business is actually run against.

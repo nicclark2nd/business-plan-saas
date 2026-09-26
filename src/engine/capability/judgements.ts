@@ -97,9 +97,15 @@ export function readStress(s: Row): Stress {
   };
 }
 
-export function readSale(s: Row): Sale {
+/**
+ * The add-backs are a LIST now (§6.129.3), summed here. No lines is null, not nought: "no add-backs entered"
+ * and "the owner has checked and there are none" are different claims, and only the first is on the table.
+ */
+export function readSale(s: Row, addBacks: { amount?: unknown }[] = []): Sale {
+  const lines = addBacks.map((a) => n(a.amount)).filter((v): v is number => v !== null);
   return {
-    askingPrice: n(s?.asking_price), addBacks: n(s?.owner_add_backs),
+    askingPrice: n(s?.asking_price),
+    addBacks: lines.length ? Math.round(lines.reduce((a, b) => a + b, 0) * 100) / 100 : null,
     multipleLow: n(s?.multiple_low), multipleHigh: n(s?.multiple_high),
     exitYear: n(s?.intended_exit_year),
   };

@@ -16,8 +16,12 @@ import { loadCapTable, loadFundingRows } from "@/lib/planSources";
  * Funding comes after Sales, COGS and Overheads precisely so it can answer the question APeX never asks:
  * is the money enough? Everything the cash check needs is gathered here, on the server.
  */
-export default async function FundingPage({ params }: { params: Promise<{ planId: string }> }) {
+export default async function FundingPage({ params, searchParams }: {
+  params: Promise<{ planId: string }>; searchParams: Promise<{ area?: string }>;
+}) {
   const { planId } = await params;
+  /* `?area=lender` — the pencil on the lender checklist lands on the answers, not the loan list (§6.129.3). */
+  const { area } = await searchParams;
   const supabase = await createClient();
   const [session, rows, cap, products, fixedCogs, overheads, people, spend, assets, oneOffs, settings, historic] = await Promise.all([
     getSession(),
@@ -38,7 +42,7 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
     supabase.from("plan_fixed_assets").select("*").eq("plan_id", planId),
     // A sold asset stops wearing out (§6.56), so the Year 1 depreciation this page quotes has to know.
     supabase.from("plan_extraordinary_items").select("*").eq("plan_id", planId),
-    supabase.from("plan_settings").select("opening_cash, on_cost_pct, financial_year_end_month, first_projected_year, no_funding").eq("plan_id", planId).maybeSingle(),
+    supabase.from("plan_settings").select("opening_cash, on_cost_pct, financial_year_end_month, first_projected_year, no_funding, repayments_on_time, covenant_history, guarantee_offered, guarantee_by").eq("plan_id", planId).maybeSingle(),
     supabase.from("plan_historic_periods").select("cash").eq("plan_id", planId).order("period_number").limit(1).maybeSingle(),
   ]);
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
@@ -104,6 +108,13 @@ export default async function FundingPage({ params }: { params: Promise<{ planId
       bought={bought} cap={cap} saidNone={settings.data?.no_funding === true}
       cash={{ revenueMonths, cogsMonths, overheadsMonths: ohMonths, capexMonths: capex }}
       year1={{ revenue: revenueYear1, cogs: cogsYear1, overheads: ohYear1, depreciation: assetsMonths(withDisposals(assetRows, sold)).reduce((a, b) => a + b, 0) }}
+      initialArea={area === "monthly" || area === "lender" ? area : "sources"}
+      lender={{
+        repayments_on_time: settings.data?.repayments_on_time ?? null,
+        covenant_history: settings.data?.covenant_history ?? null,
+        guarantee_offered: settings.data?.guarantee_offered ?? null,
+        guarantee_by: settings.data?.guarantee_by ?? null,
+      }}
     />
   );
 }

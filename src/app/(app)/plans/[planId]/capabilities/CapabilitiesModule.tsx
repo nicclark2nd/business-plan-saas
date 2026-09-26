@@ -19,6 +19,8 @@ import { BORROW_WEIGHTS, CAPACITY_TERM_YEARS, borrowMetrics, stressedCash } from
 import { SELL_WEIGHTS, sellMetrics } from "@/engine/capability/sell";
 import { buyerQuestions, verdict } from "@/engine/capability/verdict";
 import { panels as buildPanels, withTrends, type FacilityFacts, type Panels, type ProductFacts } from "@/engine/capability/series";
+import { ageingView, concentration, earningsBridge, executionLines, lenderChecklist, type ExtraFacts, type Line } from "@/engine/capability/extras";
+import { Meter } from "@/components/chart/core";
 
 /**
  * Everything the server hands down. Only the money formatter is built here, because a function cannot cross
@@ -56,7 +58,7 @@ const TONE: Record<Severity, ChartSeverity> = { good: "good", watch: "warn", bad
  * box on the step that owns the figure — Assumptions for the cash floor and the downside, Plan settings for
  * the price, Leadership Team for owner dependence, Fixed Assets for security, Funding for the borrowing.
  */
-export function CapabilitiesModule({ planId, mode, currency, facts, products, facilities, months, openingDebt }: {
+export function CapabilitiesModule({ planId, mode, currency, facts, products, facilities, months, openingDebt, extras }: {
   planId: string; mode: "guided" | "advanced"; currency: string; facts: PlanFacts;
   /** For the panels only (§6.129.2) — each product's five years, and the borrowing the plan carries. */
   products: ProductFacts[]; facilities: FacilityFacts[];
@@ -64,6 +66,8 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
   months: string[];
   /** Bank debt already on the last balance sheet — owed, repaid by the forecast, and not a Funding row. */
   openingDebt: number;
+  /** The figures behind the four panels that had no data until §6.129.3. */
+  extras: ExtraFacts;
 }) {
   const [tab, setTab] = useState<Tab>("grow");
   const money = useMemo(() => moneyFormatter(currency), [currency]);
@@ -201,9 +205,9 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
       */}
       <div className="@container border-t border-border">
       <div className="grid gap-px bg-border @[860px]:grid-cols-2">
-        {tab === "grow" && <GrowPanels P={P} input={input} months={months} money={money} planId={planId} />}
-        {tab === "borrow" && <BorrowPanels P={P} facilities={facilities} openingDebt={openingDebt} money={money} planId={planId} />}
-        {tab === "sell" && <SellPanels P={P} metrics={sell} input={input} money={money} planId={planId} />}
+        {tab === "grow" && <GrowPanels P={P} input={input} months={months} money={money} planId={planId} extras={extras} />}
+        {tab === "borrow" && <BorrowPanels P={P} facilities={facilities} openingDebt={openingDebt} money={money} planId={planId} extras={extras} input={input} metrics={borrow} />}
+        {tab === "sell" && <SellPanels P={P} metrics={sell} input={input} money={money} planId={planId} extras={extras} />}
       </div>
       </div>
     </ModuleFrame>
@@ -518,8 +522,14 @@ function ValuationRange({ planId, metrics, input, money }: {
  * so the tabs cannot drift apart again the way they did in §6.128.3–5. `wide` spans both columns and is for
  * the one panel on a tab whose categories need the room (twelve months).
  */
-function Panel({ title, sub, wide, height = 220, children }: {
-  title: string; sub?: React.ReactNode; wide?: boolean; height?: number;
+function Panel({ title, sub, wide, height, children }: {
+  title: string; sub?: React.ReactNode; wide?: boolean;
+  /**
+   * Reserved before the width is measured, so a CHART does not make the page jump when it appears. Given only
+   * by chart panels: a list of bars sizes itself, and a reserved 220px under four short rows left a blank
+   * slab the height of the rows again beneath the debtor ageing (§6.129.3).
+   */
+  height?: number;
   children: React.ReactNode | ((width: number) => React.ReactNode);
 }) {
   const [ref, width] = useWidth<HTMLDivElement>();
@@ -527,7 +537,7 @@ function Panel({ title, sub, wide, height = 220, children }: {
     <section className={cn("min-w-0 bg-card px-5 py-4", wide && "@[860px]:col-span-2")}>
       <h3 className="text-[13px] font-semibold">{title}</h3>
       {sub && <p className="mt-0.5 text-[11.5px] text-muted-foreground">{sub}</p>}
-      <div ref={ref} className="mt-2.5" style={typeof children === "function" ? { minHeight: height } : undefined}>
+      <div ref={ref} className="mt-2.5" style={typeof children === "function" && height ? { minHeight: height } : undefined}>
         {typeof children === "function" ? (width > 0 && children(width)) : children}
       </div>
     </section>
@@ -549,8 +559,8 @@ const pctFmt = (v: number) => `${Math.round(v * 10) / 10}%`;
 const yearsIn = (ys: number[]) => ys.length === 1 ? `Year ${ys[0]}` : `Years ${ys.slice(0, -1).join(", ")} and ${ys[ys.length - 1]}`;
 const timesFmt = (v: number) => `${Math.round(v * 100) / 100}×`;
 
-function GrowPanels({ P, input, months, money, planId }: {
-  P: Panels; input: CapabilityInput; months: string[]; money: (v: number) => string; planId: string;
+function GrowPanels({ P, input, months, money, planId, extras }: {
+  P: Panels; input: CapabilityInput; months: string[]; money: (v: number) => string; planId: string; extras: ExtraFacts;
 }) {
   const cash = input.monthlyCash;
   const floor = input.growth.cashBuffer;
@@ -574,7 +584,7 @@ function GrowPanels({ P, input, months, money, planId }: {
           : <Empty planId={planId}>No monthly cash forecast yet. Fill in your sales and costs and this draws itself.</Empty>}
       </Panel>
 
-      <Panel title="The cash cycle, year by year" sub="Days cash is tied up: stock days + debtor days − creditor days, from Assumptions">
+      <Panel height={220} title="The cash cycle, year by year" sub="Days cash is tied up: stock days + debtor days − creditor days, from Assumptions">
         {P.has
           ? (w) => (
             <Lines width={w} height={220} categories={P.cycle.categories} format={(v) => `${Math.round(v)} days`}
@@ -588,7 +598,7 @@ function GrowPanels({ P, input, months, money, planId }: {
           : <Empty planId={planId}>Needs a forecast.</Empty>}
       </Panel>
 
-      <Panel title="Keeping it standing, and growing it"
+      <Panel height={220} title="Keeping it standing, and growing it"
         sub={P.capex.runDown.length
           ? <>Spending below depreciation in {yearsIn(P.capex.runDown)} — the assets are being run down, not kept.</>
           : <>Depreciation stands in for what it costs to stand still; capital spending above that is growth.</>}>
@@ -608,6 +618,11 @@ function GrowPanels({ P, input, months, money, planId }: {
           ? (w) => <BarRows width={w} format={money}
               rows={growth.map((p) => ({ label: p.name, value: p.change, tone: p.change < 0 ? "bad" : "accent" }))} />
           : <Empty planId={planId} fix={{ label: "Add products", to: "sales" }}>No product changes between Year 1 and Year 2.</Empty>}
+      </Panel>
+
+      <Panel title="Can the business execute it?"
+        sub="Capacity, people, work in the pipeline, customers kept. Growth stalls at whichever runs out first.">
+        <LineList lines={executionLines(extras, input)} planId={planId} meters />
       </Panel>
 
       <Panel title="Gross margin by product, Year 1"
@@ -632,14 +647,16 @@ function GrowPanels({ P, input, months, money, planId }: {
   );
 }
 
-function BorrowPanels({ P, facilities, openingDebt, money, planId }: {
+function BorrowPanels({ P, facilities, openingDebt, money, planId, extras, input, metrics }: {
   P: Panels; facilities: FacilityFacts[]; openingDebt: number; money: (v: number) => string; planId: string;
+  extras: ExtraFacts; input: CapabilityInput; metrics: Metric[];
 }) {
+  const ageing = ageingView(extras);
   const hasCover = P.cover.base.some((v) => v !== null);
   const hasStress = P.cover.stressed.some((v) => v !== null);
   return (
     <>
-      <Panel title="Debt cover over five years"
+      <Panel height={220} title="Debt cover over five years"
         sub={hasStress
           ? <>Cash from trading against what the plan repays each year, as it stands and in the bad year you described. Drawn up to 4× — an open ring is higher; hover for the figure.</>
           : <>Cash from trading against what the plan repays each year. Drawn up to 4× — an open ring is higher. Describe a bad year on Assumptions and it draws beside this.</>}>
@@ -657,7 +674,7 @@ function BorrowPanels({ P, facilities, openingDebt, money, planId }: {
           : <Empty planId={planId} fix={{ label: "Add the borrowing", to: "funding" }}>The plan carries no borrowing, so there is no cover to draw.</Empty>}
       </Panel>
 
-      <Panel title="Cash available against repayments" sub="Each year's cash from trading, with the repayments it has to meet marked across it">
+      <Panel height={220} title="Cash available against repayments" sub="Each year's cash from trading, with the repayments it has to meet marked across it">
         {P.has
           ? (w) => (
             <Columns width={w} height={220} categories={P.service.categories} values={P.service.available}
@@ -665,6 +682,23 @@ function BorrowPanels({ P, facilities, openingDebt, money, planId }: {
               format={money} tone={(i) => (P.service.available[i] < P.service.repayments[i] ? "bad" : "accent")} />
           )
           : <Empty planId={planId}>Needs a forecast.</Empty>}
+      </Panel>
+
+      <Panel title="How overdue are the invoices?"
+        sub={ageing.state === "ready"
+          ? <>{ageing.overduePct}% of debtors is past its due date.{ageing.gap !== null && Math.abs(ageing.gap) >= 1 ? <> The split is {money(Math.abs(ageing.gap))} {ageing.gap > 0 ? "short of" : "over"} the debtors figure it should add up to.</> : null}</>
+          : <>The most recent year&apos;s debtors, split by how late each invoice is.</>}>
+        {ageing.state === "new"
+          ? <Empty planId={planId}>A new business has no invoices to age yet. This fills in once there is a year of trading.</Empty>
+          : ageing.state === "missing"
+            ? <Empty planId={planId} fix={ageing.fix}>Debtors are one figure on the balance sheet. A lender wants them split by age.</Empty>
+            : (w) => <BarRows width={w} format={money} labelShare={0.42}
+                rows={ageing.buckets.map((b) => ({ label: b.label, value: b.value, tone: b.value > 0 ? TONE[b.tone] : undefined }))} />}
+      </Panel>
+
+      <Panel title="What the lender will check beyond the numbers"
+        sub="The half of a credit paper no forecast answers. A grey line is not a pass — it is a question nobody has answered yet.">
+        <LineList lines={lenderChecklist(extras, input, metrics)} planId={planId} />
       </Panel>
 
       {/*
@@ -734,19 +768,22 @@ function BorrowPanels({ P, facilities, openingDebt, money, planId }: {
   );
 }
 
-function SellPanels({ P, metrics, input, money, planId }: {
-  P: Panels; metrics: Metric[]; input: CapabilityInput; money: (v: number) => string; planId: string;
+function SellPanels({ P, metrics, input, money, planId, extras }: {
+  P: Panels; metrics: Metric[]; input: CapabilityInput; money: (v: number) => string; planId: string; extras: ExtraFacts;
 }) {
+  const conc = concentration(extras, new Date());
+  const bridge = earningsBridge(extras, input);
   const unscored = P.transfer.filter((t) => t.score === null).length;
   const shares = [...P.byProduct].filter((p) => p.share !== null && p.share > 0).sort((a, b) => (b.share ?? 0) - (a.share ?? 0));
   const questions = buyerQuestions(metrics, {
     money, addBacks: input.sale.addBacks,
     transfer: P.transfer.map((t) => ({ key: t.key, label: t.label, score: t.score })),
-    knowsCustomers: false,
+    knowsCustomers: conc.rows.length > 0,
+    customers: conc.rows.map((c) => ({ name: c.name, share: c.share, assignable: c.assignable, endsWithinYear: c.endsWithinYear })),
   });
   return (
     <>
-      <Panel title="Revenue over five years"
+      <Panel height={220} title="Revenue over five years"
         sub={P.revenue.lossYears.length
           ? <>Red is a year the business makes an operating loss: {yearsIn(P.revenue.lossYears)}.</>
           : <>What a buyer is being shown, from the plan&apos;s own forecast.</>}>
@@ -756,7 +793,7 @@ function SellPanels({ P, metrics, input, money, planId }: {
           : <Empty planId={planId}>Needs a forecast.</Empty>}
       </Panel>
 
-      <Panel title="Margins over five years" sub="Gross margin, and the earnings margin a buyer strikes a price on (with your add-backs)">
+      <Panel height={220} title="Margins over five years" sub="Gross margin, and the earnings margin a buyer strikes a price on (with your add-backs)">
         {P.has
           ? (w) => (
             <Lines width={w} height={220} categories={P.margins.categories} format={pctFmt}
@@ -784,11 +821,56 @@ function SellPanels({ P, metrics, input, money, planId }: {
       </Panel>
 
       <Panel title="Revenue by product, Year 1"
-        sub="Products, not customers. Who BUYS is what a buyer asks first, and the plan does not record customers yet.">
+        sub="Products, not customers — who buys is the panel beside this. A buyer asks both.">
         {shares.length
           ? (w) => <BarRows width={w} format={pctFmt}
               rows={shares.map((p) => ({ label: p.name, value: p.share ?? 0, tone: (p.share ?? 0) > 60 ? "bad" : (p.share ?? 0) > 35 ? "warn" : "accent" }))} />
           : <Empty planId={planId} fix={{ label: "Add products", to: "sales" }}>No products with revenue in Year 1.</Empty>}
+      </Panel>
+
+      <Panel title="Who the customers are"
+        sub={conc.rows.length
+          ? <>{conc.topShare !== null ? <>The largest is {conc.topShare}% of sales{conc.listedShare !== null && conc.rows.length > 1 ? <>; the {conc.rows.length} listed are {conc.listedShare}% together</> : null}.</> : <>No shares given yet.</>}
+              {conc.notAssignable ? <> {conc.notAssignable} contract{conc.notAssignable === 1 ? "" : "s"} end on a sale.</> : null}
+              {conc.unchecked ? <> {conc.unchecked} not checked for assignability.</> : null}</>
+          : <>The first thing a buyer&apos;s adviser asks: who buys, and how much of the business each one is.</>}>
+        {conc.rows.length
+          ? (w) => (
+            <>
+              <BarRows width={w} format={pctFmt} labelShare={0.36}
+                rows={conc.rows.map((c) => ({
+                  label: c.name, value: c.share ?? 0,
+                  display: [c.share === null ? "Share not given" : pctFmt(c.share),
+                    c.endsWithinYear ? "ends within a year" : null,
+                    c.assignable === false ? "ends on a sale" : c.assignable === null ? "not checked" : null].filter(Boolean).join(" · "),
+                  tone: c.share === null ? undefined : c.share > 20 ? "bad" : c.share > 15 ? "warn" : "accent",
+                }))} />
+              <Pencil planId={planId} fix={{ label: "Edit the customers", to: "marketing?area=market" }} />
+            </>
+          )
+          : <Empty planId={planId} fix={{ label: "Add the largest customers", to: "marketing?area=market" }}>
+              No customers recorded. Up to five, with each one&apos;s share of sales.
+            </Empty>}
+      </Panel>
+
+      <Panel title="From reported to normalised earnings"
+        sub="What the accounts show, each add-back a buyer's accountant will test, and what a price is struck on.">
+        {!bridge
+          ? <Empty planId={planId}>Needs a Year 1 forecast.</Empty>
+          : (w) => (
+            <>
+              <BarRows width={w} format={money} labelShare={0.45}
+                rows={[
+                  /* §6.115.1: a loss is said in words, never left to a minus sign in front of the figure. */
+                  { label: "Reported EBITDA, Year 1", value: bridge.reported, tone: bridge.reported < 0 ? "bad" : "accent",
+                    display: bridge.reported < 0 ? `${money(Math.abs(bridge.reported))} loss` : undefined },
+                  ...bridge.adds.map((a) => ({ label: `+ ${a.label}`, value: a.amount, tone: "good" as const })),
+                  { label: "Normalised earnings", value: bridge.normalised, tone: bridge.normalised < 0 ? "bad" : "accent",
+                    display: bridge.normalised < 0 ? `${money(Math.abs(bridge.normalised))} loss` : undefined },
+                ]} />
+              {!bridge.adds.length && <Pencil planId={planId} fix={{ label: "List the add-backs", to: "settings?area=exit" }} />}
+            </>
+          )}
       </Panel>
 
       <Panel wide title="Questions a buyer will ask"
@@ -807,3 +889,36 @@ function SellPanels({ P, metrics, input, money, planId }: {
 
 /* Counted from the list, not written down: the list is the fact (§6.41). */
 const TRANSFER_TOTAL = TRANSFER_FACTORS.length;
+
+/**
+ * A CHECKLIST, OR A SET OF METERS (§6.129.3).
+ *
+ * The same row either way: a label, a reading, one sentence, and — when nobody has answered it — a pencil
+ * to the box that would. An unanswered line is drawn greyed with a hollow marker, never with a status: a
+ * checklist item nobody has checked is not a pass, and drawing it neutral-but-solid would read as one.
+ */
+function LineList({ lines, planId, meters }: { lines: Line[]; planId: string; meters?: boolean }) {
+  const DOT: Record<Severity, string> = { good: "bg-good", watch: "bg-warn", bad: "bg-bad" };
+  const TXT: Record<Severity, string> = { good: "text-good", watch: "text-warn", bad: "text-bad" };
+  return (
+    <ul className="space-y-3">
+      {lines.map((l, idx) => (
+        <li key={l.label + idx} className={cn(l.status === null && "opacity-70")}>
+          <div className="flex items-baseline gap-2.5">
+            {!meters && (
+              <i className={cn("mt-[3px] inline-block size-2.5 shrink-0 rounded-full",
+                l.status ? DOT[l.status] : "border border-dashed border-muted-foreground")} />
+            )}
+            <span className="min-w-0 flex-1 text-[12.5px] font-medium">{l.label}</span>
+            <span className={cn("shrink-0 text-[12.5px] font-semibold tabular-nums", l.status ? TXT[l.status] : "text-muted-foreground")}>{l.display}</span>
+          </div>
+          {meters && (
+            <Meter pct={l.pct} severity={l.status === "good" ? "good" : l.status === "watch" ? "warn" : l.status === "bad" ? "bad" : "accent"} label={`${l.label}: ${l.display}`} />
+          )}
+          {l.detail && <p className={cn("mt-0.5 text-[11.5px] text-muted-foreground", !meters && "pl-5")}>{l.detail}</p>}
+          {l.fix && <div className={cn(!meters && "pl-5")}><Pencil planId={planId} fix={l.fix} /></div>}
+        </li>
+      ))}
+    </ul>
+  );
+}

@@ -8,6 +8,7 @@ import { borrowMetrics, stressedCash, BORROW_WEIGHTS, CAPACITY_TERM_YEARS } from
 import { sellMetrics, SELL_WEIGHTS } from "./sell";
 import { panels, series, withTrends } from "./series";
 import { buyerQuestions, verdict } from "./verdict";
+import { ageingView, concentration, earningsBridge, executionLines, lenderChecklist, type ExtraFacts } from "./extras";
 import {
   LENDER_MIN_DSCR, TRANSFER_FACTORS, readCollateral, readGrowth, readSale, readStress, readUndrawn,
   type TransferFactor,
@@ -778,5 +779,115 @@ describe("the actions follow the reading, not just the measure", () => {
     expect(loss).toContain("no earnings figure");
     expect(positive).not.toContain("no earnings figure");
     expect(positive).toContain("thin for a sale");
+  });
+});
+
+/**
+ * THE FOUR PANELS THAT HAD NO DATA (§6.129.3).
+ *
+ * The rule under test is the same one as the dials: an unanswered line is NOT a status. It carries a pencil
+ * to the box that answers it and nothing else. A checklist that drew "not said" as a pass, or as a fail,
+ * would be telling a lender something nobody told it.
+ */
+describe("the panels that read the new fields", () => {
+  const blank: ExtraFacts = {
+    capacity: [], hires: { inPlace: 0, planned: 0 }, pipeline: null, retention: null, customers: [],
+    ageing: { current: null, d30: null, d60: null, d90: null }, receivables: null, newBusiness: false,
+    lender: { onTime: null, covenants: null, guarantee: null, guaranteeBy: null },
+    addBackLines: [], yearsTrading: null, leadership: { count: 0, avgTenureYears: null }, lastRevenue: null,
+  };
+
+  it("never gives an unanswered line a status — only a pencil", () => {
+    for (const l of [...executionLines(blank, full()), ...lenderChecklist(blank, full(), borrowMetrics(full()))]) {
+      if (l.status === null) expect(l.fix, `${l.label} is unanswered and points nowhere`).toBeDefined();
+    }
+    const unanswered = executionLines(blank, full()).filter((l) => l.status === null);
+    expect(unanswered.map((l) => l.fix!.to)).toEqual(expect.arrayContaining(["operations?area=capacity", "marketing?area=sales", "marketing?area=market", "people"]));
+  });
+
+  it("judges capacity by how close to the limit it is", () => {
+    const x = { ...blank, capacity: [{ name: "Pump", pctUsed: 95 }, { name: "Yard", pctUsed: 60 }, { name: "Crew", pctUsed: null }] };
+    const lines = executionLines(x, full());
+    expect(lines.find((l) => l.label === "Pump")!.status).toBe("bad");
+    expect(lines.find((l) => l.label === "Yard")!.status).toBe("good");
+    expect(lines.find((l) => l.label === "Crew")!.status).toBeNull();
+  });
+
+  /* Worked out from People, never asked: a start date still to come is a planned hire. */
+  it("reads key hires from the leadership team's start dates", () => {
+    const l = executionLines({ ...blank, hires: { inPlace: 4, planned: 2 } }, full()).find((x) => x.label === "Key people in place")!;
+    expect(l.display).toBe("4 of 6");
+    expect(l.status).toBe("watch");
+  });
+
+  it("measures the pipeline against next year's planned growth", () => {
+    /* The fixture grows 200,000 from Year 1 to Year 2. */
+    const l = executionLines({ ...blank, pipeline: 400_000 }, full()).find((x) => x.label.startsWith("Quoted work"))!;
+    expect(l.display).toBe("2×");
+    expect(l.status).toBe("good");
+  });
+
+  it("tells a new business, an un-aged ledger and an aged one apart", () => {
+    expect(ageingView({ ...blank, newBusiness: true }).state).toBe("new");
+    const missing = ageingView(blank);
+    expect(missing.state).toBe("missing");
+    const ready = ageingView({ ...blank, receivables: 300_000, ageing: { current: 200_000, d30: 60_000, d60: 20_000, d90: 10_000 } });
+    expect(ready.state).toBe("ready");
+    if (ready.state === "ready") {
+      expect(ready.overduePct).toBe(31);
+      expect(ready.gap).toBe(10_000);                        // the split is 10,000 short of the debtors figure
+    }
+  });
+
+  it("reads the lender's checklist from the plan, and only asks what the plan cannot answer", () => {
+    const x: ExtraFacts = {
+      ...blank, yearsTrading: 14, leadership: { count: 3, avgTenureYears: 6 }, lastRevenue: 1_400_000,
+      customers: [{ name: "Metricon", share: 32, endsOn: null, assignable: null }],
+      lender: { onTime: true, covenants: "None.", guarantee: false, guaranteeBy: null },
+    };
+    const L = lenderChecklist(x, full({ collateral: 1_000_000 }), borrowMetrics(full({ collateral: 1_000_000 })));
+    const at = (k: string) => L.find((l) => l.label === k)!;
+    expect(at("Years trading").status).toBe("good");
+    expect(at("Forecast against last year").status).toBe("bad");      // 2.0M against 1.4M actual: +42.9%
+    expect(at("Customer concentration").display).toContain("Metricon");
+    expect(at("Customer concentration").status).toBe("bad");
+    expect(at("Covenant breaches").status).toBe("good");
+    expect(at("Guarantee").status).toBe("watch");
+    expect(at("Security").status).toBe("good");
+    expect(L.filter((l) => l.status === null)).toHaveLength(0);
+  });
+
+  it("flags a contract ending within the year, from a fixed today", () => {
+    const c = concentration({ ...blank, customers: [
+      { name: "Small", share: 5, endsOn: null, assignable: true },
+      { name: "Big", share: 30, endsOn: "2026-12-01", assignable: false },
+    ] }, new Date("2026-09-26"));
+    expect(c.rows[0].name).toBe("Big");
+    expect(c.rows[0].endsWithinYear).toBe(true);
+    expect(c.topShare).toBe(30);
+    expect(c.notAssignable).toBe(1);
+  });
+
+  /* The bridge on screen and the sum on the price card must be one reading of one list (§6.41). */
+  it("bridges reported to normalised earnings one add-back at a time, and agrees with the price card", () => {
+    const x = { ...blank, addBackLines: [{ label: "Owner salary above market", amount: 60_000 }, { label: "Family car", amount: 25_000 }] };
+    const b = earningsBridge(x, full())!;
+    expect(b.adds).toHaveLength(2);
+    expect(b.normalised).toBe(b.reported + 85_000);
+    const sale = readSale({}, x.addBackLines);
+    expect(sale.addBacks).toBe(85_000);
+    expect(readSale({}, []).addBacks).toBeNull();            // no lines is "not said", not nought
+  });
+
+  it("names the customer in the buyer's question once the customer is known", () => {
+    const money = (v: number) => `$${Math.round(v).toLocaleString("en-AU")}`;
+    const q = buyerQuestions(sellMetrics(full()), {
+      money, addBacks: null, knowsCustomers: true,
+      transfer: TRANSFER_FACTORS.map((f) => ({ key: f.key, label: f.label, score: 4 })),
+      customers: [{ name: "Metricon", share: 32, assignable: false, endsWithinYear: true }],
+    });
+    expect(q.some((x) => x.includes("Metricon — 32% of sales"))).toBe(true);
+    expect(q.some((x) => x.includes("change of ownership"))).toBe(true);
+    expect(q.some((x) => x.includes("largest customers, what share"))).toBe(false);
   });
 });

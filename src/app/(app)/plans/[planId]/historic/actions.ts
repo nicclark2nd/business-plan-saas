@@ -80,3 +80,26 @@ export async function continueFromHistoric(planId: string, intent: "next" | "lat
   redirect(intent === "next" ? nextHref(planId, "historic") : `/plans/${planId}/dashboard`);
 }
 
+
+/**
+ * HOW OLD THE DEBTORS ARE (§6.129.3), on the most recent period — the one the forecast opens from.
+ *
+ * Four buckets that must add up to the debtors figure already on that period. The check is here rather than
+ * in the database so the message can say by how much it is out; a split that does not reconcile is saved
+ * anyway and flagged, because a client halfway through typing four numbers has not made a mistake yet.
+ * All four empty clears the split — nobody has aged the ledger, which is a different answer from "nothing
+ * is overdue" (§6.89).
+ */
+export async function saveAgeing(planId: string, a: { ar_current: number | null; ar_30: number | null; ar_60: number | null; ar_90: number | null }): Promise<Result<{ gap: number | null }>> {
+  const clean = (v: number | null) => (v === null || !Number.isFinite(v) ? null : Math.max(0, Math.round(v * 100) / 100));
+  const row = { ar_current: clean(a.ar_current), ar_30: clean(a.ar_30), ar_60: clean(a.ar_60), ar_90: clean(a.ar_90) };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("plan_historic_periods").update(row)
+    .eq("plan_id", planId).eq("period_number", 1).select("accounts_receivable").maybeSingle();
+  if (error) return failed(error, "save the debtor ageing");
+  if (!data) return { ok: false, error: "Enter the most recent year's balance sheet first — the ageing is a split of its debtors figure." };
+  revalidatePath(`/plans/${planId}`, "layout");
+  const parts = [row.ar_current, row.ar_30, row.ar_60, row.ar_90];
+  const gap = parts.every((p) => p === null) ? null : Math.round(((Number(data.accounts_receivable) || 0) - parts.reduce<number>((t, p) => t + (p ?? 0), 0)) * 100) / 100;
+  return { ok: true, data: { gap } };
+}

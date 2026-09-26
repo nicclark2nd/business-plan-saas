@@ -209,3 +209,26 @@ export async function saveOpeningCash(planId: string, value: number): Promise<Re
 export async function continueFromFunding(planId: string, intent: "next" | "later") {
   redirect(intent === "next" ? nextHref(planId, "funding") : `/plans/${planId}/dashboard`);
 }
+
+/**
+ * WHAT A LENDER CHECKS BEYOND THE NUMBERS (§6.129.3) — for the whole plan, not per loan: most small
+ * businesses have one lender, and a repayment history is the business's, not the facility's.
+ *
+ * Every answer is three-valued. "No covenant breaches" and "nobody has said" are different claims, and a
+ * lender reading the checklist on Financial Capabilities is told which one it is looking at (§6.89).
+ */
+export async function saveLenderHistory(planId: string, h: {
+  repayments_on_time?: boolean | null; covenant_history?: string | null;
+  guarantee_offered?: boolean | null; guarantee_by?: string | null;
+}): Promise<Result> {
+  const row: Record<string, unknown> = { plan_id: planId };
+  if ("repayments_on_time" in h) row.repayments_on_time = h.repayments_on_time ?? null;
+  if ("covenant_history" in h) row.covenant_history = (h.covenant_history ?? "").trim() || null;
+  if ("guarantee_offered" in h) row.guarantee_offered = h.guarantee_offered ?? null;
+  if ("guarantee_by" in h) row.guarantee_by = (h.guarantee_by ?? "").trim() || null;
+  const supabase = await createClient();
+  const { error } = await supabase.from("plan_settings").upsert(row, { onConflict: "plan_id" });
+  if (error) return failed(error, "save the lender history");
+  revalidatePath(`/plans/${planId}`, "layout");
+  return { ok: true };
+}

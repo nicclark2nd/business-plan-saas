@@ -13,7 +13,7 @@ export default async function OperationsPage({ params, searchParams }: {
   const { planId } = await params;
   const { area } = await searchParams;
   const supabase = await createClient();
-  const [session, premises, suppliers, steps, capacity, settings] = await Promise.all([
+  const [session, premises, suppliers, steps, capacity, settings, measures] = await Promise.all([
     getSession(),
     supabase.from("plan_outlets").select("id, name, address, tenure, is_primary, floor_area, monthly_cost, purpose, sort_order")
       .eq("plan_id", planId).order("is_primary", { ascending: false }).order("sort_order").order("created_at"),
@@ -21,6 +21,8 @@ export default async function OperationsPage({ params, searchParams }: {
     supabase.from("plan_operations_steps").select("*").eq("plan_id", planId).order("sort_order").order("created_at"),
     supabase.from("plan_operations").select("*").eq("plan_id", planId).maybeSingle(),
     supabase.from("plan_settings").select("product_type").eq("plan_id", planId).maybeSingle(),
+    /* The numbers under the capacity prose (§6.129.3). */
+    supabase.from("plan_capacity_measures").select("id, name, pct_used").eq("plan_id", planId).order("sort_order").order("created_at"),
   ]);
 
   const written = Object.fromEntries(
@@ -46,6 +48,7 @@ export default async function OperationsPage({ params, searchParams }: {
       initialSuppliers={(suppliers.data ?? []) as Supplier[]}
       initialSteps={(steps.data ?? []) as OpStep[]}
       initialCapacity={written}
+      initialMeasures={(measures.data ?? []).map((m) => ({ id: m.id as string, name: m.name as string, pct_used: m.pct_used === null ? null : Number(m.pct_used) }))}
       noun={{ one: noun.one, many: noun.many }}
       drafting={drafting}
     />

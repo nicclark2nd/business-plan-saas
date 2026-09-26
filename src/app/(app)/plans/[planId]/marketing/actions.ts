@@ -20,12 +20,28 @@ export async function saveMarket(planId: string, m: Partial<Market & Position>):
   touch(planId); return { ok: true };
 }
 
+/**
+ * Customer retention and the weighted pipeline (§6.129.3). Numbers, nullable, and clamped only where a
+ * range is a fact: a retention above 100% is a typo, a pipeline has no ceiling.
+ */
+export async function saveMarketFigures(planId: string, f: { customer_retention_pct?: number | null; weighted_pipeline?: number | null }): Promise<Result> {
+  const row: Record<string, unknown> = { plan_id: planId };
+  if ("customer_retention_pct" in f) row.customer_retention_pct = f.customer_retention_pct === null || f.customer_retention_pct === undefined ? null : Math.min(100, Math.max(0, f.customer_retention_pct));
+  if ("weighted_pipeline" in f) row.weighted_pipeline = f.weighted_pipeline === null || f.weighted_pipeline === undefined ? null : Math.max(0, f.weighted_pipeline);
+  const supabase = await createClient();
+  const { error } = await supabase.from("plan_marketing").upsert(row, { onConflict: "plan_id" });
+  if (error) return failed(error, "save that figure");
+  touch(planId); return { ok: true };
+}
+
 /** One save path for the three row grids. Column whitelist per table; nothing else reaches the database. */
 const TABLES = {
   competitors: { table: "plan_competitors", cols: ["name", "kind", "reach", "pricing", "threat", "strengths", "weaknesses", "how_we_win"], required: "name" },
   spend: { table: "plan_marketing_spend", cols: ["kind", "approach", "annual_budget"], required: "approach" },
   evidence: { table: "plan_marketing_evidence", cols: ["source", "method", "finding", "decision", "occurred_on"], required: "source" },
   segments: { table: "plan_market_segments", cols: ["name", "profile", "cares_about", "revenue_share"], required: "name" },
+  /* The largest customers (§6.129.3). Contract end parses "Mar 2027" the way evidence dates do. */
+  customers: { table: "plan_customers", cols: ["name", "revenue_share", "contract_ends_on", "assignable"], required: "name" },
 } as const;
 export type RowKind = keyof typeof TABLES;
 
@@ -44,6 +60,9 @@ export async function upsertRow(planId: string, kind: RowKind, row: Record<strin
     else if (c === "pricing") clean[c] = ["much_lower", "lower", "same", "higher", "much_higher"].includes(String(v)) ? v : null;
     else if (c === "threat") clean[c] = ["low", "medium", "high", "critical"].includes(String(v)) ? v : "medium";
     else if (c === "occurred_on") { const d = parseMonth(v as string); if (d === undefined) return { ok: false, error: "When should be a month and year, e.g. Mar 2026." }; clean[c] = d; }
+    else if (c === "contract_ends_on") { const d = parseMonth(v as string); if (d === undefined) return { ok: false, error: "Contract end should be a month and year, e.g. Mar 2027." }; clean[c] = d; }
+    /* Three-valued on purpose: "yes", "no", and null — nobody has read the contract. */
+    else if (c === "assignable") clean[c] = v === true || v === "yes" ? true : v === false || v === "no" ? false : null;
     else clean[c] = typeof v === "string" ? (v.trim() || null) : v;
   }
   if (!String(clean[spec.required] ?? "").trim()) return { ok: false, error: "Fill in the first column." };
@@ -53,7 +72,7 @@ export async function upsertRow(planId: string, kind: RowKind, row: Record<strin
   const { data, error } = await q;
   if (error) return failed(error, `save the ${kind}`);
   touch(planId);
-  return { ok: true, data: { id: data.id, occurred_on: clean.occurred_on as string | null | undefined } };
+  return { ok: true, data: { id: data.id, occurred_on: (clean.occurred_on ?? clean.contract_ends_on) as string | null | undefined } };
 }
 
 export async function deleteRow(planId: string, kind: RowKind, id: string): Promise<Result> {

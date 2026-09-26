@@ -8,6 +8,7 @@ import { monthlyProfit } from "@/engine/forecast/monthlyProfit";
 import { productYears, sourceOf, recurring, type AnyProduct } from "@/engine/sales/product";
 import { productCostYears, type CostProduct } from "@/engine/cogs/direct";
 import type { FacilityFacts, ProductFacts } from "@/engine/capability/series";
+import type { ExtraFacts } from "@/engine/capability/extras";
 import { FORECAST_YEARS } from "@/engine/forecast/model";
 import { planMonths } from "@/engine/plan/calendar";
 import { CapabilitiesModule } from "./CapabilitiesModule";
@@ -33,10 +34,57 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
   const { planId } = await params;
   const supabase = await createClient();
 
-  const [session, ratings] = await Promise.all([
+  const [session, ratings, addBacks, measures, customers, marketing, historic, people, meta] = await Promise.all([
     getSession(),
     supabase.from("plan_transfer_ratings").select("factor, score, note").eq("plan_id", planId),
+    /*
+     * THE FIGURES BEHIND THE FOUR PANELS THAT HAD NO DATA (§6.129.3), each from the step that collects it.
+     * Read outside the forecast's try: a plan too empty to forecast still has customers and a lender history
+     * worth showing, and those panels should not go dark because the P&L is blank.
+     */
+    supabase.from("plan_add_backs").select("label, amount").eq("plan_id", planId).order("sort_order").order("created_at"),
+    supabase.from("plan_capacity_measures").select("name, pct_used").eq("plan_id", planId).order("sort_order").order("created_at"),
+    supabase.from("plan_customers").select("name, revenue_share, contract_ends_on, assignable").eq("plan_id", planId).order("sort_order").order("created_at"),
+    supabase.from("plan_marketing").select("customer_retention_pct, weighted_pipeline").eq("plan_id", planId).maybeSingle(),
+    supabase.from("plan_historic_periods").select("revenue, accounts_receivable, ar_current, ar_30, ar_60, ar_90").eq("plan_id", planId).eq("period_number", 1).maybeSingle(),
+    supabase.from("plan_people").select("started_on").eq("plan_id", planId),
+    supabase.from("plan_settings").select("date_established, has_history, repayments_on_time, covenant_history, guarantee_offered, guarantee_by").eq("plan_id", planId).maybeSingle(),
   ]);
+
+  const num = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
+  const today = new Date();
+  const yearsSince = (iso: string) => (today.getTime() - new Date(iso).getTime()) / (365.25 * 24 * 3600 * 1000);
+  /*
+   * KEY HIRES ARE WORKED OUT, NOT ASKED (§6.41). Somebody on the Leadership Team with a start date still to
+   * come is a planned hire; everyone else is in place. Tenure is measured to today, because "how long have
+   * these people run this business" is asked about the business as it stands.
+   */
+  const starts = (people.data ?? []).map((p) => p.started_on as string | null);
+  const planned = starts.filter((d) => d && new Date(d) > today).length;
+  const tenures = starts.filter((d): d is string => !!d && new Date(d) <= today).map(yearsSince);
+  const h = historic.data;
+  const extras: ExtraFacts = {
+    capacity: (measures.data ?? []).map((m) => ({ name: m.name as string, pctUsed: num(m.pct_used) })),
+    hires: { inPlace: starts.length - planned, planned },
+    pipeline: num(marketing.data?.weighted_pipeline), retention: num(marketing.data?.customer_retention_pct),
+    customers: (customers.data ?? []).map((c) => ({
+      name: c.name as string, share: num(c.revenue_share), endsOn: (c.contract_ends_on as string | null) ?? null,
+      assignable: (c.assignable as boolean | null) ?? null,
+    })),
+    ageing: { current: num(h?.ar_current), d30: num(h?.ar_30), d60: num(h?.ar_60), d90: num(h?.ar_90) },
+    receivables: num(h?.accounts_receivable),
+    newBusiness: meta.data?.has_history === false || !h,
+    lender: {
+      onTime: (meta.data?.repayments_on_time as boolean | null) ?? null,
+      covenants: (meta.data?.covenant_history as string | null) ?? null,
+      guarantee: (meta.data?.guarantee_offered as boolean | null) ?? null,
+      guaranteeBy: (meta.data?.guarantee_by as string | null) ?? null,
+    },
+    addBackLines: (addBacks.data ?? []).map((a) => ({ label: a.label as string, amount: Number(a.amount) || 0 })),
+    yearsTrading: meta.data?.date_established ? Math.max(0, yearsSince(meta.data.date_established as string)) : null,
+    leadership: { count: starts.length, avgTenureYears: tenures.length ? tenures.reduce((a, b) => a + b, 0) / tenures.length : null },
+    lastRevenue: num(h?.revenue),
+  };
 
   let currency = "AUD";
   /*
@@ -155,7 +203,7 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
        * facility on the Funding screen — and the security values come off the very assets the balance sheet
        * is carrying.
        */
-      growth: readGrowth(settings), stress: readStress(settings), sale: readSale(settings),
+      growth: readGrowth(settings), stress: readStress(settings), sale: readSale(settings, addBacks.data ?? []),
       collateral: readCollateral((plan.sources.assets ?? []) as { security_value?: unknown }[]),
       undrawn: readUndrawn(plan.sources.funding),
     };
@@ -177,6 +225,7 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
       facilities={facilities}
       months={months}
       openingDebt={openingDebt}
+      extras={extras}
     />
   );
 }
