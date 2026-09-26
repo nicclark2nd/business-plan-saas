@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { loadPlan } from "@/lib/planLoad";
-import { planMonthNames, planQuarters, planYearEnding, quarterOf } from "@/engine/plan/calendar";
+import { planMonthNames } from "@/engine/plan/calendar";
 import { WhatIfModule } from "./WhatIfModule";
 import { lastApply } from "./actions";
 
@@ -23,24 +23,19 @@ import { lastApply } from "./actions";
  */
 export default async function WhatIfPage({ params }: { params: Promise<{ planId: string }> }) {
   const { planId } = await params;
-  const [{ plan, mode, fyEndMonth, firstYear, noun, taxLabel, impliedFromHistory }, supabase] =
+  const [{ plan, mode, fyEndMonth, noun, taxLabel, impliedFromHistory }, supabase] =
     await Promise.all([loadPlan(planId), createClient()]);
-  // The people a goal can be given to (§6.42), and the plan's own quarters to give it in (§6.44).
+  // The people a goal can be given to (§6.42). The quarters went in §6.139: every goal lands in the 90 days.
   const [{ data: people }, lastApplied] = await Promise.all([
     supabase.from("plan_people").select("id, name, role").eq("plan_id", planId).order("sort_order"),
     lastApply(planId),
   ]);
-  const quarters = [1, 2].flatMap((planYear) =>
-    planQuarters(fyEndMonth, planYearEnding(firstYear, planYear)).map((q) => ({
-      planYear, quarter: q.quarter, label: q.label, months: q.months,
-    })));
 
   return (
     <WhatIfModule
       planId={planId} mode={mode} plan={plan} noun={noun} taxLabel={taxLabel}
       monthNames={planMonthNames(fyEndMonth)} history={impliedFromHistory}
-      people={people ?? []} quarters={quarters}
-      thisQuarter={{ planYear: 1, quarter: quarterOf(fyEndMonth, new Date()) }}
+      people={people ?? []}
       lastApplied={lastApplied}
     />
   );

@@ -60,18 +60,17 @@ const HISTORY_OF: Partial<Record<LeverKey, keyof WorkingCapitalDays>> = {
   debtorDays: "debtorDays", stockDays: "inventoryDays", creditorDays: "creditorDays",
 };
 
-export type QuarterChoice = { planYear: number; quarter: number; label: string; months: string };
 export type Person = { id: string; name: string; role: string | null };
 
 export function WhatIfModule({
-  planId, mode, plan, noun, taxLabel, monthNames, history, people, quarters, thisQuarter, lastApplied,
+  planId, mode, plan, noun, taxLabel, monthNames, history, people, lastApplied,
 }: {
   planId: string; mode: "guided" | "advanced"; plan: WhatIfPlan; noun: Noun; taxLabel: string;
   monthNames: string[];
   /** Days implied by the last set of accounts, or null for a business with no history yet (§6.41.3). */
   history: WorkingCapitalDays | null;
   /** Who a goal can be given to, and when (§6.44). */
-  people: Person[]; quarters: QuarterChoice[]; thisQuarter: { planYear: number; quarter: number };
+  people: Person[];
   /** The last applied scenario, if one is waiting to be undone (§6.45.1). */
   lastApplied?: { label: string; at: string } | null;
 }) {
@@ -349,8 +348,7 @@ export function WhatIfModule({
 
       {goalsOpen && (
         <TurnIntoGoalsDialog
-          goals={proposedGoals(what, lv, noun, num)} people={people} quarters={quarters}
-          thisQuarter={thisQuarter} saving={saving} error={savedError}
+          goals={proposedGoals(what, lv, noun, num)} people={people} saving={saving} error={savedError}
           onClose={() => setGoalsOpen(false)}
           onCreate={(rows) => startSave(async () => {
             const r = await createGoalsFromScenario(planId, rows);
@@ -387,31 +385,31 @@ export function WhatIfModule({
  * being wrong. Each row is one lever the client moved, already carrying what that lever is worth — the
  * measured contribution, not a fresh calculation — and all that is left to decide is when and who.
  *
- * Quarter and owner default once at the top and then per row, because in practice a client sets "this
- * quarter, me" for all of them and changes one.
+ * Due date and owner default once at the top and then per row, because in practice a client sets "the end
+ * of the ninety days, me" for all of them and changes one.
+ *
+ * NO QUARTER ANY MORE (§6.139, open item 43). Since §6.125 every goal a scenario makes lands on the 90-day
+ * rung, and the quarter this dialog asked for was thrown away by the save — a choice that did nothing. The
+ * useful question in its place is the one the Goals screen asks of every 90-day goal: when is it due.
  */
-function TurnIntoGoalsDialog({ goals, people, quarters, thisQuarter, saving, error, onClose, onCreate }: {
-  goals: ProposedGoal[]; people: Person[]; quarters: QuarterChoice[];
-  thisQuarter: { planYear: number; quarter: number };
+function TurnIntoGoalsDialog({ goals, people, saving, error, onClose, onCreate }: {
+  goals: ProposedGoal[]; people: Person[];
   saving: boolean; error?: string;
   onClose: () => void; onCreate: (rows: GoalToCreate[]) => void;
 }) {
-  const key = (q: { planYear: number; quarter: number }) => `${q.planYear}:${q.quarter}`;
-  const fallback = quarters.some((q) => key(q) === key(thisQuarter)) ? key(thisQuarter) : key(quarters[0]);
-  const [when, setWhen] = useState<Record<string, string>>({});
+  const [due, setDue] = useState<Record<string, string>>({});
   const [owner, setOwner] = useState<Record<string, string>>({});
-  const [allWhen, setAllWhen] = useState(fallback);
+  const [allDue, setAllDue] = useState("");
   const [allOwner, setAllOwner] = useState("");
 
-  const whenOf = (g: ProposedGoal) => when[g.lever] ?? allWhen;
+  const dueOf = (g: ProposedGoal) => due[g.lever] ?? allDue;
   const ownerOf = (g: ProposedGoal) => owner[g.lever] ?? allOwner;
-  const quarterOpts = quarters.map((q) => ({ value: key(q), label: `${q.label} · ${q.months}` }));
   const ownerOpts = [{ value: "", label: "Nobody yet" }, ...people.map((p) => ({ value: p.id, label: p.name || "Unnamed" }))];
 
-  const rows = (): GoalToCreate[] => goals.map((g) => {
-    const [year, quarter] = whenOf(g).split(":").map(Number);
-    return { lever: g.lever, area: g.area, title: g.title, detail: g.detail, year, quarter, ownerPersonId: ownerOf(g) || null };
-  });
+  const rows = (): GoalToCreate[] => goals.map((g) => ({
+    lever: g.lever, area: g.area, title: g.title, detail: g.detail,
+    dueDate: dueOf(g) || null, ownerPersonId: ownerOf(g) || null,
+  }));
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -419,14 +417,15 @@ function TurnIntoGoalsDialog({ goals, people, quarters, thisQuarter, saving, err
         <DialogHeader>
           <DialogTitle>Turn into goals</DialogTitle>
           <DialogDescription>
-            One goal for each lever you moved, carrying what it is worth. They appear in Goals under their
-            area and on your dashboard for the quarter you pick. Nothing in your forecast changes.
+            One goal for each lever you moved, carrying what it is worth. They land in the next ninety days on
+            Goals and on your dashboard. Nothing in your forecast changes.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-wrap items-center gap-2 rounded border border-border bg-secondary px-3 py-2">
           <span className="text-[12.5px] text-muted-foreground">Set all to</span>
-          <CellSelect className="h-7 w-[180px]" value={allWhen} onValueChange={(v) => { setAllWhen(v); setWhen({}); }} options={quarterOpts} />
+          <Input type="date" aria-label="Due date for all" className="h-7 w-[160px] text-[12.5px]" value={allDue}
+            onChange={(e) => { setAllDue(e.target.value); setDue({}); }} />
           <CellSelect className="h-7 w-[160px]" value={allOwner} onValueChange={(v) => { setAllOwner(v); setOwner({}); }} options={ownerOpts} />
         </div>
 
@@ -441,7 +440,8 @@ function TurnIntoGoalsDialog({ goals, people, quarters, thisQuarter, saving, err
                 </div>
               </div>
               <div className="mt-1.5 flex flex-wrap gap-2 pl-[84px]">
-                <CellSelect className="h-7 w-[180px]" value={whenOf(g)} onValueChange={(v) => setWhen((x) => ({ ...x, [g.lever]: v }))} options={quarterOpts} />
+                <Input type="date" aria-label={`Due date: ${g.title}`} className="h-7 w-[160px] text-[12.5px]" value={dueOf(g)}
+                  onChange={(e) => setDue((x) => ({ ...x, [g.lever]: e.target.value }))} />
                 <CellSelect className="h-7 w-[160px]" value={ownerOf(g)} onValueChange={(v) => setOwner((x) => ({ ...x, [g.lever]: v }))} options={ownerOpts} />
               </div>
             </div>

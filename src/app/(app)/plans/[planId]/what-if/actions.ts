@@ -52,8 +52,8 @@ export type GoalToCreate = {
   area: string;
   title: string;
   detail: string;
-  year: number;
-  quarter: number;
+  /** When it is due, or null. The 90-day rung's own question (§6.139); the old quarter did nothing. */
+  dueDate: string | null;
   ownerPersonId: string | null;
 };
 
@@ -104,9 +104,11 @@ export async function createGoalsFromScenario(planId: string, goals: GoalToCreat
 
   const inserts: Record<string, unknown>[] = [];
   for (const g of wanted) {
+    const due = g.dueDate && /^\d{4}-\d{2}-\d{2}$/.test(g.dueDate) ? g.dueDate : null;
     const fields = {
       area: g.area, title: g.title.trim(), detail: g.detail.trim() || null,
       ...(g.ownerPersonId ? { owner_person_id: g.ownerPersonId } : {}),
+      ...(due ? { milestone_date: due } : {}),
     };
     const id = existing.get(g.lever);
     if (id) {

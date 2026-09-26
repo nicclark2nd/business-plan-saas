@@ -451,11 +451,11 @@ industry or a smaller country will often get "couldn't find" instead. If that is
 next step is an SDE-to-EBITDA path using the leadership pay the plan already holds, since most published
 small-business multiples are on SDE.
 
-### 43. The What-If "Turn into goals" dialog still offers a quarter
+### ~~43. The What-If "Turn into goals" dialog still offers a quarter~~ — **done (§6.139)**
 
-The dialog says goals appear "for the quarter you pick" and offers a quarter for each, but since §6.125
-every What-If goal lands on the 90-day rung and the chosen quarter is ignored by the save. Found while
-testing §6.134 on ZZ Test Walk. The picker should come out, or become the goal's due date.
+The quarter pickers are gone. In their place a due date — once at the top for all, then per goal — which
+is saved as the goal's due date on the 90-day rung. The dialog now says the goals land in the next ninety
+days. Checked live on ZZ Test Walk (goal created with its date, then removed).
 
 ### ~~44. A save that never reaches the server takes the whole screen down~~ — **done (§6.138)**
 
