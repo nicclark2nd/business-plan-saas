@@ -289,6 +289,43 @@ It stays. The walk has to be repeatable, and a plan that starts empty is the onl
 screen quietly reading a year off the wrong field. The name begins with ZZ so it sorts last, and anyone
 finding it in the plan list should leave it alone rather than tidy it away.
 
+### 31. Capability to sell is not built, and needs a data-collection step first
+
+§6.128 built Grow and Borrow. Sell was left out because over half of it asks for facts the app has never
+collected: an asking price, the owner add-backs behind a normalised EBITDA, who the largest customer is
+and what share they are, which contracts can be assigned to a buyer, and a transferability assessment.
+Four of its ten measures (cash conversion, revenue growth, gross margin, return on capital) already
+compute. The rest is a step in its own right, not a screen.
+
+### 32. The capability bands are general, not per-industry
+
+Every band on the Financial Capabilities screen is a general small-business range. A concreter, a café and
+a software business do not share a sensible cash cycle, debtor days or margin. The plan knows the
+industry and the screen says out loud that the bands do not — which is honest but not right. Either the
+bands come from somewhere real per industry, or the consultant sets them per client.
+
+### 33. Nothing holds a plan's cash buffer
+
+`Lowest month in Year 1` grades itself against a buffer the client is supposed to have chosen, and no
+screen asks for one. It currently falls back to "above zero is fine", which is a much weaker test than
+the one the card describes. A single figure on Assumptions or Plan settings would close it.
+
+### 34. A plan's own child rows are invisible to the report but visible to its screens — unexplained
+
+On the test plan `75bebd96`, the SWOT screen server-renders a weakness and its mitigation from the
+database while the report, fetched from the same server in the same second, reports **no SWOT lines**. A
+probe in `gather` settled what is happening without explaining why: an UNSCOPED read of
+`plan_swot_items` — no plan filter, so RLS alone decides — returns only SEQ's six rows. People, goals,
+competitors and premises all come back 0 for that plan too. No query error is raised.
+
+This should not be possible: `can_read_plan` is the weaker of the two predicates, so anything the user can
+write they should be able to read, and the write plainly succeeded. Either the row is not where the SWOT
+screen appears to be reading it from, or that plan has no `plan_members` row and something else is
+letting the screen through. **Two SQL queries settle it and neither has been run yet** — the rows in
+`plan_swot_items` for that plan, and the `plan_members` rows for it beside SEQ's.
+
+SEQ is unaffected: its SWOT section renders, with the new Mitigation column.
+
 ---
 
 ## Closed, so nobody investigates it twice

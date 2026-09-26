@@ -53,7 +53,21 @@ export async function gatherReport(planId: string) {
   /* The first day of plan Year 1 — what a person's Started date is measured against (§6.11). */
   const salaryFyStart = planYearStart(firstProjectedYear(settings?.first_projected_year as number | null, fyEndMonth), fyEndMonth);
 
-  const rows = <T,>(p: PromiseLike<{ data: T[] | null }>) => p.then((r) => r.data ?? []) as Promise<Record<string, unknown>[]>;
+  /**
+   * A QUERY THAT FAILS HERE MUST SAY SO SOMEWHERE (§6.82, §6.127.1).
+   *
+   * This helper turned every failed read into an empty list, and §6.82 already recorded what that costs:
+   * one bad column name silently zeroed four sections of the report and the document went out looking
+   * merely sparse rather than broken. The swallow itself is right — the report must still build when one
+   * table will not read — but doing it in silence means nobody ever finds out.
+   *
+   * So the empty list stays and the reason goes to the server log, named by table.
+   */
+  const rows = <T,>(p: PromiseLike<{ data: T[] | null; error?: { message?: string } | null }>, what = "row") =>
+    p.then((r) => {
+      if (r.error) console.error(`gather: ${what} query failed for plan ${planId} —`, r.error.message ?? r.error);
+      return r.data ?? [];
+    }) as Promise<Record<string, unknown>[]>;
   const [planRow, framework, goals, people, caps, licences, marketing, segments, evidence, spend, competitors, premises, suppliers, opSteps, opCapacity, completeness, ladderSettings, kpis, kpiTargets] = await Promise.all([
     supabase.from("plans").select("business_name, plan_year").eq("id", planId).maybeSingle().then((r) => r.data),
     supabase.from("plan_framework").select("vision, mission, purpose, brand_promise, field_of_play").eq("plan_id", planId).maybeSingle().then((r) => r.data),
@@ -86,8 +100,7 @@ export async function gatherReport(planId: string) {
   ]);
   const historicRow = await supabase.from("plan_historic_periods").select("*").eq("plan_id", planId)
     .order("period_number").limit(1).maybeSingle().then((r) => r.data);
-  const swotItems = await rows(supabase.from("plan_swot_items").select("*").eq("plan_id", planId).order("sort_order"));
-
+  const swotItems = await rows(supabase.from("plan_swot_items").select("*").eq("plan_id", planId).order("sort_order"), "plan_swot_items");
   const { checked } = runForecast(plan);
   const { sources } = plan;
 

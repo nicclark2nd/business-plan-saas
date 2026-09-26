@@ -107,7 +107,15 @@ export const NAV: NavGroup[] = [
    * and not a report but it has no number." It sat in Financials, the group where a client TYPES things,
    * while being the one screen you can only use once a forecast already exists to bend.
    */
-  { group: "Tools", items: [{ id: "what-if", label: "What-If Planner", tool: true }] },
+  { group: "Tools", items: [
+    { id: "what-if", label: "What-If Planner", tool: true },
+    /*
+     * FINANCIAL CAPABILITIES (§6.128) — beside What-If, and for the same reason it is here rather than in
+     * the numbered path: it asks the client for nothing the plan does not already hold, and nothing it
+     * shows is saved. A tool reads the plan; a step builds it.
+     */
+    { id: "capabilities", label: "Financial Capabilities", tool: true },
+  ] },
 
   // ---- not built yet, and the settings -----------------------------------
   /**

@@ -7,6 +7,7 @@
  */
 import { useState } from "react";
 import { Frame, PLOT, Tip, niceScale, type Severity } from "./core";
+import { cn } from "@/lib/utils";
 
 const SEV: Record<Severity, string> = {
   accent: "var(--primary)", good: "var(--good)", warn: "var(--warn)", bad: "var(--bad)",
@@ -246,5 +247,117 @@ export function Lines({ width, height = 260, categories, series, format }: {
         ))}
       </Frame>
     </>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Financial Capabilities (§6.128)                                     *
+ * ------------------------------------------------------------------ */
+
+export type Zone = { to: number; severity: Severity };
+
+/**
+ * THE ONE DIAL THIS APP ALLOWS, AND THE ARGUMENT FOR THE EXCEPTION.
+ *
+ * `Meter` above rejects dials, and gives three reasons: on an arc 40% and 50% look the same; a gauge
+ * spends a square of space saying one number; and two of them side by side cannot be compared. Every one
+ * of those is right, and every one of them is about a SMALL metric in a GRID.
+ *
+ * None of the three applies here. There is exactly one of these on a screen, so there is nothing beside it
+ * to compare. It is not a ratio being read precisely — it is a score out of 100, where "how far round has
+ * it gone" is the whole message and the exact number is printed underneath anyway. And the square of space
+ * is the point: this is the headline of the screen, not one of eight cards.
+ *
+ * So the rule stands and this is its exception, written down rather than quietly ignored. Anything smaller
+ * than the headline still uses `Meter`.
+ */
+export function ScoreDial({ width, value, zones, caption }: {
+  width: number;
+  /** 0 to 100, or null when too little of the plan is filled in to score it. */
+  value: number | null;
+  zones: Zone[];
+  caption?: string;
+}) {
+  const w = Math.min(width, 280);
+  const h = w * 0.58;
+  const cx = w / 2, cy = w * 0.5, r = w * 0.38, sw = w * 0.075;
+  const at = (f: number, rr: number) => {
+    const a = Math.PI * (1 - Math.max(0, Math.min(1, f)));
+    return [cx + rr * Math.cos(a), cy - rr * Math.sin(a)] as const;
+  };
+  const arc = (f0: number, f1: number) => {
+    const [x0, y0] = at(f0, r), [x1, y1] = at(f1, r);
+    return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r} ${r} 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+  };
+
+  let from = 0;
+  const bands = zones.map((z) => { const seg = [from / 100, z.to / 100] as const; from = z.to; return { seg, s: z.severity }; });
+  const frac = value === null ? 0 : Math.max(0, Math.min(100, value)) / 100;
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} role="img"
+      aria-label={value === null ? `${caption ?? "Score"}: not enough of the plan filled in to score` : `${caption ?? "Score"}: ${value} out of 100`}>
+      <path d={arc(0, 1)} stroke="var(--chart-track)" strokeWidth={sw + 3} fill="none" strokeLinecap="butt" />
+      {value !== null && bands.map(({ seg, s }, i) => (
+        <path key={i} d={arc(seg[0], Math.max(seg[0], seg[1] - 0.006))} stroke={SEV[s]} strokeWidth={sw} fill="none" />
+      ))}
+      {[0, 50, 100].map((t) => {
+        const [x1, y1] = at(t / 100, r + sw / 2 + 2), [x2, y2] = at(t / 100, r + sw / 2 + 7);
+        return <line key={t} x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--border)" strokeWidth={1.5} />;
+      })}
+      <text x={cx - r} y={cy + 15} textAnchor="middle" className="fill-muted-foreground text-[10px]">0</text>
+      <text x={cx + r} y={cy + 15} textAnchor="middle" className="fill-muted-foreground text-[10px]">100</text>
+      {/*
+        The needle is drawn, not animated. §6.49.2's rule is that the data is the loudest thing on the
+        page; a needle that sweeps in on load makes the chrome the loudest thing for its first second.
+      */}
+      {value !== null && (() => {
+        const [nx, ny] = at(frac, r - sw * 0.3);
+        return <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="var(--foreground)" strokeWidth={3} strokeLinecap="round" />;
+      })()}
+      <circle cx={cx} cy={cy} r={6} fill="var(--foreground)" />
+      <circle cx={cx} cy={cy} r={2.5} fill="var(--card)" />
+    </svg>
+  );
+}
+
+/**
+ * A VALUE AGAINST THE RANGE THAT MAKES SENSE OF IT (§6.128).
+ *
+ * Built for one question — "the loan I want is $1.5M; what does this business actually support?" — where
+ * the answer is two figures and a want, and the only thing a reader needs is which side of the line they
+ * fall on. A bar chart of three numbers would be three bars of nearly equal height saying nothing.
+ *
+ * Marks can sit above or below the track so two close together do not collide. That is the caller's call,
+ * because only the caller knows which two are close.
+ */
+export function RangeBar({ min, max, zones, marks, ticks, format }: {
+  /* No `width`: the track is laid out in percentages, so it fits whatever box it is given. */
+  min: number; max: number;
+  zones: { from: number; to: number; severity: Severity }[];
+  marks: { at: number; label: string; tone?: "foreground" | "bad"; below?: boolean }[];
+  ticks: number[];
+  format: (v: number) => string;
+}) {
+  const pos = (v: number) => `${(((v - min) / (max - min)) * 100).toFixed(2)}%`;
+  return (
+    <div className="pb-1 pt-6">
+      <div className="relative h-7 rounded border border-border bg-chart-track">
+        {zones.map((z, i) => (
+          <div key={i} className="absolute inset-y-0 opacity-70"
+            style={{ left: pos(z.from), width: `calc(${pos(z.to)} - ${pos(z.from)})`, background: SEV[z.severity] }} />
+        ))}
+        {marks.map((m, i) => (
+          <div key={i} className="absolute -inset-y-1.5 w-0 border-l-2"
+            style={{ left: pos(m.at), borderColor: m.tone === "bad" ? "var(--bad)" : "var(--foreground)" }}>
+            <span className={cn("absolute -translate-x-1/2 whitespace-nowrap text-[11px] font-semibold",
+              m.below ? "top-[calc(100%+2px)]" : "bottom-[calc(100%+2px)]")}>{m.label}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 flex justify-between text-[11px] text-muted-foreground tabular-nums">
+        {ticks.map((t) => <span key={t}>{format(t)}</span>)}
+      </div>
+    </div>
   );
 }
