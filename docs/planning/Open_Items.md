@@ -473,10 +473,15 @@ retries. Driven live on ZZ Test Walk: a Marketing segment and the Business profi
 saved with the connection blocked (message, screen intact, text kept) then retried and stored; and Save
 and continue on Marketing still went to Competitors.
 
-### 45. A card's one-line comment can still quote the general range
+### ~~45. A card's one-line comment can still quote the general range~~ — **done (§6.141)**
 
-§6.140 moves the lines, the colour and the score, but some cards choose their sentence from fixed numbers
-in the engine rather than from the bands — loan-to-value still says "above the 75% most lenders stop at",
-and Operating margin at risk under a plan's own range still reads "The business makes money before it
-grows". The sentences should be chosen from the metric's own status, so they cannot disagree with the dial.
+When a plan's own range puts a figure in a different band from the general one, `applyRanges` now writes
+the card's sentence from the plan's lines ("At 92.1%, below the 95% this plan sets as its floor — the weak
+end of its own range."), and the growth summary above the cards picks it up. Where the band is the same,
+the measure's own, more specific sentence stays. A sentence that quotes the general figure itself
+(loan-to-value's "75% most lenders stop at") is marked `citesGeneral` and always rewritten under a plan
+range. Loan-to-value also gained a watch sentence for 65–75%, which used to read "security to spare".
+Checked live on ZZ Test Walk: Operating margin 95 / 98 turned the card and summary to At risk with the
+plan's sentence; "Use general" put back Healthy, the original sentence and a grow score of 78. ZZ has no
+security value, so the loan-to-value change rests on its unit test.
 

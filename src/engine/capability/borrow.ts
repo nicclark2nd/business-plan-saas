@@ -328,7 +328,10 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
       note: gap ? "Waits until the plant already on the books is listed. Against only part of it, the whole debt would look as though it rested on a machine or two."
         : lvr === null ? "How much of the security behind this business is already spoken for."
         : lvr * 100 > 75 ? "Above the 75% most lenders stop at. There is little security left to offer for anything further."
+        : lvr * 100 > 65 ? "Inside what a lender will consider, but close to the 75% most stop at — little security left to spare."
         : "Inside the range a lender will normally consider, with security to spare.",
+      /* §6.141: the sentence names the general 75%, so a plan's own range must replace it. */
+      citesGeneral: !gap && lvr !== null,
       bench: "75% is a common ceiling on secured lending",
       formula: "Debt at the end of Year 1 ÷ what a lender would advance against the assets",
       reveals: "Whether there is security left behind the business.",

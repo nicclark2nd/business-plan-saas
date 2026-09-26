@@ -58,6 +58,8 @@ export type Metric = {
   bench: string;
   /** True when this plan set its own range for the measure (§6.140), so the card can say so. */
   rangeSet?: boolean;
+  /** The note quotes the general range's own figure (§6.141), so a plan's range always rewrites it. */
+  citesGeneral?: boolean;
   /* The three lines behind "Formula and data confidence" — the reason a client can trust the dial. */
   formula: string;
   reveals: string;

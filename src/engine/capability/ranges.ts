@@ -1,4 +1,5 @@
-import type { CapabilityInput, Metric, Unit } from "./model";
+import type { CapabilityInput, Metric, Severity, Unit } from "./model";
+import { statusOf } from "./model";
 import { growMetrics } from "./grow";
 import { borrowMetrics } from "./borrow";
 import { sellMetrics } from "./sell";
@@ -96,6 +97,28 @@ export function describe(a: number, b: number, unit: Unit, lowIsGood: boolean): 
 }
 
 /**
+ * THE SENTENCE UNDER THE DIAL FOLLOWS THE DIAL (§6.141, open item 45).
+ *
+ * Each measure picks its sentence from the engine's own fixed figures, which are the general range. Once a
+ * plan sets its own lines, the same value can be "At risk" on the dial and "holding up" underneath it. When
+ * the plan's range puts the value in a different band from the general one, the general sentence is the
+ * wrong one by construction, so it is replaced with one written from the plan's own lines. When the band is
+ * the same, the measure's own, more specific sentence stays.
+ */
+export function rangeSentence(display: string, s: Severity, a: number, b: number, unit: Unit, lowIsGood: boolean): string {
+  const A = fmt(a, unit), B = fmt(b, unit);
+  if (s === "watch") return `At ${display}, inside the ${A} to ${B} this plan marks as one to watch.`;
+  if (lowIsGood) {
+    return s === "good"
+      ? `At ${display}, at or under the ${A} this plan counts as strong.`
+      : `At ${display}, above the ${B} this plan sets as its limit — the weak end of its own range.`;
+  }
+  return s === "good"
+    ? `At ${display}, above the ${B} this plan counts as strong.`
+    : `At ${display}, below the ${A} this plan sets as its floor — the weak end of its own range.`;
+}
+
+/**
  * The plan's ranges laid over the measures, before anything is scored. The gauge's top stretches if a line
  * was set above it, so the needle and the lines always fit on the dial.
  */
@@ -107,10 +130,13 @@ export function applyRanges(metrics: Metric[], ranges: Ranges | undefined, kind:
     const [a, b] = r;
     const max = Math.max(m.max, Math.ceil(b * 1.25));
     const min = Math.min(m.min, Math.floor(Math.min(0, a)));
+    const bands = [{ ...m.bands[0], to: a }, { ...m.bands[1], to: b }, { ...m.bands[2], to: max }];
+    const lowIsGood = m.bands[0].s === "good";
+    const was = statusOf(m.value, m.bands), now = statusOf(m.value, bands);
     return {
-      ...m, min, max,
-      bands: [{ ...m.bands[0], to: a }, { ...m.bands[1], to: b }, { ...m.bands[2], to: max }],
-      bench: describe(a, b, m.unit, m.bands[0].s === "good"),
+      ...m, min, max, bands,
+      bench: describe(a, b, m.unit, lowIsGood),
+      note: m.value !== null && now && (now !== was || m.citesGeneral) ? rangeSentence(m.display, now, a, b, m.unit, lowIsGood) : m.note,
       rangeSet: true,
     };
   });

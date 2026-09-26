@@ -36,6 +36,29 @@ describe("ranges set for a plan (§6.140)", () => {
     expect(statusOf(12, set.bands)).toBe("watch");
     expect(set.bench).toContain("Set for this plan");
     expect(set.rangeSet).toBe(true);
+    /* §6.141: the general sentence would contradict the dial, so it is written from the plan's lines. */
+    expect(set.note).toBe("At 12%, inside the 10% to 18% this plan marks as one to watch.");
+  });
+
+  it("keeps the measure's own sentence when the plan's range puts it in the same band", () => {
+    const own = { ...m, note: "Specific sentence" };
+    expect(applyRanges([own], { "grow:operatingMargin": [5, 10] }, "grow")[0].note).toBe("Specific sentence");
+  });
+
+  it("rewrites a sentence that quotes the general line, even in the same band", () => {
+    const lvr: Metric = { ...m, key: "lvr", name: "Loan to value", value: 90, display: "90%", min: 0, max: 100,
+      bands: [{ to: 65, s: "good" }, { to: 75, s: "watch" }, { to: 100, s: "bad" }],
+      note: "Above the 75% most lenders stop at.", citesGeneral: true };
+    expect(keys).toContain("lvr");
+    expect(applyRanges([lvr], { "borrow:lvr": [70, 85] }, "borrow")[0].note)
+      .toBe("At 90%, above the 85% this plan sets as its limit — the weak end of its own range.");
+  });
+
+  it("writes the weak and strong ends the right way round for either direction", () => {
+    const low: Metric = { ...m, key: "leverage", unit: "x", value: 4, display: "4×",
+      bands: [{ to: 2.5, s: "good" }, { to: 3.5, s: "watch" }, { to: 6, s: "bad" }] };
+    expect(applyRanges([low], { "borrow:leverage": [4.5, 5] }, "borrow")[0].note).toContain("at or under the 4.5×");
+    expect(applyRanges([m], { "grow:operatingMargin": [15, 20] }, "grow")[0].note).toContain("below the 15% this plan sets as its floor");
   });
 
   it("stretches the dial when a line is set above its top", () => {
