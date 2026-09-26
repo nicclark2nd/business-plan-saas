@@ -308,11 +308,13 @@ a software business do not share a sensible cash cycle, debtor days or margin. T
 industry and the screen says out loud that the bands do not — which is honest but not right. Either the
 bands come from somewhere real per industry, or the consultant sets them per client.
 
-### 33. Nothing holds a plan's cash buffer
+### ~~33. Nothing holds a plan's cash buffer~~ — **answered on the screen (§6.128.3)**
 
-`Lowest month in Year 1` grades itself against a buffer the client is supposed to have chosen, and no
-screen asks for one. It currently falls back to "above zero is fine", which is a much weaker test than
-the one the card describes. A single figure on Assumptions or Plan settings would close it.
+The Grow tab now asks for a cash floor and a cost of capital, beside the loan and the asking price, and
+the lowest-month card is graded against the floor rather than against zero. It is a scenario input like
+the others, so it is not saved — which is right while it is only this screen's question. **If anything
+else ever needs a cash floor** (the dashboard's cash chart is the obvious candidate) it should be promoted
+to a plan setting rather than asked for twice.
 
 ### 34. A plan's own child rows are invisible to the report but visible to its screens — unexplained
 

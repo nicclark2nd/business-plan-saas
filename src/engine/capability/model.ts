@@ -155,8 +155,12 @@ export type CapabilityInput = {
   debtService: Partial<Record<number, number>>;
   /** Capex per year from Fixed Assets, so growth spending can be told from keeping the lights on. */
   capex: Partial<Record<number, number>>;
-  /** The lowest the client said cash should go. Null when they have not said. */
-  cashBuffer: number | null;
+  /**
+   * The two judgements the growth question needs and the plan does not hold: how low the client is willing
+   * to let cash go, and what their money costs. Typed on the screen like the loan and the asking price —
+   * both are the client's own tolerance, not a fact the forecast produces.
+   */
+  growth: Growth;
   /** Year 1 revenue that comes from products sold as an ongoing client rather than a one-off job. */
   recurringShare: number | null;
   /**
@@ -203,6 +207,15 @@ export const TRANSFER_FACTORS = [
 ] as const;
 
 export const DEFAULT_SALE: Sale = { askingPrice: 0, addBacks: 0, multipleLow: 3.5, multipleHigh: 4.8, transfer: [] };
+
+export type Growth = {
+  /** The floor the client wants cash to stay above. Zero means "just don't go negative". */
+  cashBuffer: number;
+  /** What the money funding the growth costs, as a percentage. Sets the bar the return has to clear. */
+  costOfCapital: number;
+};
+
+export const DEFAULT_GROWTH: Growth = { cashBuffer: 0, costOfCapital: 11 };
 
 export type Proposal = {
   amount: number;

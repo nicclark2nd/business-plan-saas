@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_STRESS, LENDER_MIN_DSCR, annualRepayment, borrowingCapacity, over, score, statusOf,
+  DEFAULT_GROWTH, DEFAULT_STRESS, LENDER_MIN_DSCR, annualRepayment, borrowingCapacity, over, score, statusOf,
   type CapabilityInput, type Metric,
 } from "./model";
 import { growMetrics, GROW_WEIGHTS } from "./grow";
@@ -22,7 +22,7 @@ const empty: CapabilityInput = {
   money: (v) => `$${Math.round(v).toLocaleString("en-AU")}`,
   pnl: {}, cashFlow: {}, balanceSheet: {}, days: {},
   monthlyCash: [], monthlyProfit: [], debtService: {}, capex: {},
-  cashBuffer: null, proposal: null, stress: DEFAULT_STRESS, sale: null, recurringShare: null,
+  growth: DEFAULT_GROWTH, proposal: null, stress: DEFAULT_STRESS, sale: null, recurringShare: null,
 };
 
 const pnl = (revenue: number, over_: Partial<Record<string, number>> = {}) => ({
@@ -61,7 +61,7 @@ const full = (o: Partial<CapabilityInput> = {}): CapabilityInput => ({
   monthlyCash: [200, 180, 150, 120, 90, 60, 80, 110, 140, 170, 190, 210].map((v) => v * 1000),
   monthlyProfit: new Array(12).fill(20_000),
   debtService: { 1: 120_000 }, capex: { 1: 40_000, 2: 300_000 },
-  cashBuffer: 100_000,
+  growth: { cashBuffer: 100_000, costOfCapital: 11 },
   ...o,
 });
 
@@ -209,7 +209,7 @@ describe("growth, on a plan that has a forecast", () => {
   /* A dip below the buffer the client set is a warning, not a failure — and not a pass either. */
   it("grades the lowest month against the buffer the client chose", () => {
     expect(statusOf(by("lowestCash").value, by("lowestCash").bands)).toBe("watch");
-    const fine = growMetrics(full({ cashBuffer: 20_000 }));
+    const fine = growMetrics(full({ growth: { cashBuffer: 20_000, costOfCapital: 11 } }));
     expect(statusOf(fine.find((x) => x.key === "lowestCash")!.value, fine.find((x) => x.key === "lowestCash")!.bands)).toBe("good");
   });
 

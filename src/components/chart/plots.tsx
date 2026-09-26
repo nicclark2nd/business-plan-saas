@@ -290,8 +290,10 @@ export function ScoreDial({ width, value, zones, caption }: {
     return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r} ${r} 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
   };
 
-  let from = 0;
-  const bands = zones.map((z) => { const seg = [from / 100, z.to / 100] as const; from = z.to; return { seg, s: z.severity }; });
+  const bands = zones.map((z, i) => ({
+    seg: [(i === 0 ? 0 : zones[i - 1].to) / 100, z.to / 100] as const,
+    s: z.severity,
+  }));
   const frac = value === null ? 0 : Math.max(0, Math.min(100, value)) / 100;
 
   return (
@@ -359,5 +361,72 @@ export function RangeBar({ min, max, zones, marks, ticks, format }: {
         {ticks.map((t) => <span key={t}>{format(t)}</span>)}
       </div>
     </div>
+  );
+}
+
+/**
+ * THE SAME DIAL, CARD-SIZED (§6.128.3).
+ *
+ * `ScoreDial` above notes that gauges are an exception in this app and says why the headline earns one.
+ * This is the exception widening, deliberately and on the client's own instruction after seeing the built
+ * screen: three tabs where only the headline had a dial read as three different screens, and consistency
+ * across a tool a consultant walks a client through is worth more than the objection it costs.
+ *
+ * THE OBJECTION IS REAL AND IS ANSWERED IN THE LAYOUT, not waved away. `Meter` is right that two arcs side
+ * by side are hard to compare — so the number stays printed at full size next to the dial, and the dial is
+ * given the job it is actually good at: showing at a glance how far through its range a value sits, and
+ * which band it landed in. The reader compares the numerals; the arc carries the shape.
+ *
+ * A metric with no value draws its bands greyed and no needle, which is a different picture from a needle
+ * at zero — "not answered" and "answered badly" must never look alike (§6.89).
+ */
+export function MiniDial({ width, value, min, max, zones, severity, label }: {
+  width: number;
+  value: number | null;
+  min: number; max: number;
+  zones: { to: number; severity: Severity }[];
+  severity: import("./core").Severity | null;
+  label: string;
+}) {
+  const w = Math.min(width, 150);
+  const h = w * 0.56;
+  const cx = w / 2, cy = w * 0.48, r = w * 0.37, sw = w * 0.085;
+  const clamp = (v: number) => Math.max(min, Math.min(max, v));
+  const frac = (v: number) => (max === min ? 0 : (clamp(v) - min) / (max - min));
+  const at = (f: number, rr: number) => {
+    const a = Math.PI * (1 - Math.max(0, Math.min(1, f)));
+    return [cx + rr * Math.cos(a), cy - rr * Math.sin(a)] as const;
+  };
+  const arc = (f0: number, f1: number) => {
+    const [x0, y0] = at(f0, r), [x1, y1] = at(f1, r);
+    return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r} ${r} 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+  };
+
+  /* Each band starts where the previous one ended. Read from the array rather than carried in a variable,
+     because a variable reassigned inside a render is a variable that can survive into the next one. */
+  const bands = zones.map((z, i) => ({
+    seg: [frac(i === 0 ? min : zones[i - 1].to), frac(z.to)] as const,
+    s: z.severity,
+  }));
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} role="img" aria-label={label}>
+      <path d={arc(0, 1)} stroke="var(--chart-track)" strokeWidth={sw + 2} fill="none" />
+      {bands.map(({ seg, s }, i) => seg[1] > seg[0] && (
+        <path key={i} d={arc(seg[0], Math.max(seg[0], seg[1] - 0.008))} stroke={SEV[s]} strokeWidth={sw}
+          fill="none" opacity={value === null ? 0.25 : 0.9} />
+      ))}
+      {value !== null && (() => {
+        const [nx, ny] = at(frac(value), r - sw * 0.25);
+        return <>
+          <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="var(--foreground)" strokeWidth={2} strokeLinecap="round" />
+          <circle cx={cx} cy={cy} r={3.5} fill="var(--foreground)" />
+        </>;
+      })()}
+      {value === null && <circle cx={cx} cy={cy} r={3.5} fill="var(--border)" />}
+      {severity && value !== null && (
+        <circle cx={cx} cy={cy} r={1.4} fill={SEV[severity]} />
+      )}
+    </svg>
   );
 }

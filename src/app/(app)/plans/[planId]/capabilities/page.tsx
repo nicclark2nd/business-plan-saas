@@ -39,7 +39,7 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
    */
   let input: PlanFacts = {
     pnl: {}, cashFlow: {}, balanceSheet: {}, days: {},
-    monthlyCash: [], monthlyProfit: [], debtService: {}, capex: {}, cashBuffer: null,
+    monthlyCash: [], monthlyProfit: [], debtService: {}, capex: {},
     recurringShare: null,
   };
 

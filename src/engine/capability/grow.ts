@@ -49,7 +49,7 @@ export function growMetrics(i: CapabilityInput): Metric[] {
 
   const lowCash = i.monthlyCash.length ? Math.min(...i.monthlyCash) : null;
   const lowMonth = lowCash === null ? null : i.monthlyCash.indexOf(lowCash) + 1;
-  const buffer = i.cashBuffer;
+  const buffer = i.growth.cashBuffer;
 
   /*
    * IS THERE A PROFIT TO GROW? (§6.128.1)
@@ -135,12 +135,18 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       key: "returnOnPlan", name: "Return on the growth plan", unit: "pct",
       value: returnOnPlan === null ? null : r1(returnOnPlan * 100),
       display: returnOnPlan === null ? "—" : pct(returnOnPlan * 100),
-      min: 0, max: 40, bands: [{ to: 8, s: "bad" }, { to: 14, s: "watch" }, { to: 40, s: "good" }],
+      /* The bar is what the money costs, which the client sets — not a number this app picked for them. */
+      min: 0, max: Math.max(40, i.growth.costOfCapital * 2),
+      bands: [
+        { to: i.growth.costOfCapital, s: "bad" },
+        { to: i.growth.costOfCapital * 1.3, s: "watch" },
+        { to: Number.MAX_SAFE_INTEGER, s: "good" },
+      ],
       sub: invested ? `${m(extraProfit ?? 0)} more profit on ${m(invested)} invested` : undefined,
       note: returnOnPlan === null ? "Needs Year 2 capital spending recorded on the Fixed Assets step."
-        : returnOnPlan * 100 < 10 ? "The extra profit is thin against what the plan spends to get it."
-        : "The extra profit clears a sensible cost of capital.",
-      bench: "Compare against what the money costs — a loan at 8.5%, or what equity expects",
+        : returnOnPlan * 100 < i.growth.costOfCapital ? `The extra profit does not clear the ${i.growth.costOfCapital}% the money costs. The plan spends more than the growth returns.`
+        : "The extra profit clears the cost of capital you set.",
+      bench: `Has to beat the ${i.growth.costOfCapital}% you said the money costs`,
       formula: "Extra operating profit in Year 2 ÷ (Year 2 capex + the extra working capital growth ties up)",
       reveals: "Whether the money the growth plan needs earns an adequate return.",
       confidence: "Medium — it assumes Year 2's capex is what buys Year 2's extra profit, which is rarely exactly true.",
@@ -193,17 +199,15 @@ export function growMetrics(i: CapabilityInput): Metric[] {
     {
       key: "lowestCash", name: "Lowest month in Year 1", unit: "money",
       value: lowCash, display: lowCash === null ? "—" : m(lowCash),
-      min: buffer !== null ? -Math.abs(buffer) * 2 : -100_000,
-      max: buffer !== null ? Math.abs(buffer) * 4 : 400_000,
-      bands: buffer !== null
-        ? [{ to: 0, s: "bad" }, { to: buffer, s: "watch" }, { to: Number.MAX_SAFE_INTEGER, s: "good" }]
-        : [{ to: 0, s: "bad" }, { to: 1, s: "watch" }, { to: Number.MAX_SAFE_INTEGER, s: "good" }],
+      min: buffer > 0 ? -buffer : -(Math.abs(lowCash ?? 100_000) + 100_000),
+      max: buffer > 0 ? buffer * 4 : Math.max(Math.abs(lowCash ?? 0) * 2, 200_000),
+      bands: [{ to: 0, s: "bad" }, { to: Math.max(buffer, 1), s: "watch" }, { to: Number.MAX_SAFE_INTEGER, s: "good" }],
       sub: lowMonth ? `Month ${lowMonth} of Year 1` : undefined,
       note: lowCash === null ? "Needs a monthly cash forecast."
         : lowCash < 0 ? "The plan runs out of money before the year ends. Nothing else on this page matters until that is fixed."
-        : buffer !== null && lowCash < buffer ? "Cash stays positive but dips below the buffer you set."
+        : buffer > 0 && lowCash < buffer ? `Cash stays positive but dips below the ${m(buffer)} floor you set.`
         : "Cash stays above water every month of Year 1.",
-      bench: "It is the month, not the year, that runs a business out of money",
+      bench: buffer > 0 ? `Your floor is ${m(buffer)} — it is the month, not the year, that runs a business out of money` : "Set a cash floor above and this is judged against it",
       formula: "The lowest closing balance in the twelve-month cash forecast",
       reveals: "Whether the growth can be funded out of the year as it is planned.",
       confidence: "High — the same monthly figures the dashboard charts.",

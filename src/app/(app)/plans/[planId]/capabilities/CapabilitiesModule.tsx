@@ -3,15 +3,15 @@
 import { useMemo, useState } from "react";
 import { ModuleFrame, ModuleFooter } from "@/components/module/ModuleFrame";
 import { CellInput, Note } from "@/components/module/DataGrid";
-import { Meter, StatTile, TileRow, useWidth, type Severity as ChartSeverity } from "@/components/chart/core";
-import { RangeBar, ScoreDial } from "@/components/chart/plots";
+import { StatTile, TileRow, useWidth, type Severity as ChartSeverity } from "@/components/chart/core";
+import { MiniDial, RangeBar, ScoreDial } from "@/components/chart/plots";
 import { navGroup } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { moneyFormatter } from "@/engine/plan/money";
 import {
-  DEFAULT_SALE, DEFAULT_STRESS, LENDER_MIN_DSCR, SCORE_BANDS, SEVERITY_LABEL, TRANSFER_FACTORS,
+  DEFAULT_GROWTH, DEFAULT_SALE, DEFAULT_STRESS, LENDER_MIN_DSCR, SCORE_BANDS, SEVERITY_LABEL, TRANSFER_FACTORS,
   borrowingCapacity, score, statusOf,
-  type CapabilityInput, type Metric, type Proposal, type Sale, type Severity, type Stress,
+  type CapabilityInput, type Growth, type Metric, type Proposal, type Sale, type Severity, type Stress,
 } from "@/engine/capability/model";
 import { GROW_WEIGHTS, growMetrics } from "@/engine/capability/grow";
 import { BORROW_WEIGHTS, borrowMetrics, stressedCash } from "@/engine/capability/borrow";
@@ -19,7 +19,7 @@ import { SELL_WEIGHTS, sellMetrics } from "@/engine/capability/sell";
 import { verdict } from "@/engine/capability/verdict";
 
 /** Everything the server can serialise. The formatter and the scenario are the client's own. */
-export type PlanFacts = Omit<CapabilityInput, "money" | "proposal" | "stress" | "sale">;
+export type PlanFacts = Omit<CapabilityInput, "money" | "proposal" | "stress" | "sale" | "growth">;
 
 type Tab = "grow" | "borrow" | "sell";
 
@@ -49,14 +49,15 @@ export function CapabilitiesModule({ planId, mode, currency, facts }: {
   const [proposal, setProposal] = useState<Proposal>({ amount: 0, ratePct: 8.5, termYears: 7, undrawn: 0, collateral: null });
   const [stress, setStress] = useState<Stress>(DEFAULT_STRESS);
   const [sale, setSale] = useState<Sale>(DEFAULT_SALE);
+  const [growth, setGrowth] = useState<Growth>(DEFAULT_GROWTH);
   const money = useMemo(() => moneyFormatter(currency), [currency]);
 
   const input: CapabilityInput = useMemo(() => ({
     ...facts, money,
     /* A loan of nothing is not a loan: until an amount is entered, every test that needs one stays blank. */
     proposal: proposal.amount > 0 ? proposal : null,
-    stress, sale,
-  }), [facts, money, proposal, stress, sale]);
+    stress, sale, growth,
+  }), [facts, money, proposal, stress, sale, growth]);
 
   const grow = useMemo(() => growMetrics(input), [input]);
   const borrow = useMemo(() => borrowMetrics(input), [input]);
@@ -151,7 +152,9 @@ export function CapabilitiesModule({ planId, mode, currency, facts }: {
       </section>
 
       {/* ---------- the loan being considered ---------- */}
-      {tab === "sell" && <SaleInputs sale={sale} onSale={setSale} money={money} />}
+      {tab === "grow" && <GrowInputs growth={growth} onGrowth={setGrowth} metrics={grow} money={money} />}
+
+      {tab === "sell" && <SaleInputs sale={sale} onSale={setSale} metrics={sell} input={input} money={money} />}
 
       {tab === "borrow" && (
         <BorrowInputs
@@ -201,10 +204,22 @@ function Pill({ s }: { s: Severity }) {
  * terms, what the measure is actually for, and how much the app trusts the inputs — which is the sentence
  * that stops a medium-confidence estimate being read as a fact.
  */
+function Gauge({ m, s }: { m: Metric; s: Severity | null }) {
+  const [ref, width] = useWidth<HTMLDivElement>();
+  /* The last band runs to MAX_SAFE_INTEGER on some metrics; the arc is drawn to the card's own scale. */
+  const zones = m.bands.map((b) => ({ to: Math.min(b.to, m.max), severity: TONE[b.s] }));
+  return (
+    <div ref={ref} className="w-[112px] shrink-0">
+      {width > 0 && (
+        <MiniDial width={width} value={m.value} min={m.min} max={m.max} zones={zones}
+          severity={s ? TONE[s] : null} label={`${m.name}: ${m.display}`} />
+      )}
+    </div>
+  );
+}
+
 function Card({ m }: { m: Metric }) {
   const s = statusOf(m.value, m.bands);
-  const pct = m.value === null ? null
-    : Math.max(0, Math.min(100, ((m.value - m.min) / (m.max - m.min)) * 100));
   return (
     <article className="bg-card px-5 py-4">
       <div className="flex items-start justify-between gap-3">
@@ -212,13 +227,20 @@ function Card({ m }: { m: Metric }) {
         {s ? <Pill s={s} /> : <span className="eyebrow shrink-0 text-muted-foreground">Not yet</span>}
       </div>
 
-      <div className="mt-2 flex items-baseline gap-2">
-        <span className={cn("text-[26px] font-semibold leading-none tabular-nums",
-          s === "good" && "text-good", s === "watch" && "text-warn", s === "bad" && "text-bad",
-          !s && "text-muted-foreground")}>{m.display}</span>
-        {m.sub && <span className="min-w-0 truncate text-[11.5px] text-muted-foreground">{m.sub}</span>}
+      {/*
+        THE DIAL AND THE NUMERAL, SIDE BY SIDE (§6.128.3). The arc shows how far through its range the
+        value sits and which band caught it; the numeral is what a reader actually compares between cards.
+        Neither on its own does both jobs.
+      */}
+      <div className="mt-1 flex items-center gap-3">
+        <Gauge m={m} s={s} />
+        <div className="min-w-0 flex-1">
+          <div className={cn("text-[26px] font-semibold leading-none tabular-nums",
+            s === "good" && "text-good", s === "watch" && "text-warn", s === "bad" && "text-bad",
+            !s && "text-muted-foreground")}>{m.display}</div>
+          {m.sub && <div className="mt-1 text-[11.5px] leading-snug text-muted-foreground">{m.sub}</div>}
+        </div>
       </div>
-      <Meter pct={pct} severity={s ? TONE[s] : "accent"} label={`${m.name}: ${m.display}`} />
 
       <p className="mt-2.5 text-[12.5px] leading-relaxed">{m.missing ?? m.note}</p>
       {!m.missing && <p className="mt-1 text-[11.5px] text-muted-foreground">{m.bench}</p>}
@@ -344,8 +366,8 @@ function BorrowInputs({ proposal, onProposal, stress, onStress, input, money }: 
  * owner vanished?" — because "owner dependence: 3" means whatever the person scoring it decided, and a
  * number nobody can reconstruct is worse than no number.
  */
-function SaleInputs({ sale, onSale, money }: {
-  sale: Sale; onSale: (s: Sale) => void; money: (v: number) => string;
+function SaleInputs({ sale, onSale, metrics, input, money }: {
+  sale: Sale; onSale: (s: Sale) => void; metrics: Metric[]; input: CapabilityInput; money: (v: number) => string;
 }) {
   const num = (v: string) => Number(v.replace(/[^0-9.-]/g, "")) || 0;
   const set = (patch: Partial<Sale>) => onSale({ ...sale, ...patch });
@@ -376,6 +398,13 @@ function SaleInputs({ sale, onSale, money }: {
             onChange={(e) => set({ multipleHigh: num(e.target.value) })} />
         </StatTile>
       </TileRow>
+
+      {/*
+        THE PRICE ARGUMENT AS A PICTURE (§6.128.3). "5.2× is above your range" is a sentence a client can
+        disagree with; the same fact as a band with their asking price standing outside it is one they can
+        see. Built from the multiples they entered, against the earnings their own forecast produced.
+      */}
+      <ValuationRange sale={sale} metrics={metrics} input={input} money={money} />
 
       <section className="border-b border-border px-5 py-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -414,5 +443,116 @@ function SaleInputs({ sale, onSale, money }: {
         </p>
       </section>
     </>
+  );
+}
+
+
+/**
+ * WHAT THE GROWTH QUESTION NEEDS AND THE PLAN DOES NOT HOLD (§6.128.3).
+ *
+ * Two numbers, and both are a tolerance rather than a fact: how low the owner is willing to let cash go,
+ * and what their money costs. The forecast can say what cash does; only the owner can say what is too
+ * low. Before these existed the lowest-month card graded itself against "above zero", which is a much
+ * weaker test than the card's own wording described.
+ *
+ * The range beneath them is the year in one line: the worst month against the floor and against nothing.
+ */
+function GrowInputs({ growth, onGrowth, metrics, money }: {
+  growth: Growth; onGrowth: (g: Growth) => void; metrics: Metric[]; money: (v: number) => string;
+}) {
+  const num = (v: string) => Number(v.replace(/[^0-9.-]/g, "")) || 0;
+  const low = metrics.find((x) => x.key === "lowestCash");
+  const lowCash = low?.value ?? null;
+  const top = Math.max(growth.cashBuffer * 3, Math.abs(lowCash ?? 0) * 2, 100_000);
+  const floorAt = Math.max(growth.cashBuffer, 0);
+
+  return (
+    <>
+      <TileRow>
+        <StatTile label="Cash floor" value={growth.cashBuffer ? money(growth.cashBuffer) : "Not set"}
+          sub="How low you will let the bank balance go">
+          <CellInput numeric className="mt-1.5 w-full" placeholder="0"
+            value={growth.cashBuffer || ""} onChange={(e) => onGrowth({ ...growth, cashBuffer: num(e.target.value) })} />
+        </StatTile>
+        <StatTile label="Cost of capital" value={`${growth.costOfCapital}%`} sub="What the money funding this costs">
+          <CellInput numeric className="mt-1.5 w-full" value={growth.costOfCapital}
+            onChange={(e) => onGrowth({ ...growth, costOfCapital: num(e.target.value) })} />
+        </StatTile>
+      </TileRow>
+
+      <section className="border-b border-border px-5 py-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <span className="text-[12.5px] font-semibold">The worst month of Year 1</span>
+          <span className="text-[11.5px] text-muted-foreground">Closing bank balance at its lowest point</span>
+        </div>
+        {lowCash === null ? (
+          <Note>No monthly cash forecast yet. Fill in your sales and costs and this draws itself.</Note>
+        ) : (
+          <RangeBar
+            min={Math.min(0, lowCash) - (lowCash < 0 ? Math.abs(lowCash) * 0.2 : 0)} max={top}
+            zones={[
+              { from: Math.min(0, lowCash), to: 0, severity: "bad" },
+              { from: 0, to: floorAt, severity: "warn" },
+              { from: floorAt, to: top, severity: "good" },
+            ]}
+            marks={[
+              ...(floorAt > 0 ? [{ at: floorAt, label: `Your floor ${money(floorAt)}`, below: true }] : []),
+              { at: Math.min(lowCash, top), label: `Lowest ${money(lowCash)}`, tone: lowCash < floorAt ? ("bad" as const) : undefined },
+            ]}
+            ticks={[Math.min(0, lowCash), top / 2, top]} format={(t) => money(t)}
+          />
+        )}
+      </section>
+    </>
+  );
+}
+
+
+function ValuationRange({ sale, metrics, input, money }: {
+  sale: Sale; metrics: Metric[]; input: CapabilityInput; money: (v: number) => string;
+}) {
+  const y1 = input.pnl[1];
+  const e = y1 ? y1.operatingProfit + y1.depreciation + sale.addBacks : null;
+  if (e === null || e <= 0) {
+    return (
+      <section className="border-b border-border px-5 py-4">
+        <span className="text-[12.5px] font-semibold">What the earnings support</span>
+        <Note>
+          {y1 ? "This plan's Year 1 earnings are not positive, so there is no multiple to apply. A buyer prices a loss on assets, not on earnings." : "No forecast yet, so there is nothing to value."}
+        </Note>
+      </section>
+    );
+  }
+  const lowV = e * sale.multipleLow, highV = e * sale.multipleHigh;
+  const top = Math.max(highV, sale.askingPrice) * 1.2;
+  const mult = metrics.find((x) => x.key === "priceMultiple")?.value ?? null;
+
+  return (
+    <section className="border-b border-border px-5 py-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-[12.5px] font-semibold">What the earnings support</span>
+        <span className="text-[11.5px] text-muted-foreground">
+          {money(e)} of normalised earnings at {sale.multipleLow}× to {sale.multipleHigh}×
+        </span>
+      </div>
+      <RangeBar
+        min={0} max={top}
+        zones={[{ from: lowV, to: highV, severity: "good" }, { from: highV, to: top, severity: "bad" }]}
+        marks={[
+          { at: (lowV + highV) / 2, label: `Midpoint ${money((lowV + highV) / 2)}`, below: true },
+          ...(sale.askingPrice > 0
+            ? [{ at: Math.min(sale.askingPrice, top), label: `Asking ${money(sale.askingPrice)}`,
+                 tone: sale.askingPrice > highV ? ("bad" as const) : undefined }]
+            : []),
+        ]}
+        ticks={[0, top / 2, top]} format={(t) => money(t)}
+      />
+      {sale.askingPrice > highV && (
+        <p className="mt-2 text-[12px] text-muted-foreground">
+          <b className="font-semibold text-foreground">{money(sale.askingPrice - highV)}</b> above the top of the range
+          {mult ? ` — ${mult}× against a ceiling of ${sale.multipleHigh}×` : ""}.
+        </p>
+      )}
+    </section>
   );
 }
