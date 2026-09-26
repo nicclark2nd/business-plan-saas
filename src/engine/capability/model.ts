@@ -71,7 +71,14 @@ export type Metric = {
    */
   fix?: { label: string; to: string };
   /** Year 1 to 5, or three historic points — whatever the metric is honestly a series of. */
-  trend?: number[];
+  /**
+   * The same measure across the forecast's years (§6.129.2), in the units `display` uses. A null is a year
+   * the measure cannot be taken — a loss year for a ratio struck on earnings — and draws as a gap, never as
+   * a zero.
+   */
+  trend?: (number | null)[];
+  /** Which point in `trend` the dial is showing, so the sparkline marks the year being judged. */
+  trendAt?: number;
   trendLabel?: string;
 };
 

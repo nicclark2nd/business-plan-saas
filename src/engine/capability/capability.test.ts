@@ -6,6 +6,8 @@ import {
 import { growMetrics, GROW_WEIGHTS } from "./grow";
 import { borrowMetrics, stressedCash, BORROW_WEIGHTS, CAPACITY_TERM_YEARS } from "./borrow";
 import { sellMetrics, SELL_WEIGHTS } from "./sell";
+import { panels, series, withTrends } from "./series";
+import { buyerQuestions, verdict } from "./verdict";
 import {
   LENDER_MIN_DSCR, TRANSFER_FACTORS, readCollateral, readGrowth, readSale, readStress, readUndrawn,
   type TransferFactor,
@@ -631,5 +633,150 @@ describe("a plan that loses money cannot be flattered by its own ratios", () => 
     expect(m.value).toBeNull();
     expect(m.sub).toBeUndefined();
     expect(m.missing).toContain("not positive");
+  });
+});
+
+/**
+ * FIVE YEARS ON EVERY CARD (§6.129.2).
+ *
+ * The dial reads one year; the sparkline beside it reads all five, and it is computed separately. Two
+ * computations of one measure is the §6.41 fault waiting to happen, so every card's dial is held against
+ * the point its own line marks. If the two formulas ever part company this is where it shows — not on a
+ * client's screen, as a dial saying 1.4× beside a line whose marked point says 1.1×.
+ */
+describe("the five-year line on each card", () => {
+  const losing = (o: Partial<CapabilityInput> = {}) => full({
+    pnl: { 1: pnl(2_000_000, { operatingProfit: -140_000 }), 2: pnl(2_200_000) },
+    ...o,
+  });
+
+  for (const [kind, of] of [["grow", growMetrics], ["borrow", borrowMetrics], ["sell", sellMetrics]] as const) {
+    it(`never lets a ${kind} dial and its own line disagree`, () => {
+      const i = full({ collateral: 1_000_000, sale: { ...empty.sale, addBacks: 50_000 } });
+      const withLines = withTrends(kind, of(i), i);
+      const drawn = withLines.filter((m) => m.trend && m.trendAt !== undefined);
+      expect(drawn.length, `${kind} drew no trend lines at all`).toBeGreaterThan(0);
+      for (const m of drawn) {
+        const marked = m.trend![m.trendAt!];
+        if (m.value === null) { expect(marked, `${m.key}: the dial is blank but the line has a value`).toBeNull(); continue; }
+        expect(marked, `${m.key}: the dial has a value the line does not`).not.toBeNull();
+        expect(marked!, `${m.key}: dial ${m.value} vs line ${marked}`).toBeCloseTo(m.value, 1);
+      }
+    });
+  }
+
+  /* The §6.129.1 guards travel with the formulas: a loss year is a hole in the line, not a cheerful point. */
+  it("leaves a loss year as a gap, never as a point", () => {
+    const lev = series.leverage(losing());
+    expect(lev[0]).toBeNull();
+    expect(lev[1]).not.toBeNull();
+    const conv = series.conversion(losing());
+    expect(conv[0]).toBeNull();
+  });
+
+  it("does not draw a line with fewer than two real points", () => {
+    const one = full({ pnl: { 1: pnl(2_000_000) }, cashFlow: { 1: cf(240_000) }, balanceSheet: { 1: bs() }, days: { 1: { debtorDays: 52, inventoryDays: 48, creditorDays: 34 } } });
+    for (const m of withTrends("borrow", borrowMetrics(one), one)) expect(m.trend, `${m.key} drew a one-point line`).toBeUndefined();
+  });
+
+  it("stresses any year, not only the first", () => {
+    const i = full();
+    expect(stressedCash(i, 2)).not.toBeNull();
+    expect(stressedCash(i, 2)!).toBeLessThan(i.cashFlow[2]!.netOperating + i.cashFlow[2]!.interestPaid);
+    expect(stressedCash(i, 3)).toBeNull();                 // no Year 3 in the fixture — nothing invented
+  });
+
+  /* The sixth costume (§6.129.1): two negatives made a positive, and SEQ read 186.8% · Healthy. */
+  it("will not call a loss converting into a loss 'cash conversion'", () => {
+    const g = growMetrics(full({
+      pnl: { 1: pnl(2_000_000, { operatingProfit: -140_000 }), 2: pnl(2_200_000) },
+      cashFlow: { 1: cf(-137_633), 2: cf(100_000) },
+    }));
+    const c = g.find((x) => x.key === "cashConversion")!;
+    expect(c.value).toBeNull();
+    expect(c.missing).toContain("A loss has no share");
+  });
+});
+
+describe("the panels under the cards", () => {
+  const products = [
+    { name: "Slabs", years: [{ revenue: 1_200_000, grossProfit: 480_000 }, { revenue: 1_400_000, grossProfit: 560_000 }] },
+    { name: "Driveways", years: [{ revenue: 800_000, grossProfit: 160_000 }, { revenue: 760_000, grossProfit: 150_000 }] },
+  ];
+
+  it("reads growth and margin per product from the same projection COGS uses", () => {
+    const P = panels(full(), products);
+    const slabs = P.byProduct.find((p) => p.name === "Slabs")!;
+    expect(slabs.change).toBe(200_000);
+    expect(slabs.margin).toBe(40);
+    expect(slabs.share).toBe(60);
+    expect(P.avgMargin).toBe(32);                            // 640,000 on 2,000,000
+    expect(P.byProduct.find((p) => p.name === "Driveways")!.change).toBe(-40_000);
+  });
+
+  /* Spending less than depreciation is running the assets down, and the panel has to say so. */
+  it("names the years the assets are being run down rather than kept", () => {
+    const P = panels(full({ capex: { 1: 40_000, 2: 300_000 } }), products);
+    expect(P.capex.runDown).toEqual([1]);                   // 40,000 against 60,000 of depreciation
+    expect(P.capex.growth[1]).toBe(240_000);
+  });
+
+  it("marks loss years on the revenue panel", () => {
+    const P = panels(full({ pnl: { 1: pnl(2_000_000, { operatingProfit: -10 }), 2: pnl(2_200_000) } }), products);
+    expect(P.revenue.lossYears).toEqual([1]);
+  });
+
+  it("keeps an unscored factor unscored — never a bar of nothing", () => {
+    const P = panels({ ...full(), transfer: rate(4, 2) }, products);
+    expect(P.transfer.map((t) => t.score)).toEqual([4, 2, null, null, null, null]);
+  });
+});
+
+describe("the questions a buyer will ask", () => {
+  const money = (v: number) => `$${Math.round(v).toLocaleString("en-AU")}`;
+  const unscored = TRANSFER_FACTORS.map((f) => ({ key: f.key, label: f.label, score: null as number | null }));
+
+  it("opens on the loss when there is one", () => {
+    const m = sellMetrics(full({ pnl: { 1: pnl(2_000_000, { operatingProfit: -140_000 }), 2: pnl(2_200_000) } }));
+    const q = buyerQuestions(m, { money, addBacks: null, transfer: unscored, knowsCustomers: false });
+    expect(q[0]).toContain("lose money");
+  });
+
+  it("turns each weak judgement into its own question", () => {
+    const transfer = unscored.map((t) => ({ ...t, score: t.key === "owner" ? 1 : 4 }));
+    const q = buyerQuestions(sellMetrics(full()), { money, addBacks: 80_000, transfer, knowsCustomers: true });
+    expect(q.some((x) => x.includes("owner leaves"))).toBe(true);
+    expect(q.some((x) => x.includes("$80,000"))).toBe(true);
+    expect(q.some((x) => x.includes("largest customers"))).toBe(false);
+  });
+
+  /* Until the plan records customers, the first thing a buyer asks is asked every time. */
+  it("asks about customers until the plan can answer it", () => {
+    const q = buyerQuestions(sellMetrics(full()), { money, addBacks: null, transfer: unscored, knowsCustomers: false });
+    expect(q.some((x) => x.includes("largest customers"))).toBe(true);
+    expect(q.some((x) => x.includes("not been assessed"))).toBe(true);
+  });
+
+  it("stops at six — a list of fifteen is a list nobody prepares for", () => {
+    const m = sellMetrics(full({
+      pnl: { 1: pnl(2_000_000, { operatingProfit: -140_000 }), 2: pnl(1_800_000) },
+      cashFlow: { 1: cf(-200_000), 2: cf(-100_000) }, recurringShare: 0.1, largestProductShare: 0.9,
+    }));
+    const transfer = unscored.map((t) => ({ ...t, score: 1 }));
+    expect(buyerQuestions(m, { money, addBacks: 80_000, transfer, knowsCustomers: false }).length).toBe(6);
+  });
+});
+
+describe("the actions follow the reading, not just the measure", () => {
+  /* Found on SEQ: add-backs lifted a loss to +0.4%, and the action still said there were no earnings. */
+  it("tells a thin margin and a loss apart", () => {
+    /* Operating loss 100,000 with 60,000 of depreciation: EBITDA −40,000. Add back 60,000 and it is +20,000. */
+    const thin = sellMetrics(full({ pnl: { 1: pnl(2_000_000, { operatingProfit: -100_000 }), 2: pnl(2_200_000) } }));
+    const thinWithBacks = sellMetrics({ ...full({ pnl: { 1: pnl(2_000_000, { operatingProfit: -100_000 }), 2: pnl(2_200_000) } }), sale: { ...empty.sale, addBacks: 60_000 } });
+    const loss = verdict("sell", thin, SELL_WEIGHTS, 30).actions.join(" ");
+    const positive = verdict("sell", thinWithBacks, SELL_WEIGHTS, 30).actions.join(" ");
+    expect(loss).toContain("no earnings figure");
+    expect(positive).not.toContain("no earnings figure");
+    expect(positive).toContain("thin for a sale");
   });
 });

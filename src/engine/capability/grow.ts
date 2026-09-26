@@ -43,7 +43,12 @@ export function growMetrics(i: CapabilityInput): Metric[] {
     ? over(owc2 - owc1, y2.revenue - y1.revenue) : null;
 
   const e1 = ebitda(y1);
-  const conversion = cf1 && e1 ? over(cf1.netOperating, e1) : null;
+  /*
+   * CASH CONVERSION NEEDS EARNINGS TO CONVERT (§6.129.1, the sixth costume). SEQ read "186.8% · Healthy"
+   * because operating cash of −137,633 divided by EBITDA of −76,054 is a positive number. Two negatives do
+   * not make a business that turns its profit into cash; they make one that has neither.
+   */
+  const conversion = cf1 && e1 !== null && e1 > 0 ? over(cf1.netOperating, e1) : null;
 
   const ccc = d1 ? d1.inventoryDays + d1.debtorDays - d1.creditorDays : null;
 
@@ -217,14 +222,18 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       value: conversion === null ? null : r1(conversion * 100),
       display: conversion === null ? "—" : pct(conversion * 100),
       min: 0, max: 130, bands: [{ to: 70, s: "bad" }, { to: 85, s: "watch" }, { to: 130, s: "good" }],
-      note: conversion === null ? "Needs a Year 1 forecast with an operating profit."
+      note: conversion === null && e1 !== null && e1 <= 0
+        ? "There are no earnings to convert — the business makes a loss before interest, tax and depreciation, so no share of it can arrive as cash."
+        : conversion === null ? "Needs a Year 1 forecast with an operating profit."
         : conversion * 100 < 70 ? "Profit is not turning into cash — most of it is sitting in stock and unpaid invoices."
         : "Most of the profit the plan forecasts actually arrives as cash.",
       bench: "85% or better means earnings are real cash",
       formula: "Year 1 cash from operations ÷ Year 1 EBITDA",
       reveals: "Whether forecast profit becomes money in the bank.",
       confidence: "High.",
-      missing: conversion === null ? "A Year 1 forecast with sales and costs in it." : undefined,
+      missing: conversion === null
+        ? (e1 !== null && e1 <= 0 ? "Positive earnings. A loss has no share that turns into cash." : "A Year 1 forecast with sales and costs in it.")
+        : undefined,
     },
     {
       key: "lowestCash", name: "Lowest month in Year 1", unit: "money",

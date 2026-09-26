@@ -44,7 +44,12 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
   const normalised = e1 === null ? null : r2(e1 + (sale.addBacks ?? 0));
   const normalisedMargin = y1?.revenue ? over(normalised, y1.revenue) : null;
 
-  const conversion = cf1 && e1 ? over(cf1.netOperating, e1) : null;
+  /*
+   * CASH CONVERSION NEEDS EARNINGS TO CONVERT (§6.129.1, the sixth costume). SEQ read "186.8% · Healthy"
+   * because operating cash of −137,633 divided by EBITDA of −76,054 is a positive number. Two negatives do
+   * not make a business that turns its profit into cash; they make one that has neither.
+   */
+  const conversion = cf1 && e1 !== null && e1 > 0 ? over(cf1.netOperating, e1) : null;
 
   /*
    * MAINTENANCE CAPEX, PROXIED BY DEPRECIATION. A business that spends its depreciation keeps its assets
@@ -271,7 +276,9 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       formula: "Year 1 cash from operations ÷ EBITDA",
       reveals: "Whether the profit being sold is real.",
       confidence: "High.",
-      missing: conversion === null ? "A Year 1 forecast." : undefined,
+      missing: conversion === null
+        ? (e1 !== null && e1 <= 0 ? "Positive earnings. A loss has no share that turns into cash." : "A Year 1 forecast.")
+        : undefined,
     },
     {
       key: "freeCashFlow", name: "Free cash flow", unit: "pct",

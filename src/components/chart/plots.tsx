@@ -143,14 +143,23 @@ export function Trend({ width, height = 260, categories, values, cross, format }
  * Horizontal bars, sorted, for a handful of long-named things. Horizontal because "Garage, Granny Flat &
  * Home Extension Slabs" cannot be a column label at any width worth having.
  */
-export function BarRows({ width, rows, format, height }: {
+export function BarRows({ width, rows, format, height, labelShare = 0.3 }: {
   width: number;
-  rows: { label: string; value: number }[];
+  /**
+   * `tone` when the bar carries a status (a transferability score, a margin below the business's own
+   * average); `display` when the figure beside it is not a plain format of the value — "Not scored" on a
+   * factor nobody has judged, which must never be drawn as a bar of nothing (§6.89).
+   */
+  rows: { label: string; value: number; tone?: Severity; display?: string }[];
   format: (v: number) => string;
   height?: number;
+  /** How much of the width the names get. A short list of long names (six judgements) wants more. */
+  labelShare?: number;
 }) {
   const [hover, setHover] = useState<number | null>(null);
-  const ROW = 26, LABEL = Math.min(240, Math.max(120, Math.round(width * 0.3)));
+  const ROW = 26, LABEL = Math.min(320, Math.max(120, Math.round(width * labelShare)));
+  /* Cut to the room there is, not to a fixed count: 30 characters clipped a label with space to spare. */
+  const fits = Math.max(12, Math.floor((LABEL - 12) / 6.3));
   const h = height ?? rows.length * ROW + 8;
   const max = Math.max(...rows.map((r) => Math.abs(r.value)), 1);
   const inner = Math.max(10, width - LABEL - 96);
@@ -163,13 +172,17 @@ export function BarRows({ width, rows, format, height }: {
           <g key={r.label + i} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
             <rect x={0} y={y} width={width} height={ROW} fill={hover === i ? "var(--secondary)" : "transparent"} />
             <text x={0} y={y + ROW / 2} dy="0.32em" className="fill-foreground text-[12px]">
-              {r.label.length > 30 ? `${r.label.slice(0, 29)}…` : r.label}
+              {r.label.length > fits ? `${r.label.slice(0, fits - 1)}…` : r.label}
               <title>{r.label}</title>
             </text>
-            <rect x={LABEL} y={y + 6} width={Math.max(2, w)} height={ROW - 14} rx={4}
-              fill={r.value < 0 ? "var(--bad)" : "var(--primary)"} />
-            <text x={LABEL + Math.max(2, w) + 8} y={y + ROW / 2} dy="0.32em"
-              className="fill-foreground text-[11.5px] font-semibold tabular-nums">{format(r.value)}</text>
+            {r.display === undefined || r.value !== 0 ? (
+              <rect x={LABEL} y={y + 6} width={Math.max(2, w)} height={ROW - 14} rx={4}
+                fill={r.tone ? SEV[r.tone] : r.value < 0 ? "var(--bad)" : "var(--primary)"} />
+            ) : null}
+            <text x={LABEL + (r.display !== undefined && r.value === 0 ? 0 : Math.max(2, w) + 8)} y={y + ROW / 2} dy="0.32em"
+              className={cn("text-[11.5px] tabular-nums", r.display !== undefined && r.value === 0 ? "fill-muted-foreground" : "fill-foreground font-semibold")}>
+              {r.display ?? format(r.value)}
+            </text>
           </g>
         );
       })}
@@ -191,13 +204,27 @@ const LEGEND_H = 20;
  * The series slots are assigned in the fixed order §6.49.2 set and never cycled. A legend appears because
  * there is more than one line — with one, the title has already said what it is.
  */
-export function Lines({ width, height = 260, categories, series, format }: {
+export function Lines({ width, height = 260, categories, series, format, reference, ceiling }: {
   width: number; height?: number; categories: string[];
-  series: { label: string; values: number[] }[];
+  /**
+   * A null is a year the measure cannot be taken (§6.129.2) and BREAKS the line. Joining across it would
+   * draw a value nobody computed; dropping it to zero would draw one that is false.
+   */
+  series: { label: string; values: (number | null)[] }[];
   format: (v: number) => string;
+  /** A fixed line to read the others against — a lender's minimum cover. Labelled, never in the legend. */
+  reference?: { value: number; label: string };
+  /**
+   * THE TOP OF THE AXIS, when the interesting part of the chart is near the bottom (§6.129.2). SEQ's debt
+   * cover runs 0× to 25× as the loans are paid off, and on that scale the 1.25× lender minimum is a hairline
+   * on the floor — the only line on the chart that matters became the one you could not see. Values above the
+   * ceiling are DRAWN at it, with an open ring to say so, and the tooltip still gives the true figure.
+   */
+  ceiling?: number;
 }) {
   const [hover, setHover] = useState<number | null>(null);
-  const all = series.flatMap((s) => s.values);
+  const clip = (v: number) => (ceiling !== undefined ? Math.min(v, ceiling) : v);
+  const all = [...series.flatMap((s) => s.values.filter((v): v is number => v !== null).map(clip)), ...(reference ? [reference.value] : [])];
   const scale = niceScale(Math.min(...all, 0), Math.max(...all, 0));
   /**
    * `height` is the whole chart INCLUDING its legend, because that is what the caller reserved for it.
@@ -227,18 +254,37 @@ export function Lines({ width, height = 260, categories, series, format }: {
         ))}
       </div>
       <Frame width={width} height={plotHeight} scale={scale} categories={categories} band={band}>
-        {series.map((s, si) => (
-          <path key={s.label} fill="none" stroke={colour(si)} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round"
-            d={s.values.map((v, i) => `${i ? "L" : "M"}${px(i)} ${py(v)}`).join(" ")} />
-        ))}
+        {reference && (
+          <g>
+            <line x1={PLOT.left} x2={width - PLOT.right} y1={py(reference.value)} y2={py(reference.value)}
+              stroke="var(--foreground)" strokeWidth={1.5} strokeLinecap="round" opacity={0.55} />
+            <text x={width - PLOT.right} y={py(reference.value) - 5} textAnchor="end"
+              className="fill-foreground text-[10.5px] font-semibold">{reference.label}</text>
+          </g>
+        )}
+        {series.map((s, si) => {
+          /* A new sub-path after every gap, so a missing year leaves a hole rather than a bridge. */
+          const d = s.values.map((v, i) => (v === null ? "" : `${s.values[i - 1] == null ? "M" : "L"}${px(i)} ${py(clip(v))}`)).join(" ");
+          return (
+            <g key={s.label}>
+              <path fill="none" stroke={colour(si)} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" d={d} />
+              {/* A lone point between two gaps is still a reading; without a dot it would not draw at all. */}
+              {s.values.map((v, i) => v !== null && s.values[i - 1] == null && s.values[i + 1] == null
+                ? <circle key={i} cx={px(i)} cy={py(clip(v))} r={2.5} fill={colour(si)} /> : null)}
+              {/* Off the top: an open ring at the ceiling, so a clipped point never passes for a real one. */}
+              {ceiling !== undefined && s.values.map((v, i) => v !== null && v > ceiling
+                ? <circle key={"c" + i} cx={px(i)} cy={py(ceiling)} r={3.5} fill="var(--card)" stroke={colour(si)} strokeWidth={1.5} /> : null)}
+            </g>
+          );
+        })}
         {hover !== null && (
           <>
             <line x1={px(hover)} x2={px(hover)} y1={PLOT.top} y2={PLOT.top + h} stroke="var(--input)" strokeWidth={1} />
-            {series.map((s, si) => (
-              <circle key={s.label} cx={px(hover)} cy={py(s.values[hover] ?? 0)} r={4} fill={colour(si)} stroke="var(--card)" strokeWidth={2} />
+            {series.map((s, si) => s.values[hover] == null ? null : (
+              <circle key={s.label} cx={px(hover)} cy={py(clip(s.values[hover] as number))} r={4} fill={colour(si)} stroke="var(--card)" strokeWidth={2} />
             ))}
-            <Tip x={px(hover)} y={py(Math.max(...series.map((s) => s.values[hover] ?? 0)))} width={width}
-              lines={series.map((s) => [s.label, format(s.values[hover] ?? 0)] as [string, string])} />
+            <Tip x={px(hover)} y={py(clip(Math.max(...series.map((s) => s.values[hover] ?? 0))))} width={width}
+              lines={series.map((s) => [s.label, s.values[hover] == null ? "—" : format(s.values[hover] as number)] as [string, string])} />
           </>
         )}
         {categories.map((_, i) => (
@@ -427,6 +473,38 @@ export function MiniDial({ width, value, min, max, zones, severity, label }: {
       {severity && value !== null && (
         <circle cx={cx} cy={cy} r={1.4} fill={SEV[severity]} />
       )}
+    </svg>
+  );
+}
+
+/**
+ * THE CARD'S FIVE YEARS IN EIGHTY PIXELS (§6.129.2).
+ *
+ * No axis, no labels: the card's numeral is the figure and this is only its direction. Gaps stay gaps — a
+ * loss year on a ratio struck on earnings is not a point — and the year the dial is judging is the one
+ * marked, in the dial's own colour, so the eye can find "now" on the line without a caption.
+ */
+export function Spark({ values, at, severity, label }: {
+  values: (number | null)[]; at: number; severity: Severity | null; label: string;
+}) {
+  const w = 88, h = 26, p = 4;
+  const real = values.filter((v): v is number => v !== null);
+  if (real.length < 2) return null;
+  const mn = Math.min(...real), mx = Math.max(...real), rg = mx - mn || 1;
+  const x = (i: number) => p + (i * (w - 2 * p)) / Math.max(1, values.length - 1);
+  const y = (v: number) => h - p - ((v - mn) / rg) * (h - 2 * p);
+  /* A point starts a new stroke when the one before it is a gap — read off the array, never a flag (§6.128.5 lint). */
+  const d = values.map((v, i) => (v === null ? "" : `${values[i - 1] == null ? "M" : "L"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`)).join(" ");
+  const now = values[at];
+  const tone = severity ? SEV[severity] : "var(--muted-foreground)";
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} role="img" aria-label={label} className="shrink-0">
+      <path d={d} fill="none" stroke="var(--muted-foreground)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" opacity={0.7} />
+      {values.map((v, i) => v === null ? null : (
+        <circle key={i} cx={x(i)} cy={y(v)} r={i === at ? 3.5 : 1.8}
+          fill={i === at ? tone : "var(--muted-foreground)"} stroke={i === at ? "var(--card)" : "none"} strokeWidth={i === at ? 1.5 : 0} />
+      ))}
+      {now === null && <circle cx={x(at)} cy={h / 2} r={3} fill="none" stroke="var(--border)" strokeWidth={1.5} />}
     </svg>
   );
 }

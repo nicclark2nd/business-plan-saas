@@ -6,7 +6,10 @@ import { loadSalariesByYear } from "@/lib/planSources";
 import { runForecast } from "@/engine/forecast/run";
 import { monthlyProfit } from "@/engine/forecast/monthlyProfit";
 import { productYears, sourceOf, recurring, type AnyProduct } from "@/engine/sales/product";
+import { productCostYears, type CostProduct } from "@/engine/cogs/direct";
+import type { FacilityFacts, ProductFacts } from "@/engine/capability/series";
 import { FORECAST_YEARS } from "@/engine/forecast/model";
+import { planMonths } from "@/engine/plan/calendar";
 import { CapabilitiesModule } from "./CapabilitiesModule";
 import type { PlanFacts } from "./CapabilitiesModule";
 
@@ -36,6 +39,18 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
   ]);
 
   let currency = "AUD";
+  /*
+   * FOR THE PANELS UNDER THE CARDS (§6.129.2), not for any measure: each product's own five years, and the
+   * borrowing lines the plan carries. Both through the converters their own steps use — `productCostYears`
+   * is what COGS shows per product, the funding rows are what the forecast repays — so a panel here cannot
+   * disagree with the screen the figure came from.
+   */
+  let productFacts: ProductFacts[] = [];
+  let facilities: FacilityFacts[] = [];
+  /* §6.21: the plan's own twelve months, never the calendar's. */
+  let months: string[] = planMonths(6);
+  /* Bank debt already on the last balance sheet, which Funding does not itemise (§6.32.4). */
+  let openingDebt = 0;
 
   /*
    * THE FACTS CROSS THE WIRE; THE FORMATTER DOES NOT.
@@ -63,6 +78,8 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
   try {
     const { plan, fyEndMonth, firstYear, settings } = await loadPlan(planId);
     currency = (settings?.currency as string | undefined) ?? "AUD";
+    months = planMonths(fyEndMonth);
+    openingDebt = (plan.opening.bankLoansCurrent ?? 0) + (plan.opening.bankLoansNonCurrent ?? 0);
     const run = runForecast(plan);
     const f = run.checked ?? run.forecast;
 
@@ -106,6 +123,20 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
      */
     const salaries = await loadSalariesByYear(planId, firstYear, fyEndMonth).catch(() => []);
 
+    productFacts = (products as (CostProduct & { name?: string | null })[]).map((prod) => ({
+      name: (prod.name ?? "").trim() || "Unnamed product",
+      years: productCostYears(prod, sourceOf(prod, products)).map((y) => ({ revenue: y.revenue, grossProfit: y.grossProfit })),
+    }));
+    facilities = plan.sources.funding
+      .filter((fs) => fs.loan)
+      .map((fs) => ({
+        name: fs.name || "Unnamed facility", kind: fs.kind,
+        drawn: fs.loan!.amount_drawn ?? 0,
+        facility: fs.loan!.total_facility_amount ?? fs.loan!.amount_drawn ?? 0,
+        ratePct: fs.loan!.interest_rate ?? 0,
+        termMonths: fs.loan!.term_months ?? 0,
+      }));
+
     input = {
       ...input,
       recurringShare: totalRevenue > 0 ? recurringRevenue / totalRevenue : null,
@@ -142,6 +173,10 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
       mode={(session?.profile?.mode ?? "guided") as "guided" | "advanced"}
       currency={currency}
       facts={input}
+      products={productFacts}
+      facilities={facilities}
+      months={months}
+      openingDebt={openingDebt}
     />
   );
 }

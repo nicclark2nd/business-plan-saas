@@ -53,7 +53,7 @@ const FIX_SECURITY = { label: "Value the security", to: "assets" };
  * a figure that has already paid it would be testing the loan against itself. Tax, working capital and
  * the ordinary cost of trading are all already inside it, which is exactly what a lender wants.
  */
-const cashForDebtService = (i: CapabilityInput, year: number): number | null => {
+export const cashForDebtService = (i: CapabilityInput, year: number): number | null => {
   const cf = i.cashFlow[year];
   return cf ? r2(cf.netOperating + cf.interestPaid) : null;
 };
@@ -70,16 +70,16 @@ const cashForDebtService = (i: CapabilityInput, year: number): number | null => 
  * incomplete one, and a stressed cover figure built on it would be quoted to a lender as though the whole
  * test had been run (§6.89).
  */
-export function stressedCash(i: CapabilityInput): number | null {
+export function stressedCash(i: CapabilityInput, year = 1): number | null {
   const { salesPct, marginPts, debtorDaysAdded } = i.stress;
   if (salesPct === null || marginPts === null || debtorDaysAdded === null) return null;
-  const base = cashForDebtService(i, 1);
-  const y1 = i.pnl[1];
-  if (base === null || !y1 || !y1.revenue) return null;
-  const gm = (y1.grossMargin ?? 0) / 100;
-  const lostSales = y1.revenue * (salesPct / 100);
+  const base = cashForDebtService(i, year);
+  const p = i.pnl[year];
+  if (base === null || !p || !p.revenue) return null;
+  const gm = (p.grossMargin ?? 0) / 100;
+  const lostSales = p.revenue * (salesPct / 100);
   const lostOnVolume = lostSales * gm;
-  const remaining = y1.revenue - lostSales;
+  const remaining = p.revenue - lostSales;
   const lostOnMargin = remaining * (marginPts / 100);
   const extraDebtors = (remaining / 365) * debtorDaysAdded;
   return r2(base - lostOnVolume - lostOnMargin - extraDebtors);

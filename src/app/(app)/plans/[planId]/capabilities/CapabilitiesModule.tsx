@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ModuleFrame, ModuleFooter } from "@/components/module/ModuleFrame";
 import { Note } from "@/components/module/DataGrid";
 import { useWidth, type Severity as ChartSeverity } from "@/components/chart/core";
-import { MiniDial, RangeBar, ScoreDial } from "@/components/chart/plots";
+import { BarRows, Columns, Lines, MiniDial, RangeBar, ScoreDial, Spark } from "@/components/chart/plots";
 import { navGroup } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { moneyFormatter } from "@/engine/plan/money";
@@ -13,11 +13,12 @@ import {
   SCORE_BANDS, SEVERITY_LABEL, borrowingCapacity, score, statusOf,
   type CapabilityInput, type Metric, type Severity,
 } from "@/engine/capability/model";
-import { LENDER_MIN_DSCR } from "@/engine/capability/judgements";
+import { LENDER_MIN_DSCR, TRANSFER_FACTORS } from "@/engine/capability/judgements";
 import { GROW_WEIGHTS, growMetrics } from "@/engine/capability/grow";
 import { BORROW_WEIGHTS, CAPACITY_TERM_YEARS, borrowMetrics, stressedCash } from "@/engine/capability/borrow";
 import { SELL_WEIGHTS, sellMetrics } from "@/engine/capability/sell";
-import { verdict } from "@/engine/capability/verdict";
+import { buyerQuestions, verdict } from "@/engine/capability/verdict";
+import { panels as buildPanels, withTrends, type FacilityFacts, type Panels, type ProductFacts } from "@/engine/capability/series";
 
 /**
  * Everything the server hands down. Only the money formatter is built here, because a function cannot cross
@@ -55,17 +56,25 @@ const TONE: Record<Severity, ChartSeverity> = { good: "good", watch: "warn", bad
  * box on the step that owns the figure — Assumptions for the cash floor and the downside, Plan settings for
  * the price, Leadership Team for owner dependence, Fixed Assets for security, Funding for the borrowing.
  */
-export function CapabilitiesModule({ planId, mode, currency, facts }: {
+export function CapabilitiesModule({ planId, mode, currency, facts, products, facilities, months, openingDebt }: {
   planId: string; mode: "guided" | "advanced"; currency: string; facts: PlanFacts;
+  /** For the panels only (§6.129.2) — each product's five years, and the borrowing the plan carries. */
+  products: ProductFacts[]; facilities: FacilityFacts[];
+  /** The plan's own twelve months (§6.21), for the month-by-month cash panel. */
+  months: string[];
+  /** Bank debt already on the last balance sheet — owed, repaid by the forecast, and not a Funding row. */
+  openingDebt: number;
 }) {
   const [tab, setTab] = useState<Tab>("grow");
   const money = useMemo(() => moneyFormatter(currency), [currency]);
 
   const input: CapabilityInput = useMemo(() => ({ ...facts, money }), [facts, money]);
 
-  const grow = useMemo(() => growMetrics(input), [input]);
-  const borrow = useMemo(() => borrowMetrics(input), [input]);
-  const sell = useMemo(() => sellMetrics(input), [input]);
+  /* Each card carries its own five years (§6.129.2) — the scores read `value`, never the trend. */
+  const grow = useMemo(() => withTrends("grow", growMetrics(input), input), [input]);
+  const borrow = useMemo(() => withTrends("borrow", borrowMetrics(input), input), [input]);
+  const sell = useMemo(() => withTrends("sell", sellMetrics(input), input), [input]);
+  const P = useMemo(() => buildPanels(input, products), [input, products]);
   const growScore = useMemo(() => score(grow, GROW_WEIGHTS), [grow]);
   const borrowScore = useMemo(() => score(borrow, BORROW_WEIGHTS), [borrow]);
   const sellScore = useMemo(() => score(sell, SELL_WEIGHTS), [sell]);
@@ -102,8 +111,15 @@ export function CapabilitiesModule({ planId, mode, currency, facts }: {
       <form id="capabilities-form" className="hidden" />
 
       {/* ---------- the verdict: identical on all three tabs ---------- */}
-      <section className="grid gap-0 border-b border-border @container md:grid-cols-[minmax(220px,300px)_minmax(0,1fr)_minmax(230px,320px)]">
-        <div className="flex flex-col items-center justify-center border-b border-border bg-secondary/40 px-5 py-5 text-center md:border-b-0 md:border-r">
+      {/*
+        SIZED BY THE MODULE, NOT THE WINDOW (§6.129.2). This band used `md:` — the VIEWPORT — while it lives
+        in a column the sidebar has already taken 260px from. On a laptop-width window the viewport said
+        "three columns" and the module had room for one, and the verdict paragraph was squeezed into a
+        sliver one word wide. Container queries ask the module how wide it actually is.
+      */}
+      <div className="@container border-b border-border">
+      <section className="grid gap-0 @[720px]:grid-cols-[minmax(200px,260px)_minmax(0,1fr)] @[1100px]:grid-cols-[minmax(220px,300px)_minmax(0,1fr)_minmax(230px,320px)]">
+        <div className="flex flex-col items-center justify-center border-b border-border bg-secondary/40 px-5 py-5 text-center @[720px]:border-b-0 @[720px]:border-r">
           <Dial value={s.value} />
           <div className={cn("mt-1 text-[44px] font-semibold leading-none tabular-nums",
             band === "good" && "text-good", band === "watch" && "text-warn", band === "bad" && "text-bad")}>
@@ -115,7 +131,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts }: {
           </p>
         </div>
 
-        <div className="border-b border-border px-5 py-5 md:border-b-0">
+        <div className="border-b border-border px-5 py-5 @[1100px]:border-b-0">
           <p className="text-[13px] text-muted-foreground">{v.question}</p>
           <h2 className="mt-1 text-[22px] font-semibold leading-tight">{v.headline}</h2>
           <div className="mt-3 space-y-2">
@@ -127,7 +143,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts }: {
           </div>
         </div>
 
-        <aside className="px-5 py-5 md:border-l md:border-border">
+        <aside className="px-5 py-5 @[720px]:col-span-2 @[1100px]:col-span-1 @[1100px]:border-l @[1100px]:border-border">
           <span className="eyebrow">What to do next, in order</span>
           {v.actions.length ? (
             <ol className="mt-2 list-decimal space-y-2 pl-4 text-[13px] marker:font-semibold marker:text-primary">
@@ -154,6 +170,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts }: {
           )}
         </aside>
       </section>
+      </div>
 
       {/*
         ---------- one picture, and every tab has exactly one ----------
@@ -168,8 +185,26 @@ export function CapabilitiesModule({ planId, mode, currency, facts }: {
       {tab === "sell" && <ValuationRange planId={planId} metrics={sell} input={input} money={money} />}
 
       {/* ---------- the measures ---------- */}
-      <div className="grid gap-px bg-border @container sm:grid-cols-2 xl:grid-cols-3">
-        {metrics.map((m) => <Card key={m.key} m={m} planId={planId} />)}
+      <div className="@container">
+        <div className="grid gap-px bg-border @[640px]:grid-cols-2 @[1000px]:grid-cols-3">
+          {metrics.map((m) => <Card key={m.key} m={m} planId={planId} />)}
+        </div>
+      </div>
+
+      {/*
+        ---------- the panels (§6.129.2) ----------
+
+        THE BOTTOM HALF OF THE DASHBOARD THIS WAS MODELLED ON, and the half that was never brought across.
+        The cards judge one year each; these show the shape behind the judgement — five years of cover, the
+        cash month by month, where the growth actually comes from. Same skeleton on every tab: a grid of
+        panels, each one a picture of figures the plan already holds, none of them with a box to type in.
+      */}
+      <div className="@container border-t border-border">
+      <div className="grid gap-px bg-border @[860px]:grid-cols-2">
+        {tab === "grow" && <GrowPanels P={P} input={input} months={months} money={money} planId={planId} />}
+        {tab === "borrow" && <BorrowPanels P={P} facilities={facilities} openingDebt={openingDebt} money={money} planId={planId} />}
+        {tab === "sell" && <SellPanels P={P} metrics={sell} input={input} money={money} planId={planId} />}
+      </div>
       </div>
     </ModuleFrame>
   );
@@ -259,6 +294,13 @@ function Card({ m, planId }: { m: Metric; planId: string }) {
             s === "good" && "text-good", s === "watch" && "text-warn", s === "bad" && "text-bad",
             !s && "text-muted-foreground")}>{m.display}</div>
           {m.sub && <div className="mt-1 text-[11.5px] leading-snug text-muted-foreground">{m.sub}</div>}
+          {/* The same measure across the forecast (§6.129.2); the marked dot is the year the dial judges. */}
+          {m.trend && m.trendAt !== undefined && (
+            <div className="mt-1.5 flex items-center gap-2">
+              <Spark values={m.trend} at={m.trendAt} severity={s ? TONE[s] : null} label={`${m.name}, ${m.trendLabel ?? ""}`} />
+              <span className="text-[10.5px] text-muted-foreground">{m.trendLabel}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -466,3 +508,302 @@ function ValuationRange({ planId, metrics, input, money }: {
     </Picture>
   );
 }
+
+/* ------------------------------------------------------------------ *
+ * The panels (§6.129.2)                                               *
+ * ------------------------------------------------------------------ */
+
+/**
+ * ONE PANEL. Title, one line saying what it shows, and the picture — the same furniture on all three tabs,
+ * so the tabs cannot drift apart again the way they did in §6.128.3–5. `wide` spans both columns and is for
+ * the one panel on a tab whose categories need the room (twelve months).
+ */
+function Panel({ title, sub, wide, height = 220, children }: {
+  title: string; sub?: React.ReactNode; wide?: boolean; height?: number;
+  children: React.ReactNode | ((width: number) => React.ReactNode);
+}) {
+  const [ref, width] = useWidth<HTMLDivElement>();
+  return (
+    <section className={cn("min-w-0 bg-card px-5 py-4", wide && "@[860px]:col-span-2")}>
+      <h3 className="text-[13px] font-semibold">{title}</h3>
+      {sub && <p className="mt-0.5 text-[11.5px] text-muted-foreground">{sub}</p>}
+      <div ref={ref} className="mt-2.5" style={typeof children === "function" ? { minHeight: height } : undefined}>
+        {typeof children === "function" ? (width > 0 && children(width)) : children}
+      </div>
+    </section>
+  );
+}
+
+/** A panel with nothing to draw says what would draw it, and points there when a box would (§6.87). */
+function Empty({ children, planId, fix }: { children: React.ReactNode; planId: string; fix?: { label: string; to: string } }) {
+  return (
+    <div className="rounded border border-dashed border-border bg-secondary/30 px-4 py-5 text-[12.5px] text-muted-foreground">
+      {children}
+      {fix && <div><Pencil planId={planId} fix={fix} /></div>}
+    </div>
+  );
+}
+
+const pctFmt = (v: number) => `${Math.round(v * 10) / 10}%`;
+/** [1] → "Year 1"; [1, 2] → "Years 1 and 2"; [2, 3, 4, 5] → "Years 2, 3, 4 and 5". */
+const yearsIn = (ys: number[]) => ys.length === 1 ? `Year ${ys[0]}` : `Years ${ys.slice(0, -1).join(", ")} and ${ys[ys.length - 1]}`;
+const timesFmt = (v: number) => `${Math.round(v * 100) / 100}×`;
+
+function GrowPanels({ P, input, months, money, planId }: {
+  P: Panels; input: CapabilityInput; months: string[]; money: (v: number) => string; planId: string;
+}) {
+  const cash = input.monthlyCash;
+  const floor = input.growth.cashBuffer;
+  const growth = [...P.byProduct].filter((p) => p.change !== 0).sort((a, b) => b.change - a.change);
+  const margins = [...P.byProduct].filter((p) => p.margin !== null).sort((a, b) => (b.margin ?? 0) - (a.margin ?? 0));
+
+  return (
+    <>
+      <Panel wide height={240} title="Cash, month by month through Year 1"
+        sub={floor !== null && floor > 0
+          ? <>Closing bank balance each month against your floor of {money(floor)}. Amber is under the floor; red is overdrawn.</>
+          : <>Closing bank balance each month. Red is overdrawn. No floor set, so nothing is marked as too low.</>}>
+        {cash.length
+          ? (w) => (
+            <Columns width={w} height={240} categories={months.slice(0, cash.length)} values={cash}
+              threshold={floor !== null && floor > 0 ? cash.map(() => floor) : undefined}
+              thresholdLabel={floor !== null && floor > 0 ? `Your floor ${money(floor)}` : undefined}
+              format={money}
+              tone={(i) => (cash[i] < 0 ? "bad" : floor !== null && cash[i] < floor ? "warn" : "accent")} />
+          )
+          : <Empty planId={planId}>No monthly cash forecast yet. Fill in your sales and costs and this draws itself.</Empty>}
+      </Panel>
+
+      <Panel title="The cash cycle, year by year" sub="Days cash is tied up: stock days + debtor days − creditor days, from Assumptions">
+        {P.has
+          ? (w) => (
+            <Lines width={w} height={220} categories={P.cycle.categories} format={(v) => `${Math.round(v)} days`}
+              series={[
+                { label: "Cash cycle", values: P.cycle.cycle },
+                { label: "Debtor days", values: P.cycle.debtor },
+                { label: "Stock days", values: P.cycle.stock },
+                { label: "Creditor days", values: P.cycle.creditor },
+              ]} />
+          )
+          : <Empty planId={planId}>Needs a forecast.</Empty>}
+      </Panel>
+
+      <Panel title="Keeping it standing, and growing it"
+        sub={P.capex.runDown.length
+          ? <>Spending below depreciation in {yearsIn(P.capex.runDown)} — the assets are being run down, not kept.</>
+          : <>Depreciation stands in for what it costs to stand still; capital spending above that is growth.</>}>
+        {P.has
+          ? (w) => (
+            <Lines width={w} height={220} categories={P.capex.categories} format={money}
+              series={[
+                { label: "Keeping it standing (depreciation)", values: P.capex.maintenance },
+                { label: "Growth spending (capex above that)", values: P.capex.growth },
+              ]} />
+          )
+          : <Empty planId={planId}>Needs a forecast.</Empty>}
+      </Panel>
+
+      <Panel title="Where Year 2's growth comes from" sub="Change in revenue, Year 1 to Year 2, by product">
+        {growth.length
+          ? (w) => <BarRows width={w} format={money}
+              rows={growth.map((p) => ({ label: p.name, value: p.change, tone: p.change < 0 ? "bad" : "accent" }))} />
+          : <Empty planId={planId} fix={{ label: "Add products", to: "sales" }}>No product changes between Year 1 and Year 2.</Empty>}
+      </Panel>
+
+      <Panel title="Gross margin by product, Year 1"
+        /*
+         * TWO AVERAGES ON ONE TAB, AND THE SENTENCE SAYS WHICH IS WHICH (§6.41). The incremental-margin card
+         * reads the forecast's gross margin, which carries fixed cost of sales; this is per product, direct
+         * cost only. SEQ showed 39.4% on the card and 41.5% here, and without the explanation that reads as
+         * the app disagreeing with itself.
+         */
+        sub={P.avgMargin !== null
+          ? <>Direct cost only. Across all products that averages {pctFmt(P.avgMargin)} — higher than the forecast&apos;s gross margin because fixed cost of sales is not in it. A line below the average makes it worse every time it grows.</>
+          : undefined}>
+        {margins.length
+          ? (w) => <BarRows width={w} format={pctFmt}
+              rows={margins.map((p) => ({
+                label: p.name, value: p.margin ?? 0,
+                tone: (p.margin ?? 0) < 0 ? "bad" : P.avgMargin !== null && (p.margin ?? 0) < P.avgMargin ? "warn" : "good",
+              }))} />
+          : <Empty planId={planId} fix={{ label: "Add products and their costs", to: "cogs" }}>No products with revenue in Year 1.</Empty>}
+      </Panel>
+    </>
+  );
+}
+
+function BorrowPanels({ P, facilities, openingDebt, money, planId }: {
+  P: Panels; facilities: FacilityFacts[]; openingDebt: number; money: (v: number) => string; planId: string;
+}) {
+  const hasCover = P.cover.base.some((v) => v !== null);
+  const hasStress = P.cover.stressed.some((v) => v !== null);
+  return (
+    <>
+      <Panel title="Debt cover over five years"
+        sub={hasStress
+          ? <>Cash from trading against what the plan repays each year, as it stands and in the bad year you described. Drawn up to 4× — an open ring is higher; hover for the figure.</>
+          : <>Cash from trading against what the plan repays each year. Drawn up to 4× — an open ring is higher. Describe a bad year on Assumptions and it draws beside this.</>}>
+        {hasCover
+          ? (w) => (
+            <Lines width={w} height={220} categories={P.cover.categories} format={timesFmt}
+              reference={{ value: P.cover.minimum, label: `Lender minimum ${P.cover.minimum}×` }}
+              /* Above 4× the exact multiple stops mattering to a lender; the minimum line is what must be visible. */
+              ceiling={4}
+              series={[
+                { label: "As planned", values: P.cover.base },
+                ...(hasStress ? [{ label: "In a bad year", values: P.cover.stressed }] : []),
+              ]} />
+          )
+          : <Empty planId={planId} fix={{ label: "Add the borrowing", to: "funding" }}>The plan carries no borrowing, so there is no cover to draw.</Empty>}
+      </Panel>
+
+      <Panel title="Cash available against repayments" sub="Each year's cash from trading, with the repayments it has to meet marked across it">
+        {P.has
+          ? (w) => (
+            <Columns width={w} height={220} categories={P.service.categories} values={P.service.available}
+              threshold={P.service.repayments.map((r) => (r > 0 ? r : null))} thresholdLabel="Repayments"
+              format={money} tone={(i) => (P.service.available[i] < P.service.repayments[i] ? "bad" : "accent")} />
+          )
+          : <Empty planId={planId}>Needs a forecast.</Empty>}
+      </Panel>
+
+      {/*
+        WHAT REPLACED "PROPOSED FACILITY" (§6.129). The dashboard this was modelled on opened the borrowing tab
+        with the loan being asked for. That loan was typed into a dashboard and thrown away; what is shown
+        instead is what the plan actually owes, read from the Funding rows the forecast repays.
+      */}
+      <Panel wide title="The borrowing the plan already carries" sub="From the Funding step — the same loans the forecast repays">
+        {facilities.length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] text-[12.5px]">
+              <thead>
+                <tr className="border-b border-border text-left text-[11px] uppercase tracking-[.05em] text-muted-foreground">
+                  <th className="py-1.5 pr-3 font-semibold">Facility</th>
+                  <th className="py-1.5 pr-3 text-right font-semibold">Drawn</th>
+                  <th className="py-1.5 pr-3 text-right font-semibold">Limit</th>
+                  <th className="py-1.5 pr-3 text-right font-semibold">Undrawn</th>
+                  <th className="py-1.5 pr-3 text-right font-semibold">Rate</th>
+                  <th className="py-1.5 text-right font-semibold">Term</th>
+                </tr>
+              </thead>
+              <tbody>
+                {facilities.map((f, idx) => (
+                  <tr key={f.name + idx} className="border-b border-border last:border-b-0">
+                    <td className="py-1.5 pr-3">{f.name}</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums">{money(f.drawn)}</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums">{money(f.facility)}</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums">{f.facility > f.drawn ? money(f.facility - f.drawn) : "—"}</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums">{f.ratePct ? `${f.ratePct}%` : "—"}</td>
+                    <td className="py-1.5 text-right tabular-nums">{f.termMonths ? `${Math.round((f.termMonths / 12) * 10) / 10} years` : "—"}</td>
+                  </tr>
+                ))}
+                {/*
+                  THE DEBT THAT IS NOT A FUNDING ROW (§6.129.2). SEQ listed 45,000 of loans here while the
+                  loan-to-value card, one scroll up, said 225,001 of debt. Both were right: the rest is bank
+                  debt on the last balance sheet, which the forecast repays but Funding does not itemise.
+                  Without this row the panel and the card read as the app disagreeing with itself.
+                */}
+                {openingDebt > 0 && (
+                  <tr className="border-b border-border text-muted-foreground last:border-b-0">
+                    <td className="py-1.5 pr-3">Brought forward from the last balance sheet</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums">{money(openingDebt)}</td>
+                    <td className="py-1.5 pr-3 text-right">—</td>
+                    <td className="py-1.5 pr-3 text-right">—</td>
+                    <td className="py-1.5 pr-3 text-right">—</td>
+                    <td className="py-1.5 text-right">—</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            {openingDebt > 0 && (
+              <p className="mt-2 text-[11.5px] text-muted-foreground">
+                The last line is bank debt from the Historic balance sheet. The forecast repays it, but it has no
+                rate or term on Funding — add it there as a loan and every figure on this tab becomes exact.
+              </p>
+            )}
+          </div>
+        ) : openingDebt > 0 ? (
+          <Empty planId={planId} fix={{ label: "Itemise it on Funding", to: "funding" }}>
+            {money(openingDebt)} of bank debt from the last balance sheet, and no loans itemised on Funding.
+          </Empty>
+        ) : (
+          <Empty planId={planId} fix={{ label: "Add the borrowing", to: "funding" }}>No loans in the plan.</Empty>
+        )}
+      </Panel>
+    </>
+  );
+}
+
+function SellPanels({ P, metrics, input, money, planId }: {
+  P: Panels; metrics: Metric[]; input: CapabilityInput; money: (v: number) => string; planId: string;
+}) {
+  const unscored = P.transfer.filter((t) => t.score === null).length;
+  const shares = [...P.byProduct].filter((p) => p.share !== null && p.share > 0).sort((a, b) => (b.share ?? 0) - (a.share ?? 0));
+  const questions = buyerQuestions(metrics, {
+    money, addBacks: input.sale.addBacks,
+    transfer: P.transfer.map((t) => ({ key: t.key, label: t.label, score: t.score })),
+    knowsCustomers: false,
+  });
+  return (
+    <>
+      <Panel title="Revenue over five years"
+        sub={P.revenue.lossYears.length
+          ? <>Red is a year the business makes an operating loss: {yearsIn(P.revenue.lossYears)}.</>
+          : <>What a buyer is being shown, from the plan&apos;s own forecast.</>}>
+        {P.has
+          ? (w) => <Columns width={w} height={220} categories={P.revenue.categories} values={P.revenue.values} format={money}
+              tone={(i) => (P.revenue.lossYears.includes(i + 1) ? "bad" : "accent")} />
+          : <Empty planId={planId}>Needs a forecast.</Empty>}
+      </Panel>
+
+      <Panel title="Margins over five years" sub="Gross margin, and the earnings margin a buyer strikes a price on (with your add-backs)">
+        {P.has
+          ? (w) => (
+            <Lines width={w} height={220} categories={P.margins.categories} format={pctFmt}
+              series={[
+                { label: "Gross margin", values: P.margins.gross },
+                { label: "Normalised EBITDA margin", values: P.margins.normalised },
+              ]} />
+          )
+          : <Empty planId={planId}>Needs a forecast.</Empty>}
+      </Panel>
+
+      <Panel title="Would it survive a change of owner?"
+        sub={unscored ? <>{TRANSFER_TOTAL - unscored} of {TRANSFER_TOTAL} scored on Leadership Team → Risk &amp; Succession.</> : <>1 weak to 5 strong, scored on Leadership Team → Risk &amp; Succession.</>}>
+        {(w) => (
+          <>
+            <BarRows width={w} format={(v) => `${v} / 5`} labelShare={0.5}
+              rows={P.transfer.map((t) => ({
+                label: t.label, value: t.score ?? 0,
+                display: t.score === null ? "Not scored" : undefined,
+                tone: t.score === null ? undefined : t.score <= 2 ? "bad" : t.score === 3 ? "warn" : "good",
+              }))} />
+            {unscored > 0 && <Pencil planId={planId} fix={{ label: "Score the rest", to: "people?area=risk" }} />}
+          </>
+        )}
+      </Panel>
+
+      <Panel title="Revenue by product, Year 1"
+        sub="Products, not customers. Who BUYS is what a buyer asks first, and the plan does not record customers yet.">
+        {shares.length
+          ? (w) => <BarRows width={w} format={pctFmt}
+              rows={shares.map((p) => ({ label: p.name, value: p.share ?? 0, tone: (p.share ?? 0) > 60 ? "bad" : (p.share ?? 0) > 35 ? "warn" : "accent" }))} />
+          : <Empty planId={planId} fix={{ label: "Add products", to: "sales" }}>No products with revenue in Year 1.</Empty>}
+      </Panel>
+
+      <Panel wide title="Questions a buyer will ask"
+        sub="Written from this plan's own weak measures. Have an answer to each before the first meeting.">
+        {questions.length ? (
+          <ol className="list-decimal space-y-1.5 pl-5 text-[13px] leading-relaxed marker:font-semibold marker:text-primary">
+            {questions.map((q, idx) => <li key={idx}>{q}</li>)}
+          </ol>
+        ) : (
+          <Empty planId={planId}>Nothing on this tab raises a question a buyer would open with.</Empty>
+        )}
+      </Panel>
+    </>
+  );
+}
+
+/* Counted from the list, not written down: the list is the fact (§6.41). */
+const TRANSFER_TOTAL = TRANSFER_FACTORS.length;

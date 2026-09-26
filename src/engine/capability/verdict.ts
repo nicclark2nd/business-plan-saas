@@ -46,7 +46,13 @@ function ranked(metrics: Metric[], weights: Record<string, number>): { m: Metric
  * observation — "bring debtor days down" rather than "debtor days are high", which the card above already
  * said. Nothing here invents a number: where an action needs one, it points at the screen that holds it.
  */
-const ACTIONS: Record<string, string> = {
+/*
+ * An action can depend on the reading (§6.129.2). The margin action was rewritten for a LOSS in §6.129.1 and
+ * then shown on SEQ the moment Nic's own add-backs lifted normalised earnings to +0.4% — "there is no earnings
+ * figure to sell on" beside a card saying there is one. Same measure, two different problems, two sentences.
+ */
+type Action = string | ((m: Metric) => string);
+const ACTIONS: Record<string, Action> = {
   /* Grow */
   operatingMargin: "Fix the loss before growing into it — this is the one thing on the page that has to change first.",
   lowestCash: "Fix the low month before anything else — bring invoicing forward, stage the spending, or arrange an overdraft to cover it.",
@@ -75,7 +81,9 @@ const ACTIONS: Record<string, string> = {
   /* Sell */
   priceMultiple: "Reset the price to the top of your comparable range, or wait and sell stronger numbers.",
   transferability: "Fix the weakest transferability factor before going to market. A buyer discounts for it far harder than you would.",
-  normalisedMargin: "There is no earnings figure to sell on. Get the business into profit and hold it there for a year — nothing else on this tab matters until then.",
+  normalisedMargin: (m) => m.value !== null && m.value < 0
+    ? "There is no earnings figure to sell on. Get the business into profit and hold it there for a year — nothing else on this tab matters until then."
+    : "The margin is thin for a sale. Either improve it for a year, or expect the multiple to reflect it.",
   fcfYield: "At this price a buyer's money earns too little. The price is the thing to move.",
   recurringShare: "Convert repeat customers onto something contracted before you go to market — it is the cheapest value you can add.",
   largestCustomer: "Work out your largest customer's share from your sales ledger. If it is above 20%, secure that contract on assignable terms before a buyer asks.",
@@ -150,6 +158,102 @@ export function verdict(
     question,
     headline: HEAD[kind][band],
     paragraphs,
-    actions: problems.map((p) => ACTIONS[p.m.key]).filter(Boolean).slice(0, 4),
+    actions: problems
+      .map((p) => { const a = ACTIONS[p.m.key]; return typeof a === "function" ? a(p.m) : a; })
+      .filter((a): a is string => !!a)
+      .slice(0, 4),
   };
+}
+
+/**
+ * WHAT A BUYER'S ADVISER WILL ASK (§6.129.2).
+ *
+ * The dashboard this was modelled on closed its selling tab with six due-diligence questions, and they were
+ * the most useful thing on it: a seller who has read them before the first meeting has answers instead of
+ * surprises. Its questions were hand-written for one sample business. These are written by RULE, from this
+ * plan's own weak measures, for the reason the verdict is (§6.128): every question can be traced to the
+ * measure that raised it, and a question that does not apply to this business is never asked.
+ *
+ * Ordered by what a buyer tests first — earnings, then price, then dependence on the owner — and capped at
+ * six, because a list of fifteen is a list nobody prepares for.
+ */
+export function buyerQuestions(
+  metrics: Metric[],
+  facts: {
+    money: (v: number) => string;
+    addBacks: number | null;
+    transfer: { key: string; label: string; score: number | null }[];
+    knowsCustomers: boolean;
+  },
+): string[] {
+  const m = facts.money;
+  const at = (k: string) => metrics.find((x) => x.key === k);
+  const s = (k: string) => { const x = at(k); return x ? statusOf(x.value, x.bands) : null; };
+  const q: string[] = [];
+
+  const margin = at("normalisedMargin");
+  if (margin && margin.value !== null && margin.value < 0) {
+    q.push("Why does the business lose money before interest, tax and depreciation — and what, specifically, changes that?");
+  } else if (s("normalisedMargin") === "bad") {
+    q.push("Why is the margin below what similar businesses earn, and is it a price problem or a cost problem?");
+  }
+
+  const price = at("priceMultiple");
+  if (price && price.value !== null && s("priceMultiple") !== "good") {
+    q.push(`How is ${price.display} earnings justified against what comparable businesses have sold for?`);
+  }
+
+  if (facts.addBacks && facts.addBacks > 0) {
+    q.push(`Which of the ${m(facts.addBacks)} in owner add-backs will survive a quality-of-earnings review, and what document supports each one?`);
+  }
+
+  /* Owner dependence, factor by factor — the weakest judgements become the sharpest questions. */
+  const weak = facts.transfer.filter((t) => t.score !== null && t.score <= 2);
+  const PER_FACTOR: Record<string, string> = {
+    owner: "What happens to the business in the month after the owner leaves?",
+    customers: "Who, other than the owner, knows the largest customers — and would they stay?",
+    processes: "Where is it written down how the work is actually done?",
+    staff: "Which of the people who matter are tied in, and on what terms?",
+    contracts: "Which contracts can be assigned to a new owner, and which end at a change of control?",
+    systems: "Are the books and systems something a buyer's accountant can rely on without rebuilding them?",
+  };
+  for (const w of weak) if (PER_FACTOR[w.key]) q.push(PER_FACTOR[w.key]);
+  if (facts.transfer.every((t) => t.score === null)) {
+    q.push("Would the business keep trading if the owner stopped turning up? It has not been assessed yet.");
+  }
+
+  /*
+   * THE ONE QUESTION THIS APP CANNOT ANSWER FOR THE CLIENT, asked every time until it can. Customer
+   * concentration is the first thing a buyer's adviser looks for, and the plan does not yet record customers.
+   */
+  if (!facts.knowsCustomers) {
+    q.push("Who are the largest customers, what share of revenue does each one hold, and when do their contracts end?");
+  }
+
+  const conv = at("cashConversion");
+  if (conv && conv.value !== null && s("cashConversion") === "bad") {
+    q.push(`Why does only ${conv.display} of earnings arrive as cash?`);
+  }
+  const fcf = at("freeCashFlow");
+  if (fcf && fcf.value !== null && fcf.value < 0) {
+    q.push("What does it cost each year just to keep the assets standing still — and who funds that after settlement?");
+  }
+  if (s("recurringShare") === "bad") {
+    q.push("How much of next year's revenue is already contracted, and on what terms?");
+  }
+  if (s("largestProduct") === "bad") {
+    q.push("What happens to the earnings if the biggest product line stops selling?");
+  }
+  const pay = at("leadershipPay");
+  if (s("leadershipPay") === "bad" || (pay && pay.value === null && pay.sub === undefined && pay.missing?.includes("not positive"))) {
+    q.push("What would it cost to replace the owner with a manager paid at market rate?");
+  }
+  if (s("assetIntensity") === "bad") {
+    q.push("What plant falls due for replacement in the next three years, and at what cost?");
+  }
+  if (s("revenueGrowth") === "bad") {
+    q.push("Why is revenue flat, and what would make it grow under a new owner?");
+  }
+
+  return q.slice(0, 6);
 }

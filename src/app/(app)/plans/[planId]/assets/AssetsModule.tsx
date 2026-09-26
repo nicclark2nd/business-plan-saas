@@ -673,7 +673,7 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
             <Grid className="mt-2 min-w-0">
               {/* `table-fixed` shares width evenly unless told otherwise, which clipped the row names to
                   "Depr…" and "Still …" once the table stopped being 900px wide. */}
-              <thead><tr><Th style={{ width: 112 }} /> {YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}</tr></thead>
+              <thead><tr><Th style={{ width: 112 }} />{YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}</tr></thead>
               <tbody>
                 <GridRow><Td>Depreciation</Td>{dep.map((v, i) => <Td key={i} right className="num">{v ? num(v) : "—"}</Td>)}</GridRow>
                 <GridRow><Td>Still worth</Td>{book.map((v, i) => <Td key={i} right className="num">{num(v)}</Td>)}</GridRow>
