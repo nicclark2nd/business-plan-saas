@@ -192,7 +192,7 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
                   <Td><CellInput value={x.address ?? ""} placeholder="Street and suburb" onChange={(e) => edit("premises", x.id, { address: e.target.value })} /></Td>
                   <Td><CellSelect value={x.tenure} options={TENURE} placeholder="Tenure —" onValueChange={(v) => edit("premises", x.id, { tenure: v }, !!x.name.trim())} /></Td>
                   <Td><CellInput value={x.floor_area ?? ""} placeholder="420 m²" onChange={(e) => edit("premises", x.id, { floor_area: e.target.value })} /></Td>
-                  <Td right><CellInput numeric value={x.monthly_cost === null ? "" : String(x.monthly_cost)} placeholder="0" onChange={(e) => edit("premises", x.id, { monthly_cost: Number(e.target.value) || 0 })} /></Td>
+                  <Td right><CellInput money value={x.monthly_cost === null ? "" : String(x.monthly_cost)} placeholder="0" onChange={(e) => edit("premises", x.id, { monthly_cost: Number(e.target.value.replace(/[,\s$]/g, "")) || 0 })} /></Td>
                   <Td>
                     <button type="button" onClick={() => makePrimary(x.id)} disabled={!x.name.trim()}
                       className={cn("rounded border px-2 py-0.5 text-[11.5px] font-semibold",

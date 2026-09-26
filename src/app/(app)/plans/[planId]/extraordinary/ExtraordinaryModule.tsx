@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/module/MoneyInput";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { useSaveErrors } from "@/components/module/saveErrors";
@@ -361,7 +362,7 @@ function ItemDialog({ row, assets, monthOptions, pending, onCancel, onSave }: {
             </div>
             <div>
               <span className={label}>Amount</span>
-              <Input inputMode="decimal" defaultValue={d.amount ? String(d.amount) : ""}
+              <MoneyInput defaultValue={d.amount ? String(d.amount) : ""}
                 onBlur={(e) => set({ amount: parseNum(e.target.value) })} placeholder="0" className={cn(box, "num text-right")} />
             </div>
             <div>

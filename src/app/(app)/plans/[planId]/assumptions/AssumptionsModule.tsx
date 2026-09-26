@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/module/MoneyInput";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ModuleFrame, ModuleFooter } from "@/components/module/ModuleFrame";
@@ -122,7 +123,8 @@ export function AssumptionsModule({
     setWc({ ...wc, [year]: { ...wc[year], [key]: Math.min(365, Math.max(0, Math.round(Number(raw) || 0))) } });
   };
   const setTiming = (year: number, key: keyof CashTiming, raw: string) => {
-    const v = Number(raw) || 0;
+    /* Commas stripped: a money box shows 12,000 and a pasted figure arrives the same way (§6.130). */
+    const v = Number(raw.replace(/[,\s$]/g, "")) || 0;
     setCt({ ...ct, [year]: { ...ct[year], [key]: key === "taxPaidPct" ? Math.min(100, Math.max(0, v)) : Math.max(0, v) } });
   };
 
@@ -244,7 +246,7 @@ export function AssumptionsModule({
                 hint={lowestMonth === null
                   ? "The lowest balance you are willing to let the business reach. Zero is a real answer: it means \u201Cjust don\u2019t go negative\u201D."
                   : `The lowest balance you are willing to reach. This forecast\u2019s worst month closes at ${num(lowestMonth)}.`}>
-                <FieldInput numeric placeholder="Not set" disabled={pending}
+                <FieldInput money placeholder="Not set" disabled={pending}
                   value={cap.cash_floor} onChange={(e) => editCap("cash_floor", e.target.value)}
                   onBlur={() => commitCap("cash_floor")} />
               </Field>
@@ -406,7 +408,7 @@ function MoneyRow({ label, hint, value, onChange, onBlur, pending }: {
       <AssumptionLabel label={label} hint={hint} />
       {FORECAST_YEARS.map((y) => (
         <Td key={y} right>
-          <Input inputMode="decimal" disabled={pending} className={cn(box, "num text-right")}
+          <MoneyInput disabled={pending} className={cn(box, "num text-right")}
             value={String(value(y))} onChange={(e) => onChange(y, e.target.value)} onBlur={onBlur} />
         </Td>
       ))}

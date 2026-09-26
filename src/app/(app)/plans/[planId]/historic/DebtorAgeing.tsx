@@ -61,7 +61,7 @@ export function DebtorAgeing({ planId, receivables, initial, onError }: {
         <FieldGrid>
           {BUCKETS.map((b) => (
             <Field key={b.key} label={b.label} span={1} hint={b.hint}>
-              <FieldInput numeric value={vals[b.key]} placeholder="—" disabled={pending}
+              <FieldInput money value={vals[b.key]} placeholder="—" disabled={pending}
                 onChange={(e) => edit(b.key, e.target.value)} />
             </Field>
           ))}

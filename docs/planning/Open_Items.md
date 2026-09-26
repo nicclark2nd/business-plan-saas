@@ -417,13 +417,16 @@ The capacity measures, add-backs, debtor ageing and lender history each save on 
 failures through the module's error channel, but none of them tells the footer they are mid-save. The
 failure path is covered; the "saving…" state is not.
 
-### 41. Money boxes elsewhere still show 1000000 — **Build, one pass**
+### ~~41. Money boxes elsewhere still show 1000000~~ — **done (§6.130.1)**
 
-§6.130 added `money` to `FieldInput` and `CellInput`: grouped as 1,000,000 while the box is not being
-edited, as typed while it is. Only the Exit & sale asking price and add-back amounts use it so far. Every
-other money box — cash floor, security values, weighted pipeline, debtor ageing, guarantee, historic
-figures, sales and overhead grids — still shows raw digits. One pass, switching `numeric` to `money` where
-the figure is currency (not percentages, days or multiples).
+`MoneyInput` (and `money` on FieldInput/CellInput) now on every currency box that showed raw digits: cash
+floor, prepayments and accruals, opening tax losses and retained earnings, debtor ageing, premises rent,
+weighted pipeline, asset cost / residual / deposit / security, funding opening cash, amount, facility limit,
+fees, balloon, deposit, pre-money valuation, minimum payment, and one-off amounts. Works on controlled and
+uncontrolled (defaultValue) boxes. Two parsers that choked on a comma (prepayments/accruals, premises rent)
+now strip it. Left alone: boxes that already format as you type (sales price, COGS, overheads, historic
+lines, salaries, marketing spend) — they show commas already, though they re-format mid-typing — and
+percentages, days, months, counts and multiples.
 
 ### 42. The searched comparable range clears the two-site minimum by exactly two — **watch**
 

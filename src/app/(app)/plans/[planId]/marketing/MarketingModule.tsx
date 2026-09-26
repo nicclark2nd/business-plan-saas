@@ -386,7 +386,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
             <FieldGrid>
               <Field label="Weighted value of quoted work" span={2} error={errors.forKey("fig:pipeline")}
                 hint="Each open quote times your honest chance of winning it, added up. A $100,000 quote at a one-in-four chance counts as $25,000.">
-                <CellInput numeric value={figs.pipeline} placeholder="Not said"
+                <CellInput money value={figs.pipeline} placeholder="Not said"
                   onChange={(e) => editFig("pipeline", e.target.value)} onBlur={() => commitFig("pipeline")} />
               </Field>
             </FieldGrid>

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/module/MoneyInput";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { useSaveErrors } from "@/components/module/saveErrors";
@@ -201,7 +202,7 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
               <span className="ml-1.5 font-normal text-muted-foreground">from Historic</span>
             </span>
           ) : (
-            <Input inputMode="decimal" value={openingText ?? (opening ? String(opening) : "")} placeholder="0"
+            <MoneyInput value={openingText ?? (opening ? String(opening) : "")} placeholder="0"
               onChange={(e) => { setOpeningText(e.target.value); setOpening(parseNum(e.target.value)); }}
               onBlur={commitOpening} className={cn(box, "num w-28 text-right")} />
           )}
@@ -571,10 +572,10 @@ function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: 
                 */}
               <span className={label}>{isLoc ? "Facility limit" : "Amount"}</span>
               {isLoc ? (
-                <Input inputMode="decimal" defaultValue={d.total_facility_amount ? String(d.total_facility_amount) : ""}
+                <MoneyInput defaultValue={d.total_facility_amount ? String(d.total_facility_amount) : ""}
                   onBlur={(e) => set({ total_facility_amount: parseNum(e.target.value), amount: 0 })} placeholder="0" className={cn(box, "num text-right")} />
               ) : (
-                <Input inputMode="decimal" defaultValue={d.amount ? String(d.amount) : ""}
+                <MoneyInput defaultValue={d.amount ? String(d.amount) : ""}
                   onBlur={(e) => set({ amount: parseNum(e.target.value) })} placeholder="0" className={cn(box, "num text-right")} />
               )}
             </div>
@@ -624,7 +625,7 @@ function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: 
               {isLoc ? (
                 <div>
                   <span className={label}>Annual fee</span>
-                  <Input inputMode="decimal" defaultValue={d.annual_fee ? String(d.annual_fee) : ""}
+                  <MoneyInput defaultValue={d.annual_fee ? String(d.annual_fee) : ""}
                     onBlur={(e) => set({ annual_fee: parseNum(e.target.value) })} placeholder="0" className={cn(box, "num text-right")} />
                 </div>
               ) : (
@@ -663,13 +664,13 @@ function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: 
               ) : (
                 <div>
                   <span className={label}>Balloon at the end</span>
-                  <Input inputMode="decimal" defaultValue={d.residual_value ? String(d.residual_value) : ""}
+                  <MoneyInput defaultValue={d.residual_value ? String(d.residual_value) : ""}
                     onBlur={(e) => set({ residual_value: parseNum(e.target.value) })} placeholder="0" className={cn(box, "num text-right")} />
                 </div>
               )}
               <div>
                 <span className={label}>Annual fee</span>
-                <Input inputMode="decimal" defaultValue={d.annual_fee ? String(d.annual_fee) : ""}
+                <MoneyInput defaultValue={d.annual_fee ? String(d.annual_fee) : ""}
                   onBlur={(e) => set({ annual_fee: parseNum(e.target.value) })} placeholder="0" className={cn(box, "num text-right")} />
               </div>
             </div>
@@ -684,7 +685,7 @@ function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: 
                 </div>
                 <div>
                   <span className={label}>Paid up front</span>
-                  <Input inputMode="decimal" defaultValue={d.deposit ? String(d.deposit) : ""}
+                  <MoneyInput defaultValue={d.deposit ? String(d.deposit) : ""}
                     onBlur={(e) => set({ deposit: parseNum(e.target.value) })} placeholder="0" className={cn(box, "num text-right")} />
                 </div>
                 <div className="self-end pb-1 text-[12px] text-muted-foreground">
@@ -715,7 +716,7 @@ function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: 
               </div>
               <div>
                 <span className={label}>Valuation before the money</span>
-                <Input inputMode="decimal" defaultValue={d.pre_money_valuation ? String(d.pre_money_valuation) : ""}
+                <MoneyInput defaultValue={d.pre_money_valuation ? String(d.pre_money_valuation) : ""}
                   onBlur={(e) => set({ pre_money_valuation: parseNum(e.target.value) || null })} placeholder="Optional" className={cn(box, "num text-right")} />
               </div>
               <div>
@@ -792,7 +793,7 @@ function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: 
               </div>
               <div>
                 <span className={label}>Minimum a month</span>
-                <Input inputMode="decimal" defaultValue={d.min_monthly_payment ? String(d.min_monthly_payment) : ""}
+                <MoneyInput defaultValue={d.min_monthly_payment ? String(d.min_monthly_payment) : ""}
                   onBlur={(e) => set({ min_monthly_payment: parseNum(e.target.value) })} placeholder="0" className={cn(box, "num text-right")} />
               </div>
             </div>

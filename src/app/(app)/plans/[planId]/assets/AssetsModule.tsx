@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/module/MoneyInput";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { GstToggle, GstFreeTag } from "@/components/module/GstToggle";
 import { useGst } from "@/components/GstProvider";
@@ -575,12 +576,12 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
           <div className="grid grid-cols-2 gap-3 min-[560px]:grid-cols-4 [&>div]:min-w-0">
             <div>
               <span className={label}>{ownedNow ? "What it is worth now" : "What it cost"}</span>
-              <Input inputMode="decimal" disabled={locked} defaultValue={d.purchase_price ? String(d.purchase_price) : ""}
+              <MoneyInput disabled={locked} defaultValue={d.purchase_price ? String(d.purchase_price) : ""}
                 onBlur={(e) => set({ purchase_price: parseNum(e.target.value) })} placeholder="0" className={cn(box, "num text-right")} />
             </div>
             <div>
               <span className={label}>Worth at the end</span>
-              <Input inputMode="decimal" disabled={locked} defaultValue={d.residual_value ? String(d.residual_value) : ""}
+              <MoneyInput disabled={locked} defaultValue={d.residual_value ? String(d.residual_value) : ""}
                 onBlur={(e) => set({ residual_value: parseNum(e.target.value) })} placeholder="0" className={cn(box, "num text-right")} />
             </div>
             <div>
@@ -609,7 +610,7 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
               </div>
               <div>
                 <span className={label}>Paid up front</span>
-                <Input inputMode="decimal" defaultValue={fin.deposit ? String(fin.deposit) : ""}
+                <MoneyInput defaultValue={fin.deposit ? String(fin.deposit) : ""}
                   onBlur={(e) => setFin((f) => ({ ...f, deposit: parseNum(e.target.value) }))} placeholder="0" className={cn(box, "num text-right")} />
               </div>
               <div>
@@ -653,7 +654,7 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
           <div className="grid grid-cols-2 gap-3">
             <div>
               <span className={label}>What a lender would advance</span>
-              <Input inputMode="decimal" value={sec} onChange={(e) => setSec(e.target.value)}
+              <MoneyInput value={sec} onChange={(e) => setSec(e.target.value)}
                 onBlur={() => set({ security_value: sec.trim() === "" ? null : Math.max(0, parseNum(sec)) })}
                 placeholder="Not set" className={cn(box, "num text-right")} />
               <p className="mt-1 text-[11.5px] text-muted-foreground">
