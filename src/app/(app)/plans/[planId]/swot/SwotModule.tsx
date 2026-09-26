@@ -1,5 +1,6 @@
 "use client";
 
+import { useRowSaves } from "@/lib/rowSaves";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { useSaveErrors } from "@/components/module/saveErrors";
@@ -25,40 +26,56 @@ export function SwotModule({ planId, initial, suggestions, goals, mode }: {
   const errors = useSaveErrors();
   const [pending, start] = useTransition();
   const ref = useRef(rows); useEffect(() => { ref.current = rows; }, [rows]);
-  const left = (e: React.FocusEvent<HTMLElement>) => !e.currentTarget.contains(e.relatedTarget as Node);
 
+  /*
+   * EACH BOX SAVES AS IT IS LEFT, QUEUED PER LINE (§6.131, see src/lib/rowSaves.ts). A line and its
+   * mitigation are two boxes; leaving the first for the second used to save nothing until both were left.
+   */
+  const rs = useRowSaves();
+  const put = (fn: (xs: Row[]) => Row[]) => { const next = fn(ref.current); ref.current = next; setRows(next); };
   /* Typing no longer erases the reason a line would not save (§6.98). */
-  const edit = (id: string, patch: Partial<Row>) => setRows((xs) => xs.map((x) => (x.id === id ? { ...x, ...patch, _dirty: true } : x)));
-  const commit = (id: string) => {
-    const row = ref.current.find((x) => x.id === id);
+  const edit = (id: string, patch: Partial<Row>) => put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, ...patch, _dirty: true } : x)));
+  const commit = (id: string): Promise<void> => {
+    const p = rs.queue("swot", id, () => saveLine(id));
+    start(() => p);
+    return p;
+  };
+  const saveLine = async (id: string) => {
+    const row = ref.current.find((x) => rs.same(x.id, id));
     if (!row || !row._dirty || !row.text.trim()) return;
-    setRows((xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: false } : x)));
-    start(async () => {
-      const r = await upsertSwot(planId, { id: id.startsWith("tmp-") ? undefined : id, quadrant: row.quadrant, text: row.text, source: row.source, response: row.response });
-      if (r.ok) { errors.clear(`line:${id}`); setRows((xs) => xs.map((x) => (x.id === id ? { ...x, id: r.data!.id } : x))); }
-      else { errors.raise({ key: `line:${id}`, message: r.error, label: "SWOT line" }); setRows((xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: true } : x))); }
-    });
+    put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: false } : x)));
+    const r = await upsertSwot(planId, { id: rs.realId(row.id), quadrant: row.quadrant, text: row.text, source: row.source, response: row.response });
+    const key = `line:${rs.keyOf(row.id)}`;
+    if (r.ok) { errors.clear(key); rs.adopt(row.id, r.data!.id); put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, id: r.data!.id } : x))); }
+    else { errors.raise({ key, message: r.error, label: "SWOT line" }); put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: true } : x))); }
   };
-  const add = (q: Quadrant) => { const id = `tmp-${crypto.randomUUID()}`; setRows((xs) => [blank(q, id), ...xs]); focusRow(`[data-row="${id}"]`); };
+  const add = (q: Quadrant) => { const id = `tmp-${crypto.randomUUID()}`; put((xs) => [blank(q, id), ...xs]); focusRow(`[data-row="${id}"]`); };
   const remove = (row: Row) => {
-    setRows((xs) => { const rest = xs.filter((x) => x.id !== row.id); return rest.some((x) => x.quadrant === row.quadrant) ? rest : [...rest, blank(row.quadrant, `tmp-${crypto.randomUUID()}`)]; });
-    if (!row.id.startsWith("tmp-")) start(async () => { await deleteSwot(planId, row.id); });
+    put((xs) => { const rest = xs.filter((x) => !rs.same(x.id, row.id)); return rest.some((x) => x.quadrant === row.quadrant) ? rest : [...rest, blank(row.quadrant, `tmp-${crypto.randomUUID()}`)]; });
+    /* Behind any save still running for the line, so a first save in flight cannot land after the delete. */
+    start(() => rs.queue("swot", row.id, async () => {
+      const stored = rs.realId(row.id);
+      if (!stored) return;
+      const r = await deleteSwot(planId, stored);
+      if (!r.ok) errors.raise({ key: `line:${rs.keyOf(row.id)}`, message: r.error, label: "Remove" });
+    }));
   };
-  /** One click turns a suggestion into a real item, saved at once, remembering where it came from. */
+  /**
+   * One click turns a suggestion into a real item, saved at once, remembering where it came from. Its first
+   * save goes through the line's queue like any other, so a mitigation typed straight after it cannot insert
+   * the line a second time.
+   */
   const use = (s: Suggestion) => {
     const id = `tmp-${crypto.randomUUID()}`;
-    setRows((xs) => [{ id, quadrant: s.quadrant, text: s.text, source: s.key, sort_order: 0, response: null }, ...xs.filter((x) => !(x.quadrant === s.quadrant && !x.text.trim() && x.id.startsWith("tmp-")))]);
-    start(async () => {
-      const r = await upsertSwot(planId, { quadrant: s.quadrant, text: s.text, source: s.key });
-      if (r.ok) { errors.clear(`line:${id}`); setRows((xs) => xs.map((x) => (x.id === id ? { ...x, id: r.data!.id } : x))); }
-      else errors.raise({ key: `line:${id}`, message: r.error, label: "SWOT line" });
-    });
+    put((xs) => [{ id, quadrant: s.quadrant, text: s.text, source: s.key, sort_order: 0, response: null, _dirty: true }, ...xs.filter((x) => !(x.quadrant === s.quadrant && !x.text.trim() && !rs.realId(x.id)))]);
+    commit(id);
   };
-  const flush = () => ref.current.forEach((r) => r._dirty && commit(r.id));
+  const flush = () => Promise.all(ref.current.filter((r) => r._dirty).map((r) => commit(r.id)));
+  /* The line saves finish before the page moves on — a redirect that overtakes the last save loses it. */
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const intent = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value === "later" ? "later" : "next";
-    flush(); start(async () => { await continueFromSwot(planId, intent); });
+    start(async () => { await flush(); await continueFromSwot(planId, intent); });
   };
 
   const real = rows.filter((r) => r.text.trim());
@@ -138,8 +155,8 @@ export function SwotModule({ planId, initial, suggestions, goals, mode }: {
                 {list.map((r) => {
                   const goal = byId.get(r.id);
                   return (
-                    <li key={r.id} data-row={r.id} onBlur={(e) => left(e) && commit(r.id)} title={errors.forKey(`line:${r.id}`)}
-                      className={cn("border-b border-border py-1 pl-5 pr-3", errors.forKey(`line:${r.id}`) && "bg-bad-soft")}>
+                    <li key={rs.keyOf(r.id)} data-row={r.id} onBlur={() => commit(r.id)} title={errors.forKey(`line:${rs.keyOf(r.id)}`)}
+                      className={cn("border-b border-border py-1 pl-5 pr-3", errors.forKey(`line:${rs.keyOf(r.id)}`) && "bg-bad-soft")}>
                       <div className="flex items-start gap-2">
                         <span className="mt-[9px] size-1.5 shrink-0 rounded-full bg-border" />
                         <CellTextarea value={r.text} placeholder="One line" className="min-h-[30px]" onChange={(e) => edit(r.id, { text: e.target.value })} />

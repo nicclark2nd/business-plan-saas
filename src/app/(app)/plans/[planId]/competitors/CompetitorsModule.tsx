@@ -1,5 +1,6 @@
 "use client";
 
+import { useRowSaves } from "@/lib/rowSaves";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
@@ -47,24 +48,38 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
       else errors.clear("position");
     });
   };
+  /*
+   * EACH BOX SAVES AS IT IS LEFT, QUEUED PER ROW (§6.131, see src/lib/rowSaves.ts). The list is written to
+   * its ref on the edit, so a one-click choice saves the value just chosen rather than the one before it.
+   */
+  const rs = useRowSaves();
+  const put = (fn: (xs: Row_[]) => Row_[]) => { const next = fn(rowsRef.current); rowsRef.current = next; setRows(next); };
   const edit = (id: string, changes: Partial<Competitor>, immediate = false) => {
-    setRows((xs) => xs.map((x) => (x.id === id ? { ...x, ...changes, _dirty: true } : x)));
-    if (immediate) queueMicrotask(() => commit(id));
+    put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, ...changes, _dirty: true } : x)));
+    if (immediate) commit(id);
   };
-  const commit = (id: string) => {
-    const row = rowsRef.current.find((x) => x.id === id);
+  const commit = (id: string): Promise<void> => {
+    const p = rs.queue("competitors", id, () => saveRow(id));
+    start(() => p);
+    return p;
+  };
+  const saveRow = async (id: string) => {
+    const row = rowsRef.current.find((x) => rs.same(x.id, id));
     if (!row || !row._dirty) return;
-    setRows((xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: false } : x)));
-    start(async () => {
-      const r = await upsertRow(planId, "competitors", { ...row, id: id.startsWith("tmp-") ? undefined : id });
-      if (!r.ok) {
-        errors.raise({ key: `competitor:${id}`, message: r.error, label: rows.find((x) => x.id === id)?.name || "Competitor" });
-        setRows((xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: true } : x)));
-        return;
-      }
-      errors.clear(`competitor:${id}`);
-      setRows((xs) => xs.map((x) => (x.id === id ? { ...x, id: r.data!.id } : x)));
-    });
+    const stored = rs.realId(row.id);
+    /* A new competitor with no name waits, unscolded, until it has one (§6.131). */
+    if (!stored && !row.name?.trim()) return;
+    put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: false } : x)));
+    const r = await upsertRow(planId, "competitors", { ...row, id: stored });
+    const key = `competitor:${rs.keyOf(row.id)}`;
+    if (!r.ok) {
+      errors.raise({ key, message: r.error, label: row.name || "Competitor" });
+      put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: true } : x)));
+      return;
+    }
+    errors.clear(key);
+    rs.adopt(row.id, r.data!.id);
+    put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, id: r.data!.id } : x)));
   };
   const add = () => {
     const tmp = `tmp-${crypto.randomUUID()}`;
@@ -73,20 +88,27 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
   };
   /** A competitor carries the whole SBA comparison — never dropped silently (§6.24). */
   const askRemove = (id: string) => {
-    const r = rowsRef.current.find((x) => x.id === id);
-    if (!r || (!r.name?.trim() && id.startsWith("tmp-"))) { remove(id); return; }
+    const r = rowsRef.current.find((x) => rs.same(x.id, id));
+    if (!r || (!r.name?.trim() && !rs.realId(id))) { remove(id); return; }
     setKill({ id, name: r.name ?? "" });
   };
   const remove = (id: string) => {
     setKill(null);
-    setRows((xs) => { const rest = xs.filter((x) => x.id !== id); return rest.length ? rest : [blank(`tmp-${crypto.randomUUID()}`)]; });
-    if (!id.startsWith("tmp-")) start(async () => { await deleteRow(planId, "competitors", id); });
+    put((xs) => { const rest = xs.filter((x) => !rs.same(x.id, id)); return rest.length ? rest : [blank(`tmp-${crypto.randomUUID()}`)]; });
+    /* Behind any save still running for the row, so a first save in flight cannot land after the delete. */
+    start(() => rs.queue("competitors", id, async () => {
+      const stored = rs.realId(id);
+      if (!stored) return;
+      const r = await deleteRow(planId, "competitors", stored);
+      if (!r.ok) errors.raise({ key: `competitor:${rs.keyOf(id)}`, message: r.error, label: "Remove" });
+    }));
   };
-  const flush = () => { commitPosition(); rowsRef.current.forEach((r) => r._dirty && commit(r.id)); };
+  const flush = () => { commitPosition(); return Promise.all(rowsRef.current.filter((r) => r._dirty).map((r) => commit(r.id))); };
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const intent = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value === "later" ? "later" : "next";
-    flush(); start(async () => { await continueFromCompetitors(planId, intent); });
+    /* The row saves finish before the page moves on — a redirect that overtakes the last save loses it. */
+    start(async () => { await flush(); await continueFromCompetitors(planId, intent); });
   };
 
   const positioned = POSITION_FIELDS.filter((f) => position[f.key].trim()).length;
@@ -123,7 +145,7 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
             </tr></thead>
             <tbody>
               {rows.map((c) => [
-                <tr key={c.id + "a"} data-row={c.id} onBlur={(e) => left(e) && commit(c.id)} className={cn("[&>td]:border-b-0 [&>td]:pt-2", errors.forKey(`competitor:${c.id}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`competitor:${c.id}`)}>
+                <tr key={rs.keyOf(c.id) + "a"} data-row={c.id} onBlur={() => commit(c.id)} className={cn("[&>td]:border-b-0 [&>td]:pt-2", errors.forKey(`competitor:${rs.keyOf(c.id)}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`competitor:${rs.keyOf(c.id)}`)}>
                   <Td><CellInput value={c.name} placeholder="Name" className="font-semibold" onChange={(e) => edit(c.id, { name: e.target.value })} /></Td>
                   <Td><CellSelect value={c.kind} options={COMPETITOR_KIND} onValueChange={(v) => edit(c.id, { kind: v as Competitor["kind"] }, !!c.name.trim())} /></Td>
                   <Td><CellSelect value={c.reach} options={COMPETITOR_REACH} placeholder="Reach —" onValueChange={(v) => edit(c.id, { reach: v }, !!c.name.trim())} /></Td>
@@ -145,7 +167,7 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
                  * the thirds. It spans the fact columns deliberately instead of accidentally, and it
                  * stacks below 1180px rather than becoming three unreadable ribbons.
                  */
-                <tr key={c.id + "b"} data-row={c.id} onBlur={(e) => left(e) && commit(c.id)} className={cn(errors.forKey(`competitor:${c.id}`) && "[&>td]:bg-bad-soft")}>
+                <tr key={rs.keyOf(c.id) + "b"} data-row={c.id} onBlur={() => commit(c.id)} className={cn(errors.forKey(`competitor:${rs.keyOf(c.id)}`) && "[&>td]:bg-bad-soft")}>
                   <Td colSpan={6} wrap className="pb-2.5 pt-0">
                     <div className="grid grid-cols-3 gap-x-0 gap-y-3 rounded-[3px] border-l-2 border-input bg-secondary/60 py-2 pl-3.5 pr-3 max-[1180px]:grid-cols-1">
                       {/*

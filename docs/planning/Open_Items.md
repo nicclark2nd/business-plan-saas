@@ -405,7 +405,7 @@ plant at 129,294 with none of it itemised, so loan-to-value on that plan measure
 the 9,000 of one listed machine and reads 2500%. Correct arithmetic on an incomplete list. The same
 already-known gap that the Fixed Assets screen warns about in its own words, now with a second consequence.
 
-### 39. Row grids that save only when focus leaves the ROW — **Marketing and Operations done (§6.131); four grids left**
+### ~~39. Row grids that save only when focus leaves the ROW~~ — **done (§6.131, §6.131.1)**
 
 The fault: Tab out of a row's last box and focus lands on its own remove button, still inside the row, so
 the save never ran and the footer said "All changes saved" (§6.98). §6.131 moved Marketing (segments,
@@ -416,8 +416,14 @@ erroring, removals queued behind a save in flight, and "Save and continue" waiti
 redirects. Checked live on ZZ Test Walk: filled a supplier and a customer box by box, tabbed onto the
 remove button, reloaded — one row each, every box stored.
 
-**Still on the old shape:** People (the team, salaries, capabilities), Competitors, SWOT lines and
-Licences. Same helper, same change.
+*§6.131.1:* People (the team, salaries, Roles & Capability), Competitors, SWOT lines and Licences moved
+over the same way. People and capabilities already had a `_key` that never changes, so they use the queue
+directly; the others use `useRowSaves`. SWOT's one-click "Use" suggestion now saves through the line's
+queue too, so a mitigation typed straight after it cannot insert the line twice. Checked live on ZZ Test
+Walk for a person, a SWOT line with its mitigation, a competitor (strength typed before the name) and a
+licence: each tabbed onto its remove button, reloaded, stored once, then removed. Roles & Capability was not
+exercised live (ZZ has no saved person to hang one on). No row grid in the app saves only on leaving the
+row now.
 
 ### 40. The footer's "All changes saved" does not know about component-level saves
 

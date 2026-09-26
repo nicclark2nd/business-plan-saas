@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
 import { useSaveErrors } from "@/components/module/saveErrors";
+import { useSerialSave } from "@/lib/serialSave";
 import { Grid, Th, Td, Row, FootRow, GroupRow, Toolbar, Meta, Note, NameLink, LinkButton, RemoveButton, CellInput, CellSelect, CellTextarea, focusRow } from "@/components/module/DataGrid";
 import { cn } from "@/lib/utils";
 import type { CapTable } from "@/engine/funding/ownership";
@@ -95,35 +96,52 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
   const capsFor = (key: string) => caps.filter((c) => c.person_id === people.find((p) => p._key === key)?.id);
   const capCount = (scope ? capsFor(scope) : caps).filter(real).length;
 
-  // ----- save policy (§6.10): typing marks dirty; one request when focus leaves the row; selects save at once -----
-  const patch = (key: string, p: Partial<Row>) => setPeople((ps) => ps.map((r) => (r._key === key ? { ...r, ...p } : r)));
+  /*
+   * ----- save policy (§6.10, §6.131): typing marks dirty; each box saves as it is left; selects save at once -----
+   *
+   * Rows here already carry a `_key` that never changes, so the React key was never the problem. The two
+   * that were: a save only when focus left the ROW (Tab lands on the row's own remove button, still inside
+   * it, and nothing saved), and two quick saves both seeing no id and both inserting. Saves now run in a
+   * queue per `_key`, and the lists are written to their refs on the edit so each queued save reads the row
+   * as it actually stands — including the id the save before it adopted.
+   */
+  const serial = useSerialSave();
+  /* The id each row was stored under, by `_key` — what a removal queued behind a first save deletes. */
+  const stored = useRef(new Map<string, string>());
+  const capIds = useRef(new Map<string, string>());
+  const putPeople = (fn: (ps: Row[]) => Row[]) => { const next = fn(peopleRef.current); peopleRef.current = next; setPeople(next); };
+  const putCaps = (fn: (cs: Cap[]) => Cap[]) => { const next = fn(capsRef.current); capsRef.current = next; setCaps(next); };
+  const patch = (key: string, p: Partial<Row>) => putPeople((ps) => ps.map((r) => (r._key === key ? { ...r, ...p } : r)));
   const edit = (key: string, changes: Partial<Row>, immediate = false) => {
-    setPeople((ps) => ps.map((r) => (r._key === key ? { ...r, ...changes, _dirty: true, _state: undefined } : r)));
-    if (immediate) queueMicrotask(() => commitPerson(key));
+    putPeople((ps) => ps.map((r) => (r._key === key ? { ...r, ...changes, _dirty: true, _state: undefined } : r)));
+    if (immediate) commitPerson(key);
   };
-  const commitPerson = (key: string) => {
+  const commitPerson = (key: string): Promise<void> => {
+    const p = serial(`person:${key}`, () => savePerson(key));
+    start(() => p);
+    return p;
+  };
+  const savePerson = async (key: string) => {
     const row = peopleRef.current.find((r) => r._key === key);
     if (!row || !row._dirty || !(row.first_name ?? "").trim()) return;
     patch(key, { _state: "saving", _dirty: false });
-    start(async () => {
-      const res = await upsertPerson(planId, { ...row, id: row.id || undefined });
-      if (res.ok) {
-        errors.clear(`person:${key}`);
-        patch(key, { id: res.data!.id, started_on: res.data!.started_on, started_text: formatMonth(res.data!.started_on), name: `${row.first_name.trim()} ${(row.last_name ?? "").trim()}`.trim(), _state: "saved" });
-        if (!row.id) setCaps((cs) => cs.some((c) => c.person_id === res.data!.id) ? cs : [...cs, blankCap(res.data!.id, `tmp-${crypto.randomUUID()}`)]);
-      }
-      else {
-        /* Keyed by the person, so two who will not save are two messages (§6.98). */
-        errors.raise({ key: `person:${key}`, message: res.error, label: `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim() || "This person" });
-        patch(key, { _dirty: true });
-      }
-    });
+    const res = await upsertPerson(planId, { ...row, id: row.id || undefined });
+    if (res.ok) {
+      errors.clear(`person:${key}`);
+      stored.current.set(key, res.data!.id);
+      patch(key, { id: res.data!.id, started_on: res.data!.started_on, started_text: formatMonth(res.data!.started_on), name: `${row.first_name.trim()} ${(row.last_name ?? "").trim()}`.trim(), _state: "saved" });
+      if (!row.id) putCaps((cs) => cs.some((c) => c.person_id === res.data!.id) ? cs : [...cs, blankCap(res.data!.id, `tmp-${crypto.randomUUID()}`)]);
+    }
+    else {
+      /* Keyed by the person, so two who will not save are two messages (§6.98). */
+      errors.raise({ key: `person:${key}`, message: res.error, label: `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim() || "This person" });
+      patch(key, { _dirty: true });
+    }
   };
-  const left = (e: React.FocusEvent<HTMLElement>) => !e.currentTarget.contains(e.relatedTarget as Node);
 
   const addPerson = () => {
     const r = blankPerson(crypto.randomUUID());
-    setPeople((ps) => [r, ...ps]); setScope(null); setArea("people");
+    putPeople((ps) => [r, ...ps]); setScope(null); setArea("people");
     focusRow(`[data-row="${r._key}"]`);
   };
   /** A person carries a salary, its yearly adjustments and a start date (§6.24). */
@@ -133,42 +151,62 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
   };
   const removePerson = (r: Row) => {
     setKillPerson(null);
-    setPeople((ps) => { const rest = ps.filter((x) => x._key !== r._key); return rest.length ? rest : [blankPerson(crypto.randomUUID())]; });
+    putPeople((ps) => { const rest = ps.filter((x) => x._key !== r._key); return rest.length ? rest : [blankPerson(crypto.randomUUID())]; });
     if (scope === r._key) setScope(null);
-    if (r.id) start(async () => { await deletePerson(planId, r.id); });
+    /* Behind any save still running for the person, and with the id that save gave them, not the stale one. */
+    start(() => serial(`person:${r._key}`, async () => {
+      const id = r.id || stored.current.get(r._key);
+      if (id) await deletePerson(planId, id);
+    }));
   };
 
-  // ----- capabilities -----
+  // ----- capabilities: the same queue, keyed by each line's own `_key` -----
   const editCap = (id: string, changes: Partial<Cap>, immediate = false) => {
-    setCaps((cs) => cs.map((c) => (c._key === id ? { ...c, ...changes, _dirty: true } : c)));
-    if (immediate) queueMicrotask(() => commitCap(id));
+    putCaps((cs) => cs.map((c) => (c._key === id ? { ...c, ...changes, _dirty: true } : c)));
+    if (immediate) commitCap(id);
   };
-  const commitCap = (id: string) => {
-    const c = capsRef.current.find((x) => x._key === id);
-    if (!c || !c._dirty || !c.description.trim()) return;
-    setCaps((cs) => cs.map((x) => (x._key === id ? { ...x, _dirty: false } : x)));
-    start(async () => {
+  const commitCap = (id: string): Promise<void> => {
+    const p = serial(`cap:${id}`, async () => {
+      const c = capsRef.current.find((x) => x._key === id);
+      if (!c || !c._dirty || !c.description.trim()) return;
+      putCaps((cs) => cs.map((x) => (x._key === id ? { ...x, _dirty: false } : x)));
       const res = await upsertCapability(planId, { ...c, id: c.id.startsWith("tmp-") ? undefined : c.id });
-      if (res.ok && c.id.startsWith("tmp-")) setCaps((cs) => cs.map((x) => (x._key === id ? { ...x, id: res.data!.id } : x)));
+      if (!res.ok) {
+        errors.raise({ key: `cap:${id}`, message: res.error, label: "Roles & Capability" });
+        putCaps((cs) => cs.map((x) => (x._key === id ? { ...x, _dirty: true } : x)));
+        return;
+      }
+      errors.clear(`cap:${id}`);
+      capIds.current.set(id, res.data!.id);
+      if (c.id.startsWith("tmp-")) putCaps((cs) => cs.map((x) => (x._key === id ? { ...x, id: res.data!.id } : x)));
     });
+    start(() => p);
+    return p;
   };
   const addCap = (person: Row) => {
     if (!person.id) return;
     const tmp = `tmp-${crypto.randomUUID()}`;
-    setCaps((cs) => [blankCap(person.id, tmp), ...cs]);
+    putCaps((cs) => [blankCap(person.id, tmp), ...cs]);
     focusRow(`[data-cap="${tmp}"]`);
   };
   const removeCap = (c: Cap) => {
-    setCaps((cs) => { const rest = cs.filter((x) => x._key !== c._key); return rest.some((x) => x.person_id === c.person_id) ? rest : [...rest, blankCap(c.person_id, `tmp-${crypto.randomUUID()}`)]; });
-    if (!c.id.startsWith("tmp-")) start(async () => { await deleteCapability(planId, c.id); });
+    putCaps((cs) => { const rest = cs.filter((x) => x._key !== c._key); return rest.some((x) => x.person_id === c.person_id) ? rest : [...rest, blankCap(c.person_id, `tmp-${crypto.randomUUID()}`)]; });
+    /* Behind any save still running for the line, with whatever id that save gave it. */
+    start(() => serial(`cap:${c._key}`, async () => {
+      const id = !c.id.startsWith("tmp-") ? c.id : capIds.current.get(c._key);
+      if (id) await deleteCapability(planId, id);
+    }));
   };
 
-  const flush = () => { peopleRef.current.forEach((r) => r._dirty && commitPerson(r._key)); capsRef.current.forEach((c) => c._dirty && commitCap(c._key)); };
+  const flush = () => Promise.all([
+    ...peopleRef.current.filter((r) => r._dirty).map((r) => commitPerson(r._key)),
+    ...capsRef.current.filter((c) => c._dirty).map((c) => commitCap(c._key)),
+  ]);
+  /* The row saves finish before the page moves on — a redirect that overtakes the last save loses it. */
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const intent = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value === "later" ? "later" : "next";
-    flush();
-    start(async () => { await continueFromPeople(planId, intent); });
+    start(async () => { await flush(); await continueFromPeople(planId, intent); });
   };
 
   const areas = [
@@ -226,7 +264,7 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
             <thead><tr><Th style={{ width: 130 }}>First name</Th><Th style={{ width: 130 }}>Last name</Th><Th>Position</Th><Th style={{ width: 130 }}>Role</Th><Th right style={{ width: 90 }}>Share %</Th><Th style={{ width: 115 }}>Started</Th><Th right style={{ width: 95 }}>Tenure</Th><Th style={{ width: 36 }} /></tr></thead>
             <tbody>
               {visible.map((r) => (
-                <Row key={r._key} data-row={r._key} onBlur={(e) => left(e) && commitPerson(r._key)} className={cn(errors.forKey(`person:${r._key}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`person:${r._key}`)}>
+                <Row key={r._key} data-row={r._key} onBlur={() => commitPerson(r._key)} className={cn(errors.forKey(`person:${r._key}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`person:${r._key}`)}>
                   <Td className="relative">
                     {r.id && missing(r).length > 0 && <i title={`Missing: ${missing(r).join(", ")}`} className="absolute left-2 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-warn" />}
                     {r.id && scope !== r._key
@@ -274,7 +312,7 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
                 const sched = salarySchedule(r.annual_salary ?? 0, r.salary_adjustments, sy);
                 const change = scheduleChangeFromFirstYear(r.annual_salary ?? 0, r.salary_adjustments, sy);
                 return [
-                  <tr key={r._key + "a"} data-row={r._key} onBlur={(e) => left(e) && commitPerson(r._key)} className="[&>td]:border-b-0 [&>td]:h-[34px]">
+                  <tr key={r._key + "a"} data-row={r._key} onBlur={() => commitPerson(r._key)} className="[&>td]:border-b-0 [&>td]:h-[34px]">
                     <Td rowSpan={2} className="!border-b border-border align-middle">
                       <NameLink onClick={() => setScope(r._key)}>{r.name || r.first_name || "New person"}</NameLink>
                       <div className={cn("text-[11.5px]", sy > 1 ? "text-warn" : "text-muted-foreground")}>{sy > 5 ? "starts after Year 5" : sy > 1 ? `joins Year ${sy} · ${r.started_text}` : "from Year 1"}</div>
@@ -285,7 +323,7 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
                     {SALARY_YEARS.map((y) => <Td key={y} right className="text-muted-foreground">{y < sy ? "—" : y === sy ? <span className="text-[11px] text-muted-foreground/70">base year</span> : <CellInput numeric value={String(r.salary_adjustments?.[String(y)] ?? "")} placeholder="0" onChange={(e) => edit(r._key, { salary_adjustments: { ...r.salary_adjustments, [String(y)]: Number(e.target.value.replace(/[^\d.-]/g, "")) || 0 } })} />}</Td>)}
                     <Td className="max-[1280px]:hidden" />
                   </tr>,
-                  <tr key={r._key + "b"} data-row={r._key} onBlur={(e) => left(e) && commitPerson(r._key)} className="[&>td]:h-[30px] [&>td]:font-semibold">
+                  <tr key={r._key + "b"} data-row={r._key} onBlur={() => commitPerson(r._key)} className="[&>td]:h-[30px] [&>td]:font-semibold">
                     <Td className="text-[11px] font-semibold uppercase tracking-[.04em] text-muted-foreground">Salary</Td>
                     {sched.map((s) => (
                       <Td key={s.year} right className={cn("num", s.year < sy && "text-muted-foreground", s.year === sy && "!font-normal")}>
@@ -309,7 +347,7 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
         </>
       )}
 
-      {area === "cap" && <CapabilityArea people={visible} caps={caps} onScope={setScope} onAdd={addCap} onEdit={editCap} onCommit={commitCap} onRemove={removeCap} left={left} />}
+      {area === "cap" && <CapabilityArea people={visible} caps={caps} onScope={setScope} onAdd={addCap} onEdit={editCap} onCommit={commitCap} onRemove={removeCap} />}
 
       {/*
         * RISK & SUCCESSION, BUILT (§6.129).
@@ -412,10 +450,9 @@ function PendingBridge({ pending, saving }: { pending: boolean; saving: boolean 
   return null;
 }
 
-function CapabilityArea({ people, caps, onScope, onAdd, onEdit, onCommit, onRemove, left }: {
+function CapabilityArea({ people, caps, onScope, onAdd, onEdit, onCommit, onRemove }: {
   people: Row[]; caps: Cap[]; onScope: (k: string) => void; onAdd: (p: Row) => void;
   onEdit: (id: string, c: Partial<Cap>, immediate?: boolean) => void; onCommit: (id: string) => void; onRemove: (c: Cap) => void;
-  left: (e: React.FocusEvent<HTMLElement>) => boolean;
 }) {
   const [kind, setKind] = useState<string>("all");
   const kinds = CAPABILITY_KINDS.map((k) => ({ value: k, label: KIND_LABEL[k] }));
@@ -463,7 +500,7 @@ function CapabilityArea({ people, caps, onScope, onAdd, onEdit, onCommit, onRemo
                 <span className={cn(gap ? "ml-4" : "ml-auto")}>{p.id ? <LinkButton onClick={() => onAdd(p)}>+ Add</LinkButton> : <span className="text-xs font-normal text-muted-foreground">save the person first</span>}</span>
               </GroupRow>,
               ...rows.map((c) => (
-                <Row key={c._key} data-cap={c._key} onBlur={(e) => left(e) && onCommit(c._key)} className={cn(c.internal && "[&>td]:bg-[repeating-linear-gradient(135deg,transparent_0_6px,rgba(0,0,0,.025)_6px_8px)] [&_input]:italic [&_input]:text-muted-foreground")}>
+                <Row key={c._key} data-cap={c._key} onBlur={() => onCommit(c._key)} className={cn(c.internal && "[&>td]:bg-[repeating-linear-gradient(135deg,transparent_0_6px,rgba(0,0,0,.025)_6px_8px)] [&_input]:italic [&_input]:text-muted-foreground")}>
                   <Td><CellSelect value={c.kind} options={kinds} onValueChange={(v) => onEdit(c._key, { kind: v as CapabilityKind, internal: v === "development" }, !!c.description.trim())} className={cn(c.internal && "italic text-muted-foreground")} /></Td>
                   <Td wrap><CellTextarea value={c.description} placeholder={c.kind === "education" || c.kind === "licence" ? "What, where, year — e.g. Diploma of Accounting, TAFE Queensland, 2008" : "A sentence or two"} onChange={(e) => onEdit(c._key, { description: e.target.value })} /></Td>
                   <Td>{c.internal && <span className="mr-1.5 text-[9.5px] uppercase tracking-[.06em] text-muted-foreground/70">internal</span>}<RemoveButton onClick={() => onRemove(c)} /></Td>

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { licenceState, formatExpiry } from "@/engine/plan/licences";
 import { saveLicence, deleteLicence } from "./actions";
+import { useRowSaves } from "@/lib/rowSaves";
 import type { Licence } from "./model";
 
 type Row_ = Licence & { _dirty?: boolean; _error?: string };
@@ -43,32 +44,40 @@ export function LicenceSection({ planId, initial, onPending }: {
   const err = rows.find((r) => r._error)?._error;
   useEffect(() => { onPending(pending, err); }, [pending, err, onPending]);
 
-  const left = (e: React.FocusEvent<HTMLElement>) => !e.currentTarget.contains(e.relatedTarget as Node);
+  /*
+   * EACH BOX SAVES AS IT IS LEFT, QUEUED PER LICENCE (§6.131, see src/lib/rowSaves.ts). The list is written
+   * to its ref on the edit, so the save always reads what was typed.
+   */
+  const rs = useRowSaves();
+  const put = (fn: (xs: Row_[]) => Row_[]) => { const next = fn(rowsRef.current); rowsRef.current = next; setRows(next); };
   const edit = (id: string, changes: Partial<Licence>) =>
     /* Typing no longer erases the reason a licence would not save (§6.98). */
-    setRows((xs) => xs.map((x) => (x.id === id ? { ...x, ...changes, _dirty: true } : x)));
+    put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, ...changes, _dirty: true } : x)));
 
-  const commit = (id: string) => {
-    const row = rowsRef.current.find((x) => x.id === id);
+  const commit = (id: string) => start(() => rs.queue("licence", id, async () => {
+    const row = rowsRef.current.find((x) => rs.same(x.id, id));
     if (!row || !row._dirty) return;
     // A row with no name has nothing to save yet; it is a line somebody has started, not an error.
     if (!row.name.trim()) return;
-    setRows((xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: false } : x)));
-    start(async () => {
-      const r = await saveLicence(planId, { ...row, id: id.startsWith("tmp-") ? undefined : id });
-      if (!r.ok) { setRows((xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: true, _error: r.error } : x))); return; }
-      setRows((xs) => xs.map((x) => (x.id === id ? { ...x, id: r.id } : x)));
-    });
-  };
+    put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: false } : x)));
+    const r = await saveLicence(planId, { ...row, id: rs.realId(row.id) });
+    if (!r.ok) { put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: true, _error: r.error } : x))); return; }
+    rs.adopt(row.id, r.id);
+    put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, id: r.id, _error: undefined } : x)));
+  }));
 
   const add = () => {
     const tmp = `tmp-${crypto.randomUUID()}`;
-    setRows((xs) => [...xs, { id: tmp, name: "", number: null, issuer: null, expires_on: null, sort_order: xs.length }]);
+    put((xs) => [...xs, { id: tmp, name: "", number: null, issuer: null, expires_on: null, sort_order: xs.length }]);
     focusRow(`[data-licence="${tmp}"]`);
   };
   const remove = (id: string) => {
-    setRows((xs) => xs.filter((x) => x.id !== id));
-    if (!id.startsWith("tmp-")) start(async () => { await deleteLicence(planId, id); });
+    put((xs) => xs.filter((x) => !rs.same(x.id, id)));
+    /* Behind any save still running for the licence, so a first save in flight cannot land after the delete. */
+    start(() => rs.queue("licence", id, async () => {
+      const stored = rs.realId(id);
+      if (stored) await deleteLicence(planId, stored);
+    }));
   };
 
   return (
@@ -98,7 +107,7 @@ export function LicenceSection({ planId, initial, onPending }: {
             {rows.map((l) => {
               const state = today ? licenceState(l.expires_on, today) : "current";
               return (
-                <GridRow key={l.id} data-licence={l.id} onBlur={(e) => left(e) && commit(l.id)}
+                <GridRow key={rs.keyOf(l.id)} data-licence={l.id} onBlur={() => commit(l.id)}
                   className={cn(l._error && "[&>td]:bg-bad-soft")} title={l._error}>
                   <Td><CellInput value={l.name} placeholder="e.g. QBCC contractor licence — concreting" className="font-semibold"
                     onChange={(e) => edit(l.id, { name: e.target.value })} /></Td>
