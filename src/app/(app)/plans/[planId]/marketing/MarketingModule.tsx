@@ -1,5 +1,6 @@
 "use client";
 
+import { useRowSaves } from "@/lib/rowSaves";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
@@ -116,36 +117,64 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
     else errors.clear(`fig:${k}`);
   });
 
-  // ----- row grids: one request per row, when focus leaves it; selects save at once -----
+  /*
+   * ----- row grids: each box saves as it is left, queued per row (§6.131); selects save at once -----
+   *
+   * The list is written to its ref ON THE EDIT, not after the render: a select saves in the same tick it
+   * changes, and a ref that caught up in an effect handed that save the row as it was BEFORE the choice.
+   */
   type AnyRow = { id: string; _dirty?: boolean } & Record<string, unknown>;
   type GridKind = Exclude<RowKind, "competitors">;
+  const rs = useRowSaves();
+  /* The column a row cannot be stored without — the same one the action refuses (marketing/actions.ts). */
+  const REQUIRED: Record<GridKind, string> = { spend: "approach", evidence: "source", segments: "name", customers: "name" };
   const list = (k: GridKind) => rowsRef.current[k] as unknown as AnyRow[];
-  const setList = (k: GridKind, fn: (xs: AnyRow[]) => AnyRow[]) => setRows((r) => ({ ...r, [k]: fn(r[k] as unknown as AnyRow[]) }));
-  const edit = (k: GridKind, id: string, changes: Record<string, unknown>, immediate = false) => {
-    setList(k, (xs) => xs.map((x) => (x.id === id ? { ...x, ...changes, _dirty: true } : x)));
-    if (immediate) queueMicrotask(() => commit(k, id));
+  const setList = (k: GridKind, fn: (xs: AnyRow[]) => AnyRow[]) => {
+    const next = { ...rowsRef.current, [k]: fn(rowsRef.current[k] as unknown as AnyRow[]) } as typeof rows;
+    rowsRef.current = next;
+    setRows(next);
   };
-  const commit = (k: GridKind, id: string) => {
-    const row = list(k).find((x) => x.id === id);
+  const edit = (k: GridKind, id: string, changes: Record<string, unknown>, immediate = false) => {
+    setList(k, (xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, ...changes, _dirty: true } : x)));
+    if (immediate) commit(k, id);
+  };
+  /* Returns the save, so leaving the screen can wait for it rather than racing it. */
+  const commit = (k: GridKind, id: string): Promise<void> => {
+    const p = rs.queue(k, id, () => saveRow(k, id));
+    start(() => p);
+    return p;
+  };
+  const saveRow = async (k: GridKind, id: string) => {
+    /* Read when this save's turn comes, not when it was asked for: the row may have moved on, or gone. */
+    const row = list(k).find((x) => rs.same(x.id, id));
     if (!row || !row._dirty) return;
-    setList(k, (xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: false } : x)));
-    const payload: Record<string, unknown> = { ...row, id: id.startsWith("tmp-") ? undefined : id };
+    const stored = rs.realId(row.id);
+    /*
+     * A NEW ROW WITH NO NAME IS NOT SAVED, AND NOT SCOLDED. Typing the share before the name used to be
+     * fine because nothing saved until the row was left; per-box saving would answer that box with "Fill in
+     * the first column". It waits, dirty, until there is a name. A STORED row whose name is cleared still
+     * goes to the server and gets that message — that is a real mistake.
+     */
+    if (!stored && !String(row[REQUIRED[k]] ?? "").trim()) return;
+    setList(k, (xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: false } : x)));
+    const payload: Record<string, unknown> = { ...row, id: stored };
     if (k === "evidence") payload.occurred_on = row.when_text;      // the action parses "Mar 2026"
     if (k === "customers") payload.contract_ends_on = row.ends_text;
-    start(async () => {
-      const r = await upsertRow(planId, k, payload);
-      if (!r.ok) {
-        errors.raise({ key: `${k}:${id}`, message: r.error, label: k === "spend" ? "Marketing spend" : k === "evidence" ? "Evidence" : k === "customers" ? "Customer" : "Segment" });
-        setList(k, (xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: true } : x)));
-        return;
-      }
-      errors.clear(`${k}:${id}`);
-      setList(k, (xs) => xs.map((x) => (x.id === id ? {
-        ...x, id: r.data!.id,
-        ...(k === "evidence" && r.data!.occurred_on !== undefined ? { occurred_on: r.data!.occurred_on, when_text: formatMonth(r.data!.occurred_on) } : {}),
-        ...(k === "customers" && r.data!.occurred_on !== undefined ? { contract_ends_on: r.data!.occurred_on, ends_text: formatMonth(r.data!.occurred_on) } : {}),
-      } : x)));
-    });
+    const r = await upsertRow(planId, k, payload);
+    const key = `${k}:${rs.keyOf(row.id)}`;
+    if (!r.ok) {
+      errors.raise({ key, message: r.error, label: k === "spend" ? "Marketing spend" : k === "evidence" ? "Evidence" : k === "customers" ? "Customer" : "Segment" });
+      setList(k, (xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: true } : x)));
+      return;
+    }
+    errors.clear(key);
+    rs.adopt(row.id, r.data!.id);
+    /* Only the id and the parsed date are adopted — the boxes keep what the client has typed since. */
+    setList(k, (xs) => xs.map((x) => (rs.same(x.id, id) ? {
+      ...x, id: r.data!.id,
+      ...(k === "evidence" && r.data!.occurred_on !== undefined ? { occurred_on: r.data!.occurred_on, when_text: formatMonth(r.data!.occurred_on) } : {}),
+      ...(k === "customers" && r.data!.occurred_on !== undefined ? { contract_ends_on: r.data!.occurred_on, ends_text: formatMonth(r.data!.occurred_on) } : {}),
+    } : x)));
   };
   const add = (k: GridKind, blank: Record<string, unknown>) => {
     const tmp = `tmp-${crypto.randomUUID()}`;
@@ -158,8 +187,8 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
    * click through dialogs.
    */
   const askRemoveSpend = (id: string) => {
-    const r = (list("spend") as AnyRow[]).find((x) => x.id === id) as { channel?: string; annual_budget?: number } | undefined;
-    if (!r || (!r.channel?.trim() && id.startsWith("tmp-"))) { remove("spend", id); return; }
+    const r = (list("spend") as AnyRow[]).find((x) => rs.same(x.id, id)) as { channel?: string; annual_budget?: number } | undefined;
+    if (!r || (!r.channel?.trim() && !rs.realId(id))) { remove("spend", id); return; }
     setKill({ id, channel: r.channel ?? "", budget: Number(r.annual_budget ?? 0) });
   };
   const remove = (k: GridKind, id: string) => {
@@ -169,14 +198,29 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
       const tmp = `tmp-${crypto.randomUUID()}`;
       return (g === "spend" ? blankSpend(tmp) : g === "evidence" ? blankEvidence(tmp) : g === "segments" ? blankSegment(tmp) : blankCustomer(tmp)) as unknown as AnyRow;
     };
-    setList(k, (xs) => { const rest = xs.filter((x) => x.id !== id); return rest.length ? rest : [blankFor(k)]; });
-    if (!id.startsWith("tmp-")) start(async () => { await deleteRow(planId, k, id); });
+    setList(k, (xs) => { const rest = xs.filter((x) => !rs.same(x.id, id)); return rest.length ? rest : [blankFor(k)]; });
+    /*
+     * Behind any save still running for the row: removing a line whose first save is in flight would
+     * otherwise delete nothing, and the insert would land a moment later — a row the client removed,
+     * back on the next visit.
+     */
+    start(() => rs.queue(k, id, async () => {
+      const stored = rs.realId(id);
+      if (!stored) return;
+      const r = await deleteRow(planId, k, stored);
+      if (!r.ok) errors.raise({ key: `${k}:${rs.keyOf(id)}`, message: r.error, label: "Remove" });
+    }));
   };
-  const flush = () => { commitMarket(); (["spend", "evidence", "segments", "customers"] as GridKind[]).forEach((k) => list(k).forEach((r) => r._dirty && commit(k, r.id))); };
+  const flush = () => {
+    commitMarket();
+    return Promise.all((["spend", "evidence", "segments", "customers"] as GridKind[])
+      .flatMap((k) => list(k).filter((r) => r._dirty).map((r) => commit(k, r.id))));
+  };
+  /* The row saves finish before the page moves on — a redirect that overtakes the last save loses it. */
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const intent = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value === "later" ? "later" : "next";
-    flush(); start(async () => { await continueFromMarketing(planId, intent); });
+    start(async () => { await flush(); await continueFromMarketing(planId, intent); });
   };
 
   const written = [...MARKET_FIELDS, POSITION_ONE_LINER].filter((f) => (market[f.key as keyof Market] ?? "").trim()).length;
@@ -283,7 +327,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
             </tr></thead>
             <tbody>
               {rows.segments.map((sg) => (
-                <Row key={sg.id} data-row={sg.id} onBlur={(e) => left(e) && commit("segments", sg.id)} className={cn(errors.forKey(`segments:${sg.id}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`segments:${sg.id}`)}>
+                <Row key={rs.keyOf(sg.id)} data-row={sg.id} onBlur={() => commit("segments", sg.id)} className={cn(errors.forKey(`segments:${rs.keyOf(sg.id)}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`segments:${rs.keyOf(sg.id)}`)}>
                   <Td wrap><CellTextarea value={sg.name} placeholder="e.g. Residential builders" onChange={(e) => edit("segments", sg.id, { name: e.target.value })} /></Td>
                   <Td wrap><CellTextarea value={sg.profile ?? ""} placeholder="e.g. Licensed, 3–25 staff, $2–12M turnover, within 90 minutes" onChange={(e) => edit("segments", sg.id, { profile: e.target.value })} /></Td>
                   <Td wrap><CellTextarea value={sg.cares_about ?? ""} placeholder="e.g. Never holding up their other trades. Pays more to avoid a callback." onChange={(e) => edit("segments", sg.id, { cares_about: e.target.value })} /></Td>
@@ -329,8 +373,8 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
             </tr></thead>
             <tbody>
               {rows.customers.map((c) => (
-                <Row key={c.id} data-row={c.id} onBlur={(e) => left(e) && commit("customers", c.id)}
-                  className={cn(errors.forKey(`customers:${c.id}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`customers:${c.id}`)}>
+                <Row key={rs.keyOf(c.id)} data-row={c.id} onBlur={() => commit("customers", c.id)}
+                  className={cn(errors.forKey(`customers:${rs.keyOf(c.id)}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`customers:${rs.keyOf(c.id)}`)}>
                   <Td><CellInput value={c.name} placeholder="e.g. Metricon Homes" onChange={(e) => edit("customers", c.id, { name: e.target.value })} /></Td>
                   <Td right><CellInput numeric suffix="%" value={c.revenue_share === null ? "" : String(c.revenue_share)} placeholder="—"
                     onChange={(e) => edit("customers", c.id, { revenue_share: e.target.value.trim() === "" ? null : Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} /></Td>
@@ -402,7 +446,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
             <thead><tr><Th style={{ width: 248 }}>Type</Th><Th>Approach</Th><Th right style={{ width: 140 }}>Annual budget</Th><Th style={{ width: 36 }} /></tr></thead>
             <tbody>
               {rows.spend.map((s) => (
-                <Row key={s.id} data-row={s.id} onBlur={(e) => left(e) && commit("spend", s.id)} className={cn(errors.forKey(`spend:${s.id}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`spend:${s.id}`)}>
+                <Row key={rs.keyOf(s.id)} data-row={s.id} onBlur={() => commit("spend", s.id)} className={cn(errors.forKey(`spend:${rs.keyOf(s.id)}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`spend:${rs.keyOf(s.id)}`)}>
                   <Td><CellSelect value={s.kind} options={SPEND_KINDS.map((k) => ({ value: k, label: SPEND_LABEL[k] }))} onValueChange={(v) => edit("spend", s.id, { kind: v as SpendKind }, !!s.approach.trim())} /></Td>
                   <Td wrap><CellTextarea value={s.approach} placeholder="e.g. Google Ads on 'concreter Wollongong'; referral fee to builders" onChange={(e) => edit("spend", s.id, { approach: e.target.value })} /></Td>
                   <Td right><CellInput numeric value={s.annual_budget ? num(s.annual_budget) : ""} placeholder="0" onChange={(e) => edit("spend", s.id, { annual_budget: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} /></Td>
@@ -518,7 +562,7 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
             <thead><tr><Th style={{ width: "22%" }}>What you wanted to know</Th><Th style={{ width: "20%" }}>How you looked</Th><Th>What it showed</Th><Th style={{ width: "22%" }}>What you&apos;ll do</Th><Th style={{ width: 110 }}>When</Th><Th style={{ width: 36 }} /></tr></thead>
             <tbody>
               {rows.evidence.map((ev) => (
-                <Row key={ev.id} data-row={ev.id} onBlur={(e) => left(e) && commit("evidence", ev.id)} className={cn(errors.forKey(`evidence:${ev.id}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`evidence:${ev.id}`)}>
+                <Row key={rs.keyOf(ev.id)} data-row={ev.id} onBlur={() => commit("evidence", ev.id)} className={cn(errors.forKey(`evidence:${rs.keyOf(ev.id)}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`evidence:${rs.keyOf(ev.id)}`)}>
                   <Td wrap><CellTextarea value={ev.source} placeholder="e.g. How long do builders wait for a slab — and would they pay to wait less?" onChange={(e) => edit("evidence", ev.id, { source: e.target.value })} /></Td>
                   <Td wrap><CellTextarea value={ev.method ?? ""} placeholder="e.g. Phone survey of 40 builders, over two weeks" onChange={(e) => edit("evidence", ev.id, { method: e.target.value })} /></Td>
                   <Td wrap><CellTextarea value={ev.finding ?? ""} placeholder="e.g. 31 of 40 had waited >3 weeks in the last year; 26 would pay 5–8% more for a guaranteed date" onChange={(e) => edit("evidence", ev.id, { finding: e.target.value })} /></Td>

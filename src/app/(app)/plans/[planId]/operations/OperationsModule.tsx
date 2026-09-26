@@ -1,5 +1,6 @@
 "use client";
 
+import { useRowSaves } from "@/lib/rowSaves";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
@@ -68,28 +69,55 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
   const cRef = useRef(capacity); useEffect(() => { cRef.current = capacity; }, [capacity]);
   const left = (e: React.FocusEvent<HTMLElement>) => !e.currentTarget.contains(e.relatedTarget as Node);
 
-  const setter = (kind: RowKind) => (kind === "premises" ? setPremises : kind === "suppliers" ? setSuppliers : setSteps) as React.Dispatch<React.SetStateAction<(Record<string, unknown> & Dirty & { id: string })[]>>;
-  const listOf = (kind: RowKind) => (kind === "premises" ? pRef.current : kind === "suppliers" ? sRef.current : oRef.current) as (Record<string, unknown> & Dirty & { id: string })[];
+  type AnyRow = Record<string, unknown> & Dirty & { id: string };
+  const refOf = (kind: RowKind) => (kind === "premises" ? pRef : kind === "suppliers" ? sRef : oRef) as unknown as React.MutableRefObject<AnyRow[]>;
+  const stateOf = (kind: RowKind) => (kind === "premises" ? setPremises : kind === "suppliers" ? setSuppliers : setSteps) as unknown as (xs: AnyRow[]) => void;
+  const listOf = (kind: RowKind) => refOf(kind).current;
+  /*
+   * WRITTEN TO THE REF ON THE EDIT (§6.131), not after the render: a choice saves in the same tick it is
+   * made, and a ref that caught up in an effect handed that save the row as it was before the choice.
+   */
+  const setter = (kind: RowKind) => (fn: (xs: AnyRow[]) => AnyRow[]) => {
+    const next = fn(refOf(kind).current);
+    refOf(kind).current = next;
+    stateOf(kind)(next);
+  };
+  const rs = useRowSaves();
+  /* The column a row cannot be stored without — the same one the action refuses (operations/actions.ts). */
+  const REQUIRED: Record<RowKind, string> = { premises: "name", suppliers: "name", steps: "title" };
 
   const edit = (kind: RowKind, id: string, changes: Record<string, unknown>, immediate = false) => {
     /* Typing no longer erases the reason a row would not save (§6.98). */
-    setter(kind)((xs) => xs.map((x) => (x.id === id ? { ...x, ...changes, _dirty: true } : x)));
-    if (immediate) queueMicrotask(() => commit(kind, id));
+    setter(kind)((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, ...changes, _dirty: true } : x)));
+    if (immediate) commit(kind, id);
   };
-  const commit = (kind: RowKind, id: string) => {
-    const row = listOf(kind).find((x) => x.id === id);
+  /*
+   * EACH BOX SAVES AS IT IS LEFT, QUEUED PER ROW (§6.131). Returns the save so leaving the screen can wait
+   * for it rather than racing it.
+   */
+  const commit = (kind: RowKind, id: string): Promise<void> => {
+    const p = rs.queue(kind, id, () => saveRow(kind, id));
+    start(() => p);
+    return p;
+  };
+  const saveRow = async (kind: RowKind, id: string) => {
+    /* Read when this save's turn comes: the row may have moved on, or been removed. */
+    const row = listOf(kind).find((x) => rs.same(x.id, id));
     if (!row || !row._dirty) return;
-    setter(kind)((xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: false } : x)));
-    start(async () => {
-      const r = await upsertRow(planId, kind, { ...row, id: id.startsWith("tmp-") ? undefined : id });
-      if (!r.ok) {
-        errors.raise({ key: `${kind}:${id}`, message: r.error, label: kind === "premises" ? "Premises" : kind === "suppliers" ? "Supplier" : "Process step" });
-        setter(kind)((xs) => xs.map((x) => (x.id === id ? { ...x, _dirty: true } : x)));
-        return;
-      }
-      errors.clear(`${kind}:${id}`);
-      setter(kind)((xs) => xs.map((x) => (x.id === id ? { ...x, id: r.data!.id } : x)));
-    });
+    const stored = rs.realId(row.id);
+    /* A new row with no name waits, dirty and unscolded, until it has one — see marketing (§6.131). */
+    if (!stored && !String(row[REQUIRED[kind]] ?? "").trim()) return;
+    setter(kind)((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: false } : x)));
+    const r = await upsertRow(planId, kind, { ...row, id: stored });
+    const key = `${kind}:${rs.keyOf(row.id)}`;
+    if (!r.ok) {
+      errors.raise({ key, message: r.error, label: kind === "premises" ? "Premises" : kind === "suppliers" ? "Supplier" : "Process step" });
+      setter(kind)((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: true } : x)));
+      return;
+    }
+    errors.clear(key);
+    rs.adopt(row.id, r.data!.id);
+    setter(kind)((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, id: r.data!.id } : x)));
   };
   const add = (kind: RowKind) => {
     const tmp = `tmp-${crypto.randomUUID()}`;
@@ -98,14 +126,20 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
     focusRow(`[data-row="${tmp}"]`);
   };
   const askRemove = (kind: RowKind, id: string, name: string) => {
-    if (!name.trim() && id.startsWith("tmp-")) { remove(kind, id); return; }
+    if (!name.trim() && !rs.realId(id)) { remove(kind, id); return; }
     setKill({ kind, id, name });
   };
   const remove = (kind: RowKind, id: string) => {
     setKill(null);
     const blank = kind === "premises" ? blankPremise : kind === "suppliers" ? blankSupplier : blankStep;
-    setter(kind)((xs) => { const rest = xs.filter((x) => x.id !== id); return rest.length ? rest : [blank(`tmp-${crypto.randomUUID()}`) as never]; });
-    if (!id.startsWith("tmp-")) start(async () => { await deleteRow(planId, kind, id); });
+    setter(kind)((xs) => { const rest = xs.filter((x) => !rs.same(x.id, id)); return rest.length ? rest : [blank(`tmp-${crypto.randomUUID()}`) as never]; });
+    /* Behind any save still running for the row, so a first save in flight cannot land after the delete. */
+    start(() => rs.queue(kind, id, async () => {
+      const stored = rs.realId(id);
+      if (!stored) return;
+      const r = await deleteRow(planId, kind, stored);
+      if (!r.ok) errors.raise({ key: `${kind}:${rs.keyOf(id)}`, message: r.error, label: "Remove" });
+    }));
   };
   const commitCapacity = () => {
     if (!capacityDirty) return;
@@ -117,20 +151,23 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
     });
   };
   const makePrimary = (id: string) => {
-    setPremises((xs) => xs.map((x) => ({ ...x, is_primary: x.id === id })));
-    if (!id.startsWith("tmp-")) start(async () => {
-      const r = await setPrimaryPremise(planId, id);
+    setter("premises")((xs) => xs.map((x) => ({ ...x, is_primary: rs.same(x.id, id) })));
+    const stored = rs.realId(id);
+    if (stored) start(async () => {
+      const r = await setPrimaryPremise(planId, stored);
       if (!r.ok) errors.raise({ key: "primary", message: r.error, label: "Main premises" }); else errors.clear("primary");
     });
   };
   const flush = () => {
     commitCapacity();
-    (["premises", "suppliers", "steps"] as RowKind[]).forEach((k) => listOf(k).forEach((r) => r._dirty && commit(k, r.id)));
+    return Promise.all((["premises", "suppliers", "steps"] as RowKind[])
+      .flatMap((k) => listOf(k).filter((r) => r._dirty).map((r) => commit(k, r.id))));
   };
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const intent = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value === "later" ? "later" : "next";
-    flush(); start(async () => { await continueFromOperations(planId, intent); });
+    /* The row saves finish before the page moves on — a redirect that overtakes the last save loses it. */
+    start(async () => { await flush(); await continueFromOperations(planId, intent); });
   };
 
   const namedPremises = premises.filter((x) => x.name.trim());
@@ -186,8 +223,8 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
             </tr></thead>
             <tbody>
               {premises.map((x) => [
-                <tr key={x.id + "a"} data-row={x.id} onBlur={(e) => left(e) && commit("premises", x.id)}
-                  className={cn("[&>td]:border-b-0 [&>td]:pt-2", errors.forKey(`premises:${x.id}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`premises:${x.id}`)}>
+                <tr key={rs.keyOf(x.id) + "a"} data-row={x.id} onBlur={() => commit("premises", x.id)}
+                  className={cn("[&>td]:border-b-0 [&>td]:pt-2", errors.forKey(`premises:${rs.keyOf(x.id)}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`premises:${rs.keyOf(x.id)}`)}>
                   <Td><CellInput value={x.name} placeholder="Yard, office, depot" className="font-semibold" onChange={(e) => edit("premises", x.id, { name: e.target.value })} /></Td>
                   <Td><CellInput value={x.address ?? ""} placeholder="Street and suburb" onChange={(e) => edit("premises", x.id, { address: e.target.value })} /></Td>
                   <Td><CellSelect value={x.tenure} options={TENURE} placeholder="Tenure —" onValueChange={(v) => edit("premises", x.id, { tenure: v }, !!x.name.trim())} /></Td>
@@ -202,7 +239,7 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
                   </Td>
                   <Td><RemoveButton onClick={() => askRemove("premises", x.id, x.name)} /></Td>
                 </tr>,
-                <tr key={x.id + "b"} data-row={x.id} onBlur={(e) => left(e) && commit("premises", x.id)} className={cn(errors.forKey(`premises:${x.id}`) && "[&>td]:bg-bad-soft")}>
+                <tr key={rs.keyOf(x.id) + "b"} data-row={x.id} onBlur={() => commit("premises", x.id)} className={cn(errors.forKey(`premises:${rs.keyOf(x.id)}`) && "[&>td]:bg-bad-soft")}>
                   <Td colSpan={7} wrap className="pb-2.5 pt-0">
                     <div className="rounded-[3px] border-l-2 border-input bg-secondary/60 py-2 pl-3.5 pr-3">
                       <div className={proseLabel}>What happens here</div>
@@ -236,8 +273,8 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
             </tr></thead>
             <tbody>
               {suppliers.map((x) => [
-                <tr key={x.id + "a"} data-row={x.id} onBlur={(e) => left(e) && commit("suppliers", x.id)}
-                  className={cn("[&>td]:border-b-0 [&>td]:pt-2", errors.forKey(`suppliers:${x.id}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`suppliers:${x.id}`)}>
+                <tr key={rs.keyOf(x.id) + "a"} data-row={x.id} onBlur={() => commit("suppliers", x.id)}
+                  className={cn("[&>td]:border-b-0 [&>td]:pt-2", errors.forKey(`suppliers:${rs.keyOf(x.id)}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`suppliers:${rs.keyOf(x.id)}`)}>
                   <Td><CellInput value={x.name} placeholder="Name" className="font-semibold" onChange={(e) => edit("suppliers", x.id, { name: e.target.value })} /></Td>
                   <Td><CellInput value={x.supplies ?? ""} placeholder="Concrete, steel, plant hire" onChange={(e) => edit("suppliers", x.id, { supplies: e.target.value })} /></Td>
                   <Td><CellInput value={x.terms ?? ""} placeholder="30 days, COD, fixed to Jun 27" onChange={(e) => edit("suppliers", x.id, { terms: e.target.value })} /></Td>
@@ -246,7 +283,7 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
                     onValueChange={(v) => edit("suppliers", x.id, { dependency: v }, !!x.name.trim())} /></Td>
                   <Td><RemoveButton onClick={() => askRemove("suppliers", x.id, x.name)} /></Td>
                 </tr>,
-                <tr key={x.id + "b"} data-row={x.id} onBlur={(e) => left(e) && commit("suppliers", x.id)} className={cn(errors.forKey(`suppliers:${x.id}`) && "[&>td]:bg-bad-soft")}>
+                <tr key={rs.keyOf(x.id) + "b"} data-row={x.id} onBlur={() => commit("suppliers", x.id)} className={cn(errors.forKey(`suppliers:${rs.keyOf(x.id)}`) && "[&>td]:bg-bad-soft")}>
                   <Td colSpan={5} wrap className="pb-2.5 pt-0">
                     <div className="rounded-[3px] border-l-2 border-input bg-secondary/60 py-2 pl-3.5 pr-3">
                       <div className={proseLabel}>If they stopped tomorrow</div>
@@ -283,14 +320,14 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
             </tr></thead>
             <tbody>
               {steps.map((x) => [
-                <tr key={x.id + "a"} data-row={x.id} onBlur={(e) => left(e) && commit("steps", x.id)}
-                  className={cn("[&>td]:border-b-0 [&>td]:pt-2", errors.forKey(`steps:${x.id}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`steps:${x.id}`)}>
+                <tr key={rs.keyOf(x.id) + "a"} data-row={x.id} onBlur={() => commit("steps", x.id)}
+                  className={cn("[&>td]:border-b-0 [&>td]:pt-2", errors.forKey(`steps:${rs.keyOf(x.id)}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`steps:${rs.keyOf(x.id)}`)}>
                   <Td><CellInput value={x.title} placeholder="Site measure and set-out" className="font-semibold" onChange={(e) => edit("steps", x.id, { title: e.target.value })} /></Td>
                   <Td><CellInput value={x.owner ?? ""} placeholder="Name or role" onChange={(e) => edit("steps", x.id, { owner: e.target.value })} /></Td>
                   <Td><CellInput value={x.duration ?? ""} placeholder="Half a day" onChange={(e) => edit("steps", x.id, { duration: e.target.value })} /></Td>
                   <Td><RemoveButton onClick={() => askRemove("steps", x.id, x.title)} /></Td>
                 </tr>,
-                <tr key={x.id + "b"} data-row={x.id} onBlur={(e) => left(e) && commit("steps", x.id)} className={cn(errors.forKey(`steps:${x.id}`) && "[&>td]:bg-bad-soft")}>
+                <tr key={rs.keyOf(x.id) + "b"} data-row={x.id} onBlur={() => commit("steps", x.id)} className={cn(errors.forKey(`steps:${rs.keyOf(x.id)}`) && "[&>td]:bg-bad-soft")}>
                   <Td colSpan={4} wrap className="pb-2.5 pt-0">
                     <div className="rounded-[3px] border-l-2 border-input bg-secondary/60 py-2 pl-3.5 pr-3">
                       <div className={proseLabel}>{STEP_DETAIL.label}</div>

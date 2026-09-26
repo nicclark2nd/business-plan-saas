@@ -405,18 +405,19 @@ plant at 129,294 with none of it itemised, so loan-to-value on that plan measure
 the 9,000 of one listed machine and reads 2500%. Correct arithmetic on an incomplete list. The same
 already-known gap that the Fixed Assets screen warns about in its own words, now with a second consequence.
 
-### 39. Every row grid still saves only when focus leaves the ROW — **Build**
+### 39. Row grids that save only when focus leaves the ROW — **Marketing and Operations done (§6.131); four grids left**
 
-Found on the capacity measures while verifying §6.129.3: tab out of a row's last box and focus lands on the
-row's own remove button — still inside the row — so the save never runs, and the footer goes on saying
-"All changes saved". The capacity measures and the add-backs now save box by box through
-`lib/serialSave.ts`, queued per row so two quick saves cannot both insert.
+The fault: Tab out of a row's last box and focus lands on its own remove button, still inside the row, so
+the save never ran and the footer said "All changes saved" (§6.98). §6.131 moved Marketing (segments,
+customers, spend, evidence) and Operations (premises, suppliers, steps) to per-box saves through
+`useRowSaves`: a queue per row so two quick saves cannot both insert, one name per row across its tmp→stored
+id change, a React key that does not change mid-typing, a new row with no name waiting quietly rather than
+erroring, removals queued behind a save in flight, and "Save and continue" waiting for the saves before it
+redirects. Checked live on ZZ Test Walk: filled a supplier and a customer box by box, tabbed onto the
+remove button, reloaded — one row each, every box stored.
 
-**Every other row grid in the app has the same shape and the same hole** — segments, spend, evidence and
-the new customers on Marketing, premises, suppliers and steps on Operations, and more. Most are rescued by
-the module's own flush on "Save and continue", but a client who tabs to the remove button and then clicks a
-sidebar link has left a row unsaved with the screen telling them otherwise (§6.98). Worth one pass across
-all of them with the same helper.
+**Still on the old shape:** People (the team, salaries, capabilities), Competitors, SWOT lines and
+Licences. Same helper, same change.
 
 ### 40. The footer's "All changes saved" does not know about component-level saves
 
