@@ -473,7 +473,7 @@ function ValuationRange({ planId, metrics, input, money }: {
     return (
       <Picture title="What the earnings support" aside={`${money(e)} of normalised earnings`}>
         <Note>A range needs a low and a high multiple — what businesses like this one have actually sold for.</Note>
-        <Pencil planId={planId} fix={{ label: "Set the comparable range", to: "settings?area=exit" }} />
+        <Pencil planId={planId} fix={{ label: "Set the similar-sales range", to: "settings?area=exit" }} />
       </Picture>
     );
   }
@@ -507,6 +507,13 @@ function ValuationRange({ planId, metrics, input, money }: {
         <p className="mt-2 text-[12px] text-muted-foreground">
           <b className="font-semibold text-foreground">{money(price - highV)}</b> above the top of the range
           {mult ? ` — ${mult}× against a ceiling of ${sale.multipleHigh}×` : ""}.
+        </p>
+      )}
+      {/* A searched range says so (§6.130): the dial weighing 3 should never rest on a figure of unknown origin. */}
+      {sale.multipleFound && (
+        <p className="mt-2 text-[11.5px] text-muted-foreground">
+          Range from {sale.multipleFound.sources} published sources, found{" "}
+          {new Date(`${sale.multipleFound.on}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })}.
         </p>
       )}
     </Picture>

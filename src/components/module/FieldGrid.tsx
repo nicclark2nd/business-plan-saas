@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { groupDigits } from "@/lib/grouped";
 
 /**
  * One-record form grid for a module area (mockup: .section + .fields). Six columns; a field spans 1–6.
@@ -45,8 +46,24 @@ export function Field({ label, span = 1, hint, error, children }: {
     </div>
   );
 }
-export function FieldInput({ className, numeric, ...props }: React.ComponentProps<typeof Input> & { numeric?: boolean }) {
-  return <Input {...props} inputMode={numeric ? (props.inputMode ?? "decimal") : props.inputMode} className={cn("h-8", numeric && "num text-right", className)} />;
+/**
+ * `money` → shown as 1,000,000 while the box is not being edited, and as typed while it is (§6.130). The value
+ * the module holds is never changed by this; only what is painted in the box.
+ */
+export function FieldInput({ className, numeric, money, ...props }: React.ComponentProps<typeof Input> & { numeric?: boolean; money?: boolean }) {
+  const shown = useGrouped(money, props);
+  return <Input {...props} {...shown} inputMode={numeric || money ? (props.inputMode ?? "decimal") : props.inputMode} className={cn("h-8", (numeric || money) && "num text-right", className)} />;
+}
+
+/** Shared with the grid cell: while unfocused, a string value is painted grouped. */
+export function useGrouped(money: boolean | undefined, props: { value?: unknown; onFocus?: React.FocusEventHandler<HTMLInputElement>; onBlur?: React.FocusEventHandler<HTMLInputElement> }) {
+  const [editing, setEditing] = React.useState(false);
+  if (!money) return {};
+  return {
+    value: !editing && typeof props.value === "string" ? groupDigits(props.value) : props.value as string | undefined,
+    onFocus: (e: React.FocusEvent<HTMLInputElement>) => { setEditing(true); props.onFocus?.(e); },
+    onBlur: (e: React.FocusEvent<HTMLInputElement>) => { setEditing(false); props.onBlur?.(e); },
+  };
 }
 export function FieldTextarea({ className, ...props }: React.ComponentProps<typeof Textarea>) {
   return <Textarea {...props} className={cn("min-h-[64px]", className)} />;

@@ -110,7 +110,7 @@ All five collection points, the stripped tabs, and one thing the map did not ant
 | Assumptions → Cash & capital | cash floor, cost of capital | hint quotes the plan's worst month and its dearest loan rate |
 | Assumptions → Downside | sales −%, margin −pts, debtor days | all three or none; a partial downside is not a milder one |
 | Fixed Assets, per asset | security value | nullable; editable on financed assets too |
-| Plan settings → Exit & sale | price, add-backs, low ×, high ×, exit year | with the plain-English explanation of add-backs and multiples |
+| Plan settings → Exit & sale | price, add-backs, low ×, high ×, exit year | with the plain-English explanation of add-backs and multiples; the low/high range can be searched from Business Profile with sources, accepted before saving (§6.130, migration 0050) |
 | Vision & Purpose, field 7 | Selling the business | prose, and the only field on that step AI will not draft |
 | Leadership Team → Risk & Succession | the six judgements, with a note each | "Phase 2" tag removed; the empty per-person grid deleted |
 

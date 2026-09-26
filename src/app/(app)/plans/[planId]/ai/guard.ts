@@ -35,7 +35,7 @@ const bad = (message: string, status: number): Refusal => ({
   }),
 });
 
-export async function guardDraft(planId: string, purpose: "field_draft" | "goals_draft"): Promise<Refusal | Allowed> {
+export async function guardDraft(planId: string, purpose: "field_draft" | "goals_draft" | "multiples_search"): Promise<Refusal | Allowed> {
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pieceFromLine, requestBody } from "./provider";
+import { pieceFromLine, requestBody, searchBody, readSearchReply } from "./provider";
 import { buildMessages, tidyDraft } from "@/engine/ai/prompt";
 import { planDraft, type DraftableField } from "@/engine/ai/draft";
 import type { ReportInput } from "@/engine/report/build";
@@ -124,4 +124,18 @@ describe("the brief the model is given", () => {
     expect(whole).not.toContain("LEAKEDNAME");
     expect(whole).not.toContain("999999");
   });
+});
+
+describe("the one call that searches the web (§6.130)", () => {
+  const body = searchBody([{ role: "user", content: "x" }], "m");
+  it("is still zero-retention for the model", () => expect(body.provider).toEqual({ zdr: true }));
+  it("names one search engine rather than whatever the model offers", () => expect(body.plugins).toEqual([{ id: "web", engine: "exa", max_results: 8 }]));
+  it("is answered whole, not streamed", () => expect(body.stream).toBe(false));
+  it("keeps only URLs the search itself cited", () => {
+    const r = readSearchReply({ choices: [{ message: { content: "{}", annotations: [
+      { type: "url_citation", url_citation: { url: "https://a.com" } }, { type: "file", url_citation: { url: "https://no.com" } }, { type: "url_citation" },
+    ] } }] });
+    expect(r).toEqual({ text: "{}", cited: ["https://a.com"] });
+  });
+  it("reads a broken reply as empty", () => expect(readSearchReply(null)).toEqual({ text: "", cited: [] }));
 });

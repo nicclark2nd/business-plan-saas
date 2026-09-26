@@ -132,3 +132,69 @@ export const openRouter: DraftProvider = {
     }
   },
 };
+
+/**
+ * ONE SEARCH, ANSWERED WHOLE (§6.130).
+ *
+ * The comparable-multiples lookup is the only call that reaches the web. It does not stream: the answer is
+ * JSON to be checked, not prose to be read as it arrives, and half a JSON object is nothing.
+ *
+ * THE MODEL CALL STAYS ZERO-RETENTION; THE SEARCH IS A SEPARATE PARTY. OpenRouter runs the search through
+ * Exa, which receives the query. That is why the request holds nothing but an industry, a country and a
+ * revenue band (engine/ai/multiples.ts), and why the consent statement says so in its own sentence.
+ *
+ * Exa is named rather than left to "native": native search differs by model, is priced by context size, and
+ * would change silently with OPENROUTER_MODEL. One engine, one known price per search.
+ */
+export function searchBody(messages: Message[], model = draftModel()) {
+  return {
+    model,
+    messages,
+    stream: false,
+    provider: { zdr: true },
+    plugins: [{ id: "web", engine: "exa", max_results: 8 }],
+    temperature: 0,
+    max_tokens: 1200,
+  };
+}
+
+/** The text of the reply and every URL the search itself returned — the only URLs a source may have. */
+export function readSearchReply(j: unknown): { text: string; cited: string[] } {
+  const msg = (j as { choices?: { message?: { content?: unknown; annotations?: unknown } }[] })?.choices?.[0]?.message;
+  const text = typeof msg?.content === "string" ? msg.content : "";
+  const cited = (Array.isArray(msg?.annotations) ? msg.annotations : [])
+    .map((a: { type?: string; url_citation?: { url?: unknown } }) => (a?.type === "url_citation" ? a.url_citation?.url : null))
+    .filter((u: unknown): u is string => typeof u === "string");
+  return { text, cited };
+}
+
+export async function searchOnce(messages: Message[], signal?: AbortSignal): Promise<{ text: string; cited: string[] }> {
+  const key = apiKey();
+  let res: Response;
+  try {
+    res = await fetch(ENDPOINT, {
+      method: "POST",
+      signal,
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://bizplanhq.com",
+        "X-Title": "BizPlanHQ",
+      },
+      body: JSON.stringify(searchBody(messages)),
+    });
+  } catch {
+    throw new AiUnavailable("Could not reach the AI service. Try again in a moment.", "network");
+  }
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    if (/zdr|zero.?data.?retention|no (allowed )?(endpoints|providers)/i.test(detail)) {
+      throw new AiUnavailable(
+        `No zero-retention provider can serve ${draftModel()}, so the request was refused rather than routed to one that stores your plan.`,
+        "no_zdr_endpoint",
+      );
+    }
+    throw new AiUnavailable(`The AI service refused the search (${res.status}).`, "refused");
+  }
+  return readSearchReply(await res.json().catch(() => null));
+}

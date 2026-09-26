@@ -10,6 +10,9 @@ import { checkLogo, logoObjectPath, LOGO_BUCKET } from "@/engine/plan/logo";
 import { checkEmail, checkWebsite } from "@/engine/plan/contact";
 import { failed } from "@/lib/actionFailed";
 import { adjustments, adjustedNote, type Watched } from "@/lib/adjusted";
+import { multiplesAsk, multiplesMessages, readMultiples, checkAccepted, type MultiplesReading, type MultipleSource } from "@/engine/ai/multiples";
+import { searchOnce, AiUnavailable } from "@/lib/ai/provider";
+import { guardDraft } from "../ai/guard";
 
 /**
  * `field` names the control the message belongs beside (§6.98). A save that says "that does not look like an
@@ -171,21 +174,81 @@ export async function savePrinting(planId: string, p: Partial<Printing>): Promis
  * the database carries the same constraint, and this catches it before the round trip so the message can name
  * the box. Nothing here has a view on whether 4x is right for a concreter (open item 32).
  */
-export async function saveExit(planId: string, e: Partial<Exit>): Promise<Result> {
+export async function saveExit(planId: string, e: Partial<Exit>): Promise<{ ok: true; sourcesCleared: boolean } | { ok: false; error: string; field?: string }> {
   const lo = e.multiple_low ?? null, hi = e.multiple_high ?? null;
   if (lo !== null && hi !== null && lo > hi) {
     return { ok: false, error: "The low multiple is above the high one.", field: "multiple_low" };
   }
   const supabase = await createClient();
+  /*
+   * A RANGE THE CLIENT CHANGED IS THEIRS (§6.130). If the stored pair came from a search and either end is
+   * now different, the sources no longer describe it and are cleared in the same write — never left to say
+   * "from 3 published sources" about a number nobody published.
+   */
+  const { data: was, error: readError } = await supabase.from("plan_settings")
+    .select("multiple_low, multiple_high, multiple_sources").eq("plan_id", planId).maybeSingle();
+  if (readError) return failed(readError, "save the sale figures");
+  const n = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+  const clear = !!was?.multiple_sources && (n(was.multiple_low) !== lo || n(was.multiple_high) !== hi);
   const { error } = await supabase.from("plan_settings").upsert({
     plan_id: planId,
     asking_price: e.asking_price ?? null,
     multiple_low: lo, multiple_high: hi,
     intended_exit_year: e.intended_exit_year ?? null,
+    ...(clear ? { multiple_sources: null, multiple_found_on: null } : {}),
   }, { onConflict: "plan_id" });
   if (error) return failed(error, "save the sale figures");
   touch(planId);
-  return { ok: true };
+  return { ok: true, sourcesCleared: clear };
+}
+
+/**
+ * LOOK UP WHAT SIMILAR BUSINESSES SOLD FOR (§6.130). Nothing is saved here: the range goes back to the
+ * screen as a card, and only `acceptMultiples` writes it, when the client says so.
+ *
+ * The profile is checked BEFORE the gate, so a plan with no industry is told what is missing without
+ * spending one of the day's allowance on a search that could not have been about anything.
+ */
+export async function findMultiples(planId: string): Promise<MultiplesReading> {
+  const supabase = await createClient();
+  const [settings, history] = await Promise.all([
+    supabase.from("plan_settings").select("industry, country, currency").eq("plan_id", planId).maybeSingle(),
+    supabase.from("plan_historic_periods").select("revenue").eq("plan_id", planId).eq("period_number", 1).maybeSingle(),
+  ]);
+  if (settings.error) return { ok: false, setAside: 0, reason: "Couldn't read this plan's Business Profile." };
+  const s = settings.data;
+  const revenue = history.data?.revenue === null || history.data?.revenue === undefined ? null : Number(history.data.revenue);
+  const asked = multiplesAsk({ industry: s?.industry ?? null, country: s?.country ?? null, revenue, currency: s?.currency ?? "AUD" });
+  if (!asked.ok) {
+    return { ok: false, setAside: 0, reason: `Set the ${asked.missing.join(" and ")} on Business Profile first — a comparable has to know what the business is and where.` };
+  }
+
+  const gate = await guardDraft(planId, "multiples_search");
+  if (!gate.ok) {
+    const j = await gate.response.json().catch(() => null) as { error?: string } | null;
+    return { ok: false, setAside: 0, reason: j?.error ?? "The search could not start." };
+  }
+  try {
+    const { text, cited } = await searchOnce(multiplesMessages(asked.ask));
+    return readMultiples(text, cited, asked.ask);
+  } catch (e) {
+    return { ok: false, setAside: 0, reason: e instanceof AiUnavailable ? e.message : "The search stopped before it finished. Try again in a moment." };
+  }
+}
+
+/** The client accepted the range on the card. Stored with its sources and today's date, together or not at all. */
+export async function acceptMultiples(planId: string, x: { low: number; high: number; sources: MultipleSource[] }):
+  Promise<{ ok: true; data: { low: number; high: number; sources: MultipleSource[]; found_on: string } } | { ok: false; error: string }> {
+  const c = checkAccepted(x);
+  if (!c.ok) return { ok: false, error: "That range could not be saved as found — search again." };
+  const found_on = new Date().toISOString().slice(0, 10);
+  const supabase = await createClient();
+  const { error } = await supabase.from("plan_settings").upsert({
+    plan_id: planId, multiple_low: c.low, multiple_high: c.high, multiple_sources: c.sources, multiple_found_on: found_on,
+  }, { onConflict: "plan_id" });
+  if (error) return failed(error, "save the comparable range");
+  touch(planId);
+  return { ok: true, data: { low: c.low, high: c.high, sources: c.sources, found_on } };
 }
 
 /**

@@ -52,6 +52,11 @@ export type Sale = {
   /** What businesses like this one have actually changed hands for, as a multiple of normalised EBITDA. */
   multipleLow: number | null;
   multipleHigh: number | null;
+  /**
+   * When the range was accepted from a web search, how many sources and on what day (§6.130), so the tab
+   * can say so beside it. Absent or null: the client typed it.
+   */
+  multipleFound?: { sources: number; on: string } | null;
   /** Which forecast year the sale is aimed at, if the client has said. */
   exitYear: number | null;
 };
@@ -107,6 +112,8 @@ export function readSale(s: Row, addBacks: { amount?: unknown }[] = []): Sale {
     askingPrice: n(s?.asking_price),
     addBacks: lines.length ? Math.round(lines.reduce((a, b) => a + b, 0) * 100) / 100 : null,
     multipleLow: n(s?.multiple_low), multipleHigh: n(s?.multiple_high),
+    multipleFound: Array.isArray(s?.multiple_sources) && typeof s?.multiple_found_on === "string"
+      ? { sources: (s.multiple_sources as unknown[]).length, on: s.multiple_found_on as string } : null,
     exitYear: n(s?.intended_exit_year),
   };
 }

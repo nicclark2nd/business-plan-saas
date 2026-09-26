@@ -36,7 +36,7 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
   const m = i.money;
   const sale = i.sale;
   const FIX_PRICE = { label: "Set the asking price", to: "settings?area=exit" };
-  const FIX_RANGE = { label: "Set the comparable range", to: "settings?area=exit" };
+  const FIX_RANGE = { label: "Set the similar-sales range", to: "settings?area=exit" };
   const FIX_TRANSFER = { label: "Score the six factors", to: "people?area=risk" };
 
   const e1 = ebitda(y1);
@@ -108,10 +108,10 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       sub: price && normalised ? `${m(price)} against ${m(normalised)} of normalised earnings` : undefined,
       note: multiple === null ? "The one number a buyer decides on."
         : !ranged ? `The price is ${r2(multiple)}× normalised earnings. Whether that is high or low needs a comparable range to sit it against.`
-        : multiple > high ? `Above every comparable deal you have entered. At ${high}× the price would be ${m(normalised! * high)}.`
-        : multiple < low ? "Below the range comparable businesses have sold for — you may be leaving money on the table."
-        : "Inside the range you have said comparable businesses sell for.",
-      bench: ranged ? `Comparable deals ${low}× to ${high}×` : "Set the comparable range in Plan settings",
+        : multiple > high ? `Above the top of the similar-sales range. At ${high}× the price would be ${m(normalised! * high)}.`
+        : multiple < low ? "Below the range similar businesses have sold for — you may be leaving money on the table."
+        : "Inside the range similar businesses have sold for.",
+      bench: ranged ? `Similar sales ${low}× to ${high}×` : "Set the similar-sales range in Plan settings",
       formula: "Asking price ÷ (EBITDA + owner add-backs), both from Plan settings → Exit & sale",
       reveals: "Whether the price can be justified against what similar businesses actually changed hands for.",
       confidence: "The arithmetic is exact; the comparable range is your judgement, and it is the part a buyer will argue with.",

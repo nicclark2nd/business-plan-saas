@@ -86,6 +86,8 @@ export default async function SettingsPage({ params, searchParams }: { params: P
     asking_price: nOrNull(s.asking_price),
     multiple_low: nOrNull(s.multiple_low), multiple_high: nOrNull(s.multiple_high),
     intended_exit_year: nOrNull(s.intended_exit_year),
+    multiple_sources: Array.isArray(s.multiple_sources) ? s.multiple_sources : null,
+    multiple_found_on: s.multiple_found_on ?? null,
   };
   /**
    * A SIGNED URL, minted per request (§6.94). The bucket is private, so there is no permanent address to
@@ -97,7 +99,7 @@ export default async function SettingsPage({ params, searchParams }: { params: P
     ? (await supabase.storage.from(LOGO_BUCKET).createSignedUrl(logoPath, LOGO_URL_TTL_SECONDS)).data?.signedUrl ?? null
     : null;
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
-  const initialArea = area === "financial" || area === "printing" || area === "exit" || area === "branding" || area === "lifecycle" ? area : "profile";
+  const initialArea = area === "financial" || area === "printing" || area === "exit" || area === "ai" || area === "branding" || area === "lifecycle" ? area : "profile";
   return <SettingsModule planId={planId} initial={initial} mode={mode} initialArea={initialArea} drafting={drafting}
     licences={(licences.data ?? []) as Licence[]} logoUrl={logoUrl}
     archivedAt={plan.data?.archived_at ?? null} inventory={inventory}

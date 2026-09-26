@@ -450,7 +450,7 @@ describe("selling", () => {
     const m = sellMetrics(priced({ askingPrice: 40_000_000 }));
     const mult = m.find((x) => x.key === "priceMultiple")!;
     expect(statusOf(mult.value, mult.bands)).toBe("bad");
-    expect(mult.note).toContain("Above every comparable deal");
+    expect(mult.note).toContain("Above the top of the similar-sales range");
     const s = score(m, SELL_WEIGHTS);
     expect(s.capped).toContain("priceMultiple");
     expect(s.value!).toBeLessThan(50);
@@ -533,7 +533,15 @@ describe("reading the stored judgements", () => {
     expect(readStress({ stress_sales_pct: 10, stress_margin_pts: 0, stress_debtor_days: null }))
       .toEqual({ salesPct: 10, marginPts: 0, debtorDaysAdded: null });
     expect(readSale({ asking_price: 3_000_000, multiple_low: 3.5 }))
-      .toEqual({ askingPrice: 3_000_000, addBacks: null, multipleLow: 3.5, multipleHigh: null, exitYear: null });
+      .toEqual({ askingPrice: 3_000_000, addBacks: null, multipleLow: 3.5, multipleHigh: null, multipleFound: null, exitYear: null });
+  });
+
+  /* A searched range carries its provenance to the tab (§6.130); half a provenance is none. */
+  it("says where a searched range came from, and only when both halves are there", () => {
+    const src = [{ title: "A", url: "https://a.com", low: 3, high: 4 }, { title: "B", url: "https://b.com", low: 3, high: 4 }];
+    expect(readSale({ multiple_low: 3, multiple_high: 4, multiple_sources: src, multiple_found_on: "2026-09-26" }).multipleFound)
+      .toEqual({ sources: 2, on: "2026-09-26" });
+    expect(readSale({ multiple_low: 3, multiple_high: 4, multiple_sources: src }).multipleFound).toBeNull();
   });
 
   /*

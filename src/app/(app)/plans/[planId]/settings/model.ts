@@ -1,3 +1,4 @@
+import type { MultipleSource } from "@/engine/ai/multiples";
 import { CUSTOMER_NOUNS, PRODUCT_NOUNS } from "@/engine/plan/vocabulary";
 import type { TaxComponent } from "@/engine/plan/taxRegimes";
 /** Plan settings — three small areas (SaaS §6.12): Business profile · Financial year & tax · Branding. */
@@ -170,7 +171,14 @@ export type Exit = {
  */
 export type AddBack = { id: string; label: string; amount: number; sort_order: number };
 
-export type Settings = Profile & Financial & Printing & Ai & Exit & { logo_path: string | null };
+/**
+ * Where the comparable range came from, when it came from a search (§6.130). Both null when the client typed
+ * it, or never set it. Not part of `Exit`: nothing on the screen edits these — accepting a search writes
+ * them, and typing over the range clears them.
+ */
+export type MultiplesFound = { multiple_sources: MultipleSource[] | null; multiple_found_on: string | null };
+
+export type Settings = Profile & Financial & Printing & Ai & Exit & MultiplesFound & { logo_path: string | null };
 
 /** The fields a report's business overview cannot do without. */
 /** What a report cannot open without. The products & services statement moved to Sales (§6.34). */

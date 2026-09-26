@@ -11,7 +11,9 @@ import { taxComponents, taxHeading } from "@/engine/plan/gst";
 import { needsRegion, regimeFor, regionLabel, regionsFor, type TaxComponent } from "@/engine/plan/taxRegimes";
 import { formatMonth } from "../people/model";
 import { FORECAST_YEARS } from "@/engine/forecast/model";
-import { saveProfile, saveFinancial, savePrinting, saveAiConsent, saveExit, upsertAddBack, deleteAddBack } from "./actions";
+import { saveProfile, saveFinancial, savePrinting, saveAiConsent, saveExit, upsertAddBack, deleteAddBack, findMultiples, acceptMultiples } from "./actions";
+import { ComparableSearch } from "./ComparableSearch";
+import type { MultiplesReading, MultipleSource } from "@/engine/ai/multiples";
 import { Button } from "@/components/ui/button";
 import { DraftDialog, type DraftQuestion } from "@/components/module/DraftDialog";
 import { DRAFTABLE } from "@/engine/ai/fields";
@@ -189,7 +191,30 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
       intended_exit_year: yrRef.current,
     });
     if (!res.ok) errors.raise({ key: "exit", message: res.error, field: res.field, label: "Exit & sale" });
-    else errors.clear("exit");
+    else { errors.clear("exit"); if (res.sourcesCleared) setFound(null); }
+  });
+
+  /*
+   * THE SEARCHED RANGE (§6.130). Kept outside the transition: a search takes seconds, and `pending` would
+   * lock every box on the tab while it ran. The card is the only thing waiting.
+   */
+  const [found, setFound] = useState<{ sources: MultipleSource[]; on: string } | null>(
+    initial.multiple_sources && initial.multiple_found_on ? { sources: initial.multiple_sources, on: initial.multiple_found_on } : null);
+  const [search, setSearch] = useState<"searching" | MultiplesReading | null>(null);
+  const runSearch = async () => {
+    setSearch("searching");
+    try { setSearch(await findMultiples(planId)); }
+    catch { setSearch({ ok: false, setAside: 0, reason: "The search stopped before it finished. Try again in a moment." }); }
+  };
+  const takeRange = (r: Extract<MultiplesReading, { ok: true }>) => start(async () => {
+    const res = await acceptMultiples(planId, { low: r.low, high: r.high, sources: r.sources });
+    if (!res.ok) { errors.raise({ key: "exit", message: res.error, field: "multiple_low", label: "Exit & sale" }); return; }
+    errors.clear("exit");
+    /* The boxes adopt what was stored (§6.121), so the next blur-save sees an unchanged range and keeps the sources. */
+    editEx("multiple_low", String(res.data.low));
+    editEx("multiple_high", String(res.data.high));
+    setFound({ sources: res.data.sources, on: res.data.found_on });
+    setSearch(null);
   });
 
   /*
@@ -468,17 +493,17 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
             <FieldGrid>
               <Field label="Asking price" span={2} error={errors.forField("asking_price")}
                 hint="Enterprise value — the business, not the business plus your house. Leave it empty until you have a number in mind.">
-                <FieldInput numeric placeholder="Not priced" disabled={pending}
+                <FieldInput money placeholder="Not priced" disabled={pending}
                   value={ex.asking_price} onChange={(e) => editEx("asking_price", e.target.value)}
                   onBlur={commitExit} />
               </Field>
-              <Field label="Comparable deals, low" span={1} error={errors.forField("multiple_low")}
-                hint="× EBITDA">
+              <Field label="Similar sales, low" span={1} error={errors.forField("multiple_low")}
+                hint="× yearly earnings (EBITDA)">
                 <FieldInput numeric placeholder="—" disabled={pending}
                   value={ex.multiple_low} onChange={(e) => editEx("multiple_low", e.target.value)}
                   onBlur={commitExit} />
               </Field>
-              <Field label="Comparable deals, high" span={1} hint="× EBITDA">
+              <Field label="Similar sales, high" span={1} hint="× yearly earnings (EBITDA)">
                 <FieldInput numeric placeholder="—" disabled={pending}
                   value={ex.multiple_high} onChange={(e) => editEx("multiple_high", e.target.value)}
                   onBlur={commitExit} />
@@ -489,6 +514,10 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
                   onValueChange={(v) => { setExitYear(v ? Number(v) : null); yrRef.current = v ? Number(v) : null; commitExit(); }} />
               </Field>
             </FieldGrid>
+            <ComparableSearch aiOn={s.ai_enabled} industry={s.industry} country={s.country}
+              found={found} search={search} busy={pending || search === "searching"}
+              onSearch={runSearch} onUse={takeRange} onDismiss={() => setSearch(null)}
+              onGo={(k) => { commit(dirty); setArea(k); }} />
           </Section>
           {/*
             ADD-BACKS, ONE LINE EACH (§6.129.3). A buyer's accountant does not accept "85,000 of add-backs";
@@ -510,7 +539,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
                     <GridRow key={a.uid} title={errors.forKey(`addback:${a.uid}`)}>
                       <Td><CellInput value={a.label} placeholder="e.g. Owner's salary above a manager's market rate"
                         onChange={(e) => editAb(a.uid, { label: e.target.value })} onBlur={() => commitAb(a.uid)} /></Td>
-                      <Td right><CellInput numeric value={a.amount} placeholder="0"
+                      <Td right><CellInput money value={a.amount} placeholder="0"
                         onChange={(e) => editAb(a.uid, { amount: e.target.value })} onBlur={() => commitAb(a.uid)} /></Td>
                       <Td><RemoveButton onClick={() => removeAb(a.uid)} /></Td>
                     </GridRow>
@@ -533,12 +562,13 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
                 put in what you could actually defend with a document.
               </p>
               <p>
-                <b className="text-foreground">Comparable deal multiples</b> are what businesses like this one have actually
+                <b className="text-foreground">Similar sales</b> are what businesses like this one have actually
                 changed hands for, expressed as a multiple of those normalised earnings. A small trade business with the
                 owner in the truck might be 2.5–3.5×; the same revenue with recurring contracts and a manager running it,
                 4–5×. The low and high give a range to sit the asking price inside. A broker&apos;s report, industry
-                benchmarking data or the client&apos;s accountant is where the figures come from — the app does not know them,
-                and a number it invented would be worse than none.
+                benchmarking data or your accountant is where the figures come from. With AI on, the app can look up
+                published figures and show you each source, but it never makes one up: a number it invented would be
+                worse than none.
               </p>
             </div>
           </Section>
@@ -576,6 +606,15 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
                   <b>We never send names, salaries or funding details.</b> Nothing is sent unless you press a
                   draft button. Every suggestion is yours to edit or discard, and nothing is saved to your
                   plan until you accept it.
+                </span>
+                {/*
+                  THE ONE CALL THAT LEAVES THE ZERO-RETENTION ROUTE (§6.130) gets its own sentence. The search
+                  engine sees the query, so the query is built from three things and this says which three.
+                */}
+                <span className="mt-1.5 block text-[12.5px] leading-[1.6] text-muted-foreground">
+                  On <b>Exit &amp; sale</b> you can also ask the app to look up what similar businesses sold for. That
+                  searches the public web using only your industry, your country and a rough size band — never your
+                  business name or your figures.
                 </span>
                 <span className="mt-1.5 block text-[12.5px] leading-[1.6] text-muted-foreground">
                   The AI models are provided by third parties and may change over time.

@@ -316,6 +316,9 @@ a software business do not share a sensible cash cycle, debtor days or margin. T
 industry and the screen says out loud that the bands do not — which is honest but not right. Either the
 bands come from somewhere real per industry, or the consultant sets them per client.
 
+*§6.130:* the comparable sale range is now the first per-industry figure — searched from the Business
+Profile with its sources shown, or typed. The other bands are still general.
+
 ### ~~33. Nothing holds a plan's cash buffer~~ — **stored (§6.129)**
 
 §6.128.3 answered this on the capability screen itself and this entry predicted exactly how that would
@@ -413,3 +416,21 @@ all of them with the same helper.
 The capacity measures, add-backs, debtor ageing and lender history each save on their own and report
 failures through the module's error channel, but none of them tells the footer they are mid-save. The
 failure path is covered; the "saving…" state is not.
+
+### 41. Money boxes elsewhere still show 1000000 — **Build, one pass**
+
+§6.130 added `money` to `FieldInput` and `CellInput`: grouped as 1,000,000 while the box is not being
+edited, as typed while it is. Only the Exit & sale asking price and add-back amounts use it so far. Every
+other money box — cash floor, security values, weighted pipeline, debtor ageing, guarantee, historic
+figures, sales and overhead grids — still shows raw digits. One pass, switching `numeric` to `money` where
+the figure is currency (not percentages, days or multiples).
+
+### 42. The searched comparable range clears the two-site minimum by exactly two — **watch**
+
+§6.130's first live runs on SEQ (Commercial concreting, Australia, AUD 1–5 million) came back twice with
+the same answer in about 15–20 seconds: 2× to 3.5× EBITDA from two sites — creditte.com.au ("Trade and
+construction: typically 2x – 3.5x", drawn from broker transaction data, checked by hand) and
+businessvaluationsbrisbane.com.au (could not be opened to check). Two is the minimum, so a narrower
+industry or a smaller country will often get "couldn't find" instead. If that is common in practice, the
+next step is an SDE-to-EBITDA path using the leadership pay the plan already holds, since most published
+small-business multiples are on SDE.
