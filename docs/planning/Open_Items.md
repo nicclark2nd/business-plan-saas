@@ -240,12 +240,16 @@ which ones the plan answers, the long rungs in the client's own words, the year'
 — a report computing a client's three-year revenue for itself is one edit away from printing a different
 number to the screen they set it on.
 
-### 23. Nothing happens when the 90 days end
+### ~~23. Nothing happens when the 90 days end~~ — **done (§6.137)**
 
-The period end date is a field on the plan. When it passes, the band still shows the same goals with the
-same statuses and nothing prompts a review, rolls the period forward, or keeps what was done as history.
-The competing product archives a cycle and starts the next. Until this exists, a client who sets the date
-once has a list that quietly goes stale, and the dashboard panel goes stale with it.
+Migration 0052 adds `plan_goals.closed_period_end` and `outcome`. Once the end date has passed (by the
+viewer's own clock), Goals shows "These ninety days ended on …" with **Review the 90 days**, and the
+dashboard panel reads "ended …" with a link. The review marks each goal Done, Carry forward or Drop (Done
+pre-chosen for goals already marked done), sets the next end date (13 weeks on by default), and closes the
+period: done and dropped goals are kept under **Earlier 90-day periods** ("Ended 20 September 2026 · 1 of 2
+done") and leave every live list — the ladder, dashboard, report, Marketing's goals and What-If's
+dedupe. A dropped goal's SWOT line is offered again. Driven live on ZZ Test Walk, which now carries that
+closed period and an end date of 20 December 2026.
 
 ### ~~24. SEQ has near-duplicate What-If goals and nothing dedupes them~~ — **fixed going forward (§6.134)**
 

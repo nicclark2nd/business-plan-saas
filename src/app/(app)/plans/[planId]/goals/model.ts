@@ -36,6 +36,9 @@ export type Goal = {
   source: "manual" | "ai" | "whatif";
   sort_order: number;
   swot_item_id: string | null;
+  /** The 90-day period this goal was closed under, and how (§6.137). Both null while it is live. */
+  closed_period_end?: string | null;
+  outcome?: "done" | "dropped" | null;
 };
 
 /**

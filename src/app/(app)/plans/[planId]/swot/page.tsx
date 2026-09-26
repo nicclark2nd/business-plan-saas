@@ -11,7 +11,9 @@ export default async function SwotPage({ params }: { params: Promise<{ planId: s
     getSession(),
     supabase.from("plan_swot_items").select("*").eq("plan_id", planId).order("sort_order").order("created_at"),
     // Which lines somebody is actually accountable for (§6.59.1) — a response is intent, a goal is a commitment.
-    supabase.from("plan_goals").select("id, swot_item_id, title, milestone_date, status").eq("plan_id", planId).not("swot_item_id", "is", null),
+    supabase.from("plan_goals").select("id, swot_item_id, title, milestone_date, status").eq("plan_id", planId).not("swot_item_id", "is", null)
+      /* A goal dropped at a review no longer answers its line (§6.137). */
+      .or("outcome.is.null,outcome.eq.done"),
     supabase.from("plan_competitors").select("id, name, threat, weaknesses, strengths, how_we_win").eq("plan_id", planId),
     supabase.from("plan_marketing").select("our_advantage, barriers_to_entry, future_threats, market_trends").eq("plan_id", planId).maybeSingle(),
     supabase.from("plan_people").select("id, name, role").eq("plan_id", planId),

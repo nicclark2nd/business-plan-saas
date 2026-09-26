@@ -67,7 +67,8 @@ export default async function GoalsPage({ params }: { params: Promise<{ planId: 
     kpis: (kpis.data ?? []) as { id: string; name: string; unit: string | null; source_key: string | null; sort_order: number }[],
     targets: ((targets.data ?? []) as { kpi_id: string; horizon: string; target: string | number | null }[])
       .map((t) => ({ ...t, target: t.target === null ? null : Number(t.target) })),
-    goals: (goals.data ?? []) as { horizon: string; title: string }[],
+    /* Live goals only: a closed 90-day period is history, not part of the ladder (§6.137). */
+    goals: ((goals.data ?? []) as { horizon: string; title: string; closed_period_end?: string | null }[]).filter((g) => !g.closed_period_end),
   });
 
   /* The screen's own shapes, mapped off the one assembly rather than computed a second time. */

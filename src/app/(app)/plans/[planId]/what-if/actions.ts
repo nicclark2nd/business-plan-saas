@@ -98,7 +98,7 @@ export async function createGoalsFromScenario(planId: string, goals: GoalToCreat
    */
   const { data: open, error: readError } = await supabase.from("plan_goals")
     .select("id, source_key").eq("plan_id", planId).eq("source", "whatif").eq("horizon", "ninety")
-    .neq("status", "done").in("source_key", wanted.map((g) => g.lever));
+    .neq("status", "done").is("closed_period_end", null).in("source_key", wanted.map((g) => g.lever));
   if (readError) return failed(readError, "check the goals already made");
   const existing = new Map((open ?? []).map((r) => [r.source_key as string, r.id as string]));
 

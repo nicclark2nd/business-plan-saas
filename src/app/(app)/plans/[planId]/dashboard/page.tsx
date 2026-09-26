@@ -48,6 +48,8 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
    * Q1 goals against January–March) is now unreachable rather than merely handled.
    */
   const ninetyEnds = ps?.ninety_day_ends_on ?? null;
+  /* Over once the day after the end date has started (UTC on the server; Goals itself uses the viewer's clock). */
+  const ninetyOver = !!ninetyEnds && new Date().toISOString().slice(0, 10) > ninetyEnds;
 
   /**
    * THE PLAN'S OWN TWELVE MONTHS, NOT THE CALENDAR'S (§6.21, §6.126).
@@ -65,7 +67,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
   const monthName = (m: number) => months[(m - 1) % 12];
   const { data: quarterGoals } = await supabase.from("plan_goals")
     .select("id, area, title, status, owner_person_id, milestone_date")
-    .eq("plan_id", planId).eq("horizon", "ninety")
+    .eq("plan_id", planId).eq("horizon", "ninety").is("closed_period_end", null)
     .order("milestone_date", { ascending: true, nullsFirst: false }).order("sort_order");
   const { data: goalPeople } = await supabase.from("plan_people").select("id, name").eq("plan_id", planId);
   const ownerOf = (id: string | null) => goalPeople?.find((p) => p.id === id)?.name ?? "";
@@ -235,7 +237,16 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
             </Link>
           ))}
         </Panel>
-        <Panel title="Next 90 days" badge={<span className="eyebrow">{ninetyEnds ? `ends ${ninetyEnds}` : "no end date set"}</span>}>
+        <Panel title="Next 90 days" badge={<span className={cn("eyebrow", ninetyOver && "text-bad")}>{ninetyEnds ? `${ninetyOver ? "ended" : "ends"} ${ninetyEnds}` : "no end date set"}</span>}>
+          {/*
+            A PERIOD THAT HAS ENDED SAYS SO HERE TOO (§6.137, open item 23) — the dashboard panel was the list
+            that went stalest, because it is the one people glance at without opening Goals.
+          */}
+          {ninetyOver && (
+            <p className="mb-2 rounded bg-warn-soft px-2.5 py-1.5 text-[12.5px]">
+              These ninety days are over. <Link className="font-semibold text-primary" href={`${base}/goals`}>Review them on Goals →</Link>
+            </p>
+          )}
           {quarterGoals?.length ? (
             <>
               {quarterGoals.map((g) => (

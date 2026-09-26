@@ -73,7 +73,8 @@ export async function gatherReport(planId: string) {
   const [planRow, framework, goals, people, caps, licences, marketing, segments, evidence, spend, competitors, premises, suppliers, opSteps, opCapacity, completeness, ladderSettings, kpis, kpiTargets] = await Promise.all([
     supabase.from("plans").select("business_name, plan_year").eq("id", planId).maybeSingle().then((r) => r.data),
     supabase.from("plan_framework").select("vision, mission, purpose, brand_promise, field_of_play").eq("plan_id", planId).maybeSingle().then((r) => r.data),
-    rows(supabase.from("plan_goals").select("*").eq("plan_id", planId).neq("title", "").order("year").order("quarter").order("sort_order")),
+    /* Live goals only — a closed 90-day period is history (§6.137). */
+    rows(supabase.from("plan_goals").select("*").eq("plan_id", planId).neq("title", "").is("closed_period_end", null).order("year").order("quarter").order("sort_order")),
     rows(supabase.from("plan_people").select("*").eq("plan_id", planId).order("sort_order")),
     rows(supabase.from("plan_people_capabilities").select("*").eq("plan_id", planId).order("sort_order")),
     rows(supabase.from("plan_licences").select("*").eq("plan_id", planId).order("sort_order")),

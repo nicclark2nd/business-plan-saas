@@ -22,7 +22,7 @@ export default async function MarketingPage({ params, searchParams }: { params: 
      * would put one commitment in two places, which is the fault this project keeps paying for.
      */
     supabase.from("plan_goals").select("*").eq("plan_id", planId).eq("area", "marketing")
-      .eq("horizon", "ninety").order("year").order("quarter").order("sort_order"),
+      .eq("horizon", "ninety").is("closed_period_end", null).order("year").order("quarter").order("sort_order"),
     supabase.from("plan_people").select("id, name, role").eq("plan_id", planId).order("sort_order"),
     // The sales lines, so Marketing can say what a customer costs to win (§6.61) from real figures.
     supabase.from("plan_products").select("*").eq("plan_id", planId).order("sort_order"),

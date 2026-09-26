@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { guarded } from "@/lib/guardedStart";
 import { useSaveErrors } from "@/components/module/saveErrors";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,8 @@ import {
 import { GoalsDraftDialog, type GoalQuestion } from "@/components/goals/GoalsDraftDialog";
 import { GoalDialog } from "@/components/goals/GoalDialog";
 import {
-  continueFromGoals, deleteGoal, deleteKpi, saveGoal, saveHeaderField, saveKpi, saveKpiTarget, setGoalStatus,
+  closeNinetyDays, continueFromGoals, deleteGoal, deleteKpi, saveGoal, saveHeaderField, saveKpi, saveKpiTarget, setGoalStatus,
+  type ReviewChoice,
 } from "./actions";
 
 type Tab = "ladder" | "swot";
@@ -129,11 +130,41 @@ export function GoalsModule({
 
   const money = useMemo(() => moneyFormatter(currency), [currency]);
   const ownerName = (id: string | null) => people.find((p) => p.id === id)?.name || "";
-  const at = (h: GoalHorizon) => goals.filter((g) => g.horizon === h);
+  /* Closed goals are history (§6.137): kept, shown under "Earlier 90-day periods", and off every live list. */
+  const at = (h: GoalHorizon) => goals.filter((g) => g.horizon === h && !g.closed_period_end);
   const ninety = at("ninety");
+  const history = goals.filter((g) => g.closed_period_end);
 
-  /** Lines from step 5 that nobody has committed to yet. One already answered is not offered twice. */
-  const committed = new Set(goals.map((g) => g.swot_item_id).filter(Boolean));
+  /**
+   * HAS THE PERIOD ENDED (§6.137). Today is read on the client and never during the server render — the
+   * server's date and the client's differ either side of midnight, and Nic is seven hours ahead of UTC.
+   * Until it is known, nothing claims the period is over.
+   */
+  const today = useSyncExternalStore(() => () => {}, () => new Date().toLocaleDateString("en-CA"), () => null);
+  const ends = header.ninety_day_ends_on;
+  const periodOver = !!ends && !!today && today > ends;
+  const [reviewing, setReviewing] = useState(false);
+  const closePeriod = (decisions: { id: string; choice: ReviewChoice }[], nextEnd: string) => start(async () => {
+    const r = await closeNinetyDays(planId, decisions, nextEnd);
+    if (!r.ok) { setErr(r.error); return; }
+    setErr(undefined);
+    const closedOn = r.data!.closedOn;
+    const by = new Map(decisions.map((d) => [d.id, d.choice]));
+    setGoals((xs) => xs.map((g) => {
+      const c = by.get(g.id);
+      if (c === "done") return { ...g, status: "done", outcome: "done", closed_period_end: closedOn };
+      if (c === "drop") return { ...g, outcome: "dropped", closed_period_end: closedOn };
+      return g;
+    }));
+    setHeader((h) => ({ ...h, ninety_day_ends_on: nextEnd }));
+    setReviewing(false);
+  });
+
+  /**
+   * Lines from step 5 that nobody has committed to yet. One already answered is not offered twice — but a
+   * goal that was DROPPED at a review no longer answers it, so the line is offered again (§6.137).
+   */
+  const committed = new Set(goals.filter((g) => g.outcome !== "dropped").map((g) => g.swot_item_id).filter(Boolean));
   const openSwot = swot.filter((s) => !committed.has(s.id));
 
   /* ---------- the top of the screen ---------- */
@@ -570,6 +601,16 @@ export function GoalsModule({
               </span>
               <LinkButton className="ml-auto whitespace-nowrap" onClick={() => setEditing({})}>+ Add a goal</LinkButton>
             </div>
+            {/*
+              THE PERIOD HAS ENDED AND THE SCREEN SAYS SO (§6.137, open item 23). Until now the band went on
+              showing the same goals with the same statuses long after the date, and nothing prompted anyone.
+            */}
+            {periodOver && (
+              <div className="flex flex-wrap items-center gap-3 border-b border-warn/40 bg-warn-soft px-3 py-2 text-[12.5px]">
+                <span>These ninety days ended on <b>{longDate(ends)}</b>. Close them — mark what got done, carry forward what did not, drop what no longer matters — and set the next ninety.</span>
+                <Button type="button" size="sm" className="ml-auto" disabled={pending} onClick={() => setReviewing(true)}>Review the 90 days</Button>
+              </div>
+            )}
             {ninety.length === 0 ? (
               <p className="px-3 py-2.5 text-[12.5px] text-muted-foreground">
                 Nothing yet. These are the steps towards the one-year card — the things that have to move in the next ninety days.
@@ -599,6 +640,9 @@ export function GoalsModule({
               </div>
             ))}
           </section>
+
+          {/* ---------- earlier ninety days: kept, never deleted (§6.137) ---------- */}
+          {history.length > 0 && <NinetyHistory goals={history} ownerName={ownerName} />}
         </div>
       ) : (
         /* ---------- From your SWOT ---------- */
@@ -635,6 +679,11 @@ export function GoalsModule({
             swotItemId: editing.from?.id ?? editing.goal?.swot_item_id ?? null,
           }, editing.goal)}
         />
+      )}
+
+      {reviewing && ends && (
+        <ReviewDialog ends={ends} goals={ninety} ownerName={ownerName} pending={pending}
+          onCancel={() => setReviewing(false)} onClose={closePeriod} />
       )}
 
       {toRemove && (
@@ -679,3 +728,109 @@ function PendingBridge({ pending }: { pending: boolean }) {
   useEffect(() => setNote(pending ? "Saving…" : undefined), [pending, setNote]);
   return null;
 }
+
+/** Ninety-one days on: thirteen weeks, so the next period ends on the same weekday as the last. */
+const plus91 = (iso: string) => {
+  const [y, m, d] = iso.split("-").map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d + 91));
+  return t.toISOString().slice(0, 10);
+};
+
+/**
+ * THE END-OF-PERIOD REVIEW (§6.137). One decision per goal, with a sensible first answer already chosen —
+ * done if it is marked done, carried forward otherwise — so a review of a well-kept list is one click.
+ */
+function ReviewDialog({ ends, goals, ownerName, pending, onCancel, onClose }: {
+  ends: string; goals: Goal[]; ownerName: (id: string | null) => string; pending: boolean;
+  onCancel: () => void; onClose: (d: { id: string; choice: ReviewChoice }[], nextEnd: string) => void;
+}) {
+  const [choice, setChoice] = useState<Record<string, ReviewChoice>>(() =>
+    Object.fromEntries(goals.map((g) => [g.id, g.status === "done" ? "done" : "carry"])));
+  const [next, setNext] = useState(plus91(ends));
+  const OPTIONS: { key: ReviewChoice; label: string }[] = [
+    { key: "done", label: "Done" }, { key: "carry", label: "Carry forward" }, { key: "drop", label: "Drop" },
+  ];
+  const n = (c: ReviewChoice) => goals.filter((g) => choice[g.id] === c).length;
+  const valid = /^\d{4}-\d{2}-\d{2}$/.test(next) && next > ends;
+  return (
+    <Dialog open onOpenChange={(o) => !o && onCancel()}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader><DialogTitle>Close the ninety days that ended {longDate(ends)}</DialogTitle></DialogHeader>
+        {goals.length === 0 ? (
+          <p className="text-[13px] text-muted-foreground">There were no goals in this period. Set the next end date and start again.</p>
+        ) : (
+          <div className="max-h-[46vh] overflow-auto rounded border border-border">
+            {goals.map((g) => (
+              <div key={g.id} className="flex items-center gap-3 border-b border-border px-3 py-2 text-[13px] last:border-b-0">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate" title={g.title}>{g.title}</div>
+                  <div className="text-[11.5px] text-muted-foreground">{ownerName(g.owner_person_id) || "Nobody"}{g.milestone_date ? ` · due ${longDate(g.milestone_date)}` : ""}</div>
+                </div>
+                <div className="flex flex-none overflow-hidden rounded border border-border" role="radiogroup" aria-label={g.title}>
+                  {OPTIONS.map((o) => (
+                    <button key={o.key} type="button" role="radio" aria-checked={choice[g.id] === o.key}
+                      onClick={() => setChoice((c) => ({ ...c, [g.id]: o.key }))}
+                      className={cn("px-2.5 py-1 text-[11.5px] font-semibold", choice[g.id] === o.key ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground")}>
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
+          <span>The next ninety days end on</span>
+          <Input type="date" className="h-8 w-[160px]" value={next} onChange={(e) => setNext(e.target.value)} />
+          {!valid && <span className="text-bad">It has to be after {longDate(ends)}.</span>}
+        </div>
+        <p className="text-[11.5px] text-muted-foreground">
+          {goals.length > 0 && <>{n("done")} done, {n("carry")} carried forward, {n("drop")} dropped. </>}
+          Done and dropped goals are kept under Earlier 90-day periods, not deleted.
+        </p>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onCancel}>Not now</Button>
+          <Button type="button" disabled={pending || !valid}
+            onClick={() => onClose(goals.map((g) => ({ id: g.id, choice: choice[g.id] ?? "carry" })), next)}>
+            Close the 90 days
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Every closed period, newest first, with what got done beside what was dropped (§6.137). */
+function NinetyHistory({ goals, ownerName }: { goals: Goal[]; ownerName: (id: string | null) => string }) {
+  const periods = [...new Set(goals.map((g) => g.closed_period_end!))].sort().reverse();
+  return (
+    <details className="rounded border border-border">
+      <summary className="cursor-pointer bg-secondary px-3 py-1.5 text-[12.5px]">
+        <span className="eyebrow mr-2">Earlier 90-day periods</span>
+        <span className="text-muted-foreground">{periods.length} closed</span>
+      </summary>
+      {periods.map((p) => {
+        const inP = goals.filter((g) => g.closed_period_end === p);
+        const done = inP.filter((g) => g.outcome === "done").length;
+        return (
+          <div key={p} className="border-t border-border">
+            <div className="px-3 py-1.5 text-[12px] font-semibold">
+              Ended {longDate(p)} <span className="font-normal text-muted-foreground">· {done} of {inP.length} done</span>
+            </div>
+            {inP.map((g) => (
+              <div key={g.id} className="flex items-center gap-2 px-3 py-1 text-[12.5px]">
+                <span className={cn("w-[62px] flex-none rounded-full px-1.5 text-center text-[10px] font-semibold",
+                  g.outcome === "done" ? "bg-good-soft text-good" : "bg-secondary text-muted-foreground")}>
+                  {g.outcome === "done" ? "Done" : "Dropped"}
+                </span>
+                <span className={cn("min-w-0 flex-1 truncate", g.outcome === "dropped" && "text-muted-foreground line-through")} title={g.title}>{g.title}</span>
+                <span className="w-[110px] flex-none truncate text-[11.5px] text-muted-foreground">{ownerName(g.owner_person_id) || "—"}</span>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </details>
+  );
+}
+

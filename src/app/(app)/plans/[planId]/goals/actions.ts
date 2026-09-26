@@ -227,3 +227,49 @@ export async function saveKpiTarget(
 export async function continueFromGoals(planId: string, intent: "next" | "later") {
   redirect(intent === "next" ? nextHref(planId, "goals") : `/plans/${planId}/dashboard`);
 }
+
+/* ------------------------------------------------------------------ *
+ * The end of the ninety days                                          *
+ * ------------------------------------------------------------------ */
+
+export type ReviewChoice = "done" | "carry" | "drop";
+
+/**
+ * CLOSE THE NINETY DAYS (§6.137, open item 23).
+ *
+ * Each live 90-day goal is done, carried forward, or dropped. Done and dropped goals are stamped with the
+ * period they closed under and leave the live list — kept, never deleted. Carried goals stay live as they
+ * are. Then the next end date is set.
+ *
+ * The period being closed is read from the plan, not taken from the browser: a stale tab must not close a
+ * period somebody else already closed. The goals are updated before the date moves, so a failure part-way
+ * leaves the review still due rather than a new period with last quarter's goals silently in it.
+ */
+export async function closeNinetyDays(planId: string, decisions: { id: string; choice: ReviewChoice }[], nextEnd: string):
+  Promise<Result<{ closedOn: string }>> {
+  const supabase = await createClient();
+  const { data: s, error: readError } = await supabase.from("plan_settings").select("ninety_day_ends_on").eq("plan_id", planId).maybeSingle();
+  if (readError) return failed(readError, "read the current 90 days");
+  const ended = s?.ninety_day_ends_on as string | null | undefined;
+  if (!ended) return { ok: false, error: "This plan has no 90-day end date to close." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(nextEnd) || nextEnd <= ended) {
+    return { ok: false, error: "The next 90 days have to end after the ones being closed." };
+  }
+
+  for (const choice of ["done", "drop"] as const) {
+    const ids = decisions.filter((d) => d.choice === choice).map((d) => d.id);
+    if (!ids.length) continue;
+    const patch = choice === "done"
+      ? { status: "done", outcome: "done", closed_period_end: ended }
+      : { outcome: "dropped", closed_period_end: ended };
+    const { error } = await supabase.from("plan_goals").update(patch)
+      .eq("plan_id", planId).eq("horizon", "ninety").is("closed_period_end", null).in("id", ids);
+    if (error) return failed(error, "close the 90 days");
+  }
+
+  const { error } = await supabase.from("plan_settings").update({ ninety_day_ends_on: nextEnd }).eq("plan_id", planId);
+  if (error) return failed(error, "set the next 90 days");
+  touch(planId);
+  return { ok: true, data: { closedOn: ended } };
+}
+
