@@ -41,6 +41,8 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
   /** Keyed by year, so two bad columns are two messages rather than whichever `.find()` reached first (§6.98). */
   const errors = useSaveErrors();
   const [pending, start] = useTransition();
+  /* A part that saves on its own reports its "Saving…" here, so the footer tells the truth (§6.132). */
+  const [partBusy, setPartBusy] = useState(false);
   const ref = useRef(cols); useEffect(() => { ref.current = cols; }, [cols]);
   const derived = useMemo(() => cols.map((c) => deriveFromComponents(c.input)), [cols]);
 
@@ -98,7 +100,7 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
         <p>Opening balance sheet for the forecast; debtor, stock and creditor days become the working-capital defaults; the four-year trend appears in every report and on the dashboard.</p>
       </>}
     >
-      <PendingBridge pending={pending} dirty={cols.some((c) => c._dirty)} />
+      <PendingBridge pending={pending || partBusy} dirty={cols.some((c) => c._dirty)} />
       <form id="historic-form" onSubmit={onSubmit} className="hidden" />
 
       {loadError && <div className="border-b border-border bg-bad-soft px-5 py-2 text-[13px] text-bad">Couldn&apos;t read this plan&apos;s history: {loadError}</div>}
@@ -148,7 +150,7 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
             nobody has entered is a split of nothing.
           */}
           {area === "bs" && cols[0].present && (
-            <DebtorAgeing planId={planId}
+            <DebtorAgeing planId={planId} onBusy={setPartBusy}
               receivables={typeof cols[0].input.accounts_receivable === "number" ? cols[0].input.accounts_receivable : null}
               initial={(() => { const p = initial.find((x) => x.period_number === 1) as unknown as Record<string, unknown> | undefined;
                 const v = (k: string) => (p?.[k] === null || p?.[k] === undefined ? null : Number(p[k]));

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Grid, Th, Td, Row, Toolbar, Meta, RemoveButton, CellInput } from "@/components/module/DataGrid";
 import { Meter } from "@/components/chart/core";
@@ -19,12 +19,22 @@ const MAX = 6;
  * because it saves on its own terms — one row at a time, as the row is left — and the prose above it saves
  * when the area is left, and one save path for both would have to be two things at once.
  */
-export function CapacityMeasures({ planId, initial, onError }: {
+export function CapacityMeasures({ planId, initial, onError, onBusy }: {
   planId: string; initial: CapacityMeasure[];
   onError: (key: string, message: string | null) => void;
+  /** Whether a save is running, for the module footer. */
+  onBusy?: (busy: boolean) => void;
 }) {
   type Line = { uid: string; id?: string; name: string; pct: string };
   const [pending, start] = useTransition();
+  /*
+   * THE FOOTER HEARS ABOUT THIS SAVE (§6.132, open item 40). This part saves on its own schedule, so the
+   * module's "Saving…" and "All changes saved" did not know it was mid-save. It reports up rather than
+   * writing to the footer itself: two writers to one status slot race, and the footer flickers.
+   */
+  useEffect(() => { onBusy?.(pending); }, [pending, onBusy]);
+  /* Leaving the area mid-save must not leave the footer saying "Saving…" for ever. */
+  useEffect(() => () => onBusy?.(false), [onBusy]);
   const [lines, setLines] = useState<Line[]>(() => initial.map((m) => ({ uid: m.id, id: m.id, name: m.name, pct: m.pct_used === null ? "" : String(m.pct_used) })));
   /* Written on every edit, never after the render — two rows filled quickly must both save (§6.129). */
   const ref = useRef(lines);

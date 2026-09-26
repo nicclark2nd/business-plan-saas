@@ -81,6 +81,8 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
   /** Keyed failures that survive a keystroke and clear only on a save that works (§6.98). */
   const errors = useSaveErrors();
   const [pending, start] = useTransition();
+  /* A part that saves on its own reports its "Saving…" here, so the footer tells the truth (§6.132). */
+  const [partBusy, setPartBusy] = useState(false);
   /** What the last save changed on the way in, if anything. Cleared when another save starts. */
   const [adjusted, setAdjusted] = useState<string>();
   const once = useSaveOnce();
@@ -180,7 +182,7 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
         <p>Interest is a cost in the profit and loss. The principal is not — it only moves cash. What is still owed at each year end sits on the balance sheet, and equipment or vehicle finance carries its asset through to Fixed Assets.</p>
       </>}
     >
-      <PendingBridge pending={pending} adjusted={adjusted} />
+      <PendingBridge pending={pending || partBusy} adjusted={adjusted} />
       <form id="funding-form" onSubmit={onSubmit} className="hidden" />
 
       {area === "sources" && (<>
@@ -273,7 +275,7 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
       </>)}
 
       {area === "lender" && (
-        <LenderHistory planId={planId} initial={lender}
+        <LenderHistory planId={planId} initial={lender} onBusy={setPartBusy}
           onError={(message) => message ? errors.raise({ key: "lender", message, label: "Lender history" }) : errors.clear("lender")} />
       )}
 

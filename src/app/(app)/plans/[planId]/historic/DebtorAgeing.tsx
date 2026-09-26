@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 /* FieldInput, not CellInput: these sit in a form grid, where a borderless cell reads as a label. */
 import { Section, FieldGrid, Field, FieldInput } from "@/components/module/FieldGrid";
 import { useMoney } from "@/components/MoneyProvider";
@@ -25,13 +25,23 @@ const BUCKETS: { key: Key; label: string; hint: string }[] = [
  * It must add up to the debtors figure it splits, and the screen says by how much it does not rather than
  * refusing to save — a client halfway through four boxes has not made a mistake yet.
  */
-export function DebtorAgeing({ planId, receivables, initial, onError }: {
+export function DebtorAgeing({ planId, receivables, initial, onError, onBusy }: {
   planId: string; receivables: number | null;
   initial: Partial<Record<Key, number | null>>;
   onError: (message: string | null) => void;
+  /** Whether a save is running, for the module footer. */
+  onBusy?: (busy: boolean) => void;
 }) {
   const money = useMoney();
   const [pending, start] = useTransition();
+  /*
+   * THE FOOTER HEARS ABOUT THIS SAVE (§6.132, open item 40). This part saves on its own schedule, so the
+   * module's "Saving…" and "All changes saved" did not know it was mid-save. It reports up rather than
+   * writing to the footer itself: two writers to one status slot race, and the footer flickers.
+   */
+  useEffect(() => { onBusy?.(pending); }, [pending, onBusy]);
+  /* Leaving the area mid-save must not leave the footer saying "Saving…" for ever. */
+  useEffect(() => () => onBusy?.(false), [onBusy]);
   const str = (v: number | null | undefined) => (v === null || v === undefined ? "" : String(v));
   const [vals, setVals] = useState<Record<Key, string>>({
     ar_current: str(initial.ar_current), ar_30: str(initial.ar_30), ar_60: str(initial.ar_60), ar_90: str(initial.ar_90),

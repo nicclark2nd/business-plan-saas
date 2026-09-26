@@ -48,6 +48,8 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
   drafting?: Drafting;
 }) {
   const [area, setArea] = useState<AreaKey>(initialArea);
+  /* A part that saves on its own reports its "Saving…" here, so the footer tells the truth (§6.132). */
+  const [partBusy, setPartBusy] = useState(false);
   /** Keyed per row and per area, so several failures are several messages (§6.98). */
   const errors = useSaveErrors();
   const [pending, start] = useTransition();
@@ -205,7 +207,7 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
         <p>The Operations section of the business plan, which every standard outline asks for. What limits your capacity also explains the shape of the revenue forecast, and a plan whose sales grow past its stated capacity is the first thing a careful reader notices.</p>
       </>}
     >
-      <PendingBridge pending={pending} dirty={dirty} />
+      <PendingBridge pending={pending || partBusy} dirty={dirty} />
       <form id="operations-form" onSubmit={onSubmit} className="hidden" />
 
       {area === "premises" && (
@@ -373,7 +375,7 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
           </Section>
           {/* Its own save path, so it sits outside the prose's onBlur — see CapacityMeasures (§6.129.3). */}
           <div onBlur={(e) => e.stopPropagation()}>
-            <CapacityMeasures planId={planId} initial={initialMeasures}
+            <CapacityMeasures planId={planId} initial={initialMeasures} onBusy={setPartBusy}
               onError={(key, message) => message
                 ? errors.raise({ key, message, label: "Capacity measures" })
                 : errors.clear(key)} />

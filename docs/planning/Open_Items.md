@@ -425,11 +425,14 @@ licence: each tabbed onto its remove button, reloaded, stored once, then removed
 exercised live (ZZ has no saved person to hang one on). No row grid in the app saves only on leaving the
 row now.
 
-### 40. The footer's "All changes saved" does not know about component-level saves
+### ~~40. The footer's "All changes saved" does not know about component-level saves~~ — **done (§6.132)**
 
-The capacity measures, add-backs, debtor ageing and lender history each save on their own and report
-failures through the module's error channel, but none of them tells the footer they are mid-save. The
-failure path is covered; the "saving…" state is not.
+Capacity measures, debtor ageing and lender history each save on their own transition. They now report it
+up through an `onBusy` prop, and the module's single status writer shows "Saving…" while either the module
+or the part is saving (two writers to one slot would race, which is why they do not write it directly).
+Unmounting mid-save clears it. The add-backs, the licences and the similar-sales accept already ran through
+their module's own save state. Checked live on ZZ Test Walk's lender history: the footer went "Saving…" →
+"All changes saved".
 
 ### ~~41. Money boxes elsewhere still show 1000000~~ — **done (§6.130.1)**
 

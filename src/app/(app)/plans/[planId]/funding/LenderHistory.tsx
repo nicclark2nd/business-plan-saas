@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Section, FieldGrid, Field, FieldSelect, FieldTextarea, FieldInput } from "@/components/module/FieldGrid";
 import { Toolbar, Meta } from "@/components/module/DataGrid";
 import { saveLenderHistory } from "./actions";
@@ -22,10 +22,20 @@ const fromTri = (v: string) => (v === "yes" ? true : v === "no" ? false : null);
  *
  * A choice saves on the choice, text when the box is left (§6.10).
  */
-export function LenderHistory({ planId, initial, onError }: {
+export function LenderHistory({ planId, initial, onError, onBusy }: {
   planId: string; initial: LenderHistoryValues; onError: (message: string | null) => void;
+  /** Whether a save is running, for the module footer. */
+  onBusy?: (busy: boolean) => void;
 }) {
   const [pending, start] = useTransition();
+  /*
+   * THE FOOTER HEARS ABOUT THIS SAVE (§6.132, open item 40). This part saves on its own schedule, so the
+   * module's "Saving…" and "All changes saved" did not know it was mid-save. It reports up rather than
+   * writing to the footer itself: two writers to one status slot race, and the footer flickers.
+   */
+  useEffect(() => { onBusy?.(pending); }, [pending, onBusy]);
+  /* Leaving the area mid-save must not leave the footer saying "Saving…" for ever. */
+  useEffect(() => () => onBusy?.(false), [onBusy]);
   const [v, setV] = useState({
     on: tri(initial.repayments_on_time), cov: initial.covenant_history ?? "",
     g: tri(initial.guarantee_offered), by: initial.guarantee_by ?? "",
