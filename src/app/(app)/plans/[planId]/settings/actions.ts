@@ -13,6 +13,7 @@ import { adjustments, adjustedNote, type Watched } from "@/lib/adjusted";
 import { multiplesAsk, multiplesMessages, readMultiples, checkAccepted, type MultiplesReading, type MultipleSource } from "@/engine/ai/multiples";
 import { searchOnce, AiUnavailable } from "@/lib/ai/provider";
 import { guardDraft } from "../ai/guard";
+import { adjustableMeasures, validPair } from "@/engine/capability/ranges";
 
 /**
  * `field` names the control the message belongs beside (§6.98). A save that says "that does not look like an
@@ -395,3 +396,24 @@ export async function deleteLicence(planId: string, id: string): Promise<{ ok: b
   touch(planId);
   return { ok: true };
 }
+
+/**
+ * CAPABILITY RANGES FOR THIS PLAN (§6.140). Only measures the engine says can be moved, only pairs that
+ * rise, and nothing for a measure put back to general — so the column holds exactly what was changed.
+ */
+export async function saveRanges(planId: string, ranges: Record<string, unknown>): Promise<{ ok: true } | { ok: false; error: string }> {
+  const allowed = new Set(adjustableMeasures().map((a) => a.id));
+  const clean: Record<string, [number, number]> = {};
+  for (const [k, v] of Object.entries(ranges ?? {})) {
+    if (!allowed.has(k)) continue;
+    if (!validPair(v)) return { ok: false, error: "Each range needs its first line below its second." };
+    clean[k] = [Math.round(v[0] * 100) / 100, Math.round(v[1] * 100) / 100];
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.from("plan_settings")
+    .update({ capability_ranges: Object.keys(clean).length ? clean : null }).eq("plan_id", planId);
+  if (error) return failed(error, "save the ranges");
+  touch(planId);
+  return { ok: true };
+}
+

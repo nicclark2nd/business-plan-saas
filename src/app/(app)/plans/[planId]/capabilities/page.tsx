@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { readRanges } from "@/engine/capability/ranges";
 import { readCollateral, readGrowth, readSale, readStress, readUndrawn, type TransferRating } from "@/engine/capability/judgements";
 import { getSession } from "@/lib/plan";
 import { loadPlan } from "@/lib/planLoad";
@@ -215,6 +216,8 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
           .filter((a) => a.already_owned === true).reduce((t, a) => t + (num(a.purchase_price) ?? 0), 0),
       },
       undrawn: readUndrawn(plan.sources.funding),
+      /* Ranges set for this plan on Plan settings → Capability ranges (§6.140). */
+      ranges: readRanges(settings?.capability_ranges),
     };
   } catch (e) {
     /*

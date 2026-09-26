@@ -18,6 +18,7 @@ import { GROW_WEIGHTS, growMetrics } from "@/engine/capability/grow";
 import { BORROW_WEIGHTS, CAPACITY_TERM_YEARS, borrowMetrics, stressedCash } from "@/engine/capability/borrow";
 import { SELL_WEIGHTS, sellMetrics } from "@/engine/capability/sell";
 import { buyerQuestions, verdict } from "@/engine/capability/verdict";
+import { applyRanges } from "@/engine/capability/ranges";
 import { panels as buildPanels, withTrends, type FacilityFacts, type Panels, type ProductFacts } from "@/engine/capability/series";
 import { ageingView, concentration, earningsBridge, executionLines, lenderChecklist, type ExtraFacts, type Line } from "@/engine/capability/extras";
 import { Meter } from "@/components/chart/core";
@@ -75,9 +76,10 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
   const input: CapabilityInput = useMemo(() => ({ ...facts, money }), [facts, money]);
 
   /* Each card carries its own five years (§6.129.2) — the scores read `value`, never the trend. */
-  const grow = useMemo(() => withTrends("grow", growMetrics(input), input), [input]);
-  const borrow = useMemo(() => withTrends("borrow", borrowMetrics(input), input), [input]);
-  const sell = useMemo(() => withTrends("sell", sellMetrics(input), input), [input]);
+  /* The plan's own ranges laid over the general ones before anything is scored (§6.140). */
+  const grow = useMemo(() => withTrends("grow", applyRanges(growMetrics(input), input.ranges, "grow"), input), [input]);
+  const borrow = useMemo(() => withTrends("borrow", applyRanges(borrowMetrics(input), input.ranges, "borrow"), input), [input]);
+  const sell = useMemo(() => withTrends("sell", applyRanges(sellMetrics(input), input.ranges, "sell"), input), [input]);
   const P = useMemo(() => buildPanels(input, products), [input, products]);
   const growScore = useMemo(() => score(grow, GROW_WEIGHTS), [grow]);
   const borrowScore = useMemo(() => score(borrow, BORROW_WEIGHTS), [borrow]);
@@ -109,7 +111,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
         <h3>The score</h3>
         <p>Each measure is judged against its band and the judgements are averaged, weighted by how much each matters to the question. <b>A measure the plan cannot answer is left out rather than scored nought</b> — so an unfinished plan gets a score from what it does hold, and the tab says how many measures that was.</p>
         <h3>Where the bands come from</h3>
-        <p>They are general small-business ranges, not your industry&apos;s. A concreter, a café and a software business do not share a sensible cash cycle. Read them as a starting point and use the benchmark line on each card, which says what good looks like rather than just colouring the number.</p>
+        <p>They start as general small-business ranges, not your industry&apos;s. A concreter, a café and a software business do not share a sensible cash cycle. If you know what good looks like in this industry, set the ranges for this plan in <a className="font-semibold text-primary hover:underline" href={`/plans/${planId}/settings?area=ranges`}>Plan settings → Capability ranges</a>; the benchmark line on each card says which it is using.</p>
       </>}
     >
       <form id="capabilities-form" className="hidden" />
@@ -311,7 +313,9 @@ function Card({ m, planId }: { m: Metric; planId: string }) {
       <p className="mt-2.5 text-[12.5px] leading-relaxed">{m.missing ?? m.note}</p>
       {m.missing
         ? m.fix && <Pencil planId={planId} fix={m.fix} />
-        : <p className="mt-1 text-[11.5px] text-muted-foreground">{m.bench}</p>}
+        : <p className="mt-1 text-[11.5px] text-muted-foreground">{m.bench}
+            {/* Where the range came from, one click away (§6.140). */}
+            {m.rangeSet && <a href={`/plans/${planId}/settings?area=ranges`} className="ml-1.5 font-semibold text-primary hover:underline">Change</a>}</p>}
 
       <details className="mt-2.5 border-t border-dashed border-border pt-2">
         <summary className="cursor-pointer list-none text-[11.5px] font-semibold text-primary marker:hidden">

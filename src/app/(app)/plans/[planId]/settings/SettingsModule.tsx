@@ -14,6 +14,7 @@ import { formatMonth } from "../people/model";
 import { FORECAST_YEARS } from "@/engine/forecast/model";
 import { saveProfile, saveFinancial, savePrinting, saveAiConsent, saveExit, upsertAddBack, deleteAddBack, findMultiples, acceptMultiples } from "./actions";
 import { ComparableSearch } from "./ComparableSearch";
+import { RangesSection } from "./RangesSection";
 import type { MultiplesReading, MultipleSource } from "@/engine/ai/multiples";
 import { Button } from "@/components/ui/button";
 import { DraftDialog, type DraftQuestion } from "@/components/module/DraftDialog";
@@ -29,7 +30,7 @@ import { useSerialSave } from "@/lib/serialSave";
 import { navGroup } from "@/lib/nav";
 import { governingLawNote } from "@/engine/plan/jurisdiction";
 
-type AreaKey = "profile" | "financial" | "printing" | "exit" | "ai" | "branding" | "lifecycle";
+type AreaKey = "profile" | "financial" | "printing" | "exit" | "ranges" | "ai" | "branding" | "lifecycle";
 type ExitKey = "asking_price" | "multiple_low" | "multiple_high";
 /** A stored figure into a box, and back. Empty is null, never nought (§6.89). */
 const exStr = (v: number | null) => (v === null || v === undefined ? "" : String(v));
@@ -291,6 +292,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
          * typed there, unsaved, and gone on refresh, so the sale score changed every visit.
          */
         { key: "exit", label: "Exit & sale" },
+        { key: "ranges", label: "Capability ranges" },
         { key: "ai", label: "AI drafting" },
         { key: "branding", label: "Branding" },
         { key: "lifecycle", label: "Archive & delete" },
@@ -492,6 +494,12 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
         * because Nic did not know what owner add-backs or comparable multiples were and neither will most
         * clients. A field whose meaning has to be guessed at collects noise.
         */}
+      {/* Capability ranges for this plan (§6.140), read by the Financial Capabilities dials. */}
+      {area === "ranges" && (
+        <RangesSection planId={planId} initial={initial.capability_ranges ?? {}} start={start}
+          onError={(message) => message ? errors.raise({ key: "ranges", message, label: "Capability ranges" }) : errors.clear("ranges")} />
+      )}
+
       {area === "exit" && (
         <>
           <Toolbar><Meta className="ml-0">

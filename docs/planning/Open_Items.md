@@ -314,15 +314,16 @@ market segments, but not who buys. It is the first thing a buyer's advisor asks.
 unanswered, telling the client to work it out from their own sales ledger. Giving the app customers is a
 real piece of work and probably wants to serve more than this one measure.
 
-### 32. The capability bands are general, not per-industry
+### ~~32. The capability bands are general, not per-industry~~ — **done (§6.140)**
 
-Every band on the Financial Capabilities screen is a general small-business range. A concreter, a café and
-a software business do not share a sensible cash cycle, debtor days or margin. The plan knows the
-industry and the screen says out loud that the bands do not — which is honest but not right. Either the
-bands come from somewhere real per industry, or the consultant sets them per client.
-
-*§6.130:* the comparable sale range is now the first per-industry figure — searched from the Business
-Profile with its sources shown, or typed. The other bands are still general.
+Plan settings → **Capability ranges** (migration 0053, `plan_settings.capability_ranges`). Every measure with
+a plain weak / watch / strong range — 23 across the three tabs — has two boxes for its two lines, the general
+range as placeholder and in words beneath the name. Stored per tab and measure (`grow:operatingMargin`),
+only what was changed; "Use general" puts one back. The dials apply the plan's lines before scoring; a card
+using one says "Set for this plan: …" with a Change link. Not adjustable: the price multiple, return on
+growth and lowest cash month (their lines already come from the plan) and debt cover (its middle line is the
+lender's minimum used in the borrowing arithmetic). Driven live on ZZ Test Walk: Operating margin 92.1% went
+Healthy → At risk under a 95 / 98 range and Capability to grow 78 → 49; "Use general" put both back.
 
 ### ~~33. Nothing holds a plan's cash buffer~~ — **stored (§6.129)**
 
@@ -471,3 +472,11 @@ Historic's years, the market, position and capacity prose — the flag is put ba
 retries. Driven live on ZZ Test Walk: a Marketing segment and the Business profile's industry, each
 saved with the connection blocked (message, screen intact, text kept) then retried and stored; and Save
 and continue on Marketing still went to Competitors.
+
+### 45. A card's one-line comment can still quote the general range
+
+§6.140 moves the lines, the colour and the score, but some cards choose their sentence from fixed numbers
+in the engine rather than from the bands — loan-to-value still says "above the 75% most lenders stop at",
+and Operating margin at risk under a plan's own range still reads "The business makes money before it
+grows". The sentences should be chosen from the metric's own status, so they cannot disagree with the dial.
+

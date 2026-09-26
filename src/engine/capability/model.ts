@@ -56,6 +56,8 @@ export type Metric = {
   note: string;
   /** What good looks like, so a number is not left to be judged alone. */
   bench: string;
+  /** True when this plan set its own range for the measure (§6.140), so the card can say so. */
+  rangeSet?: boolean;
   /* The three lines behind "Formula and data confidence" — the reason a client can trust the dial. */
   formula: string;
   reveals: string;
@@ -222,6 +224,8 @@ export type CapabilityInput = {
    * Fixed Assets are worth. Absent in older fixtures and on a plan with no history.
    */
   security?: { openingPlant: number | null; listedOwned: number };
+  /** Ranges set for this plan on Plan settings → Capability ranges (§6.140). Absent: the general ranges. */
+  ranges?: Record<string, [number, number]>;
   /**
    * Committed but undrawn facility, from the funding rows the plan already holds — facility total less what
    * has been drawn. Never a field anybody types: Funding records both halves of it already (§6.41).

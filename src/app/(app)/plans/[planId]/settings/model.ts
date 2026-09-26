@@ -178,7 +178,7 @@ export type AddBack = { id: string; label: string; amount: number; sort_order: n
  */
 export type MultiplesFound = { multiple_sources: MultipleSource[] | null; multiple_found_on: string | null };
 
-export type Settings = Profile & Financial & Printing & Ai & Exit & MultiplesFound & { logo_path: string | null };
+export type Settings = Profile & Financial & Printing & Ai & Exit & MultiplesFound & { logo_path: string | null; capability_ranges?: Record<string, [number, number]> };
 
 /** The fields a report's business overview cannot do without. */
 /** What a report cannot open without. The products & services statement moved to Sales (§6.34). */
