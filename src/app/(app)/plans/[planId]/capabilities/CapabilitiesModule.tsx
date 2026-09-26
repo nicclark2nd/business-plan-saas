@@ -13,7 +13,7 @@ import {
   SCORE_BANDS, SEVERITY_LABEL, borrowingCapacity, score, statusOf,
   type CapabilityInput, type Metric, type Severity,
 } from "@/engine/capability/model";
-import { LENDER_MIN_DSCR, TRANSFER_FACTORS } from "@/engine/capability/judgements";
+import { LENDER_MIN_DSCR, TRANSFER_FACTORS, saleYear } from "@/engine/capability/judgements";
 import { GROW_WEIGHTS, growMetrics } from "@/engine/capability/grow";
 import { BORROW_WEIGHTS, CAPACITY_TERM_YEARS, borrowMetrics, stressedCash } from "@/engine/capability/borrow";
 import { SELL_WEIGHTS, sellMetrics } from "@/engine/capability/sell";
@@ -453,17 +453,19 @@ function BorrowingRoom({ planId, input, money }: {
 function ValuationRange({ planId, metrics, input, money }: {
   planId: string; metrics: Metric[]; input: CapabilityInput; money: (v: number) => string;
 }) {
-  const y1 = input.pnl[1];
+  /* The year the sale is aimed at, or Year 1 until one is chosen (§6.135) — the same year the dial uses. */
   const sale = input.sale;
-  const e = y1 ? y1.operatingProfit + y1.depreciation + (sale.addBacks ?? 0) : null;
+  const sy = saleYear(sale);
+  const ys = input.pnl[sy];
+  const e = ys ? ys.operatingProfit + ys.depreciation + (sale.addBacks ?? 0) : null;
   const ranged = sale.multipleLow !== null && sale.multipleHigh !== null;
   const price = sale.askingPrice ?? 0;
 
   if (e === null || e <= 0) {
     return (
-      <Picture title="What the earnings support" aside="Normalised EBITDA × comparable multiples">
-        <Note>{y1
-          ? "Year 1 earnings are not positive, so there is no multiple to apply. Nothing about the price can be judged until the business makes money."
+      <Picture title="What the earnings support" aside={`Year ${sy} normalised EBITDA × comparable multiples`}>
+        <Note>{ys
+          ? `Year ${sy} earnings are not positive, so there is no multiple to apply. Nothing about the price can be judged until the business makes money.`
           : "No forecast yet, so there is nothing to value."}</Note>
       </Picture>
     );
@@ -471,7 +473,7 @@ function ValuationRange({ planId, metrics, input, money }: {
 
   if (!ranged) {
     return (
-      <Picture title="What the earnings support" aside={`${money(e)} of normalised earnings`}>
+      <Picture title="What the earnings support" aside={`${money(e)} of Year ${sy} normalised earnings`}>
         <Note>A range needs a low and a high multiple — what businesses like this one have actually sold for.</Note>
         <Pencil planId={planId} fix={{ label: "Set the similar-sales range", to: "settings?area=exit" }} />
       </Picture>
@@ -484,7 +486,7 @@ function ValuationRange({ planId, metrics, input, money }: {
 
   return (
     <Picture title="What the earnings support"
-      aside={`${money(e)} of normalised earnings at ${sale.multipleLow}× to ${sale.multipleHigh}×`}>
+      aside={`${money(e)} of Year ${sy} normalised earnings at ${sale.multipleLow}× to ${sale.multipleHigh}×`}>
       <RangeBar
         min={0} max={top}
         zones={[{ from: lowV, to: highV, severity: "good" }, { from: highV, to: top, severity: "bad" }]}
@@ -863,13 +865,13 @@ function SellPanels({ P, metrics, input, money, planId, extras }: {
       <Panel title="From reported to normalised earnings"
         sub="What the accounts show, each add-back a buyer's accountant will test, and what a price is struck on.">
         {!bridge
-          ? <Empty planId={planId}>Needs a Year 1 forecast.</Empty>
+          ? <Empty planId={planId}>Needs a Year {saleYear(input.sale)} forecast.</Empty>
           : (w) => (
             <>
               <BarRows width={w} format={money} labelShare={0.45}
                 rows={[
                   /* §6.115.1: a loss is said in words, never left to a minus sign in front of the figure. */
-                  { label: "Reported EBITDA, Year 1", value: bridge.reported, tone: bridge.reported < 0 ? "bad" : "accent",
+                  { label: `Reported EBITDA, Year ${saleYear(input.sale)}`, value: bridge.reported, tone: bridge.reported < 0 ? "bad" : "accent",
                     display: bridge.reported < 0 ? `${money(Math.abs(bridge.reported))} loss` : undefined },
                   ...bridge.adds.map((a) => ({ label: `+ ${a.label}`, value: a.amount, tone: "good" as const })),
                   { label: "Normalised earnings", value: bridge.normalised, tone: bridge.normalised < 0 ? "bad" : "accent",

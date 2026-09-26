@@ -1,6 +1,6 @@
 import type { CapabilityInput, Metric } from "./model";
 import { annualRepayment, borrowingCapacity, ebitda, over, r1, r2 } from "./model";
-import { LENDER_MIN_DSCR } from "./judgements";
+import { LENDER_MIN_DSCR, securityGap } from "./judgements";
 
 /**
  * CAPABILITY TO BORROW (§6.128, rebuilt §6.129).
@@ -145,7 +145,8 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
    * security is already spoken for" — which is the question a client can act on, and the only one the plan
    * can answer. Null until at least one asset on Fixed Assets carries a figure.
    */
-  const lvr = i.collateral && debtNow !== null ? over(debtNow, i.collateral) : null;
+  const gap = securityGap(i.security);
+  const lvr = !gap && i.collateral && debtNow !== null ? over(debtNow, i.collateral) : null;
 
   /*
    * HEADROOM, NOT A VERDICT ON A PARTICULAR LOAN. What the stressed cash flow supports IN TOTAL, at the
@@ -322,16 +323,19 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
       value: lvr === null ? null : r1(lvr * 100),
       display: lvr === null ? "—" : pct(lvr * 100),
       min: 0, max: 100, bands: [{ to: 65, s: "good" }, { to: 75, s: "watch" }, { to: 100, s: "bad" }],
-      sub: i.collateral ? `${m(debtNow ?? 0)} of debt against ${m(i.collateral)} of security` : "No asset has a security value yet",
-      note: lvr === null ? "How much of the security behind this business is already spoken for."
+      sub: gap ? `${m(gap.listed)} of ${m(gap.plant)} of existing plant listed`
+        : i.collateral ? `${m(debtNow ?? 0)} of debt against ${m(i.collateral)} of security` : "No asset has a security value yet",
+      note: gap ? "Waits until the plant already on the books is listed. Against only part of it, the whole debt would look as though it rested on a machine or two."
+        : lvr === null ? "How much of the security behind this business is already spoken for."
         : lvr * 100 > 75 ? "Above the 75% most lenders stop at. There is little security left to offer for anything further."
         : "Inside the range a lender will normally consider, with security to spare.",
       bench: "75% is a common ceiling on secured lending",
       formula: "Debt at the end of Year 1 ÷ what a lender would advance against the assets",
       reveals: "Whether there is security left behind the business.",
       confidence: "Medium — a figure you put against each asset is not a bank valuation.",
-      missing: lvr === null ? "A security value against at least one asset on the Fixed Assets step." : undefined,
-      fix: lvr === null ? FIX_SECURITY : undefined,
+      missing: gap ? `The plant already on your balance sheet (${m(gap.plant)}), listed on Fixed Assets with what a lender would advance against it.`
+        : lvr === null ? "A security value against at least one asset on the Fixed Assets step." : undefined,
+      fix: gap ? { label: "List the existing plant", to: "assets" } : lvr === null ? FIX_SECURITY : undefined,
     },
   ];
 }

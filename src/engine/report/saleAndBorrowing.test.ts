@@ -5,7 +5,7 @@ import type { TransferRating } from "../capability/judgements";
 
 const money = (v: number) => new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 }).format(Math.round(v) || 0);
 /* Year 1 EBITDA = operating profit + depreciation = 180,000 + 20,000 = 200,000. */
-const pnl = { 1: { operatingProfit: 180_000, depreciation: 20_000 } };
+const pnl = { 1: { operatingProfit: 180_000, depreciation: 20_000 }, 2: { operatingProfit: 230_000, depreciation: 20_000 } };
 const empty: { sale: SaleFacts; transfer: TransferRating[]; lender: LenderFacts } = {
   sale: { askingPrice: null, multipleLow: null, multipleHigh: null, exitYear: null, sources: null, foundOn: null, addBacks: [] },
   transfer: [],
@@ -28,8 +28,10 @@ describe("sale readiness and borrowing", () => {
       addBacks: [{ label: "Owner's salary above market", amount: 50_000 }] } }))!;
     expect(d.title).toBe("Sale Readiness");
     const t = text(d);
-    expect(t).toContain("250,000");                      // 200,000 + 50,000 add-back
-    expect(t).toContain("750,000 to 1,000,000");         // 250,000 × 3 to × 4
+    /* Aimed at Year 2, so struck on Year 2 (§6.135): EBITDA 250,000 + 50,000 add-back = 300,000. */
+    expect(t).toContain("Normalised EBITDA, Year 2");
+    expect(t).toContain("300,000");
+    expect(t).toContain("900,000 to 1,200,000");         // 300,000 × 3 to × 4
     expect(t).toContain("Year 2, ending 30 Jun 2028");
     expect(t).toContain("inside the range");
     expect(t).toContain("Add back: Owner's salary above market");
@@ -72,5 +74,12 @@ describe("sale readiness and borrowing", () => {
     expect(text(lenderOnly)).toContain("Offered, by Both directors");
     const both = saleAndBorrowing(input({ sale: { ...empty.sale, askingPrice: 900_000 }, lender: { ...empty.lender, repaymentsOnTime: false } }))!;
     expect(both.title).toBe("Sale Readiness and Borrowing");
+  });
+
+  it("strikes the price on Year 1 until a sale year is chosen (§6.135)", () => {
+    const t = text(saleAndBorrowing(input({ sale: { ...empty.sale, askingPrice: 800_000, multipleLow: 3, multipleHigh: 4 } })));
+    expect(t).toContain("Normalised EBITDA, Year 1");
+    expect(t).toContain("600,000 to 800,000");           // 200,000 × 3 to × 4
+    expect(t).not.toContain("the year the sale is aimed at");
   });
 });

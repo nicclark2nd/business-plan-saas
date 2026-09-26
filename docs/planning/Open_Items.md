@@ -365,15 +365,13 @@ turn red against it. Unset keeps the zero test, says so, and offers "Set the low
 to Assumptions. A floor of 0 reads as zero because it is the same test. Checked live on ZZ Test Walk with
 a temporary 50,000 floor (then cleared).
 
-### 36. Nothing reads `intended_exit_year`
+### ~~36. Nothing reads `intended_exit_year`~~ — **done (§6.135)**
 
-Plan settings → Exit & sale collects which forecast year a sale is aimed at, and no measure uses it. Every
-sale figure on the capability tab is struck on Year 1. Either the tab lets the client read the sale
-against their chosen year, or the field comes out — a field on a screen is a promise (§6.87).
-
-*§6.130.2:* the printed plan now states it ("Sale aimed at: Year 2, ending Jun 2028"), so the field is no
-longer read by nothing. Every figure is still struck on Year 1, on screen and in print — the half of this
-item that remains.
+The price measures read the year the sale is aimed at through `saleYear` (Year 1 until one is chosen, and
+Year 1 for anything outside 1–5): the multiple, "What the earnings support", the earnings bridge, and the
+printed Price and value section, each labelled with the year. The health measures (margins, cash
+conversion, returns) stay on Year 1 with their five-year lines. SEQ, aimed at Year 2: normalised earnings
+76,876, the price 13.01× against 111.78× on Year 1, the same on screen and in print.
 
 ### ~~37. The sale figures do not print in any report~~ — **done (§6.130.2)**
 
@@ -385,12 +383,12 @@ are judged); and the lender record. Each part prints only when it has something 
 only what is under it ("Sale Readiness", "Borrowing Record" or both), and a plan with none of it prints
 nothing and is not told anything is missing. On screen and in the Word file.
 
-### 38. Security values are per asset and the opening balance sheet is not
+### ~~38. Security values are per asset and the opening balance sheet is not~~ — **done (§6.135)**
 
-`plan_fixed_assets.security_value` sums only the assets somebody listed. SEQ's last balance sheet puts its
-plant at 129,294 with none of it itemised, so loan-to-value on that plan measures the whole debt against
-the 9,000 of one listed machine and reads 2500%. Correct arithmetic on an incomplete list. The same
-already-known gap that the Fixed Assets screen warns about in its own words, now with a second consequence.
+Loan-to-value, dial and five-year line, is withheld until at least three quarters of the plant on the
+last balance sheet is listed as already-owned on Fixed Assets (`securityGap`, `MIN_PLANT_LISTED`). It says
+"0 of 129,294 of existing plant listed" on SEQ and offers "List the existing plant". A plan with no
+history is not held back.
 
 ### ~~39. Row grids that save only when focus leaves the ROW~~ — **done (§6.131, §6.131.1)**
 
@@ -441,3 +439,10 @@ businessvaluationsbrisbane.com.au (could not be opened to check). Two is the min
 industry or a smaller country will often get "couldn't find" instead. If that is common in practice, the
 next step is an SDE-to-EBITDA path using the leadership pay the plan already holds, since most published
 small-business multiples are on SDE.
+
+### 43. The What-If "Turn into goals" dialog still offers a quarter
+
+The dialog says goals appear "for the quarter you pick" and offers a quarter for each, but since §6.125
+every What-If goal lands on the 90-day rung and the chosen quarter is ignored by the save. Found while
+testing §6.134 on ZZ Test Walk. The picker should come out, or become the goal's due date.
+

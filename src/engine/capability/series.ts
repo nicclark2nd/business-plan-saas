@@ -2,7 +2,7 @@ import { FORECAST_YEARS } from "@/engine/forecast/model";
 import type { CapabilityInput, Metric } from "./model";
 import { ebitda, over, r1, r2 } from "./model";
 import { cashForDebtService, stressedCash } from "./borrow";
-import { LENDER_MIN_DSCR, TRANSFER_FACTORS } from "./judgements";
+import { LENDER_MIN_DSCR, TRANSFER_FACTORS, securityGap } from "./judgements";
 import type { CapabilityKind } from "./verdict";
 
 /**
@@ -93,7 +93,8 @@ export const series = {
   }),
   lvr: (i: CapabilityInput) => Y.map((y) => {
     const b = i.balanceSheet[y];
-    return b && i.collateral ? over(b.debtCurrent + b.debtNonCurrent, i.collateral) : null;
+    /* Withheld with the dial (§6.135): a line the dial will not draw is not drawn underneath it either. */
+    return b && i.collateral && !securityGap(i.security) ? over(b.debtCurrent + b.debtNonCurrent, i.collateral) : null;
   }),
   normalisedMargin: (i: CapabilityInput) => Y.map((y) => {
     const e = ebitda(i.pnl[y]), r = rev(i, y);

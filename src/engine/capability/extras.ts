@@ -1,5 +1,6 @@
 import type { CapabilityInput, Metric, Severity } from "./model";
 import { ebitda, r1, r2 } from "./model";
+import { saleYear } from "./judgements";
 
 /**
  * THE FOUR PANELS THAT HAD NO DATA (§6.129.3).
@@ -235,7 +236,8 @@ export function concentration(x: ExtraFacts, today: Date) {
  * reading of one list (§6.41).
  */
 export function earningsBridge(x: ExtraFacts, i: CapabilityInput) {
-  return bridgeFrom(i.pnl[1], x.addBackLines);
+  /* The year the sale is aimed at, or Year 1 (§6.135) — the bridge ends at the figure the price is judged on. */
+  return bridgeFrom(i.pnl[saleYear(i.sale)], x.addBackLines);
 }
 
 /**

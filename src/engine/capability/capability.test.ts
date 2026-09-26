@@ -10,7 +10,7 @@ import { panels, series, withTrends } from "./series";
 import { buyerQuestions, verdict } from "./verdict";
 import { ageingView, concentration, earningsBridge, executionLines, lenderChecklist, type ExtraFacts } from "./extras";
 import {
-  LENDER_MIN_DSCR, TRANSFER_FACTORS, readCollateral, readGrowth, readSale, readStress, readUndrawn,
+  LENDER_MIN_DSCR, TRANSFER_FACTORS, securityGap, readCollateral, readGrowth, readSale, readStress, readUndrawn,
   type TransferFactor,
 } from "./judgements";
 
@@ -456,6 +456,21 @@ describe("selling", () => {
     expect(s.value!).toBeLessThan(50);
   });
 
+  /* A buyer in Year 3 pays for Year 3's earnings (§6.135, open item 36). */
+  it("strikes the multiple on the year the sale is aimed at, and Year 1 until one is chosen", () => {
+    /* Year 2 is the other year this fixture forecasts; it earns more than Year 1, so the multiple falls. */
+    const at = (exitYear: number | null) => sellMetrics(priced({ exitYear })).find((x) => x.key === "priceMultiple")!;
+    const i = priced({ exitYear: 2 });
+    const e2 = i.pnl[2]!.operatingProfit + i.pnl[2]!.depreciation + 80_000;
+    const e1 = i.pnl[1]!.operatingProfit + i.pnl[1]!.depreciation + 80_000;
+    expect(e2).not.toBe(e1);
+    expect(at(2).value).toBeCloseTo(Math.round((3_000_000 / e2) * 100) / 100, 2);
+    expect(at(2).sub).toContain("Year 2");
+    expect(at(null).value).toBeCloseTo(Math.round((3_000_000 / e1) * 100) / 100, 2);
+    expect(at(null).sub).toContain("Year 1");
+    expect(at(9).sub).toContain("Year 1");                 // nonsense year falls back, not through
+  });
+
   it("adds the add-backs to the earnings the multiple is struck on", () => {
     const without = sellMetrics(priced({ addBacks: 0 })).find((x) => x.key === "priceMultiple")!.value!;
     const withBacks = sellMetrics(priced({ addBacks: 200_000 })).find((x) => x.key === "priceMultiple")!.value!;
@@ -899,3 +914,27 @@ describe("the panels that read the new fields", () => {
     expect(q.some((x) => x.includes("largest customers, what share"))).toBe(false);
   });
 });
+
+/*
+ * LOAN-TO-VALUE WAITS FOR THE PLANT TO BE LISTED (§6.135, open item 38). SEQ measured its whole debt
+ * against one new machine because the 129,294 of plant on its balance sheet was never itemised.
+ */
+describe("security coverage", () => {
+  it("withholds until three quarters of the plant on the books is listed", () => {
+    expect(securityGap(undefined)).toBeNull();
+    expect(securityGap({ openingPlant: null, listedOwned: 0 })).toBeNull();          // no history: nothing to list
+    expect(securityGap({ openingPlant: 129_294, listedOwned: 0 })).toEqual({ listed: 0, plant: 129_294 });
+    expect(securityGap({ openingPlant: 100_000, listedOwned: 74_000 })).not.toBeNull();
+    expect(securityGap({ openingPlant: 100_000, listedOwned: 75_000 })).toBeNull();
+  });
+  it("says why, and points at Fixed Assets, instead of a 2500% loan-to-value", () => {
+    const i = full({ collateral: 9_000, security: { openingPlant: 129_294, listedOwned: 0 } });
+    const m = borrowMetrics(i).find((x) => x.key === "lvr")!;
+    expect(m.value).toBeNull();
+    expect(m.sub).toContain("129,294");
+    expect(m.fix?.to).toBe("assets");
+    const ok = borrowMetrics(full({ collateral: 400_000, security: { openingPlant: 129_294, listedOwned: 120_000 } })).find((x) => x.key === "lvr")!;
+    expect(ok.value).not.toBeNull();
+  });
+});
+

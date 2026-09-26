@@ -217,6 +217,12 @@ export type CapabilityInput = {
    */
   collateral: number | null;
   /**
+   * How much of the plant already on the books has been listed on Fixed Assets (§6.135, open item 38).
+   * `openingPlant` is the last balance sheet's fixed assets; `listedOwned` what the already-owned assets on
+   * Fixed Assets are worth. Absent in older fixtures and on a plan with no history.
+   */
+  security?: { openingPlant: number | null; listedOwned: number };
+  /**
    * Committed but undrawn facility, from the funding rows the plan already holds — facility total less what
    * has been drawn. Never a field anybody types: Funding records both halves of it already (§6.41).
    */

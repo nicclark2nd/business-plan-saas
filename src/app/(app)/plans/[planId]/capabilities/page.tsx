@@ -46,7 +46,7 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
     supabase.from("plan_capacity_measures").select("name, pct_used").eq("plan_id", planId).order("sort_order").order("created_at"),
     supabase.from("plan_customers").select("name, revenue_share, contract_ends_on, assignable").eq("plan_id", planId).order("sort_order").order("created_at"),
     supabase.from("plan_marketing").select("customer_retention_pct, weighted_pipeline").eq("plan_id", planId).maybeSingle(),
-    supabase.from("plan_historic_periods").select("revenue, accounts_receivable, ar_current, ar_30, ar_60, ar_90").eq("plan_id", planId).eq("period_number", 1).maybeSingle(),
+    supabase.from("plan_historic_periods").select("revenue, accounts_receivable, ar_current, ar_30, ar_60, ar_90, fixed_assets").eq("plan_id", planId).eq("period_number", 1).maybeSingle(),
     supabase.from("plan_people").select("started_on").eq("plan_id", planId),
     supabase.from("plan_settings").select("date_established, has_history, repayments_on_time, covenant_history, guarantee_offered, guarantee_by").eq("plan_id", planId).maybeSingle(),
   ]);
@@ -205,6 +205,15 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
        */
       growth: readGrowth(settings), stress: readStress(settings), sale: readSale(settings, addBacks.data ?? []),
       collateral: readCollateral((plan.sources.assets ?? []) as { security_value?: unknown }[]),
+      /*
+       * THE PLANT ALREADY ON THE BOOKS, AND HOW MUCH OF IT IS LISTED (§6.135). Loan-to-value waits until
+       * enough of it is — see `securityGap`.
+       */
+      security: {
+        openingPlant: num(historic.data?.fixed_assets),
+        listedOwned: ((plan.sources.assets ?? []) as { already_owned?: unknown; purchase_price?: unknown }[])
+          .filter((a) => a.already_owned === true).reduce((t, a) => t + (num(a.purchase_price) ?? 0), 0),
+      },
       undrawn: readUndrawn(plan.sources.funding),
     };
   } catch (e) {

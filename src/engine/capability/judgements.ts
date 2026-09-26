@@ -103,6 +103,18 @@ export function readStress(s: Row): Stress {
 }
 
 /**
+ * THE YEAR THE SALE IS STRUCK ON (§6.135, open item 36). "Aiming to sell in" was collected and read by
+ * nothing but a line of print; a buyer in Year 3 pays for Year 3's earnings, not Year 1's. So the price
+ * measures — the multiple, the value range and the earnings bridge — read the year the client chose, and
+ * Year 1 when they have not chosen. The health measures (margins, cash conversion, returns) stay on Year 1
+ * with their five-year lines beside them, because those are about the business now.
+ */
+export function saleYear(sale: Pick<Sale, "exitYear">): number {
+  const y = sale.exitYear;
+  return y !== null && Number.isInteger(y) && y >= 1 && y <= 5 ? y : 1;
+}
+
+/**
  * The add-backs are a LIST now (§6.129.3), summed here. No lines is null, not nought: "no add-backs entered"
  * and "the owner has checked and there are none" are different claims, and only the first is on the table.
  */
@@ -129,6 +141,25 @@ export function readSale(s: Row, addBacks: { amount?: unknown }[] = []): Sale {
 export function readCollateral(assets: { security_value?: unknown }[]): number | null {
   const given = assets.map((a) => n(a.security_value)).filter((v): v is number => v !== null);
   return given.length ? Math.round(given.reduce((a, b) => a + b, 0) * 100) / 100 : null;
+}
+
+/**
+ * ENOUGH OF THE PLANT LISTED TO TALK ABOUT SECURITY (§6.135, open item 38).
+ *
+ * Loan-to-value divides the debt by what a lender would advance against the listed assets. SEQ's last
+ * balance sheet carries 129,294 of plant and none of it is listed, so the whole debt was measured against
+ * one new machine and read 2500% — correct arithmetic on an incomplete list, and the most alarming number on
+ * the page. Until the plant already on the books is substantially listed, the measure waits and says why.
+ *
+ * Three quarters, not all of it: the listed figures are what the assets are worth now and the balance sheet
+ * is what is left of their cost, so the two never match exactly and demanding that they did would hold the
+ * measure back for ever.
+ */
+export const MIN_PLANT_LISTED = 0.75;
+export function securityGap(sec: { openingPlant: number | null; listedOwned: number } | undefined):
+  { listed: number; plant: number } | null {
+  if (!sec || sec.openingPlant === null || sec.openingPlant <= 0) return null;
+  return sec.listedOwned >= sec.openingPlant * MIN_PLANT_LISTED ? null : { listed: sec.listedOwned, plant: sec.openingPlant };
 }
 
 /**

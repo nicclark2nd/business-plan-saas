@@ -1,6 +1,6 @@
 import type { CapabilityInput, Metric } from "./model";
 import { ebitda, over, r1, r2 } from "./model";
-import { TRANSFER_FACTORS } from "./judgements";
+import { TRANSFER_FACTORS, saleYear } from "./judgements";
 
 /**
  * CAPABILITY TO SELL (§6.128.2).
@@ -68,7 +68,14 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
   const roic = y1 && invested && invested > 0 ? over(y1.operatingProfit * (1 - taxRate), invested) : null;
 
   const price = sale.askingPrice !== null && sale.askingPrice > 0 ? sale.askingPrice : null;
-  const multiple = price && normalised && normalised > 0 ? over(price, normalised) : null;
+  /*
+   * THE PRICE IS JUDGED ON THE SALE YEAR'S EARNINGS (§6.135). `normalised` above stays Year 1 for the margin
+   * and leadership measures; the multiple uses the year the client said the sale is aimed at.
+   */
+  const sy = saleYear(sale);
+  const eSale = ebitda(i.pnl[sy]);
+  const normalisedSale = eSale === null ? null : r2(eSale + (sale.addBacks ?? 0));
+  const multiple = price && normalisedSale && normalisedSale > 0 ? over(price, normalisedSale) : null;
   const yieldOnPrice = price && fcf !== null ? over(fcf, price) : null;
 
   /*
@@ -105,14 +112,14 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       bands: ranged
         ? [{ to: high, s: "good" }, { to: high + 0.4, s: "watch" }, { to: Number.MAX_SAFE_INTEGER, s: "bad" }]
         : [{ to: Number.MAX_SAFE_INTEGER, s: "good" }],
-      sub: price && normalised ? `${m(price)} against ${m(normalised)} of normalised earnings` : undefined,
+      sub: price && normalisedSale ? `${m(price)} against ${m(normalisedSale)} of Year ${sy} normalised earnings` : undefined,
       note: multiple === null ? "The one number a buyer decides on."
         : !ranged ? `The price is ${r2(multiple)}× normalised earnings. Whether that is high or low needs a comparable range to sit it against.`
-        : multiple > high ? `Above the top of the similar-sales range. At ${high}× the price would be ${m(normalised! * high)}.`
+        : multiple > high ? `Above the top of the similar-sales range. At ${high}× the price would be ${m(normalisedSale! * high)}.`
         : multiple < low ? "Below the range similar businesses have sold for — you may be leaving money on the table."
         : "Inside the range similar businesses have sold for.",
       bench: ranged ? `Similar sales ${low}× to ${high}×` : "Set the similar-sales range in Plan settings",
-      formula: "Asking price ÷ (EBITDA + owner add-backs), both from Plan settings → Exit & sale",
+      formula: `Asking price ÷ (Year ${sy} EBITDA + owner add-backs)${sy === 1 && sale.exitYear === null ? " — Year 1 until a sale year is chosen in Plan settings → Exit & sale" : ", the year the sale is aimed at"}`,
       reveals: "Whether the price can be justified against what similar businesses actually changed hands for.",
       confidence: "The arithmetic is exact; the comparable range is your judgement, and it is the part a buyer will argue with.",
       missing: multiple === null ? "An asking price in Plan settings, and a forecast with earnings in it."

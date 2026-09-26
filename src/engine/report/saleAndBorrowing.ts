@@ -2,7 +2,7 @@ import type { ReportInput } from "./build";
 import { cell, num, type Block, type Draft } from "./blocks";
 import { COPY } from "./content";
 import { bridgeFrom } from "../capability/extras";
-import { TRANSFER_FACTORS } from "../capability/judgements";
+import { TRANSFER_FACTORS, saleYear } from "../capability/judgements";
 import type { MultipleSource } from "../ai/multiples";
 
 /**
@@ -41,7 +41,9 @@ const x = (n: number) => `${Number(n.toFixed(2))}×`;
 
 export function saleAndBorrowing(i: ReportInput): Draft {
   const { sale, lender, money } = i;
-  const bridge = bridgeFrom(i.forecast.pnl[1], sale.addBacks);
+  /* Struck on the year the sale is aimed at, or Year 1 until one is chosen — as on screen (§6.135). */
+  const sy = saleYear(sale);
+  const bridge = bridgeFrom(i.forecast.pnl[sy], sale.addBacks);
   const normalised = bridge?.normalised ?? null;
   const ranged = sale.multipleLow !== null && sale.multipleHigh !== null;
   const price = sale.askingPrice !== null && sale.askingPrice > 0 ? sale.askingPrice : null;
@@ -55,7 +57,7 @@ export function saleAndBorrowing(i: ReportInput): Draft {
     if (sale.exitYear !== null && i.yearEndLabels[sale.exitYear - 1]) {
       rows.push(["Sale aimed at", `Year ${sale.exitYear}, ending ${i.yearEndLabels[sale.exitYear - 1]}`]);
     }
-    if (normalised !== null) rows.push(["Normalised EBITDA, Year 1", normalised < 0 ? `(${money(-normalised)})` : money(normalised)]);
+    if (normalised !== null) rows.push([`Normalised EBITDA, Year ${sy}`, normalised < 0 ? `(${money(-normalised)})` : money(normalised)]);
     if (ranged) {
       rows.push(["Similar businesses have sold for", sale.multipleLow === sale.multipleHigh
         ? `${x(sale.multipleLow!)} EBITDA` : `${x(sale.multipleLow!)} to ${x(sale.multipleHigh!)} EBITDA`]);
@@ -91,7 +93,7 @@ export function saleAndBorrowing(i: ReportInput): Draft {
     title: "From reported to normalised earnings",
     blocks: [
       { kind: "para", text: COPY.bridge(i.businessName) },
-      { kind: "table", columns: [{ label: "" }, { label: "Year 1", numeric: true, width: 130 }],
+      { kind: "table", columns: [{ label: "" }, { label: `Year ${sy}`, numeric: true, width: 130 }],
         rows: [
           [cell("EBITDA as forecast"), num(bridge.reported < 0 ? `(${money(-bridge.reported)})` : money(bridge.reported))],
           ...bridge.adds.map((a) => [cell(`Add back: ${a.label}`), num(money(a.amount))]),
@@ -137,7 +139,7 @@ export function saleAndBorrowing(i: ReportInput): Draft {
   const title = selling && lenderDraft ? "Sale Readiness and Borrowing" : selling ? "Sale Readiness" : "Borrowing Record";
   return {
     title,
-    blocks: selling ? [{ kind: "para", text: COPY.saleIntro(i.businessName) }] : [],
+    blocks: selling ? [{ kind: "para", text: COPY.saleIntro(i.businessName, sy) }] : [],
     children: [value, bridgeDraft, transferDraft, lenderDraft],
   };
 }
