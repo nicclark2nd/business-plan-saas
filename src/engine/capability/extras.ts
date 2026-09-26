@@ -235,9 +235,17 @@ export function concentration(x: ExtraFacts, today: Date) {
  * reading of one list (§6.41).
  */
 export function earningsBridge(x: ExtraFacts, i: CapabilityInput) {
-  const e = ebitda(i.pnl[1]);
+  return bridgeFrom(i.pnl[1], x.addBackLines);
+}
+
+/**
+ * The same bridge from the two things it actually needs, so the printed plan (§6.130.2) reads it through the
+ * one function the dashboard does rather than adding the add-backs up a second time (§6.41).
+ */
+export function bridgeFrom(year1: CapabilityInput["pnl"][number] | undefined, lines: { label: string; amount: number }[]) {
+  const e = ebitda(year1);
   if (e === null) return null;
-  const adds = x.addBackLines.filter((a) => a.amount > 0);
+  const adds = lines.filter((a) => a.amount > 0);
   const normalised = r2(e + adds.reduce((t, a) => t + a.amount, 0));
   return { reported: e, adds, normalised };
 }

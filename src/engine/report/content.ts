@@ -134,6 +134,24 @@ export const COPY = {
    * who changes a price and downloads again now holds two files, and until this line existed nothing in
    * either one said which was which.
    */
+  /* Sale readiness and borrowing (§6.130.2) — printed only for the parts the owner has actually answered. */
+  saleIntro: (name: string) =>
+    `What ${name} is worth to a buyer, and what a buyer would have to believe to pay it. Every earnings figure here is the plan's own Year 1, before interest, tax, depreciation and amortisation (EBITDA).`,
+  saleRangeSourced: (day: string) =>
+    `The range comes from published figures for similar businesses, found ${day}. They are averages across many sales; where this business sits inside the range depends on how much of it runs without its owner.`,
+  saleRangeOwn:
+    "The range is the owner's own figure for what similar businesses have sold for.",
+  saleNoEarnings:
+    "Year 1 earnings are not positive, so there is no multiple to apply and no value to set against the price. The price can be judged once the business is making money.",
+  bridge: (name: string) =>
+    `A buyer values ${name} on what it would earn under ordinary management. Costs in the accounts that exist only because of the present owner are added back, one line at a time, and each is a line a buyer's accountant will test.`,
+  transfer: (name: string) =>
+    `Six things a buyer's adviser tests to decide whether ${name} would keep trading under a new owner, each scored from 1 (depends entirely on the owner) to 5 (would carry on unchanged).`,
+  transferPartial: (done: number) =>
+    `${["None", "One", "Two", "Three", "Four", "Five"][done] ?? done} of the six ${done === 1 ? "has" : "have"} been assessed. An overall score is given only when all six are, because the two left out are usually the two that matter.`,
+  lenderHistory:
+    "What a lender checks that no forecast can answer: whether the business has paid on time, whether it has kept its loan conditions, and who stands behind it.",
+
   preparedOn: (day: string) => `This version prepared ${day}.`,
 
   overheads: (name: string) =>

@@ -21,6 +21,8 @@ import { COPY } from "./content";
 import { groupByCategory } from "../overheads/categories";
 import { governingLaw } from "../plan/jurisdiction";
 import { contactLine } from "../plan/contact";
+import { saleAndBorrowing, type SaleFacts, type LenderFacts } from "./saleAndBorrowing";
+import type { TransferRating } from "../capability/judgements";
 import { goalsAndMilestones, historicAppendix, howWeOperate, marketingAndSales, ourPeople, risksAndMitigation, theBusiness, theCompetition, theMarket, whatWeSell } from "./narrative";
 
 export type ReportInput = {
@@ -120,6 +122,14 @@ export type ReportInput = {
     steps: { title: string; detail: string | null; owner: string | null; duration: string | null }[];
     capacity: { operatingHours: string | null; capacityNow: string | null; capacityConstraint: string | null; capacityPlan: string | null; qualityApproach: string | null };
   };
+  /**
+   * What a buyer and a lender read that the forecast cannot produce (§6.130.2): the price, the similar-sales
+   * range and where it came from, the add-backs, the six change-of-owner judgements, the lender record.
+   * All optional; the section prints only the parts that are there.
+   */
+  sale: SaleFacts;
+  transfer: TransferRating[];
+  lender: LenderFacts;
   /** The client's own prior accounts, if they entered any. `null` for a business with no history. */
   historic: { label: string; pnl: { label: string; value: number }[]; balance: { label: string; value: number }[] } | null;
   noun: Noun & { aOne: string };
@@ -643,6 +653,11 @@ export function buildReport(i: ReportInput): ReportDoc {
     keep(risksAndMitigation(i), "Risks and Mitigation", "No SWOT lines have been written."),
     keep(goalsAndMilestones(i), "Goals and Milestones", "No goals have been set."),
     keep(financialPlan(i), "Financial Plan", "The forecast has not been built yet."),
+    /*
+     * Not `keep`: a plan that is not being sold and is not borrowing has nothing missing here, and listing
+     * "no asking price" under what the plan leaves out would tell a reader it was supposed to have one.
+     */
+    saleAndBorrowing(i),
     historicAppendix(i),
   ]);
 

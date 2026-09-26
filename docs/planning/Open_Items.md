@@ -384,12 +384,19 @@ Plan settings → Exit & sale collects which forecast year a sale is aimed at, a
 sale figure on the capability tab is struck on Year 1. Either the tab lets the client read the sale
 against their chosen year, or the field comes out — a field on a screen is a promise (§6.87).
 
-### 37. The sale figures do not print in any report
+*§6.130.2:* the printed plan now states it ("Sale aimed at: Year 2, ending Jun 2028"), so the field is no
+longer read by nothing. Every figure is still struck on Year 1, on screen and in print — the half of this
+item that remains.
 
-The asking price, the add-backs, the comparable range and the six change-of-owner judgements are stored
-(§6.129) and read by one dashboard. The reason for storing rather than typing them was that a report can
-print them and they mean the same thing next week — the first half of that is done and the second is not.
-The People help text has promised "key-person risk in funding, SBA and sale reports" since §6.11.
+### ~~37. The sale figures do not print in any report~~ — **done (§6.130.2)**
+
+A "Sale Readiness and Borrowing" section after the Financial Plan: price and value (asking price, the year
+aimed at, normalised EBITDA, the similar-sales range with its sources or "the owner's own figure", the value
+at that range, the price as a multiple and a sentence on where it sits); the add-back bridge through the
+dashboard's own `bridgeFrom`; the six change-of-owner ratings with notes (an overall score only when all six
+are judged); and the lender record. Each part prints only when it has something in it, the heading names
+only what is under it ("Sale Readiness", "Borrowing Record" or both), and a plan with none of it prints
+nothing and is not told anything is missing. On screen and in the Word file.
 
 ### 38. Security values are per asset and the opening balance sheet is not
 

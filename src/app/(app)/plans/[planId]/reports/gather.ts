@@ -12,6 +12,8 @@ import { planYearStart, startYearFromDate, salaryForYear, SALARY_YEARS } from "@
 import { resolvePageSize } from "@/engine/report/pageSize";
 import { planOverheadLines, overheadByYear, type Overhead } from "@/engine/overheads/expenses";
 import { buildReport, type ReportInput } from "@/engine/report/build";
+import type { MultipleSource } from "@/engine/ai/multiples";
+import type { TransferRating } from "@/engine/capability/judgements";
 import { buildLadder } from "@/engine/plan/ladder";
 import { AREA_LABEL } from "@/engine/whatif/goals";
 import { SPEND_LABEL } from "../marketing/model";
@@ -101,6 +103,23 @@ export async function gatherReport(planId: string) {
   const historicRow = await supabase.from("plan_historic_periods").select("*").eq("plan_id", planId)
     .order("period_number").limit(1).maybeSingle().then((r) => r.data);
   const swotItems = await rows(supabase.from("plan_swot_items").select("*").eq("plan_id", planId).order("sort_order"), "plan_swot_items");
+  /*
+   * SALE AND LENDER FIGURES (§6.130.2), asked for by name in queries of their own for the reason the ladder's
+   * are (§6.82): a column that is not there fails this query alone, not the whole plan.
+   */
+  const [saleRow, addBackRows, ratingRows] = await Promise.all([
+    supabase.from("plan_settings")
+      .select("asking_price, multiple_low, multiple_high, intended_exit_year, multiple_sources, multiple_found_on, repayments_on_time, covenant_history, guarantee_offered, guarantee_by")
+      .eq("plan_id", planId).maybeSingle().then((r) => {
+        if (r.error) console.error(`gather: sale figures query failed for plan ${planId} —`, r.error.message);
+        return r.data as Record<string, unknown> | null;
+      }),
+    rows(supabase.from("plan_add_backs").select("label, amount").eq("plan_id", planId).order("sort_order").order("created_at"), "plan_add_backs"),
+    rows(supabase.from("plan_transfer_ratings").select("factor, score, note").eq("plan_id", planId), "plan_transfer_ratings"),
+  ]);
+  /* Nullable through every layer (§6.89): `n()` would turn "not priced" into a business priced at nothing. */
+  const orNull = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
+  const bool = (v: unknown) => (v === true ? true : v === false ? false : null);
   const { checked } = runForecast(plan);
   const { sources } = plan;
 
@@ -339,6 +358,23 @@ export async function gatherReport(planId: string) {
         pnl, balance,
       };
     })() : null,
+    sale: {
+      askingPrice: orNull(saleRow?.asking_price),
+      multipleLow: orNull(saleRow?.multiple_low), multipleHigh: orNull(saleRow?.multiple_high),
+      exitYear: orNull(saleRow?.intended_exit_year),
+      sources: Array.isArray(saleRow?.multiple_sources) ? saleRow.multiple_sources as MultipleSource[] : null,
+      foundOn: typeof saleRow?.multiple_found_on === "string"
+        ? new Date(`${saleRow.multiple_found_on}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
+        : null,
+      addBacks: addBackRows.map((a) => ({ label: String(a.label ?? "").trim(), amount: n(a.amount) })).filter((a) => a.label),
+    },
+    transfer: ratingRows.map((r) => ({ factor: r.factor as TransferRating["factor"], score: n(r.score), note: text(r.note) })),
+    lender: {
+      repaymentsOnTime: bool(saleRow?.repayments_on_time),
+      covenants: text(saleRow?.covenant_history),
+      guaranteeOffered: bool(saleRow?.guarantee_offered),
+      guaranteeBy: text(saleRow?.guarantee_by),
+    },
     noun: { ...noun, aOne: `${/^[aeiou]/i.test(noun.one) ? "an" : "a"} ${noun.one}` },
     /* The client's own opening line for What We Sell (§6.104), asked in Plan settings. */
     productsServices: text(settings?.products_services_statement),
