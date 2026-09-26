@@ -21,6 +21,22 @@ export const RESPONSE_PROMPT: Record<Quadrant, string> = {
   threat: "How you'll guard against it",
 };
 
+/**
+ * WHAT THE SECOND LINE IS CALLED, ON SCREEN, PERMANENTLY (§6.127).
+ *
+ * §6.59 gave the response an arrow and no label, reasoning that the quadrant's own verb was already in
+ * the placeholder. A placeholder is gone the moment somebody types into it — so the only thing naming the
+ * field disappeared exactly when a client came back to re-read what they had written, leaving an indented
+ * grey sentence answering a question the screen no longer asked. The same fault §6.125 removed from Goals.
+ *
+ * Two words, not four: a weakness and a threat are MITIGATED, which is the word a lender uses and the word
+ * Nic asked for; a strength and an opportunity are acted on. The per-quadrant verb stays in the
+ * placeholder, where it still helps with the first draft and costs nothing when it goes.
+ */
+export const RESPONSE_LABEL: Record<Quadrant, string> = {
+  strength: "Action", weakness: "Mitigation", opportunity: "Action", threat: "Mitigation",
+};
+
 /** The two quadrants a lender reads first, and the two where a blank response is worth naming out loud. */
 export const RISK_QUADRANTS: Quadrant[] = ["weakness", "threat"];
 

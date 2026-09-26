@@ -403,8 +403,35 @@ export function risksAndMitigation(i: ReportInput): Draft {
    * what is being done — because a risk stated without a response is the one a lender remembers, and this
    * is the section where saying "nothing planned yet" out loud beats leaving a gap (§6.59).
    */
-  const plain = (title: string, rows: typeof strengths, lead: string): Draft =>
-    rows.length === 0 ? null : { title, blocks: [para(lead), { kind: "list", items: rows.map((r) => r.text.trim()) }] };
+  /**
+   * A LIST UNTIL SOMEBODY HAS WRITTEN UNDER IT (§6.127).
+   *
+   * Strengths and opportunities print as a plain list, which is right: the case FOR a business reads as a
+   * list, and a two-column table with an empty right-hand side says "nothing planned" about a strength,
+   * which is not a thing anybody needs to hear.
+   *
+   * But the screen collects an ACTION under every line in all four quadrants, and this printed two of
+   * them and silently dropped the others — a field a client filled in that the document never carried
+   * (§6.87). So the shape follows the content: no actions written, a list; one or more, the same table
+   * the risks get, with the blanks left blank rather than accused of anything.
+   */
+  const plain = (title: string, rows: typeof strengths, lead: string, head: string): Draft => {
+    if (rows.length === 0) return null;
+    if (!rows.some((r) => has(r.response))) {
+      return { title, blocks: [para(lead), { kind: "list", items: rows.map((r) => r.text.trim()) }] };
+    }
+    return {
+      title,
+      blocks: [
+        para(lead),
+        { kind: "table", columns: [{ label: title.replace(/s$/, ""), width: 340 }, { label: head }],
+          rows: rows.map((r) => [
+            cell(r.text.trim()),
+            has(r.response) ? cell(r.response!.trim()) : cell("—", { muted: true }),
+          ]) },
+      ],
+    };
+  };
 
   const withResponse = (title: string, rows: typeof weaknesses, lead: string, head: string): Draft =>
     rows.length === 0 ? null : {
@@ -423,10 +450,15 @@ export function risksAndMitigation(i: ReportInput): Draft {
     title: "Risks and Mitigation",
     blocks: [para(COPY.swot(i.businessName))],
     children: [
-      plain("Strengths", strengths, COPY.strengths),
-      plain("Opportunities", opportunities, COPY.opportunities),
-      withResponse("Weaknesses", weaknesses, COPY.weaknesses, "What we are doing about it"),
-      withResponse("Threats", threats, COPY.threats, "How we guard against it"),
+      plain("Strengths", strengths, COPY.strengths, "How we build on it"),
+      plain("Opportunities", opportunities, COPY.opportunities, "How we take it"),
+      /*
+       * "Mitigation" on both, matching the word the screen now puts beside the box a client types into.
+       * A client who wrote under a heading called Mitigation should find that heading in the document
+       * (§6.87); "What we are doing about it" was good prose and the wrong word.
+       */
+      withResponse("Weaknesses", weaknesses, COPY.weaknesses, "Mitigation"),
+      withResponse("Threats", threats, COPY.threats, "Mitigation"),
     ],
   };
 }

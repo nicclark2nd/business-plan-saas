@@ -7,7 +7,7 @@ import { Toolbar, Meta, RemoveButton, CellTextarea, LinkButton, focusRow } from 
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { upsertSwot, deleteSwot, continueFromSwot } from "./actions";
-import { QUADRANTS, QUADRANT_LABEL, QUADRANT_HINT, RESPONSE_PROMPT, RISK_QUADRANTS, QUADRANT_NOUN, type Quadrant, type SwotItem, type Suggestion, type LinkedGoal } from "./model";
+import { QUADRANTS, QUADRANT_LABEL, QUADRANT_HINT, RESPONSE_LABEL, RESPONSE_PROMPT, RISK_QUADRANTS, QUADRANT_NOUN, type Quadrant, type SwotItem, type Suggestion, type LinkedGoal } from "./model";
 
 type Row = SwotItem & { _dirty?: boolean };
 const STEP = GUIDED_STEPS.find((s) => s.id === "swot")?.step ?? 5;
@@ -87,11 +87,12 @@ export function SwotModule({ planId, initial, suggestions, goals, mode }: {
         <p>Three to five lines a quadrant, each one specific enough that a stranger could check it. &quot;Good team&quot; is not a strength; &quot;11-year builder relationships and the only QBCC open licence in the postcode&quot; is.</p>
         <p>The faint lines are drawn from what you have already written — your advantage, your competitors, your team&apos;s development areas, what could change. Click <b>Use</b> to keep one; ignore the rest. Nothing is added without you.</p>
         <p>Weaknesses are the quadrant lenders read first. An honest one (&quot;the owner does all the estimating&quot;) with a plan to fix it beats a blank.</p>
-        <h3>What you&apos;ll do about it</h3>
+        <h3>Mitigation</h3>
         <p>Under every line there is a second one: build on it, fix it, take it, guard against it. Four lists with nothing attached is a page in a report — the same four lists with &quot;hire and train a second estimator&quot; under the estimating weakness is a plan. Nothing is compulsory, but the line at the top counts the weaknesses and threats you have left blank, because that is the count a lender does.</p>
-        <p>A response is what you intend. It becomes a commitment at step {GUIDED_STEPS.find((s) => s.id === "goals")?.step}, where a goal gets an owner, a date and a status — and where you have the forecast in front of you. Anything already committed is tagged <b>goal</b> here.</p>
+        <p>What you write here is part of the plan in its own right, and it is printed as part of it — a lender reading your Weaknesses sees your mitigation in the column beside each one. It does not have to become anything else to count.</p>
+        <p>If you later want one of these to have somebody&apos;s name and a date on it, step {GUIDED_STEPS.find((s) => s.id === "goals")?.step} can turn it into a goal. That is optional. Anything you have already turned into one is tagged <b>goal</b> here, so you can see which lines somebody is accountable for and which are stated intent.</p>
         <h3>Where this goes</h3>
-        <p>SWOT section of every report, responses included. The AI reads all four quadrants when it drafts your Goals in step {GUIDED_STEPS.find((s) => s.id === "goals")?.step}.</p>
+        <p>SWOT section of every report — every line with its mitigation beside it, and <b>&quot;Not yet addressed in this plan&quot;</b> beside the ones you leave blank. The AI reads all four quadrants when it drafts your Goals in step {GUIDED_STEPS.find((s) => s.id === "goals")?.step}.</p>
       </>}
     >
       <PendingBridge pending={pending} dirty={rows.some((r) => r._dirty)} />
@@ -121,6 +122,18 @@ export function SwotModule({ planId, initial, suggestions, goals, mode }: {
                 <span className="truncate text-[11.5px] text-muted-foreground">{QUADRANT_HINT[q]}</span>
                 <LinkButton className="ml-auto shrink-0" onClick={() => add(q)}>+ Line</LinkButton>
               </header>
+              {/*
+                WHAT A CLIENT WITH AN EMPTY QUADRANT IS NOT TOLD (§6.127).
+                The second line only renders once the line above it has text, so on a new plan there is no
+                mitigation field anywhere on this screen and nothing announcing that one is coming. A
+                client writes four lists, moves on, and never learns the half that turns a list into a
+                plan exists. The sentence costs one line and only appears while the quadrant is empty.
+              */}
+              {list.every((r) => !r.text.trim()) && (
+                <p className="border-b border-border px-5 py-1.5 text-[11.5px] text-muted-foreground">
+                  Every line you write gets a second one under it — <b>{RESPONSE_LABEL[q].toLowerCase()}</b>: {RESPONSE_PROMPT[q].toLowerCase()}.
+                </p>
+              )}
               <ul>
                 {list.map((r) => {
                   const goal = byId.get(r.id);
@@ -141,7 +154,14 @@ export function SwotModule({ planId, initial, suggestions, goals, mode }: {
                       */}
                       {r.text.trim() && (
                         <div className="flex items-start gap-2 pl-[14px]">
-                          <span className="mt-[7px] shrink-0 text-[11px] leading-none text-faint">&#8627;</span>
+                          {/*
+                            THE LABEL STAYS WHEN THE PLACEHOLDER GOES (§6.127). It is what tells a client
+                            re-reading their own plan what this indented sentence is answering, and it is
+                            the word the report prints beside it.
+                          */}
+                          <span className="mt-[6px] w-[62px] shrink-0 text-[9.5px] font-semibold uppercase tracking-[.06em] text-faint">
+                            {RESPONSE_LABEL[q]}
+                          </span>
                           <CellTextarea value={r.response ?? ""} placeholder={RESPONSE_PROMPT[q]} className="min-h-[26px] text-[12.5px] text-muted-foreground"
                             onChange={(e) => edit(r.id, { response: e.target.value })} />
                           {goal && (
