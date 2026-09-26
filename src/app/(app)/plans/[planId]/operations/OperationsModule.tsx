@@ -1,5 +1,6 @@
 "use client";
 
+import { guarded } from "@/lib/guardedStart";
 import { useRowSaves } from "@/lib/rowSaves";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
@@ -52,7 +53,9 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
   const [partBusy, setPartBusy] = useState(false);
   /** Keyed per row and per area, so several failures are several messages (§6.98). */
   const errors = useSaveErrors();
-  const [pending, start] = useTransition();
+  const [pending, startRaw] = useTransition();
+  /* A save that never reaches the server is reported, not allowed to take the screen down (§6.138). */
+  const start = guarded(startRaw, (message) => errors.raise({ key: "connection", message, label: "Connection" }), () => errors.clear("connection"));
   const [kill, setKill] = useState<{ kind: RowKind; id: string; name: string } | null>(null);
 
   const blankPremise = (id: string): Premise & Dirty => ({ id, name: "", address: null, tenure: null, is_primary: false, floor_area: null, monthly_cost: 0, purpose: null, sort_order: 0 });
@@ -110,7 +113,10 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
     /* A new row with no name waits, dirty and unscolded, until it has one — see marketing (§6.131). */
     if (!stored && !String(row[REQUIRED[kind]] ?? "").trim()) return;
     setter(kind)((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: false } : x)));
-    const r = await upsertRow(planId, kind, { ...row, id: stored });
+    let r: Awaited<ReturnType<typeof upsertRow>>;
+    /* Never reached the server: put the row back to unsaved so leaving a box retries it (§6.138). */
+    try { r = await upsertRow(planId, kind, { ...row, id: stored }); }
+    catch (e) { setter(kind)((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: true } : x))); throw e; }
     const key = `${kind}:${rs.keyOf(row.id)}`;
     if (!r.ok) {
       errors.raise({ key, message: r.error, label: kind === "premises" ? "Premises" : kind === "suppliers" ? "Supplier" : "Process step" });
@@ -147,7 +153,8 @@ export function OperationsModule({ planId, mode, initialArea, initialPremises, i
     if (!capacityDirty) return;
     setCapacityDirty(false);
     start(async () => {
-      const r = await saveCapacity(planId, cRef.current);
+      let r: Awaited<ReturnType<typeof saveCapacity>>;
+      try { r = await saveCapacity(planId, cRef.current); } catch (e) { setCapacityDirty(true); throw e; }   // §6.138
       if (!r.ok) { errors.raise({ key: "capacity", message: r.error, label: "Capacity" }); setCapacityDirty(true); }
       else errors.clear("capacity");
     });

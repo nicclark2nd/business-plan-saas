@@ -1,5 +1,6 @@
 "use client";
 
+import { guarded } from "@/lib/guardedStart";
 import { useRowSaves } from "@/lib/rowSaves";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
@@ -24,7 +25,9 @@ export function SwotModule({ planId, initial, suggestions, goals, mode }: {
   const [rows, setRows] = useState<Row[]>(() => [...initial, ...QUADRANTS.filter((q) => !initial.some((i) => i.quadrant === q)).map((q) => blank(q))]);
   /** Keyed per row, so several broken lines are several messages rather than the first one found (§6.98). */
   const errors = useSaveErrors();
-  const [pending, start] = useTransition();
+  const [pending, startRaw] = useTransition();
+  /* A save that never reaches the server is reported, not allowed to take the screen down (§6.138). */
+  const start = guarded(startRaw, (message) => errors.raise({ key: "connection", message, label: "Connection" }), () => errors.clear("connection"));
   const ref = useRef(rows); useEffect(() => { ref.current = rows; }, [rows]);
 
   /*
@@ -44,7 +47,10 @@ export function SwotModule({ planId, initial, suggestions, goals, mode }: {
     const row = ref.current.find((x) => rs.same(x.id, id));
     if (!row || !row._dirty || !row.text.trim()) return;
     put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: false } : x)));
-    const r = await upsertSwot(planId, { id: rs.realId(row.id), quadrant: row.quadrant, text: row.text, source: row.source, response: row.response });
+    let r: Awaited<ReturnType<typeof upsertSwot>>;
+    /* Never reached the server: put the line back to unsaved so leaving a box retries it (§6.138). */
+    try { r = await upsertSwot(planId, { id: rs.realId(row.id), quadrant: row.quadrant, text: row.text, source: row.source, response: row.response }); }
+    catch (e) { put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: true } : x))); throw e; }
     const key = `line:${rs.keyOf(row.id)}`;
     if (r.ok) { errors.clear(key); rs.adopt(row.id, r.data!.id); put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, id: r.data!.id } : x))); }
     else { errors.raise({ key, message: r.error, label: "SWOT line" }); put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: true } : x))); }

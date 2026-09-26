@@ -1,7 +1,8 @@
 "use client";
 
+import { guarded } from "@/lib/guardedStart";
 import Link from "next/link";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,10 @@ export function PlanCard({ plan, orgName, archived }: {
   archived: boolean;
 }) {
   const router = useRouter();
-  const [pending, start] = useTransition();
+  const [pending, startRaw] = useTransition();
+  /* A save that never reaches the server is said, not allowed to take the page down (§6.138). */
+  const [err, setErr] = useState<string>();
+  const start = guarded(startRaw, (m) => setErr(m), () => setErr(undefined));
   const toggle = () => start(async () => { await setArchived(plan.id, !archived); router.refresh(); });
 
   return (
@@ -35,6 +39,7 @@ export function PlanCard({ plan, orgName, archived }: {
           <div className="text-xs text-muted-foreground">FY{plan.plan_year}{orgName ? ` · ${orgName}` : ""}</div>
         </Link>
         <div className="flex shrink-0 items-center gap-3">
+          {err && <span className="max-w-[260px] text-[11.5px] text-bad">{err}</span>}
           <Badge variant="secondary" className="capitalize">{plan.status}</Badge>
           <Button variant="outline" size="sm" type="button" onClick={toggle} disabled={pending}>
             {pending ? "…" : archived ? "Restore" : "Archive"}

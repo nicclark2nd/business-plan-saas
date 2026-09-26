@@ -1,5 +1,6 @@
 "use client";
 
+import { guarded } from "@/lib/guardedStart";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -26,10 +27,12 @@ export function DangerArea({ planId, planName, archivedAt, inventory }: {
   planId: string; planName: string; archivedAt: string | null; inventory: PlanInventory;
 }) {
   const router = useRouter();
-  const [pending, start] = useTransition();
+  const [pending, startRaw] = useTransition();
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
   const [error, setError] = useState<string | undefined>();
+  /* A save that never reaches the server is reported, not allowed to take the screen down (§6.138). */
+  const start = guarded(startRaw, (m) => setError(m));
 
   const archived = !!archivedAt;
   const same = (v: string) => v.trim().replace(/\s+/g, " ").toLowerCase();

@@ -1,5 +1,6 @@
 "use client";
 
+import { guarded } from "@/lib/guardedStart";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { ModuleFrame, ModuleStatusFooter, useModule } from "@/components/module/ModuleFrame";
 import { useSaveErrors } from "@/components/module/saveErrors";
@@ -68,7 +69,9 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
    * either. Keyed, they sit side by side until each is fixed.
    */
   const errors = useSaveErrors();
-  const [pending, start] = useTransition();
+  const [pending, startRaw] = useTransition();
+  /* A save that never reaches the server is reported, not allowed to take the screen down (§6.138). */
+  const start = guarded(startRaw, (message) => errors.raise({ key: "connection", message, label: "Connection" }), () => errors.clear("connection"));
   const ref = useRef(s); useEffect(() => { ref.current = s; }, [s]);
   const estRef = useRef(established); useEffect(() => { estRef.current = established; }, [established]);
 
@@ -87,6 +90,12 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
     if (!which) return;
     setDirty(null);
     start(async () => {
+      /* Never reached the server: the tab is unsaved again, so leaving a box retries it (§6.138). */
+      try { await commitBody(which); } catch (e) { setDirty(which); throw e; }
+    });
+  };
+  const commitBody = async (which: "profile" | "financial") => {
+    {
       /*
        * The two saves are handled in their own branches rather than through one union (§6.121). Financial
        * hands back the row it stored and Profile does not, and a union of the two narrows to nothing
@@ -127,7 +136,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
         setS((x) => ({ ...x, ...res.saved!.stored }));
         setAdjusted(res.saved.note);
       }
-    });
+    }
   };
   const left = (e: React.FocusEvent<HTMLElement>) => !e.currentTarget.contains(e.relatedTarget as Node);
   /* Neither printing control is typed, so there is no field to leave — both save on the choice itself. */

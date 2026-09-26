@@ -457,12 +457,17 @@ The dialog says goals appear "for the quarter you pick" and offers a quarter for
 every What-If goal lands on the 90-day rung and the chosen quarter is ignored by the save. Found while
 testing §6.134 on ZZ Test Walk. The picker should come out, or become the goal's due date.
 
-### 44. A save that never reaches the server takes the whole screen down — on every step but Goals
+### ~~44. A save that never reaches the server takes the whole screen down~~ — **done (§6.138)**
 
-Found while driving item 25. Every screen saves through `start(async () => { await someAction() })`, and
-when the request itself fails (Wi-Fi drop, laptop asleep, server restarting) the action REJECTS, the
-rejection escapes the transition, and React replaces the screen with its error page — losing whatever was
-just typed. Goals now uses `guarded` (§6.136); the other 20 screens (about 60 call sites) do not. The fix
-is mechanical — the same wrapper, with each module's own error channel as `onFail` — and should be done in
-one pass, leaving each redirecting "Save and continue" unguarded.
-
+Every screen's save transition now goes through `guarded` (src/lib/guardedStart.ts): Settings, Sales, COGS,
+Overheads, Historic (and its import), Assets, Funding, One-off items, Assumptions, Marketing, Competitors,
+SWOT, Operations, People, What-If, Goals, and the parts that save on their own (capacity measures, debtor
+ageing, lender history, licences, logo, archive/delete, "None to list", the plan list, the Guided/Advanced
+switch). A request that never arrives shows "Couldn't reach the server, so your last change isn't saved
+yet…" in the module's own error channel and clears itself on the next save that gets through. Next's
+redirect and not-found signals are rethrown untouched, so "Save and continue" still moves on. Where a
+save cleared its "unsaved" flag before sending — every row grid, Settings' profile and financial tabs,
+Historic's years, the market, position and capacity prose — the flag is put back, so leaving a box again
+retries. Driven live on ZZ Test Walk: a Marketing segment and the Business profile's industry, each
+saved with the connection blocked (message, screen intact, text kept) then retried and stored; and Save
+and continue on Marketing still went to Competitors.

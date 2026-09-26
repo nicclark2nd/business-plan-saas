@@ -1,5 +1,6 @@
 "use client";
 
+import { guarded } from "@/lib/guardedStart";
 import { useRowSaves } from "@/lib/rowSaves";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
@@ -94,7 +95,9 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
   const figNum = (raw: string) => { const t = raw.trim(); if (!t) return null; const x = Number(t.replace(/[^0-9.]/g, "")); return Number.isFinite(x) ? x : null; };
   /** Keyed per row and per area, so several failures are several messages (§6.98). */
   const errors = useSaveErrors();
-  const [pending, start] = useTransition();
+  const [pending, startRaw] = useTransition();
+  /* A save that never reaches the server is reported, not allowed to take the screen down (§6.138). */
+  const start = guarded(startRaw, (message) => errors.raise({ key: "connection", message, label: "Connection" }), () => errors.clear("connection"));
   const marketRef = useRef(market); useEffect(() => { marketRef.current = market; }, [market]);
   const rowsRef = useRef(rows); useEffect(() => { rowsRef.current = rows; }, [rows]);
   const left = (e: React.FocusEvent<HTMLElement>) => !e.currentTarget.contains(e.relatedTarget as Node);
@@ -104,7 +107,8 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
     if (!marketDirty) return;
     setMarketDirty(false);
     start(async () => {
-      const r = await saveMarket(planId, marketRef.current);
+      let r: Awaited<ReturnType<typeof saveMarket>>;
+      try { r = await saveMarket(planId, marketRef.current); } catch (e) { setMarketDirty(true); throw e; }   // §6.138
       if (!r.ok) { errors.raise({ key: "market", message: r.error, label: "The market" }); setMarketDirty(true); }
       else errors.clear("market");
     });
@@ -160,7 +164,10 @@ export function MarketingModule({ planId, initial, mode, initialArea, customerWo
     const payload: Record<string, unknown> = { ...row, id: stored };
     if (k === "evidence") payload.occurred_on = row.when_text;      // the action parses "Mar 2026"
     if (k === "customers") payload.contract_ends_on = row.ends_text;
-    const r = await upsertRow(planId, k, payload);
+    let r: Awaited<ReturnType<typeof upsertRow>>;
+    /* Never reached the server: put the row back to unsaved so leaving a box retries it (§6.138). */
+    try { r = await upsertRow(planId, k, payload); }
+    catch (e) { setList(k, (xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: true } : x))); throw e; }
     const key = `${k}:${rs.keyOf(row.id)}`;
     if (!r.ok) {
       errors.raise({ key, message: r.error, label: k === "spend" ? "Marketing spend" : k === "evidence" ? "Evidence" : k === "customers" ? "Customer" : "Segment" });

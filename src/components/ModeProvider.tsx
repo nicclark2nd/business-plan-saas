@@ -34,7 +34,8 @@ export function ModeProvider({ initial, children }: { initial: Mode; children: R
     const previous = mode;
     show(next);                                  // instant, and it stays
     start(async () => {
-      const saved = await persistMode(next);
+      /* A request that never arrived is a preference that did not save, not a reason to crash (§6.138). */
+      const saved = await persistMode(next).catch(() => false);
       if (!saved) show(previous);                // revert only if the preference genuinely did not save
     });
   };

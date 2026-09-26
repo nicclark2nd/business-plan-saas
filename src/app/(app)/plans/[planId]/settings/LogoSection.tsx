@@ -1,5 +1,6 @@
 "use client";
 
+import { guarded } from "@/lib/guardedStart";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -26,11 +27,13 @@ export function LogoSection({ planId, path, url, onPending }: {
 }) {
   const router = useRouter();
   const file = useRef<HTMLInputElement>(null);
-  const [pending, start] = useTransition();
+  const [pending, startRaw] = useTransition();
   const [error, setError] = useState<string>();
   const [confirming, setConfirming] = useState(false);
 
   const report = (busy: boolean, e?: string) => { setError(e); onPending(busy, e); };
+  /* A save that never reaches the server is reported, not allowed to take the screen down (§6.138). */
+  const start = guarded(startRaw, (m) => report(false, m));
 
   const choose = (f: File | null | undefined) => {
     if (!f) return;

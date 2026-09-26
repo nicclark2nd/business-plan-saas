@@ -1,5 +1,6 @@
 "use client";
 
+import { guarded } from "@/lib/guardedStart";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Section, FieldGrid, Field, FieldSelect, FieldTextarea, FieldInput } from "@/components/module/FieldGrid";
 import { Toolbar, Meta } from "@/components/module/DataGrid";
@@ -27,7 +28,9 @@ export function LenderHistory({ planId, initial, onError, onBusy }: {
   /** Whether a save is running, for the module footer. */
   onBusy?: (busy: boolean) => void;
 }) {
-  const [pending, start] = useTransition();
+  const [pending, startRaw] = useTransition();
+  /* A save that never reaches the server is reported, not allowed to take the screen down (§6.138). */
+  const start = guarded(startRaw, (m) => onError(m));
   /*
    * THE FOOTER HEARS ABOUT THIS SAVE (§6.132, open item 40). This part saves on its own schedule, so the
    * module's "Saving…" and "All changes saved" did not know it was mid-save. It reports up rather than

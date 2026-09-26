@@ -1,5 +1,6 @@
 "use client";
 
+import { guarded } from "@/lib/guardedStart";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -81,7 +82,9 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
   /** Keyed per row, so four broken lines are four messages rather than whichever `.find()` hit first (§6.98). */
   const errors = useSaveErrors();
   const [sort, setSort] = useState<Sort>(null);
-  const [pending, start] = useTransition();
+  const [pending, startRaw] = useTransition();
+  /* A save that never reaches the server is reported, not allowed to take the screen down (§6.138). */
+  const start = guarded(startRaw, (message) => errors.raise({ key: "connection", message, label: "Connection" }), () => errors.clear("connection"));
   const ref = useRef(rows); useEffect(() => { ref.current = rows; }, [rows]);
   /** What the last save changed on the way in, if anything. Cleared as soon as another save starts. */
   const [adjusted, setAdjusted] = useState<string>();

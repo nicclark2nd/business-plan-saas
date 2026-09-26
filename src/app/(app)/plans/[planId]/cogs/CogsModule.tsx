@@ -1,5 +1,6 @@
 "use client";
 
+import { guarded } from "@/lib/guardedStart";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -65,7 +66,7 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
   const [items, setItems] = useState<FixRow[]>(fixed.map((f) => ({ ...f, _key: f.id })));
   const [dlg, setDlg] = useState<Dlg>(null);
   const [draftNew, setDraftNew] = useState<FixRow | null>(null);
-  const [pending, start] = useTransition();
+  const [pending, startRaw] = useTransition();
   const ref = useRef(rows); useEffect(() => { ref.current = rows; }, [rows]);
 
   const src = (p: CostedProduct) => sourceOf(p, rows as AnyProduct[]) as CostedProduct | null;
@@ -114,6 +115,8 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
   };
   /** Keyed per line (§6.98). `setErr` here was never cleared, so one old failure masked every later success. */
   const errors = useSaveErrors();
+  /* A save that never reaches the server is reported, not allowed to take the screen down (§6.138). */
+  const start = guarded(startRaw, (message) => errors.raise({ key: "connection", message, label: "Connection" }), () => errors.clear("connection"));
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const intent = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value === "later" ? "later" : "next";

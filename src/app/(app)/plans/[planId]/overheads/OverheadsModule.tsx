@@ -1,5 +1,6 @@
 "use client";
 
+import { guarded } from "@/lib/guardedStart";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -60,7 +61,9 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
   const [draftNew, setDraftNew] = useState<Row | null>(null);
   /** Keyed failures that survive a keystroke and clear only on a save that works (§6.98). */
   const errors = useSaveErrors();
-  const [pending, start] = useTransition();
+  const [pending, startRaw] = useTransition();
+  /* A save that never reaches the server is reported, not allowed to take the screen down (§6.138). */
+  const start = guarded(startRaw, (message) => errors.raise({ key: "connection", message, label: "Connection" }), () => errors.clear("connection"));
 
   /** The two synced lines always show, whether or not a row exists yet to hold their monthly shape. */
   const syncedFor = (source: "people" | "marketing"): Row => rows.find((r) => r.source === source) ?? {

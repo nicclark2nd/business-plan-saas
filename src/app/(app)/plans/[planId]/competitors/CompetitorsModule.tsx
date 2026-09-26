@@ -1,5 +1,6 @@
 "use client";
 
+import { guarded } from "@/lib/guardedStart";
 import { useRowSaves } from "@/lib/rowSaves";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,9 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
   const [rows, setRows] = useState<Row_[]>(initialCompetitors.length ? initialCompetitors : [blank()]);   // empty grid starts with a blank row
   /** Keyed per competitor and for the positioning prose, so neither can erase the other (§6.98). */
   const errors = useSaveErrors();
-  const [pending, start] = useTransition();
+  const [pending, startRaw] = useTransition();
+  /* A save that never reaches the server is reported, not allowed to take the screen down (§6.138). */
+  const start = guarded(startRaw, (message) => errors.raise({ key: "connection", message, label: "Connection" }), () => errors.clear("connection"));
   const posRef = useRef(position); useEffect(() => { posRef.current = position; }, [position]);
   const rowsRef = useRef(rows); useEffect(() => { rowsRef.current = rows; }, [rows]);
   const left = (e: React.FocusEvent<HTMLElement>) => !e.currentTarget.contains(e.relatedTarget as Node);
@@ -43,7 +46,8 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
     if (!positionDirty) return;
     setPositionDirty(false);
     start(async () => {
-      const r = await saveMarket(planId, posRef.current);
+      let r: Awaited<ReturnType<typeof saveMarket>>;
+      try { r = await saveMarket(planId, posRef.current); } catch (e) { setPositionDirty(true); throw e; }   // §6.138
       if (!r.ok) { errors.raise({ key: "position", message: r.error, label: "Our position" }); setPositionDirty(true); }
       else errors.clear("position");
     });
@@ -70,7 +74,10 @@ export function CompetitorsModule({ planId, initialPosition, initialCompetitors,
     /* A new competitor with no name waits, unscolded, until it has one (§6.131). */
     if (!stored && !row.name?.trim()) return;
     put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: false } : x)));
-    const r = await upsertRow(planId, "competitors", { ...row, id: stored });
+    let r: Awaited<ReturnType<typeof upsertRow>>;
+    /* Never reached the server: put the row back to unsaved so leaving a box retries it (§6.138). */
+    try { r = await upsertRow(planId, "competitors", { ...row, id: stored }); }
+    catch (e) { put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: true } : x))); throw e; }
     const key = `competitor:${rs.keyOf(row.id)}`;
     if (!r.ok) {
       errors.raise({ key, message: r.error, label: row.name || "Competitor" });

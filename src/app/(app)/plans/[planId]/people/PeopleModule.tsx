@@ -1,5 +1,6 @@
 "use client";
 
+import { guarded } from "@/lib/guardedStart";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/ModuleFrame";
@@ -85,7 +86,9 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
   const [scope, setScope] = useState<string | null>(null);        // a person's _key, or everyone
   /** Keyed per person, so two who will not save are two messages (§6.98). */
   const errors = useSaveErrors();
-  const [pending, start] = useTransition();
+  const [pending, startRaw] = useTransition();
+  /* A save that never reaches the server is reported, not allowed to take the screen down (§6.138). */
+  const start = guarded(startRaw, (message) => errors.raise({ key: "connection", message, label: "Connection" }), () => errors.clear("connection"));
   const peopleRef = useRef(people); useEffect(() => { peopleRef.current = people; }, [people]);
   const capsRef = useRef(caps); useEffect(() => { capsRef.current = caps; }, [caps]);
 
@@ -125,7 +128,10 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
     const row = peopleRef.current.find((r) => r._key === key);
     if (!row || !row._dirty || !(row.first_name ?? "").trim()) return;
     patch(key, { _state: "saving", _dirty: false });
-    const res = await upsertPerson(planId, { ...row, id: row.id || undefined });
+    let res: Awaited<ReturnType<typeof upsertPerson>>;
+    /* Never reached the server: put the row back to unsaved so leaving a box retries it (§6.138). */
+    try { res = await upsertPerson(planId, { ...row, id: row.id || undefined }); }
+    catch (e) { patch(key, { _dirty: true, _state: undefined }); throw e; }
     if (res.ok) {
       errors.clear(`person:${key}`);
       stored.current.set(key, res.data!.id);
@@ -170,7 +176,9 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
       const c = capsRef.current.find((x) => x._key === id);
       if (!c || !c._dirty || !c.description.trim()) return;
       putCaps((cs) => cs.map((x) => (x._key === id ? { ...x, _dirty: false } : x)));
-      const res = await upsertCapability(planId, { ...c, id: c.id.startsWith("tmp-") ? undefined : c.id });
+      let res: Awaited<ReturnType<typeof upsertCapability>>;
+      try { res = await upsertCapability(planId, { ...c, id: c.id.startsWith("tmp-") ? undefined : c.id }); }
+      catch (e) { putCaps((cs) => cs.map((x) => (x._key === id ? { ...x, _dirty: true } : x))); throw e; }
       if (!res.ok) {
         errors.raise({ key: `cap:${id}`, message: res.error, label: "Roles & Capability" });
         putCaps((cs) => cs.map((x) => (x._key === id ? { ...x, _dirty: true } : x)));

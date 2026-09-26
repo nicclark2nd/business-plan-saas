@@ -1,5 +1,6 @@
 "use client";
 
+import { guarded } from "@/lib/guardedStart";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,7 +73,9 @@ export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth,
   const [confirmKey, setConfirm] = useState<string | null>(null);
   /** Keyed failures that survive a keystroke and clear only on a save that works (§6.98). */
   const errors = useSaveErrors();
-  const [pending, start] = useTransition();
+  const [pending, startRaw] = useTransition();
+  /* A save that never reaches the server is reported, not allowed to take the screen down (§6.138). */
+  const start = guarded(startRaw, (message) => errors.raise({ key: "connection", message, label: "Connection" }), () => errors.clear("connection"));
   const once = useSaveOnce();
 
   const lines = useMemo(() => (draft ? [...rows, draft] : rows), [rows, draft]);

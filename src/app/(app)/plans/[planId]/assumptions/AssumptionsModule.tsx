@@ -1,5 +1,6 @@
 "use client";
 
+import { guarded } from "@/lib/guardedStart";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
@@ -72,10 +73,12 @@ export function AssumptionsModule({
 }) {
   const num = useMoney();
   const router = useRouter();
-  const [pending, start] = useTransition();
+  const [pending, startRaw] = useTransition();
   const [wc, setWc] = useState(workingCapital);
   const [ct, setCt] = useState(cashTiming);
   const [err, setErr] = useState<string>();
+  /* A save that never reaches the server is reported, not allowed to take the screen down (§6.138). */
+  const start = guarded(startRaw, (m) => setErr(m));
   const [revert, setRevert] = useState(false);
   const [area, setArea] = useState<AreaKey>(initialArea);
   /**

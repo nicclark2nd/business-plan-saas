@@ -1,5 +1,6 @@
 "use client";
 
+import { guarded } from "@/lib/guardedStart";
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { Section } from "@/components/module/FieldGrid";
 import { Grid, Th, Td, Row as GridRow, CellInput, RemoveButton, Note, focusRow } from "@/components/module/DataGrid";
@@ -27,7 +28,10 @@ export function LicenceSection({ planId, initial, onPending }: {
   planId: string; initial: Licence[]; onPending: (busy: boolean, error?: string) => void;
 }) {
   const [rows, setRows] = useState<Row_[]>(initial);
-  const [pending, start] = useTransition();
+  const [pending, startRaw] = useTransition();
+  /* A save that never reaches the server is reported, not allowed to take the screen down (§6.138). */
+  const [conn, setConn] = useState<string>();
+  const start = guarded(startRaw, (m) => setConn(m), () => setConn(undefined));
   const rowsRef = useRef(rows); useEffect(() => { rowsRef.current = rows; }, [rows]);
   /**
    * Today is read after mount, never during render. This is a client component that Next still renders on
@@ -41,7 +45,7 @@ export function LicenceSection({ planId, initial, onPending }: {
     () => null,                                       // on the server: no claim at all
   );
 
-  const err = rows.find((r) => r._error)?._error;
+  const err = conn ?? rows.find((r) => r._error)?._error;
   useEffect(() => { onPending(pending, err); }, [pending, err, onPending]);
 
   /*
@@ -60,7 +64,9 @@ export function LicenceSection({ planId, initial, onPending }: {
     // A row with no name has nothing to save yet; it is a line somebody has started, not an error.
     if (!row.name.trim()) return;
     put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: false } : x)));
-    const r = await saveLicence(planId, { ...row, id: rs.realId(row.id) });
+    let r: Awaited<ReturnType<typeof saveLicence>>;
+    try { r = await saveLicence(planId, { ...row, id: rs.realId(row.id) }); }
+    catch (e) { put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: true } : x))); throw e; }
     if (!r.ok) { put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, _dirty: true, _error: r.error } : x))); return; }
     rs.adopt(row.id, r.id);
     put((xs) => xs.map((x) => (rs.same(x.id, id) ? { ...x, id: r.id, _error: undefined } : x)));

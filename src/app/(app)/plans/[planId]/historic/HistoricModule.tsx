@@ -1,5 +1,6 @@
 "use client";
 
+import { guarded } from "@/lib/guardedStart";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { DebtorAgeing } from "./DebtorAgeing";
 import { Button } from "@/components/ui/button";
@@ -40,7 +41,9 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
   const [newBusiness, setNewBusiness] = useState(hasHistory === false);
   /** Keyed by year, so two bad columns are two messages rather than whichever `.find()` reached first (§6.98). */
   const errors = useSaveErrors();
-  const [pending, start] = useTransition();
+  const [pending, startRaw] = useTransition();
+  /* A save that never reaches the server is reported, not allowed to take the screen down (§6.138). */
+  const start = guarded(startRaw, (message) => errors.raise({ key: "connection", message, label: "Connection" }), () => errors.clear("connection"));
   /* A part that saves on its own reports its "Saving…" here, so the footer tells the truth (§6.132). */
   const [partBusy, setPartBusy] = useState(false);
   const ref = useRef(cols); useEffect(() => { ref.current = cols; }, [cols]);
@@ -56,7 +59,10 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
     if (!hasData) return;
     setCols((cs) => cs.map((x) => (x.n === n ? { ...x, _dirty: false } : x)));
     start(async () => {
-      const r = await savePeriod(planId, n, { ...c.input, period_end_text: c.period_end_text, period_length: c.period_length });
+      let r: Awaited<ReturnType<typeof savePeriod>>;
+      /* Never reached the server: the year is unsaved again, so leaving a box retries it (§6.138). */
+      try { r = await savePeriod(planId, n, { ...c.input, period_end_text: c.period_end_text, period_length: c.period_length }); }
+      catch (e) { setCols((cs) => cs.map((x) => (x.n === n ? { ...x, _dirty: true } : x))); throw e; }
       if (r.ok) {
         errors.clear(`year:${n}`);
         setCols((cs) => cs.map((x) => (x.n === n ? { ...x, present: true, source: "manual", period_end_text: endText(r.data!.period_end, fyEndMonth) } : x)));
@@ -195,7 +201,9 @@ function ImportArea({ planId, onLoaded }: { planId: string; onLoaded: () => void
   const [sheet, setSheet] = useState<TemplateSheet | null>(null);
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState<string | undefined>();
-  const [pending, start] = useTransition();
+  const [pending, startRaw] = useTransition();
+  /* A save that never reaches the server is reported, not allowed to take the screen down (§6.138). */
+  const start = guarded(startRaw, (m) => setError(m));
   const preview = useMemo(() => (sheet ? periodsFromTemplate(sheet) : null), [sheet]);
 
   const onFile = async (file: File | undefined) => {

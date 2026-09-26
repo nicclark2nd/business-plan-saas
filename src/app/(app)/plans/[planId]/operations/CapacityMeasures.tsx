@@ -1,5 +1,6 @@
 "use client";
 
+import { guarded } from "@/lib/guardedStart";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Grid, Th, Td, Row, Toolbar, Meta, RemoveButton, CellInput } from "@/components/module/DataGrid";
@@ -26,7 +27,9 @@ export function CapacityMeasures({ planId, initial, onError, onBusy }: {
   onBusy?: (busy: boolean) => void;
 }) {
   type Line = { uid: string; id?: string; name: string; pct: string };
-  const [pending, start] = useTransition();
+  const [pending, startRaw] = useTransition();
+  /* A save that never reaches the server is reported, not allowed to take the screen down (§6.138). */
+  const start = guarded(startRaw, (m) => onError("capacity:connection", m), () => onError("capacity:connection", null));
   /*
    * THE FOOTER HEARS ABOUT THIS SAVE (§6.132, open item 40). This part saves on its own schedule, so the
    * module's "Saving…" and "All changes saved" did not know it was mid-save. It reports up rather than

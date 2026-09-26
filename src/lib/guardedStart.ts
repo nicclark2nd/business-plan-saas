@@ -15,15 +15,30 @@
  * retries.
  */
 export const UNREACHABLE =
-  "Couldn't reach the server, so your last change isn't saved yet. It's still on screen — click back into the box and out again to retry.";
+  "Couldn't reach the server, so your last change isn't saved yet. It's still on screen — try it again once you're back online.";
 
+/**
+ * Next signals a redirect (and a not-found) by THROWING an error whose digest starts `NEXT_`. That is not a
+ * failure: "Save and continue" ends in one, and catching it would strand the client on the screen they just
+ * finished. It is rethrown untouched (§6.138).
+ */
+const isNavigation = (e: unknown) =>
+  !!e && typeof e === "object" && "digest" in e && String((e as { digest?: unknown }).digest).startsWith("NEXT_");
+
+/**
+ * `onOk` runs when the job completes without throwing — the place to clear an earlier "couldn't reach the
+ * server" once the connection is back. It says nothing about whether the SERVER accepted the save; each
+ * screen still reports its own `{ ok: false }` answers as before.
+ */
 export function guarded(
   start: (fn: () => Promise<void>) => void,
   onFail: (message: string) => void,
+  onOk?: () => void,
 ) {
-  return (fn: () => Promise<void>) => start(async () => {
-    try { await fn(); }
+  return (fn: () => Promise<void> | void) => start(async () => {
+    try { await fn(); onOk?.(); }
     catch (e) {
+      if (isNavigation(e)) throw e;
       console.error("save did not reach the server", e);
       onFail(UNREACHABLE);
     }

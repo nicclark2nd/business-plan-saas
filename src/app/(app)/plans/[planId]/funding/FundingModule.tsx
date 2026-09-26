@@ -1,5 +1,6 @@
 "use client";
 
+import { guarded } from "@/lib/guardedStart";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -80,7 +81,9 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
   const [confirmKey, setConfirm] = useState<string | null>(null);
   /** Keyed failures that survive a keystroke and clear only on a save that works (§6.98). */
   const errors = useSaveErrors();
-  const [pending, start] = useTransition();
+  const [pending, startRaw] = useTransition();
+  /* A save that never reaches the server is reported, not allowed to take the screen down (§6.138). */
+  const start = guarded(startRaw, (message) => errors.raise({ key: "connection", message, label: "Connection" }), () => errors.clear("connection"));
   /* A part that saves on its own reports its "Saving…" here, so the footer tells the truth (§6.132). */
   const [partBusy, setPartBusy] = useState(false);
   /** What the last save changed on the way in, if anything. Cleared when another save starts. */

@@ -1,5 +1,6 @@
 "use client";
 
+import { guarded } from "@/lib/guardedStart";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -77,7 +78,7 @@ export function WhatIfModule({
   const num = useMoney();
   const router = useRouter();
   const [area, setArea] = useState<AreaKey>("levers");
-  const [saving, startSave] = useTransition();
+  const [saving, startSaveRaw] = useTransition();
   /**
    * Every lever means Year 1, which is the first PROJECTED year — the year the business is in, and a
    * forecast rather than a record (§6.47). The engine can start a change in a later year and is tested for
@@ -87,6 +88,8 @@ export function WhatIfModule({
   const [saveOpen, setSaveOpen] = useState(false);
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [savedError, setSavedError] = useState<string>();
+  /* A save that never reaches the server is reported, not allowed to take the screen down (§6.138). */
+  const startSave = guarded(startSaveRaw, (m) => setSavedError(m));
   const at = useMemo(() => planLevers(plan.workingCapital[1]), [plan]);
   const [lv, setLv] = useState<Levers>(at);
 
