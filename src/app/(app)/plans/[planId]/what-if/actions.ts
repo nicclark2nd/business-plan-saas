@@ -47,6 +47,8 @@ export async function saveDays(
  * ------------------------------------------------------------------ */
 
 export type GoalToCreate = {
+  /** The lever that proposed it — how a second "Turn into goals" finds the goal it made last time (§6.134). */
+  lever: string;
   area: string;
   title: string;
   detail: string;
@@ -85,21 +87,40 @@ export async function createGoalsFromScenario(planId: string, goals: GoalToCreat
    * Everything a scenario produces lands in the NEXT 90 DAYS, which is the only honest rung for it: a
    * lever the client just moved is something to do now, not a picture of the business in five years.
    */
-  const rows: Record<string, unknown>[] = [];
-  for (const g of goals) {
-    if (!isArea(g.area)) return { ok: false, error: `Unknown area: ${g.area}` };
-    if (!g.title.trim()) continue;
-    rows.push({
-      plan_id: planId, horizon: "ninety", area: g.area,
-      title: g.title.trim(), detail: g.detail.trim() || null,
-      owner_person_id: g.ownerPersonId || null,
-      status: "not_started", source: "whatif",
-    });
-  }
-  if (!rows.length) return { ok: false, error: "Nothing to create." };
+  const wanted = goals.filter((g) => g.title.trim());
+  for (const g of wanted) if (!isArea(g.area)) return { ok: false, error: `Unknown area: ${g.area}` };
+  if (!wanted.length) return { ok: false, error: "Nothing to create." };
 
-  const { error } = await supabase.from("plan_goals").insert(rows);
-  if (error) return failed(error, "save the goals");
+  /*
+   * ONE OPEN GOAL PER LEVER (§6.134, open item 24). The goal this lever made last time, if it is still open,
+   * is brought up to date rather than joined by a second one. Done goals are history and are left alone;
+   * so is a goal's status, because "in progress" is the client's statement, not the scenario's.
+   */
+  const { data: open, error: readError } = await supabase.from("plan_goals")
+    .select("id, source_key").eq("plan_id", planId).eq("source", "whatif").eq("horizon", "ninety")
+    .neq("status", "done").in("source_key", wanted.map((g) => g.lever));
+  if (readError) return failed(readError, "check the goals already made");
+  const existing = new Map((open ?? []).map((r) => [r.source_key as string, r.id as string]));
+
+  const inserts: Record<string, unknown>[] = [];
+  for (const g of wanted) {
+    const fields = {
+      area: g.area, title: g.title.trim(), detail: g.detail.trim() || null,
+      ...(g.ownerPersonId ? { owner_person_id: g.ownerPersonId } : {}),
+    };
+    const id = existing.get(g.lever);
+    if (id) {
+      const { error } = await supabase.from("plan_goals").update(fields).eq("id", id).eq("plan_id", planId);
+      if (error) return failed(error, "update the goals");
+    } else {
+      inserts.push({ plan_id: planId, horizon: "ninety", ...fields, owner_person_id: g.ownerPersonId || null,
+        status: "not_started", source: "whatif", source_key: g.lever });
+    }
+  }
+  if (inserts.length) {
+    const { error } = await supabase.from("plan_goals").insert(inserts);
+    if (error) return failed(error, "save the goals");
+  }
   revalidatePath(`/plans/${planId}`, "layout");
   return { ok: true };
 }

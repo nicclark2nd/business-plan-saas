@@ -73,6 +73,12 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
   const entered = rows.filter((r) => r.source === "entered" && r.name.trim());
   const lines: Row[] = [syncedFor("people"), syncedFor("marketing"), ...entered];
   const valuesFor = (r: Row) => r.source === "entered" ? enteredByYear(r as Overhead) : overheadByYear(r as Overhead, syncedValues(r.source as "people" | "marketing"));
+  /*
+   * A COUNT IS A STATEMENT ABOUT THE CLIENT'S WORK (§6.134, open item 26). The two locked lines are always
+   * on the screen, so counting them told a brand-new plan it had two expenses. They count once they carry
+   * money — salaries entered on Leadership Team, spend entered on Marketing — and not before.
+   */
+  const counted = entered.length + (["people", "marketing"] as const).filter((src) => syncedValues(src).some((v) => v > 0)).length;
   const totals = overheadsByYear(lines.map((r) => ({ o: r as Overhead, synced: r.source === "entered" ? null : syncedValues(r.source as "people" | "marketing") })), onCost);
 
   const saveRow = (r: Row) => {
@@ -119,7 +125,7 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group={navGroup("overheads")} title="Overheads" subtitle="What the business costs to run whether or not it sells anything" mode={mode}
       errors={errors}
-      areas={[{ key: "expenses", label: "Expenses", count: lines.length }, { key: "monthly", label: "Monthly projections" }]}
+      areas={[{ key: "expenses", label: "Expenses", count: counted }, { key: "monthly", label: "Monthly projections" }]}
       area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "This plan" }}
       primaryAction={area === "expenses" ? <Button size="sm" type="button" onClick={add}>+ Expense</Button> : undefined}
       footer={<ModuleFooter planId={planId} moduleId="overheads" formId="overheads-form" />}

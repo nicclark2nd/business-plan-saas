@@ -102,7 +102,7 @@ export default async function GoalsPage({ params }: { params: Promise<{ planId: 
       currency={s?.currency ?? "AUD"}
       people={(people.data ?? []) as Person[]}
       swot={((swot.data ?? []) as SwotResponse[]).filter((x) => (x.response ?? "").trim())}
-      drafting={drafting}
+      drafting={drafting} aiOff={!s?.ai_enabled}
       questions={GOAL_ASKS.map((question, i) => ({ key: `ask:${i}`, question }))}
     />
   );

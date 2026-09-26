@@ -64,7 +64,7 @@ const longDate = (iso: string | null | undefined) => {
  */
 export function GoalsModule({
   planId, mode, initial, kpis: initialKpis, targets: initialTargets, header: initialHeader,
-  figures, planMeasures, dates, currency, people, swot, drafting = null, questions = [],
+  figures, planMeasures, dates, currency, people, swot, drafting = null, aiOff = false, questions = [],
 }: {
   planId: string; mode: "guided" | "advanced";
   initial: Goal[];
@@ -81,6 +81,8 @@ export function GoalsModule({
   people: Person[];
   swot: SwotResponse[];
   drafting?: { ready: boolean; reason?: string } | null;
+  /** Drafting switched off for this plan — said out loud, with where to turn it on (§6.109, open item 29). */
+  aiOff?: boolean;
   questions?: GoalQuestion[];
 }) {
   const [tab, setTab] = useState<Tab>("ladder");
@@ -425,6 +427,17 @@ export function GoalsModule({
           </section>
 
           {/* ---------- the drafter, once, above the three cards ---------- */}
+          {/*
+            SILENCE SENDS A CLIENT LOOKING FOR A BUTTON THAT IS NOT THERE (§6.109). Every other draftable
+            box says when drafting is off and where to turn it on; Goals rendered nothing, and every new plan
+            starts with drafting off. Same words as DraftField, so the two cannot drift into different advice.
+          */}
+          {!drafting && aiOff && (
+            <p className="text-[11.5px] text-muted-foreground">
+              Drafting is off for this plan. Turn it on in{" "}
+              <a className="font-semibold text-primary hover:underline" href={`/plans/${planId}/settings?area=ai`}>Plan settings</a>.
+            </p>
+          )}
           {drafting && (
             <div className="flex flex-wrap items-center gap-2.5">
               {drafting.ready ? (

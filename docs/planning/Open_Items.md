@@ -247,12 +247,12 @@ same statuses and nothing prompts a review, rolls the period forward, or keeps w
 The competing product archives a cycle and starts the next. Until this exists, a client who sets the date
 once has a list that quietly goes stale, and the dashboard panel goes stale with it.
 
-### 24. SEQ has near-duplicate What-If goals and nothing dedupes them
+### ~~24. SEQ has near-duplicate What-If goals and nothing dedupes them~~ — **fixed going forward (§6.134)**
 
-Its Financial rung carries "debtor days 46 to 42" and "46 to 35", and "30-day terms with the two main
-concrete suppliers" beside "30-day terms with suppliers, up from 6". Turning a What-If scenario into goals
-twice leaves both sets; `createGoalsFromScenario` inserts without looking for what it wrote last time.
-Raised before §6.125 and unchanged by it — the rows simply moved to the 90-day rung.
+Migration 0051 adds `plan_goals.source_key`; a What-If goal now carries the lever that proposed it, and a
+second "Turn into goals" updates that lever's open goal instead of inserting another (done goals are left as
+history, and a goal's status is never touched). SEQ's existing pairs predate the key and were not guessed
+at — which of the two debtor-day goals to keep is the client's call.
 
 ### 25. A goal is still saved on blur, and that is still unverified under failure
 
@@ -260,12 +260,10 @@ Every box on the new Goals screen commits when focus leaves it, which is the app
 in a browser. What has never been driven live is what a client SEES when one of those saves fails — this
 is item 4 on twelve other modules and the ladder now adds six more places it could happen.
 
-### 26. Overheads counts two expenses on a plan that has none
+### ~~26. Overheads counts two expenses on a plan that has none~~ — **done (§6.134)**
 
-The module bar reads **Expenses 2** on a brand-new plan. The two are the locked derived rows — Leadership
-Team salaries and Marketing spend — both showing 0. Sales gets this right on the same screen shape
-("Products 0"). A count is a statement about the client's own work, and this one says they have entered
-two things when they have entered nothing.
+The count is the entered lines plus the two locked lines only once they carry money. A new plan reads
+"Expenses 0".
 
 ### 27. An overhead can be saved with no category, and the table says "Not set"
 
@@ -273,19 +271,15 @@ Adding an expense without picking a category saves happily and prints **Not set*
 The report groups overheads by category, so an uncategorised line has to go somewhere. Either the field
 is required, or there is a real "Uncategorised" bucket that the report is honest about.
 
-### 28. The report says "Figures agree — Yes" on a plan with no figures
+### ~~28. The report says "Figures agree — Yes" on a plan with no figures~~ — **done (§6.134)**
 
-An empty plan's Reports step shows **FIGURES AGREE · Yes · The statements reconcile**. Nought reconciles
-with nought, so it is not false — but it tells a client who has entered nothing that something has been
-checked. §6.92.1's rule is that comparing an output to another copy of itself is not verification; this is
-the same claim made about an absence.
+`gather` reports whether the five years hold any money at all; with none, the tile reads "—, Nothing to
+reconcile yet" and the not-balancing warning is not shown either.
 
-### 29. Goals says nothing at all when AI drafting is off
+### ~~29. Goals says nothing at all when AI drafting is off~~ — **done (§6.134)**
 
-§6.109 set the rule for the whole app: a draftable field with drafting switched off says so and says where
-to turn it on, because silence sends a client looking for a button that is not there. The Goals step does
-not follow it — `page.tsx` leaves `drafting` null when `ai_enabled` is false and the module renders
-nothing. Every new plan starts with drafting off, so this is what every new customer sees.
+Goals shows DraftField's own sentence — "Drafting is off for this plan. Turn it on in Plan settings." — with
+the link. Checked live on ZZ Test Walk.
 
 ### 30. "ZZ Test Walk" is a test plan, kept on purpose
 
@@ -330,23 +324,13 @@ It is now `plan_settings.cash_floor`, collected on **Assumptions → Cash & capi
 capital beside it, nullable so that a floor of zero and a floor nobody has set stay different things. The
 dashboard's own cash chart is still the obvious next reader and does not read it yet.
 
-### 34. A plan's own child rows are invisible to the report but visible to its screens — unexplained
+### ~~34. A plan's own child rows are invisible to the report but visible to its screens~~ — **no longer reproduces (§6.134)**
 
-On the test plan `75bebd96`, the SWOT screen server-renders a weakness and its mitigation from the
-database while the report, fetched from the same server in the same second, reports **no SWOT lines**. A
-probe in `gather` settled what is happening without explaining why: an UNSCOPED read of
-`plan_swot_items` — no plan filter, so RLS alone decides — returns only SEQ's six rows. People, goals,
-competitors and premises all come back 0 for that plan too. No query error is raised.
-
-This should not be possible: `can_read_plan` is the weaker of the two predicates, so anything the user can
-write they should be able to read, and the write plainly succeeded. Either the row is not where the SWOT
-screen appears to be reading it from, or that plan has no `plan_members` row and something else is
-letting the screen through. **Two SQL queries settle it and neither has been run yet** — the rows in
-`plan_swot_items` for that plan, and the `plan_members` rows for it beside SEQ's.
-
-SEQ is unaffected: its SWOT section renders, with the new Mitigation column.
-
----
+Re-tested on ZZ Test Walk on 27 September 2026: a SWOT line typed on the screen appeared in the report
+fetched straight after, under Risks and Mitigation, and disappeared from it when removed. People,
+competitors and licences on the same plan also saved and read back normally throughout §6.131. Whatever
+made that plan's rows invisible during the earlier session is not present now. If it returns, the two
+queries to run are: the rows in `plan_swot_items` for the plan, and its `plan_members` rows beside SEQ's.
 
 ## Closed, so nobody investigates it twice
 

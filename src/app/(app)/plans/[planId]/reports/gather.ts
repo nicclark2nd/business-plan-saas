@@ -411,6 +411,15 @@ export async function gatherReport(planId: string) {
        assembly, two projections, rather than a second path to the same plan (§6.41, §6.105). */
     input,
     doc, missing, mode, reconciled: checked.reconciled, pageSize,
+    /*
+     * WHETHER THERE IS ANYTHING TO RECONCILE (§6.134, open item 28). Nought agrees with nought, so an empty
+     * plan "reconciled" — and the tile said "Yes" to a client who had entered nothing. Any money in any of
+     * the five years, in or out, is something the check actually checked.
+     */
+    hasFigures: FORECAST_YEARS.some((y) => {
+      const p = checked.pnl[y], c = checked.cashFlow[y];
+      return !!(p && (p.revenue || p.operatingProfit || p.netProfit)) || !!(c && (c.openingCash || c.closingCash));
+    }),
     printSalaries: input.printSalaries, logoPath: (settings?.logo_path as string | null) ?? null,
   };
 }

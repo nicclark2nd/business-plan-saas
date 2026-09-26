@@ -28,9 +28,11 @@ import { COPY } from "@/engine/report/content";
  */
 const STEP = GUIDED_STEPS.find((s) => s.id === "reports")?.step ?? 16;
 
-export function ReportsModule({ planId, mode, doc, reconciled, missing, pageSize, printSalaries, logoUrl }: {
+export function ReportsModule({ planId, mode, doc, reconciled, hasFigures, missing, pageSize, printSalaries, logoUrl }: {
   planId: string; mode: "guided" | "advanced"; doc: ReportDoc;
   reconciled: boolean;
+  /** False on a plan with no money in it yet — there is nothing for the check to have checked (§6.134). */
+  hasFigures: boolean;
   /** Steps with nothing in them yet — named so a client can go and fix them (§6.57). */
   missing: { label: string; id: string }[];
   /**
@@ -76,11 +78,13 @@ export function ReportsModule({ planId, mode, doc, reconciled, missing, pageSize
         <StatTile label="Tables" value={String(tables)} sub="Every one from the live forecast" />
         <StatTile label="Not yet included" value={String(missing.length)} tone={missing.length ? "warn" : "good"}
           sub={missing.length ? "Steps with nothing recorded" : "Every step has something in it"} />
-        <StatTile label="Figures agree" value={reconciled ? "Yes" : "No"} tone={reconciled ? "good" : "bad"}
-          sub={reconciled ? "The statements reconcile" : "Review forecast shows which check fails"} />
+        {hasFigures
+          ? <StatTile label="Figures agree" value={reconciled ? "Yes" : "No"} tone={reconciled ? "good" : "bad"}
+              sub={reconciled ? "The statements reconcile" : "Review forecast shows which check fails"} />
+          : <StatTile label="Figures agree" value={"\u2014"} sub="Nothing to reconcile yet" />}
       </TileRow>
 
-      {!reconciled && (
+      {hasFigures && !reconciled && (
         <Note><span className="text-bad">The forecast has a check that is not balancing, so this plan cannot be relied on yet — <b>Review forecast</b> shows which.</span></Note>
       )}
 

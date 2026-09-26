@@ -407,7 +407,7 @@ function TurnIntoGoalsDialog({ goals, people, quarters, thisQuarter, saving, err
 
   const rows = (): GoalToCreate[] => goals.map((g) => {
     const [year, quarter] = whenOf(g).split(":").map(Number);
-    return { area: g.area, title: g.title, detail: g.detail, year, quarter, ownerPersonId: ownerOf(g) || null };
+    return { lever: g.lever, area: g.area, title: g.title, detail: g.detail, year, quarter, ownerPersonId: ownerOf(g) || null };
   });
 
   return (
