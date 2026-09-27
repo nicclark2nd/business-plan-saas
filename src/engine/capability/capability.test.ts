@@ -176,13 +176,13 @@ describe("loan arithmetic", () => {
 describe("the downside", () => {
   it("leaves less cash than the base case", () => {
     const i = full();
-    const base = i.cashFlow[1]!.netOperating + i.cashFlow[1]!.interestPaid;
+    const base = i.cashFlow[1]!.netOperating;   // already before interest (§6.158)
     expect(stressedCash(i)!).toBeLessThan(base);
   });
 
   it("does nothing when every stress setting is nil, which is the proof it is doing the right arithmetic", () => {
     const i = full({ stress: { salesPct: 0, marginPts: 0, debtorDaysAdded: 0 } });
-    const base = i.cashFlow[1]!.netOperating + i.cashFlow[1]!.interestPaid;
+    const base = i.cashFlow[1]!.netOperating;   // already before interest (§6.158)
     expect(stressedCash(i)).toBeCloseTo(base, 2);
   });
 
@@ -322,8 +322,8 @@ describe("borrowing, on the debt the plan already carries", () => {
   it("reads cover off the repayments the plan actually makes", () => {
     const b = borrowMetrics(full());
     const dscr = b.find((x) => x.key === "dscr")!;
-    /* 240,000 operating + 40,000 interest = 280,000, against the 120,000 the plan repays. */
-    expect(dscr.value).toBeCloseTo(2.33, 2);
+    /* 240,000 operating cash (already before interest — §6.158) against the 120,000 the plan repays. */
+    expect(dscr.value).toBeCloseTo(2, 2);
     expect(statusOf(dscr.value, dscr.bands)).toBe("good");
     expect(dscr.formula).toContain("the plan repays");
   });
@@ -715,7 +715,7 @@ describe("the five-year line on each card", () => {
   it("stresses any year, not only the first", () => {
     const i = full();
     expect(stressedCash(i, 2)).not.toBeNull();
-    expect(stressedCash(i, 2)!).toBeLessThan(i.cashFlow[2]!.netOperating + i.cashFlow[2]!.interestPaid);
+    expect(stressedCash(i, 2)!).toBeLessThan(i.cashFlow[2]!.netOperating);
     expect(stressedCash(i, 3)).toBeNull();                 // no Year 3 in the fixture — nothing invented
   });
 

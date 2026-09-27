@@ -1,5 +1,6 @@
 "use client";
 
+import { usePlanYears } from "@/components/PlanYearsProvider";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ModuleFrame, ModuleFooter } from "@/components/module/ModuleFrame";
@@ -22,6 +23,7 @@ import { applyRanges } from "@/engine/capability/ranges";
 import { panels as buildPanels, withTrends, type FacilityFacts, type Panels, type ProductFacts } from "@/engine/capability/series";
 import { ageingView, concentration, earningsBridge, executionLines, lenderChecklist, type ExtraFacts, type Line } from "@/engine/capability/extras";
 import { Meter } from "@/components/chart/core";
+import { capabilityViews, inAccounts, nameYears, yearEndCash, type ActualYear, type HistoricRow, type YearNames } from "@/engine/capability/actual";
 
 /**
  * Everything the server hands down. Only the money formatter is built here, because a function cannot cross
@@ -30,6 +32,42 @@ import { Meter } from "@/components/chart/core";
 export type PlanFacts = Omit<CapabilityInput, "money">;
 
 type Tab = "grow" | "borrow" | "sell";
+type View = "actual" | "plan";
+
+/**
+ * ONE VIEW'S CARDS, SCORES AND INPUTS (§6.158) — the same arithmetic for the accounts and for the plan; only
+ * the input and the year names differ. Actual has no lowest month (annual accounts cannot show one), so the
+ * year-end cash stands in for it, and its cards carry no five-year line.
+ */
+function buildView(
+  v: { grow: PlanFacts; position: PlanFacts; growNames: YearNames; positionNames: YearNames },
+  money: (x: number) => string, last: ActualYear | null,
+) {
+  const growIn: CapabilityInput = { ...v.grow, money };
+  /* A buyer on the actual view is pricing the business as it stands: the latest year, not a planned sale year. */
+  const posIn: CapabilityInput = { ...v.position, money, ...(last ? { sale: { ...v.position.sale, exitYear: null } } : {}) };
+  let growAll = withTrends("grow", applyRanges(growMetrics(growIn), growIn.ranges, "grow"), growIn);
+  if (last) {
+    growAll = growAll.map((m) => (m.key === "lowestCash" ? yearEndCash(last, growIn.growth.cashBuffer, money) : { ...m, trend: undefined, trendAt: undefined }));
+  }
+  const said = (m: Metric) => (last ? inAccounts(m) : m);
+  /* The lowest month is always the plan's first year's months, whatever sits in slot 1 of the growth input. */
+  const all = growAll.map((m) => said(nameYears(m, m.key === "lowestCash" ? v.positionNames : v.growNames)));
+  const grow = all.filter((m) => !m.unscored);
+  const bare = (m: Metric) => (last ? { ...m, trend: undefined, trendAt: undefined } : m);
+  const borrow = withTrends("borrow", applyRanges(borrowMetrics(posIn), posIn.ranges, "borrow"), posIn).map((m) => said(nameYears(bare(m), v.positionNames)));
+  let sell = withTrends("sell", applyRanges(sellMetrics(posIn), posIn.ranges, "sell"), posIn).map((m) => said(nameYears(bare(m), v.positionNames)));
+  if (last) {
+    /* Sell's growth card needs two years; the position input holds one. Read it off the two actual years. */
+    const rev = applyRanges(sellMetrics(growIn), growIn.ranges, "sell").find((m) => m.key === "revenueGrowth");
+    if (rev) sell = sell.map((m) => (m.key === "revenueGrowth" ? said(nameYears(bare(rev), v.growNames)) : m));
+  }
+  const growWeights = { ...GROW_WEIGHTS, yearEndCash: GROW_WEIGHTS.lowestCash ?? 1 };
+  return {
+    growIn, posIn, grow, borrow, sell, waiting: all.length - grow.length, growWeights,
+    scores: { grow: score(grow, growWeights), borrow: score(borrow, BORROW_WEIGHTS), sell: score(sell, SELL_WEIGHTS) },
+  };
+}
 
 /** The engine's three states, in the four the chart primitives speak. */
 const TONE: Record<Severity, ChartSeverity> = { good: "good", watch: "warn", bad: "bad" };
@@ -59,8 +97,12 @@ const TONE: Record<Severity, ChartSeverity> = { good: "good", watch: "warn", bad
  * box on the step that owns the figure — Assumptions for the cash floor and the downside, Plan settings for
  * the price, Leadership Team for owner dependence, Fixed Assets for security, Funding for the borrowing.
  */
-export function CapabilitiesModule({ planId, mode, currency, facts, products, facilities, months, openingDebt, extras }: {
+export function CapabilitiesModule({ planId, mode, currency, facts, products, facilities, months, openingDebt, extras, history = [], firstYear }: {
   planId: string; mode: "guided" | "advanced"; currency: string; facts: PlanFacts;
+  /** Historic, every period, for the actual view (§6.158). Empty for a business with no accounts. */
+  history?: HistoricRow[];
+  /** The year Year 1 ends in — to name the plan's years and the last actual one. */
+  firstYear: number;
   /** For the panels only (§6.129.2) — each product's five years, and the borrowing the plan carries. */
   products: ProductFacts[]; facilities: FacilityFacts[];
   /** The plan's own twelve months (§6.21), for the month-by-month cash panel. */
@@ -73,44 +115,56 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
   const [tab, setTab] = useState<Tab>("grow");
   const money = useMemo(() => moneyFormatter(currency), [currency]);
 
+  /* The plan's own input, unchanged — the pictures and panels that chart the plan's five years read this. */
   const input: CapabilityInput = useMemo(() => ({ ...facts, money }), [facts, money]);
 
-  /* Each card carries its own five years (§6.129.2) — the scores read `value`, never the trend. */
-  /* The plan's own ranges laid over the general ones before anything is scored (§6.140). */
   /*
-   * A MEASURE THAT DOES NOT APPLY IS NOT SHOWN (§6.154). Nic: "if they do not affect the business at all and
-   * don't need to be included in the score — then why are they on my screen?" Operating leverage and cash
-   * conversion mean nothing in a loss year, and what they could still say (which way the loss is moving) is
-   * already on the Operating margin card. So they leave the tab until the plan makes a profit, and the line
-   * under the dial says how many are waiting and why.
+   * ACTUAL AND PLAN (§6.158). Nic: "If the plan has historical information then I want the last two
+   * historic financial years as the financial capabilities." The page opens on the accounts; the plan is the
+   * second view, and its growth is measured from the last actual year into the first plan year. A business
+   * with no accounts has only the plan.
    */
-  const growAll = useMemo(() => withTrends("grow", applyRanges(growMetrics(input), input.ranges, "grow"), input), [input]);
-  const grow = useMemo(() => growAll.filter((m) => !m.unscored), [growAll]);
-  const waiting = tab === "grow" ? growAll.length - grow.length : 0;
-  const borrow = useMemo(() => withTrends("borrow", applyRanges(borrowMetrics(input), input.ranges, "borrow"), input), [input]);
-  const sell = useMemo(() => withTrends("sell", applyRanges(sellMetrics(input), input.ranges, "sell"), input), [input]);
-  const P = useMemo(() => buildPanels(input, products), [input, products]);
-  const growScore = useMemo(() => score(grow, GROW_WEIGHTS), [grow]);
-  const borrowScore = useMemo(() => score(borrow, BORROW_WEIGHTS), [borrow]);
-  const sellScore = useMemo(() => score(sell, SELL_WEIGHTS), [sell]);
+  const views = useMemo(() => capabilityViews(facts, history, firstYear), [facts, history, firstYear]);
+  const [view, setView] = useState<View>(views.hasHistory ? "actual" : "plan");
+  const actualV = useMemo(() => (views.actual ? buildView(views.actual, money, views.actual.last) : null), [views, money]);
+  const planV = useMemo(() => buildView(views.plan, money, null), [views, money]);
+  const V = view === "actual" && actualV ? actualV : planV;
+  const onActual = view === "actual" && !!actualV;
 
-  const WEIGHTS = { grow: GROW_WEIGHTS, borrow: BORROW_WEIGHTS, sell: SELL_WEIGHTS }[tab];
+  const { grow, borrow, sell } = V;
+  const waiting = tab === "grow" ? V.waiting : 0;
+  /* The plan's own five years, charted under their names (§6.157). */
+  const P = useMemo(() => buildPanels(input, products, [1, 2, 3, 4, 5].map((y) => String(firstYear + y - 1))), [input, products, firstYear]);
+  const growScore = V.scores.grow, borrowScore = V.scores.borrow, sellScore = V.scores.sell;
+
+  const WEIGHTS = { grow: V.growWeights, borrow: BORROW_WEIGHTS, sell: SELL_WEIGHTS }[tab];
   const metrics = { grow, borrow, sell }[tab];
-  const s = { grow: growScore, borrow: borrowScore, sell: sellScore }[tab];
-  const v = verdict(tab, metrics, WEIGHTS, s.value);
+  const s = V.scores[tab];
+  const raw = verdict(tab, metrics, WEIGHTS, s.value);
+  /* The headline speaks about what happened on the actual view, and about what is planned on the plan view. */
+  const PAST: Record<string, string> = {
+    "The growth plan does not fund itself": "Growth so far has not paid for itself",
+    "Worth doing, but it will be tight on cash": "Growing, but tight on cash",
+    "The growth stands up": "The growth so far stands up",
+  };
+  const past = (t: string) => t.replace(/\bin the plan\b/g, "in the business").replace(/\bthe plan\b/g, "the business");
+  const v = onActual
+    ? { ...raw, headline: PAST[raw.headline] ?? raw.headline, actions: raw.actions.map(past), paragraphs: raw.paragraphs.map((p) => ({ ...p, body: past(p.body) })) }
+    : raw;
   const band = s.value === null ? null : statusOf(s.value, SCORE_BANDS);
+  const span = onActual ? views.actual!.span : views.plan.span;
 
   return (
     <ModuleFrame
       group={navGroup("capabilities")} title="Financial Capabilities"
-      subtitle="What your own plan says about growing this business, borrowing against it and selling it" mode={mode}
+      subtitle={onActual ? "What your accounts say about growing this business, borrowing against it and selling it" : "What your plan says about growing this business, borrowing against it and selling it"} mode={mode}
       areas={[
         { key: "grow", label: "Capability to grow", count: growScore.value ?? undefined },
         { key: "borrow", label: "Capability to borrow", count: borrowScore.value ?? undefined },
         { key: "sell", label: "Capability to sell", count: sellScore.value ?? undefined },
       ]}
       area={tab} onArea={(k) => setTab(k as Tab)}
-      scope={{ label: "Year 1" }}
+      scope={{ label: onActual ? `Actual ${span}` : `Plan ${span}` }}
       footer={<ModuleFooter planId={planId} moduleId="capabilities" formId="capabilities-form" />}
       help={<>
         <h3>Nothing is typed on this screen</h3>
@@ -124,6 +178,31 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
       </>}
     >
       <form id="capabilities-form" className="hidden" />
+
+      {/*
+        THE TWO VIEWS (§6.158), and each one's score on this tab, so the gap between what the business has
+        done and what the plan says it will do is the first thing on the page.
+      */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-border bg-secondary/30 px-5 py-2.5">
+        {views.actual && actualV ? (
+          <div className="inline-flex overflow-hidden rounded-md border border-input" role="tablist">
+            {([
+              { k: "actual" as const, head: `Actual: ${views.actual.span}`, sub: "from your accounts", sc: actualV.scores[tab].value },
+              { k: "plan" as const, head: `Plan: ${views.plan.span}`, sub: "from your projections", sc: planV.scores[tab].value },
+            ]).map((o) => (
+              <button key={o.k} type="button" role="tab" aria-selected={view === o.k} onClick={() => setView(o.k)}
+                className={cn("px-3.5 py-1.5 text-left text-[12.5px] leading-tight",
+                  view === o.k ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-secondary")}>
+                <span className="font-semibold">{o.head}</span>
+                <span className={cn("ml-1.5", view === o.k ? "text-primary-foreground/80" : "text-muted-foreground")}>{o.sub}</span>
+                <span className={cn("ml-2 rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums", view === o.k ? "bg-primary-foreground/20" : "bg-secondary")}>{o.sc ?? "—"}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <span className="text-[12.5px]"><b>Plan: {views.plan.span}</b> <span className="text-muted-foreground">— from your projections. There are no accounts in Historic yet, so there is no actual view.</span></span>
+        )}
+      </div>
 
       {/* ---------- the verdict: identical on all three tabs ---------- */}
       {/*
@@ -143,7 +222,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
           {band && <div className="mt-2"><Pill s={band} label={DIAL_LABEL[tab][band]} /></div>}
           <p className="mt-2 max-w-[26ch] text-[11.5px] text-muted-foreground">
             {s.value === null ? "Nothing to score yet"
-              : s.covered === s.total ? `From ${s.total} measures` : `From the ${s.covered} of ${s.total} measures this plan can answer`}
+              : s.covered === s.total ? `From ${s.total} measures` : `From the ${s.covered} of ${s.total} measures ${onActual ? "the accounts" : "this plan"} can answer`}
             {s.value !== null && waiting > 0 && ` — ${waiting} more ${waiting === 1 ? "applies" : "apply"} once the business makes a profit`}
           </p>
         </div>
@@ -197,9 +276,11 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
         band showing the one argument it is making: where the worst month falls against the floor, how much
         borrowing the cash flow carries, where the asking price falls against what the earnings support.
       */}
-      {tab === "grow" && <WorstMonth planId={planId} input={input} money={money} months={months} />}
-      {tab === "borrow" && <BorrowingRoom planId={planId} input={input} money={money} />}
-      {tab === "sell" && <ValuationRange planId={planId} metrics={sell} input={input} money={money} />}
+      {tab === "grow" && (onActual
+        ? <YearEndCash planId={planId} history={history} firstYear={firstYear} floor={input.growth.cashBuffer} money={money} />
+        : <WorstMonth planId={planId} input={input} money={money} months={months} />)}
+      {tab === "borrow" && <BorrowingRoom planId={planId} input={V.posIn} money={money} />}
+      {tab === "sell" && <ValuationRange planId={planId} metrics={sell} input={V.posIn} money={money} names={onActual ? views.actual!.positionNames : views.plan.positionNames} />}
 
       {/* ---------- the measures ---------- */}
       <div className="@container">
@@ -216,6 +297,12 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
         cash month by month, where the growth actually comes from. Same skeleton on every tab: a grid of
         panels, each one a picture of figures the plan already holds, none of them with a box to type in.
       */}
+      {onActual ? (
+        <p className="border-t border-border px-5 py-3 text-[12.5px] text-muted-foreground">
+          These cards read your accounts only. The five-year charts — cash month by month, the cash cycle, where
+          the growth comes from — are on the <button type="button" className="font-semibold text-primary hover:underline" onClick={() => setView("plan")}>Plan view</button>.
+        </p>
+      ) : (
       <div className="@container border-t border-border">
       <div className="grid gap-px bg-border @[860px]:grid-cols-2">
         {tab === "grow" && <GrowPanels P={P} input={input} money={money} planId={planId} extras={extras} />}
@@ -223,6 +310,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
         {tab === "sell" && <SellPanels P={P} metrics={sell} input={input} money={money} planId={planId} extras={extras} />}
       </div>
       </div>
+      )}
     </ModuleFrame>
   );
 }
@@ -370,6 +458,7 @@ function Picture({ title, aside, children }: { title: string; aside: React.React
 function WorstMonth({ planId, input, money, months }: {
   planId: string; input: CapabilityInput; money: (v: number) => string; months: string[];
 }) {
+  const Y = usePlanYears();
   const [ref, width] = useWidth<HTMLDivElement>();
   const cash = input.monthlyCash;
   const floor = input.growth.cashBuffer;
@@ -382,7 +471,7 @@ function WorstMonth({ planId, input, money, months }: {
   const short = low === null ? 0 : bar - low;
 
   return (
-    <Picture title="The worst month of Year 1" aside={hasFloor ? `Dashed line: your floor of ${money(bar)}` : "Against zero — no floor set"}>
+    <Picture title={`The worst month of ${Y.label(1)}`} aside={hasFloor ? `Dashed line: your floor of ${money(bar)}` : "Against zero — no floor set"}>
       {low === null ? (
         <Note>No monthly cash forecast yet. Fill in your sales and costs and this draws itself.</Note>
       ) : (
@@ -399,7 +488,7 @@ function WorstMonth({ planId, input, money, months }: {
                 ? <>The bank goes to {money(low)}. {under.length} of {cash.length} months {under.length === 1 ? "is" : "are"} below {hasFloor ? "the floor" : "zero"}, starting {name(under[0])}.
                     {" "}That is the cash — or overdraft — the plan has to find.{" "}
                     <a href={`/plans/${planId}/assumptions?area=cash`} className="font-semibold text-primary hover:underline">Where to fix it</a></>
-                : <>The tightest month is {name(lowAt)}, at {money(low)}. Every month of Year 1 stays above {hasFloor ? "the floor" : "zero"}.</>}
+                : <>The tightest month is {name(lowAt)}, at {money(low)}. Every month of {Y.year(1)} stays above {hasFloor ? "the floor" : "zero"}.</>}
             </p>
           </div>
           <div ref={ref} className="mt-3" style={{ minHeight: 220 }}>
@@ -425,6 +514,52 @@ function WorstMonth({ planId, input, money, months }: {
 }
 
 /**
+ * GROWTH'S PICTURE ON THE ACTUAL VIEW (§6.158). Annual accounts show the bank on one day a year, so there
+ * is no worst month to draw. What they do show is how each year ended — against the floor if one is set, or
+ * against zero — and how many months of overheads that cash would have covered. The page says what it
+ * cannot see rather than letting a year-end balance pass for the tightest month.
+ */
+function YearEndCash({ planId, history, firstYear, floor, money }: {
+  planId: string; history: HistoricRow[]; firstYear: number; floor: number | null; money: (v: number) => string;
+}) {
+  const [ref, width] = useWidth<HTMLDivElement>();
+  const num = (v: unknown) => (v === null || v === undefined || v === "" ? 0 : Number(v) || 0);
+  const years = [...history].filter((h) => num(h.revenue) > 0).sort((a, b) => Number(b.period_number) - Number(a.period_number));
+  const bar = floor !== null && floor > 0 ? floor : 0;
+  const last = years[years.length - 1];
+  if (!last) return null;
+  const cash = num(last.cash);
+  const monthly = num(last.overheads) / 12;
+  const cover = monthly > 0 ? cash / monthly : null;
+  const lastYear = firstYear - Number(last.period_number);
+  const short = bar - cash;
+  return (
+    <Picture title={`How ${lastYear} ended`} aside={bar > 0 ? `Dashed line: your floor of ${money(bar)}` : "Year-end bank balance, from Historic"}>
+      <div className={cn("mt-2 rounded-md border px-4 py-3", short > 0 ? "border-bad/40 bg-bad-soft" : "border-good/40 bg-good-soft")}>
+        <div className={cn("text-[26px] font-semibold leading-tight tabular-nums", short > 0 ? "text-bad" : "text-good")}>
+          {money(cash)} <span className="text-[16px] font-medium">in the bank at the end of {lastYear}</span>
+        </div>
+        <p className="mt-1 text-[12.5px] text-foreground/80">
+          {cover !== null && <>About {Math.round(cover * 10) / 10} {Math.round(cover * 10) / 10 === 1 ? "month" : "months"} of overheads. </>}
+          {bar > 0 && short > 0 && <>{money(short)} below your floor. </>}
+          Annual accounts only show the last day of the year, so the tightest month is not visible here — the
+          plan&apos;s month-by-month cash is on the Plan view.
+          {floor === null && <span className="ml-2 inline-block align-middle"><Pencil planId={planId} fix={{ label: "Set a cash floor", to: "assumptions?area=cash" }} /></span>}
+        </p>
+      </div>
+      <div ref={ref} className="mt-3" style={{ minHeight: 200 }}>
+        {width > 0 && years.length > 1 && (
+          <Columns width={width} height={200} categories={years.map((h) => `${firstYear - Number(h.period_number)} actual`)}
+            values={years.map((h) => num(h.cash))}
+            threshold={bar > 0 ? years.map(() => bar) : undefined}
+            format={money} tone={(i) => (num(years[i].cash) < bar ? "bad" : "good")} />
+        )}
+      </div>
+    </Picture>
+  );
+}
+
+/**
  * Borrowing's picture: what the plan already repays, what a stressed year would carry, and what the base
  * case would. No "wanted" mark any more — there is no loan being typed, so there is nothing to want (§6.129).
  */
@@ -432,7 +567,8 @@ function BorrowingRoom({ planId, input, money }: {
   planId: string; input: CapabilityInput; money: (v: number) => string;
 }) {
   const cf1 = input.cashFlow[1];
-  const base = cf1 ? cf1.netOperating + cf1.interestPaid : null;
+  /* Before interest already (§6.158) — the forecast keeps interest under financing. */
+  const base = cf1 ? cf1.netOperating : null;
   const stressed = stressedCash(input);
   const service = input.debtService[1] ?? 0;
   const coc = input.growth.costOfCapital;
@@ -491,8 +627,8 @@ function BorrowingRoom({ planId, input, money }: {
  * same fact as a band with their asking price standing outside it is one they can see. Built from the
  * multiples and the price in Plan settings, against the earnings their own forecast produced.
  */
-function ValuationRange({ planId, metrics, input, money }: {
-  planId: string; metrics: Metric[]; input: CapabilityInput; money: (v: number) => string;
+function ValuationRange({ planId, metrics, input, money, names }: {
+  planId: string; metrics: Metric[]; input: CapabilityInput; money: (v: number) => string; names: YearNames;
 }) {
   /* The year the sale is aimed at, or Year 1 until one is chosen (§6.135) — the same year the dial uses. */
   const sale = input.sale;
@@ -504,9 +640,9 @@ function ValuationRange({ planId, metrics, input, money }: {
 
   if (e === null || e <= 0) {
     return (
-      <Picture title="What the earnings support" aside={`Year ${sy} normalised EBITDA × comparable multiples`}>
+      <Picture title="What the earnings support" aside={`${names[sy] ?? `Year ${sy}`} normalised EBITDA × comparable multiples`}>
         <Note>{ys
-          ? `Year ${sy} earnings are not positive, so there is no multiple to apply. Nothing about the price can be judged until the business makes money.`
+          ? `${names[sy] ?? `Year ${sy}`} earnings are not positive, so there is no multiple to apply. Nothing about the price can be judged until the business makes money.`
           : "No forecast yet, so there is nothing to value."}</Note>
       </Picture>
     );
@@ -514,7 +650,7 @@ function ValuationRange({ planId, metrics, input, money }: {
 
   if (!ranged) {
     return (
-      <Picture title="What the earnings support" aside={`${money(e)} of Year ${sy} normalised earnings`}>
+      <Picture title="What the earnings support" aside={`${money(e)} of ${names[sy] ?? `Year ${sy}`} normalised earnings`}>
         <Note>A range needs a low and a high multiple — what businesses like this one have actually sold for.</Note>
         <Pencil planId={planId} fix={{ label: "Set the similar-sales range", to: "settings?area=exit" }} />
       </Picture>
@@ -527,7 +663,7 @@ function ValuationRange({ planId, metrics, input, money }: {
 
   return (
     <Picture title="What the earnings support"
-      aside={`${money(e)} of Year ${sy} normalised earnings at ${sale.multipleLow}× to ${sale.multipleHigh}×`}>
+      aside={`${money(e)} of ${names[sy] ?? `Year ${sy}`} normalised earnings at ${sale.multipleLow}× to ${sale.multipleHigh}×`}>
       <RangeBar
         min={0} max={top}
         zones={[{ from: lowV, to: highV, severity: "good" }, { from: highV, to: top, severity: "bad" }]}
@@ -608,13 +744,14 @@ function Empty({ children, planId, fix }: { children: React.ReactNode; planId: s
 }
 
 const pctFmt = (v: number) => `${Math.round(v * 10) / 10}%`;
-/** [1] → "Year 1"; [1, 2] → "Years 1 and 2"; [2, 3, 4, 5] → "Years 2, 3, 4 and 5". */
-const yearsIn = (ys: number[]) => ys.length === 1 ? `Year ${ys[0]}` : `Years ${ys.slice(0, -1).join(", ")} and ${ys[ys.length - 1]}`;
+/** Plan years by name (§6.157): [2, 3, 4, 5] → "2028, 2029, 2030 and 2031". */
+const yearsIn = (ys: number[], year: (y: number) => number) => ys.length === 1 ? String(year(ys[0])) : `${ys.slice(0, -1).map(year).join(", ")} and ${year(ys[ys.length - 1])}`;
 const timesFmt = (v: number) => `${Math.round(v * 100) / 100}×`;
 
 function GrowPanels({ P, input, money, planId, extras }: {
   P: Panels; input: CapabilityInput; money: (v: number) => string; planId: string; extras: ExtraFacts;
 }) {
+  const Y = usePlanYears();
   const growth = [...P.byProduct].filter((p) => p.change !== 0).sort((a, b) => b.change - a.change);
   const margins = [...P.byProduct].filter((p) => p.margin !== null).sort((a, b) => (b.margin ?? 0) - (a.margin ?? 0));
 
@@ -636,7 +773,7 @@ function GrowPanels({ P, input, money, planId, extras }: {
 
       <Panel height={220} title="Keeping it standing, and growing it"
         sub={P.capex.runDown.length
-          ? <>Spending below depreciation in {yearsIn(P.capex.runDown)} — the assets are being run down, not kept.</>
+          ? <>Spending below depreciation in {yearsIn(P.capex.runDown, Y.year)} — the assets are being run down, not kept.</>
           : <>Depreciation stands in for what it costs to stand still; capital spending above that is growth.</>}>
         {P.has
           ? (w) => (
@@ -649,11 +786,11 @@ function GrowPanels({ P, input, money, planId, extras }: {
           : <Empty planId={planId}>Needs a forecast.</Empty>}
       </Panel>
 
-      <Panel title="Where Year 2's growth comes from" sub="Change in revenue, Year 1 to Year 2, by product">
+      <Panel title={`Where ${Y.year(2)}'s growth comes from`} sub={`Change in revenue, ${Y.year(1)} to ${Y.year(2)}, by product — the accounts do not split sales by product, so this is inside the plan`}>
         {growth.length
           ? (w) => <BarRows width={w} format={money}
               rows={growth.map((p) => ({ label: p.name, value: p.change, tone: p.change < 0 ? "bad" : "accent" }))} />
-          : <Empty planId={planId} fix={{ label: "Add products", to: "sales" }}>No product changes between Year 1 and Year 2.</Empty>}
+          : <Empty planId={planId} fix={{ label: "Add products", to: "sales" }}>No product changes between {Y.year(1)} and {Y.year(2)}.</Empty>}
       </Panel>
 
       <Panel title="Can the business execute it?"
@@ -661,7 +798,7 @@ function GrowPanels({ P, input, money, planId, extras }: {
         <LineList lines={executionLines(extras, input)} planId={planId} meters />
       </Panel>
 
-      <Panel title="Gross margin by product, Year 1"
+      <Panel title={`Gross margin by product, ${Y.year(1)}`}
         /*
          * TWO AVERAGES ON ONE TAB, AND THE SENTENCE SAYS WHICH IS WHICH (§6.41). The incremental-margin card
          * reads the forecast's gross margin, which carries fixed cost of sales; this is per product, direct
@@ -677,7 +814,7 @@ function GrowPanels({ P, input, money, planId, extras }: {
                 label: p.name, value: p.margin ?? 0,
                 tone: (p.margin ?? 0) < 0 ? "bad" : P.avgMargin !== null && (p.margin ?? 0) < P.avgMargin ? "warn" : "good",
               }))} />
-          : <Empty planId={planId} fix={{ label: "Add products and their costs", to: "cogs" }}>No products with revenue in Year 1.</Empty>}
+          : <Empty planId={planId} fix={{ label: "Add products and their costs", to: "cogs" }}>No products with revenue in {Y.year(1)}.</Empty>}
       </Panel>
     </>
   );
@@ -808,6 +945,7 @@ function BorrowPanels({ P, facilities, openingDebt, money, planId, extras, input
 function SellPanels({ P, metrics, input, money, planId, extras }: {
   P: Panels; metrics: Metric[]; input: CapabilityInput; money: (v: number) => string; planId: string; extras: ExtraFacts;
 }) {
+  const Y = usePlanYears();
   const conc = concentration(extras, new Date());
   const bridge = earningsBridge(extras, input);
   const unscored = P.transfer.filter((t) => t.score === null).length;
@@ -822,7 +960,7 @@ function SellPanels({ P, metrics, input, money, planId, extras }: {
     <>
       <Panel height={220} title="Revenue over five years"
         sub={P.revenue.lossYears.length
-          ? <>Red is a year the business makes an operating loss: {yearsIn(P.revenue.lossYears)}.</>
+          ? <>Red is a year the business makes an operating loss: {yearsIn(P.revenue.lossYears, Y.year)}.</>
           : <>What a buyer is being shown, from the plan&apos;s own forecast.</>}>
         {P.has
           ? (w) => <Columns width={w} height={220} categories={P.revenue.categories} values={P.revenue.values} format={money}
@@ -857,12 +995,12 @@ function SellPanels({ P, metrics, input, money, planId, extras }: {
         )}
       </Panel>
 
-      <Panel title="Revenue by product, Year 1"
+      <Panel title={`Revenue by product, ${Y.year(1)}`}
         sub="Products, not customers — who buys is the panel beside this. A buyer asks both.">
         {shares.length
           ? (w) => <BarRows width={w} format={pctFmt}
               rows={shares.map((p) => ({ label: p.name, value: p.share ?? 0, tone: (p.share ?? 0) > 60 ? "bad" : (p.share ?? 0) > 35 ? "warn" : "accent" }))} />
-          : <Empty planId={planId} fix={{ label: "Add products", to: "sales" }}>No products with revenue in Year 1.</Empty>}
+          : <Empty planId={planId} fix={{ label: "Add products", to: "sales" }}>No products with revenue in {Y.year(1)}.</Empty>}
       </Panel>
 
       <Panel title="Who the customers are"

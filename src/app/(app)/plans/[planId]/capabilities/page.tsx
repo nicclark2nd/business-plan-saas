@@ -14,6 +14,7 @@ import { FORECAST_YEARS } from "@/engine/forecast/model";
 import { planMonths } from "@/engine/plan/calendar";
 import { CapabilitiesModule } from "./CapabilitiesModule";
 import type { PlanFacts } from "./CapabilitiesModule";
+import type { HistoricRow } from "@/engine/capability/actual";
 
 /**
  * FINANCIAL CAPABILITIES (§6.128, rebuilt §6.129) — a tool, not a step.
@@ -35,7 +36,7 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
   const { planId } = await params;
   const supabase = await createClient();
 
-  const [session, ratings, addBacks, measures, customers, marketing, historic, people, meta] = await Promise.all([
+  const [session, ratings, addBacks, measures, customers, marketing, historic, people, meta, periods] = await Promise.all([
     getSession(),
     supabase.from("plan_transfer_ratings").select("factor, score, note").eq("plan_id", planId),
     /*
@@ -50,6 +51,8 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
     supabase.from("plan_historic_periods").select("revenue, accounts_receivable, ar_current, ar_30, ar_60, ar_90, fixed_assets").eq("plan_id", planId).eq("period_number", 1).maybeSingle(),
     supabase.from("plan_people").select("started_on").eq("plan_id", planId),
     supabase.from("plan_settings").select("date_established, has_history, repayments_on_time, covenant_history, guarantee_offered, guarantee_by").eq("plan_id", planId).maybeSingle(),
+    /* Every Historic period, for the actual view (§6.158): the last two years, and the year before for movements. */
+    supabase.from("plan_historic_periods").select("*").eq("plan_id", planId).order("period_number"),
   ]);
 
   const num = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
@@ -98,6 +101,7 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
   let facilities: FacilityFacts[] = [];
   /* §6.21: the plan's own twelve months, never the calendar's. */
   let months: string[] = planMonths(6);
+  let firstYear = new Date().getFullYear() + 1;
   /* Bank debt already on the last balance sheet, which Funding does not itemise (§6.32.4). */
   let openingDebt = 0;
 
@@ -125,7 +129,8 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
   };
 
   try {
-    const { plan, fyEndMonth, firstYear, settings } = await loadPlan(planId);
+    const { plan, fyEndMonth, firstYear: fy, settings } = await loadPlan(planId);
+    firstYear = fy;
     currency = (settings?.currency as string | undefined) ?? "AUD";
     months = planMonths(fyEndMonth);
     /* Once the loans already owed carry a rate they are a facility row of their own (§6.150), so the
@@ -240,6 +245,8 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
       months={months}
       openingDebt={openingDebt}
       extras={extras}
+      history={(periods.data ?? []).map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v]))) as HistoricRow[]}
+      firstYear={firstYear}
     />
   );
 }

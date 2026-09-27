@@ -794,3 +794,26 @@ same column once (§6.47). Fixed app-wide:
   of Year 1.
 - The set-up form's "Financial year ends in" shows the month name, not "6".
 The printed report already labels its columns by year end ("Jun 2027") and was left as it is.
+
+### 54. Financial Capabilities reads the accounts first — **stage 1 done (§6.158)**
+
+Nic: "If the plan has historical information then I want the last two historic financial years as the financial
+capabilities." Agreed design: two views at the top of the page, **Actual: 2025 → 2026 (from your accounts)** and
+**Plan: 2026 → 2027 onward (from your projections)**, each showing its score for the tab. With accounts the page
+opens on Actual; with none it shows the plan only and says why.
+- The measures are unchanged. Historic is turned into the same year-slot input (`engine/capability/actual.ts`):
+  cash from operations by the indirect method, capex from the fixed-asset movement plus depreciation, principal
+  from the prior year's current portion, and days from the balance sheet.
+- Every card names its years ("2026", "2026 actual") and, on the actual view, speaks about the business
+  rather than "the plan".
+- Annual accounts have no months, so on the actual view the lowest month is replaced by **cash at the end of the
+  year**, in months of overheads, with a note that the tightest month cannot be seen. The picture shows the four
+  year-end balances against the floor.
+- The plan's growth now starts from the last actual year (2026 actual → 2027). SEQ: sales +9.3%, operating loss
+  52,362 → 87,248, so "Growing it makes the loss bigger".
+- The plan's charts (monthly cash, cash cycle, by product) stay on the Plan view and are named by year.
+- **Bug found and fixed:** debt service cover added interest back to cash from operations that was already
+  before interest (the forecast keeps interest under financing), so every cover figure was flattered by a year's
+  interest.
+SEQ, Actual: grow 40, borrow 35, sell 37 · Plan: grow 49, borrow 30, sell 37.
+Stage 2, not built: "plan vs track record" lines on each card.

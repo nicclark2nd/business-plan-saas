@@ -49,13 +49,18 @@ const FIX_SECURITY = { label: "Value the security", to: "assets" };
 /**
  * CASH AVAILABLE FOR DEBT SERVICE, defined once.
  *
- * Cash from operations with interest added back — because interest is part of what is being tested, and
- * a figure that has already paid it would be testing the loan against itself. Tax, working capital and
- * the ordinary cost of trading are all already inside it, which is exactly what a lender wants.
+ * Cash from operations BEFORE interest — because interest is part of what is being tested, and a figure
+ * that has already paid it would be testing the loan against itself. Tax, working capital and the ordinary
+ * cost of trading are all already inside it, which is exactly what a lender wants.
+ *
+ * CORRECTED (§6.158). This used to add interest back to `netOperating`, but the forecast already keeps
+ * interest under FINANCING (its `netOperating` is receipts less suppliers less tax — see the break-even
+ * month, which takes interest off it). So interest was being added twice and every cover figure was
+ * flattered by a year's interest. Found while building the actual view, which had to match the definition.
  */
 export const cashForDebtService = (i: CapabilityInput, year: number): number | null => {
   const cf = i.cashFlow[year];
-  return cf ? r2(cf.netOperating + cf.interestPaid) : null;
+  return cf ? r2(cf.netOperating) : null;
 };
 
 /**
@@ -176,7 +181,7 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
         : dscr < LENDER_MIN_DSCR ? `Below the ${LENDER_MIN_DSCR}× most lenders require. This debt is large for this cash flow, before anything is added to it.`
         : `Passes, with ${m((base ?? 0) - service * LENDER_MIN_DSCR)} a year of room above the ${LENDER_MIN_DSCR}× minimum.`,
       bench: `${LENDER_MIN_DSCR}× is the common minimum; 1.0× means no cushion at all`,
-      formula: "Cash from operations plus interest ÷ the principal and interest the plan repays in Year 1",
+      formula: "Cash from operations before interest ÷ the principal and interest the plan repays in Year 1",
       reveals: "The central repayment test, on the debt the plan actually carries.",
       confidence: "Medium — it rests on the Year 1 forecast being right.",
       missing: dscr === null ? noDebt : undefined,

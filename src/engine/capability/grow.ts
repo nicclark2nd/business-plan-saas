@@ -216,6 +216,7 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       display: opLev === null ? "—" : `${r2(opLev)}×`,
       min: 0, max: 3, bands: [{ to: 0.75, s: "bad" }, { to: 1.1, s: "watch" }, { to: 3, s: "good" }],
       note: opLev === null ? "Needs an operating profit in Year 1 to compare against."
+        : opLev < 0 ? "Sales grew and operating profit fell — costs rose faster than the sales that were meant to pay for them."
         : opLev < 1 ? "Overheads are rising about as fast as sales, so growth is not yet making the business more profitable."
         : "Profit is growing faster than sales — the business is getting more efficient as it grows.",
       bench: "Above 1.0× means profit grows faster than sales",
@@ -239,7 +240,7 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       bands: coc === null
         ? [{ to: Number.MAX_SAFE_INTEGER, s: "good" }]
         : [{ to: coc, s: "bad" }, { to: coc * 1.3, s: "watch" }, { to: Number.MAX_SAFE_INTEGER, s: "good" }],
-      sub: invested ? `${m(extraProfit ?? 0)} more profit on ${m(invested)} invested` : undefined,
+      sub: invested ? ((extraProfit ?? 0) >= 0 ? `${m(extraProfit ?? 0)} more profit on ${m(invested)} invested` : `${m(-(extraProfit ?? 0))} less profit, after ${m(invested)} invested`) : undefined,
       note: returnOnPlan === null ? "Needs Year 2 capital spending recorded on the Fixed Assets step."
         : coc === null ? `The plan returns ${pct(returnOnPlan * 100)} on what the growth costs. Whether that is enough depends on what your money costs, which nobody has said yet.`
         : returnOnPlan * 100 < coc ? `The extra profit does not clear the ${coc}% the money costs. The plan spends more than the growth returns.`

@@ -178,13 +178,13 @@ export type FacilityFacts = { name: string; kind: string; drawn: number; facilit
 
 const YEAR_LABELS = Y.map((y) => `Year ${y}`);
 
-export function panels(i: CapabilityInput, products: ProductFacts[]) {
+export function panels(i: CapabilityInput, products: ProductFacts[], labels: string[] = YEAR_LABELS) {
   const yearsWith = Y.filter((y) => i.pnl[y]);
   const has = yearsWith.length > 0;
 
   /* ---- grow ---- */
   const cycle = {
-    categories: YEAR_LABELS,
+    categories: labels,
     stock: Y.map((y) => i.days[y]?.inventoryDays ?? 0),
     debtor: Y.map((y) => i.days[y]?.debtorDays ?? 0),
     creditor: Y.map((y) => i.days[y]?.creditorDays ?? 0),
@@ -197,7 +197,7 @@ export function panels(i: CapabilityInput, products: ProductFacts[]) {
    * as zero growth.
    */
   const capex = {
-    categories: YEAR_LABELS,
+    categories: labels,
     maintenance: Y.map((y) => r2(i.pnl[y]?.depreciation ?? 0)),
     growth: Y.map((y) => r2(Math.max(0, (i.capex[y] ?? 0) - (i.pnl[y]?.depreciation ?? 0)))),
     runDown: Y.filter((y) => (i.capex[y] ?? 0) < (i.pnl[y]?.depreciation ?? 0)) as number[],
@@ -222,26 +222,26 @@ export function panels(i: CapabilityInput, products: ProductFacts[]) {
 
   /* ---- borrow ---- */
   const cover = {
-    categories: YEAR_LABELS,
+    categories: labels,
     base: series.dscr(i).map((v) => (v === null ? null : r2(v))),
     stressed: series.dscrStressed(i).map((v) => (v === null ? null : r2(v))),
     minimum: LENDER_MIN_DSCR,
   };
   const service = {
-    categories: YEAR_LABELS,
+    categories: labels,
     available: Y.map((y) => r2(cashForDebtService(i, y) ?? 0)),
     repayments: Y.map((y) => r2(i.debtService[y] ?? 0)),
   };
 
   /* ---- sell ---- */
   const revenue = {
-    categories: YEAR_LABELS,
+    categories: labels,
     values: Y.map((y) => r2(i.pnl[y]?.revenue ?? 0)),
     /* A loss year is coloured as one — the revenue is real, the business under it is not making money. */
     lossYears: Y.filter((y) => (i.pnl[y]?.operatingProfit ?? 0) < 0) as number[],
   };
   const margins = {
-    categories: YEAR_LABELS,
+    categories: labels,
     gross: Y.map((y) => r1(i.pnl[y]?.grossMargin ?? 0)),
     /* A year with no margin to take is a gap in the line (§6.89) — `0` would draw a break-even nobody earned. */
     normalised: series.normalisedMargin(i).map((v) => (v === null ? null : r1(v * 100))),
