@@ -64,7 +64,8 @@ export function TaxNotes({ pnl, num }: { pnl: Forecast["pnl"]; num: (v: number) 
         <span className="text-warn">
           The dividend policy asks for more than the company has made: {num(withheld.reduce((a, y) => a + pnl[y].dividendsWithheld, 0))}
           {" "}could not be paid across {list(withheld)}, because a dividend can only come out of accumulated
-          profit. Set the accumulated profit the business starts with in Plan settings if it has reserves already.
+          profit. The profit it starts with is read from Historic (equity less share capital), so if the
+          business has reserves that are not showing, check those two lines on Historic.
         </span>
       )}
     </Note>
