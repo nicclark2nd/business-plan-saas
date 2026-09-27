@@ -795,7 +795,7 @@ same column once (§6.47). Fixed app-wide:
 - The set-up form's "Financial year ends in" shows the month name, not "6".
 The printed report already labels its columns by year end ("Jun 2027") and was left as it is.
 
-### 54. Financial Capabilities reads the accounts first — **stage 1 done (§6.158)**
+### 54. Financial Capabilities reads the accounts first — **done (§6.158, §6.159)**
 
 Nic: "If the plan has historical information then I want the last two historic financial years as the financial
 capabilities." Agreed design: two views at the top of the page, **Actual: 2025 → 2026 (from your accounts)** and
@@ -816,4 +816,8 @@ opens on Actual; with none it shows the plan only and says why.
   before interest (the forecast keeps interest under financing), so every cover figure was flattered by a year's
   interest.
 SEQ, Actual: grow 40, borrow 35, sell 37 · Plan: grow 49, borrow 30, sell 37.
-Stage 2, not built: "plan vs track record" lines on each card.
+Stage 2 done (§6.159): every card that exists in both views carries the other view's figure — "Track record,
+2025 → 2026: 5.7%" on the plan, "The plan, 2026 → 2027: 9.3%" on the accounts. When the plan reads better than
+the track record (a better band, or sales growth half as much again) the line turns amber and asks "What changes
+to make it true?". On SEQ it fires on sales growth (9.3% vs 5.7%), incremental margin (50.2% vs −24.6%) and cash
+tied up per extra $1 (11¢ vs 91¢).

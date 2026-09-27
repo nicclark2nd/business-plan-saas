@@ -1,7 +1,7 @@
 import type { BalanceSheetYear, CashFlowYear, PnlYear, WorkingCapitalDays } from "@/engine/forecast/model";
 import { daysFromHistory } from "@/engine/forecast/assumptions";
-import type { CapabilityInput, Metric } from "./model";
-import { over, r1, r2 } from "./model";
+import type { CapabilityInput, Metric, Severity } from "./model";
+import { over, r1, r2, statusOf } from "./model";
 
 /**
  * ACTUAL AND PLAN (§6.158).
@@ -222,4 +222,25 @@ export function inAccounts(m: Metric): Metric {
     ...m, name: fix(m.name)!, note: fix(m.note)!, bench: fix(m.bench)!, sub: fix(m.sub), formula: fix(m.formula)!,
     reveals: fix(m.reveals)!, confidence: fix(m.confidence)!, missing: fix(m.missing), action: fix(m.action),
   };
+}
+
+/**
+ * THE OTHER VIEW'S READING, ON THE SAME CARD (§6.159, stage 2 of §6.158).
+ *
+ * The point of having both views is the gap between them. So every card that exists in both carries one line
+ * for the other: on the plan, what the business actually did; on the accounts, what the plan says it will do.
+ * And when the plan reads BETTER than the track record — a better band, or sales growth half as much again
+ * as the business has managed — the line says so, because that is the question a consultant, a lender or a
+ * buyer asks first: what changes to make that true?
+ */
+export type Comparison = { label: string; display: string; ahead: boolean };
+const RANK: Record<Severity, number> = { bad: 0, watch: 1, good: 2 };
+export function compareWith(m: Metric, other: Metric | undefined, label: string, onPlan: boolean): Comparison | null {
+  if (!other || other.value === null || m.value === null) return null;
+  const s = statusOf(m.value, m.bands), o = statusOf(other.value, other.bands);
+  const plan = onPlan ? { v: m.value, s } : { v: other.value, s: o };
+  const done = onPlan ? { v: other.value, s: o } : { v: m.value, s };
+  const betterBand = plan.s !== null && done.s !== null && RANK[plan.s] > RANK[done.s];
+  const fasterGrowth = m.key === "revenueGrowth" && done.v > 0 && plan.v > done.v * 1.5;
+  return { label, display: other.display, ahead: betterBand || fasterGrowth };
 }

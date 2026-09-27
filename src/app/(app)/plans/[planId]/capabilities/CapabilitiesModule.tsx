@@ -23,7 +23,7 @@ import { applyRanges } from "@/engine/capability/ranges";
 import { panels as buildPanels, withTrends, type FacilityFacts, type Panels, type ProductFacts } from "@/engine/capability/series";
 import { ageingView, concentration, earningsBridge, executionLines, lenderChecklist, type ExtraFacts, type Line } from "@/engine/capability/extras";
 import { Meter } from "@/components/chart/core";
-import { capabilityViews, inAccounts, nameYears, yearEndCash, type ActualYear, type HistoricRow, type YearNames } from "@/engine/capability/actual";
+import { capabilityViews, compareWith, inAccounts, type Comparison, nameYears, yearEndCash, type ActualYear, type HistoricRow, type YearNames } from "@/engine/capability/actual";
 
 /**
  * Everything the server hands down. Only the money formatter is built here, because a function cannot cross
@@ -153,6 +153,16 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
     : raw;
   const band = s.value === null ? null : statusOf(s.value, SCORE_BANDS);
   const span = onActual ? views.actual!.span : views.plan.span;
+
+  /* The same card on the other view (§6.159): the track record on the plan, the plan on the accounts. */
+  const otherV = actualV ? (onActual ? planV : actualV) : null;
+  const otherLabel = !views.actual ? ""
+    : onActual ? (tab === "grow" ? `The plan, ${views.plan.span.replace(" onward", "")}` : `The plan, ${firstYear}`)
+    : (tab === "grow" ? `Track record, ${views.actual.span}` : `Actual, ${views.actual.last.year}`);
+  const otherOf = (m: Metric): Comparison | null => {
+    if (!otherV) return null;
+    return compareWith(m, otherV[tab].find((x) => x.key === m.key), otherLabel, !onActual);
+  };
 
   return (
     <ModuleFrame
@@ -285,7 +295,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
       {/* ---------- the measures ---------- */}
       <div className="@container">
         <div className="grid gap-px bg-border @[640px]:grid-cols-2 @[1000px]:grid-cols-3">
-          {metrics.map((m) => <Card key={m.key} m={m} planId={planId} labels={CARD_LABEL[tab]} />)}
+          {metrics.map((m) => <Card key={m.key} m={m} planId={planId} labels={CARD_LABEL[tab]} other={otherOf(m)} />)}
         </div>
       </div>
 
@@ -383,7 +393,7 @@ function Gauge({ m, s }: { m: Metric; s: Severity | null }) {
   );
 }
 
-function Card({ m, planId, labels }: { m: Metric; planId: string; labels: Record<Severity, string> }) {
+function Card({ m, planId, labels, other }: { m: Metric; planId: string; labels: Record<Severity, string>; other?: Comparison | null }) {
   const s = statusOf(m.value, m.bands);
   return (
     <article className="bg-card px-5 py-4">
@@ -410,6 +420,12 @@ function Card({ m, planId, labels }: { m: Metric; planId: string; labels: Record
       </div>
 
       <p className="mt-2.5 text-[12.5px] leading-relaxed">{m.missing ?? m.note}</p>
+      {other && (
+        <p className={cn("mt-2 rounded px-2.5 py-1.5 text-[12px]", other.ahead ? "bg-warn-soft text-foreground" : "bg-secondary/60 text-muted-foreground")}>
+          <b className="font-semibold">{other.label}:</b> {other.display}
+          {other.ahead && <span className="text-warn"> — the plan is better than the business has done. What changes to make it true?</span>}
+        </p>
+      )}
       {m.missing
         ? m.fix && <Pencil planId={planId} fix={m.fix} />
         : <p className="mt-1 text-[11.5px] text-muted-foreground">{m.bench}

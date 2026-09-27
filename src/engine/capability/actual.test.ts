@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { actualYear, capabilityViews, inAccounts, nameYears, yearEndCash, type HistoricRow } from "./actual";
+import { actualYear, capabilityViews, compareWith, inAccounts, nameYears, yearEndCash, type HistoricRow } from "./actual";
 import type { CapabilityInput, Metric } from "./model";
 import { growMetrics } from "./grow";
 
@@ -71,5 +71,26 @@ describe("the actual view, read from the accounts (§6.158)", () => {
     expect(c.sub).toBe("About 0.3 months of overheads");
     expect(c.note).toContain("below your floor");
     expect(c.note).toContain("only show the last day of the year");
+  });
+});
+
+describe("the other view's reading on each card (§6.159)", () => {
+  const card = (key: string, value: number | null, display: string) =>
+    ({ key, value, display, bands: [{ to: 0, s: "bad" }, { to: 5, s: "watch" }, { to: 30, s: "good" }] }) as unknown as Metric;
+  it("flags a plan whose growth is half as much again as the business has managed", () => {
+    const c = compareWith(card("revenueGrowth", 9.3, "9.3%"), card("revenueGrowth", 5.7, "5.7%"), "Track record, 2025 → 2026", true)!;
+    expect(c.display).toBe("5.7%");
+    expect(c.ahead).toBe(true);
+  });
+  it("flags a plan in a better band than the accounts, and says nothing when it is not", () => {
+    expect(compareWith(card("m", 10, "10%"), card("m", -2, "-2%"), "x", true)!.ahead).toBe(true);
+    expect(compareWith(card("m", -4, "-4%"), card("m", -2, "-2%"), "x", true)!.ahead).toBe(false);
+  });
+  it("reads the same way round from the accounts", () => {
+    expect(compareWith(card("m", -2, "-2%"), card("m", 10, "10%"), "The plan", false)!.ahead).toBe(true);
+  });
+  it("has nothing to say when either side has no figure", () => {
+    expect(compareWith(card("m", 3, "3%"), undefined, "x", true)).toBeNull();
+    expect(compareWith(card("m", null, "—"), card("m", 3, "3%"), "x", true)).toBeNull();
   });
 });
