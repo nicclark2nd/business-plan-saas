@@ -58,7 +58,14 @@ export const NEARBY: Record<string, string[]> = {
   "Australia": ["New Zealand"], "New Zealand": ["Australia"],
   "United Kingdom": ["Ireland"], "Ireland": ["United Kingdom"],
   "United States": ["Canada"], "Canada": ["United States"],
-  "Singapore": ["Malaysia"], "Malaysia": ["Singapore"],
+  "Singapore": ["Malaysia"],
+  /*
+   * Southeast Asia (§6.144). Malaysia and Thailand are the nearest in income and have the most published
+   * small-business sales, so they are what Indonesia and the Philippines borrow from. Singapore stays
+   * Malaysia's only: its prices would flatter the others.
+   */
+  "Malaysia": ["Singapore", "Thailand"], "Thailand": ["Malaysia"],
+  "Indonesia": ["Malaysia", "Thailand"], "Philippines": ["Malaysia", "Thailand"],
 };
 const ALIASES: Record<string, string[]> = {
   "New Zealand": ["NZ", "Aotearoa"], "United Kingdom": ["UK", "Britain", "England", "Scotland", "Wales"],
@@ -68,7 +75,8 @@ const nearby = (country: string) => NEARBY[country] ?? [];
 /** "the wider sector" or "the wider sector and Australia" — the same words on the card and in the reason. */
 export const widerScope = (country: string) => {
   const n = nearby(country);
-  return n.length ? `the wider sector and ${n.join(" and ")}` : "the wider sector";
+  if (!n.length) return "the wider sector";
+  return n.length === 1 ? `the wider sector and ${n[0]}` : `the wider sector, ${n.slice(0, -1).join(", ")} and ${n[n.length - 1]}`;
 };
 const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** Does a figure's stated market sit in one of these countries? Whole words, so "US" is not found in "Australia". */

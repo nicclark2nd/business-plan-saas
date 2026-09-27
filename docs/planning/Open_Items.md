@@ -509,6 +509,13 @@ this note concluded SDE would not have rescued them. The second runs of the same
 figures each — New Zealand's own transaction data (Bizstats) is quoted on SDE. Step 3 (SDE-to-EBITDA from
 the plan's leadership pay) is now the step most likely to turn a miss into a range.
 
+**Southeast Asia (§6.144, 27 Sep 2026).** `NEARBY` gains Malaysia → Singapore and Thailand; Thailand →
+Malaysia; Indonesia and the Philippines → Malaysia and Thailand. Malaysia and Thailand are the nearest in
+income and publish the most small-business sales; Singapore stays Malaysia's only, since its prices would
+flatter the others. Live on ZZ: Cafe, Thailand found 3 sites on the first search (2× to 3.5×) without
+widening; Cafe, Indonesia widened to "the wider sector, Malaysia and Thailand" and still missed, with 5
+larger-deal figures left out.
+
 ### ~~43. The What-If "Turn into goals" dialog still offers a quarter~~ — **done (§6.139)**
 
 The quarter pickers are gone. In their place a due date — once at the top for all, then per goal — which

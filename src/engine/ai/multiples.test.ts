@@ -109,6 +109,7 @@ describe("after nine live searches (§6.143)", () => {
     expect(r.ok).toBe(false);                                          // Thailand and the unnamed one are dropped
     expect(widerScope("New Zealand")).toBe("the wider sector and Australia");
     expect(widerScope("India")).toBe("the wider sector");
+    expect(widerScope("Indonesia")).toBe("the wider sector, Malaysia and Thailand");
   });
   it("matches a market by whole words, so US is not found in Australia", () => {
     const us = { ...wide, country: "Canada" };
@@ -145,5 +146,24 @@ describe("after nine live searches (§6.143)", () => {
     ] });
     expect(c.ok && c.sources[0].market).toBe("Cafe, Australia");
     expect(c.ok && "market" in c.sources[1]).toBe(false);
+  });
+});
+
+describe("Southeast Asia borrows from its neighbours (§6.144)", () => {
+  const th = { industry: "Cafe", country: "Thailand", band: null, wider: true };
+  const cited = ["https://a.com/1", "https://b.com/2", "https://c.com/3"];
+  it("asks Thailand's wider question of Thailand or Malaysia only", () => {
+    expect(multiplesMessages(th)[1].content).toContain("in Thailand or Malaysia");
+  });
+  it("keeps Malaysian figures for a Thai plan and drops Singapore's", () => {
+    const r = readMultiples(reply([
+      src("https://a.com/1", 2, 3, "EBITDA", "A", { market: "Cafes, Malaysia" }),
+      src("https://b.com/2", 2, 4, "EBITDA", "B", { market: "Food service, Thailand" }),
+      src("https://c.com/3", 5, 7, "EBITDA", "C", { market: "Cafes, Singapore" }),
+    ]), cited, th);
+    expect((r as { sources: { market?: string }[] }).sources.map((s) => s.market)).toEqual(["Cafes, Malaysia", "Food service, Thailand"]);
+  });
+  it("lets the Philippines and Indonesia borrow from Malaysia and Thailand", () => {
+    expect(multiplesMessages({ ...th, country: "Philippines" })[1].content).toContain("in Philippines or Malaysia or Thailand");
   });
 });
