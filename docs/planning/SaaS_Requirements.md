@@ -37,6 +37,34 @@ This file records what the **public SaaS** will do. Decisions are dated; open it
 - *Simplicity.* A business owner with no financial skills must be able to complete a plan unaided. Complexity that a novice can't get through is a defect, however clever.
 - *Accuracy.* Simplicity cannot come at the cost of a wrong plan. The engine stays rigorous; the interface hides the rigour.
 - *Range.* The same product must satisfy a novice owner and a financially sophisticated user. Implication: **progressive disclosure** — a guided/simple mode by default, an advanced mode that exposes the full assumption set (working-capital days, tax timing, prepaids/accruals, CapEx life, etc.).
+- *Never ask twice.* See the rule below. It sits beside these four and overrides any screen design that breaks it.
+
+**RULE — A client is never asked for the same information twice (Nic, 27 Sep 2026).**
+
+> "It is highly abrasive and non caring of us to ask the human to enter data more than one time. Uploading
+> information, e.g. the historic financials, is them entering data. If the data is entered or uploaded and
+> the AI can't find it then we should have the human enter it."
+
+1. **Uploading is entering.** Historic financials uploaded from a file count exactly the same as figures typed
+   into a screen. Anything in them has been given.
+2. **Read it or work it out.** If a figure is in what the client has entered or uploaded — directly, or by a
+   calculation from it — the app reads it or works it out. No other screen shows a box for it.
+3. **Ask only when it genuinely is not there.** When the app cannot find or derive it from anything already
+   given, the client is asked — **once**, in the place the figure naturally belongs (with the data it is part
+   of: a balance-sheet line with the balance sheet, a person's detail with the person). Every other screen
+   reads it from there.
+4. **Show where it came from.** A figure the app worked out is shown read-only with its source ("From
+   Historic, Period 1: …"), so the client can trust it without re-checking it.
+5. **An override is the exception, not the path.** Offer one only where a different real source can
+   legitimately disagree with the data given (a tax return against the accounts). It is optional and never the
+   default.
+6. **The test for every new field:** *Do we already have this, or can we work it out from what we have?* If
+   yes, it is not a field. A screen that asks for something the plan already holds is a defect, not a
+   convenience.
+
+First applied in §6.148: Tax losses brought forward and Accumulated profit at the start stopped being typed on
+Plan settings and are read from Historic. Share capital, the one figure the upload template does not carry, is
+the open follow-up (Open_Items 49): it belongs in the upload with the rest of the balance sheet.
 
 **Who pays**
 | Segment | How they use it | Product implication |
