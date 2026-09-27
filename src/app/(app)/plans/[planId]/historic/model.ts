@@ -42,4 +42,4 @@ export const BS_LINES: LineDef[] = [
   { field: "equity", label: "Equity (assets − liabilities)", calc: true, strong: true },
 ];
 
-export type Period = { period_number: number; period_end: string | null; period_length: number; source: string | null } & Record<PeriodField, number>;
+export type Period = { period_number: number; period_end: string | null; period_length: number; source: string | null; share_capital?: number | null } & Record<PeriodField, number>;

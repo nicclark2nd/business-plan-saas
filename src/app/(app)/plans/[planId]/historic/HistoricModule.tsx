@@ -20,7 +20,8 @@ const moneyWith = (num: Num) => (v: number) => (v < 0 ? `(${num(-v)})` : num(v))
 const parseNum = (s: string) => { const t = s.replace(/[,\s]/g, "").replace(/^\((.*)\)$/, "-$1"); const n = Number(t); return Number.isFinite(n) ? n : 0; };
 const PERIODS = [1, 2, 3, 4] as const;
 type AreaKey = "pnl" | "bs" | "import";
-type Col = { n: number; present: boolean; period_end_text: string; period_length: number; input: PeriodInput; _dirty?: boolean; source: string | null };
+/** `shareCapital` is the typed string: "" is "not given", which is different from nought (§6.148). */
+type Col = { n: number; present: boolean; period_end_text: string; period_length: number; input: PeriodInput; shareCapital: string; _dirty?: boolean; source: string | null };
 const STEP = GUIDED_STEPS.find((s) => s.id === "historic")?.step ?? 6;
 
 const endText = (iso: string | null, fyEnd: number) => {
@@ -36,7 +37,9 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
   const [cols, setCols] = useState<Col[]>(() => PERIODS.map((n) => {
     const p = initial.find((x) => x.period_number === n);
     const input: PeriodInput = {}; if (p) for (const f of COMPONENT_INPUTS) input[f] = p[f];
-    return { n, present: !!p, period_end_text: endText(p?.period_end ?? null, fyEndMonth), period_length: p?.period_length ?? 12, input, source: p?.source ?? null };
+    const sc = p?.share_capital;
+    return { n, present: !!p, period_end_text: endText(p?.period_end ?? null, fyEndMonth), period_length: p?.period_length ?? 12, input,
+      shareCapital: sc === null || sc === undefined ? "" : String(Number(sc)), source: p?.source ?? null };
   }));
   const [newBusiness, setNewBusiness] = useState(hasHistory === false);
   /** Keyed by year, so two bad columns are two messages rather than whichever `.find()` reached first (§6.98). */
@@ -55,13 +58,14 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
   const commit = (n: number) => {
     const c = ref.current.find((x) => x.n === n);
     if (!c || !c._dirty) return;
-    const hasData = !!c.period_end_text.trim() || Object.values(c.input).some((v) => v);
+    const hasData = !!c.period_end_text.trim() || Object.values(c.input).some((v) => v) || !!c.shareCapital.trim();
     if (!hasData) return;
     setCols((cs) => cs.map((x) => (x.n === n ? { ...x, _dirty: false } : x)));
     start(async () => {
       let r: Awaited<ReturnType<typeof savePeriod>>;
       /* Never reached the server: the year is unsaved again, so leaving a box retries it (§6.138). */
-      try { r = await savePeriod(planId, n, { ...c.input, period_end_text: c.period_end_text, period_length: c.period_length }); }
+      const sc = c.shareCapital.trim() === "" ? null : parseNum(c.shareCapital);
+      try { r = await savePeriod(planId, n, { ...c.input, period_end_text: c.period_end_text, period_length: c.period_length, share_capital: sc }); }
       catch (e) { setCols((cs) => cs.map((x) => (x.n === n ? { ...x, _dirty: true } : x))); throw e; }
       if (r.ok) {
         errors.clear(`year:${n}`);
@@ -75,7 +79,7 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
   /** Focus left this column entirely (moved to another column, or off the grid). */
   const leftCol = (e: React.FocusEvent<HTMLElement>, n: number) => (e.relatedTarget as HTMLElement | null)?.closest<HTMLElement>("[data-col]")?.dataset.col !== String(n);
   const clear = (n: number) => {
-    setCols((cs) => cs.map((c) => (c.n === n ? { n, present: false, period_end_text: "", period_length: 12, input: {}, source: null } : c)));
+    setCols((cs) => cs.map((c) => (c.n === n ? { n, present: false, period_end_text: "", period_length: 12, input: {}, shareCapital: "", source: null } : c)));
     start(async () => { await deletePeriod(planId, n); });
   };
   const flush = () => ref.current.forEach((c) => c._dirty && commit(c.n));
@@ -133,6 +137,13 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
                   {cols.map((c) => <td key={c.n} data-col={c.n} className="px-3 py-1" onBlur={(e) => leftCol(e, c.n) && commit(c.n)}><CellInput numeric inputMode="numeric" value={String(c.period_length)} onChange={(e) => edit(c.n, { period_length: Math.max(1, Math.min(24, Number(e.target.value.replace(/\D/g, "")) || 12)) })} /></td>)}
                 </tr>
                 {(area === "pnl" ? PNL_LINES : BS_LINES).map((line) => <LineRow key={line.field} line={line} cols={cols} derived={derived} onEdit={editValue} onCommit={commit} leftCol={leftCol} colError={(n) => errors.forKey(`year:${n}`)} />)}
+                {/*
+                  * EQUITY, SPLIT (§6.148). What the owners put in, typed; what is left is profit the business
+                  * has kept. Period 1's split is the "Accumulated profit at the start" the forecast's dividend
+                  * test reads — Plan settings shows it rather than asking for it again.
+                  */}
+                {area === "bs" && <EquitySplit cols={cols} derived={derived} leftCol={leftCol} onCommit={commit}
+                  onEdit={(n, v) => edit(n, { shareCapital: v })} />}
               </tbody>
               <tfoot>
                 {(area === "pnl"
@@ -169,6 +180,35 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
 
       {area === "import" && <ImportArea planId={planId} onLoaded={() => window.location.reload()} />}
     </ModuleFrame>
+  );
+}
+
+function EquitySplit({ cols, derived, leftCol, onCommit, onEdit }: {
+  cols: Col[]; derived: ReturnType<typeof deriveFromComponents>[];
+  leftCol: (e: React.FocusEvent<HTMLElement>, n: number) => boolean; onCommit: (n: number) => void; onEdit: (n: number, v: string) => void;
+}) {
+  const num = useMoney();
+  const money = moneyWith(num);
+  return (
+    <>
+      <tr className="border-b border-border" title="What the owners put in: paid-up share capital, or the capital a sole trader or partners introduced. On the accountant's balance sheet, under equity.">
+        <td className="h-8 py-0 pl-8 pr-3">of which share capital <span className="text-[11px] text-muted-foreground">(what the owners put in)</span></td>
+        {cols.map((c) => (
+          <td key={c.n} data-col={c.n} className="px-3 py-0 text-right" onBlur={(e) => leftCol(e, c.n) && onCommit(c.n)}>
+            <CellInput numeric value={c.shareCapital === "" ? "" : money(parseNum(c.shareCapital))} placeholder="—" onChange={(e) => onEdit(c.n, e.target.value)} />
+          </td>
+        ))}
+      </tr>
+      <tr className="border-b border-border bg-secondary/60">
+        <td className="h-8 py-0 pl-8 pr-3">of which accumulated profit</td>
+        {cols.map((c, i) => {
+          const v = c.shareCapital.trim() === "" ? null : derived[i].equity - parseNum(c.shareCapital);
+          return <td key={c.n} className="px-3 py-0 text-right">
+            <span className={cn("num inline-block h-7 pr-1.5 leading-7", v !== null && v < 0 && "text-bad", v === null && "text-muted-foreground")}>{v === null ? "—" : money(v)}</span>
+          </td>;
+        })}
+      </tr>
+    </>
   );
 }
 

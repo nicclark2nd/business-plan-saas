@@ -26,6 +26,9 @@ import { LogoSection } from "./LogoSection";
 import { legalStructuresFor, CUSTOMER_TYPES, PRODUCT_TYPES, COUNTRIES, CURRENCIES, MONTHS, profileMissing, type Settings, type Profile, type Financial, type Licence, type AddBack } from "./model";
 import { CellInput, RemoveButton, FootRow } from "@/components/module/DataGrid";
 import { useMoney } from "@/components/MoneyProvider";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
+import type { AccumulatedProfit, TaxLosses } from "@/engine/historic/opening";
 import { useSerialSave } from "@/lib/serialSave";
 import { navGroup } from "@/lib/nav";
 import { governingLawNote } from "@/engine/plan/jurisdiction";
@@ -42,8 +45,16 @@ const exNum = (raw: string): number | null => {
 };
 const opts = (xs: string[]) => xs.map((x) => ({ value: x, label: x }));
 
-export function SettingsModule({ planId, initial, mode, initialArea, licences, logoUrl, archivedAt, inventory, addBacks, drafting = {}}: {
+const LINK = "font-medium text-primary underline-offset-2 hover:underline";
+/** A figure the plan works out, shown where a box would be — so it is plainly not something to type (§6.148). */
+function ReadOnly({ value, bad }: { value: string; bad?: boolean }) {
+  return <div className={cn("num flex h-8 items-center justify-end rounded-md border border-dashed border-input bg-secondary/50 px-3 text-[13px]", bad && "text-bad")}>{value}</div>;
+}
+
+export function SettingsModule({ planId, initial, mode, initialArea, licences, logoUrl, archivedAt, inventory, addBacks, opening, drafting = {}}: {
   planId: string; initial: Settings; mode: "guided" | "advanced"; initialArea: AreaKey;
+  /** The opening tax and profit position read from Historic (§6.148) — what the forecast uses, shown. */
+  opening: { taxLosses: TaxLosses; accumulated: AccumulatedProfit };
   drafting?: Record<string, { caption: string; questions: DraftQuestion[] }>;
   /** What the business itself is licensed, registered or insured to do (§6.64). */
   licences: Licence[];
@@ -252,6 +263,8 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
    * ladder, and the unit typed next was lost (§6.125). Amounts are raw strings until the row is left.
    */
   const num = useMoney();
+  /* Brackets for a negative, the way the accounts print it. */
+  const money = (v: number) => (v < 0 ? `(${num(-v)})` : num(v));
   type AB = { uid: string; id?: string; label: string; amount: string };
   const [abs, setAbs] = useState<AB[]>(() => addBacks.map((a) => ({ uid: a.id, id: a.id, label: a.label, amount: String(a.amount) })));
   const absRef = useRef(abs);
@@ -439,11 +452,37 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
             <FieldGrid>
               <Field label="Company tax rate %" hint="Applied to profit before tax in the forecast."><FieldInput numeric value={String(s.tax_rate)} onChange={(e) => edit({ tax_rate: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 }, "financial")} /></Field>
               <Field label="Dividend %" hint="Share of after-tax profit paid out to owners. Never more than the company has made."><FieldInput numeric value={String(s.dividend_rate)} onChange={(e) => edit({ dividend_rate: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 }, "financial")} /></Field>
-              <Field label="Tax losses brought forward" hint="Unrelieved losses from before the plan. They come off the first profits the plan makes.">
-                <FieldInput money value={String(s.opening_tax_losses)} onChange={(e) => edit({ opening_tax_losses: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 }, "financial")} />
+              {/*
+                * READ FROM HISTORIC, NOT ASKED FOR AGAIN (§6.148). Nic: if the accounts are already in
+                * Historic, these two should come from them. Tax losses are worked out there, with the
+                * accountant's figure allowed in their place, because a tax return can differ from the
+                * accounts. Accumulated profit is equity less share capital, and is only shown here.
+                */}
+              <Field label="Tax losses brought forward">
+                {s.tax_losses_from_accountant
+                  ? <FieldInput money value={String(s.opening_tax_losses)} onChange={(e) => edit({ opening_tax_losses: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 }, "financial")} />
+                  : <ReadOnly value={money(opening.taxLosses.amount)} />}
+                <p className="mt-1 text-[11.5px] text-muted-foreground">
+                  {s.tax_losses_from_accountant
+                    ? <>Your accountant&apos;s figure, used as given. Historic shows {money(opening.taxLosses.amount)}.{" "}
+                        <button type="button" className={LINK} onClick={() => edit({ tax_losses_from_accountant: false }, "financial", true)}>Use the Historic figure</button></>
+                    : <>{!opening.taxLosses.hadHistory ? "Nil — there are no Historic years to carry a loss from."
+                        : opening.taxLosses.amount === 0 ? "Nil — your Historic years show no loss still unused."
+                        : <>From <Link className={LINK} href={`/plans/${planId}/historic`}>Historic</Link>: {opening.taxLosses.from.map((f) => `Period ${f.period}'s loss, ${money(f.amount)} still unused`).join("; ")}. It comes off the first profits the plan makes.</>}{" "}
+                        <button type="button" className={LINK} onClick={() => edit({ tax_losses_from_accountant: true, opening_tax_losses: opening.taxLosses.amount }, "financial", true)}>Use my accountant&apos;s figure instead</button></>}
+                </p>
               </Field>
-              <Field label="Accumulated profit at the start" hint="Profits already retained in the business. Negative if it is carrying a deficit. A dividend cannot exceed it.">
-                <FieldInput money value={String(s.opening_retained_earnings)} onChange={(e) => edit({ opening_retained_earnings: Number(e.target.value.replace(/[^\d.-]/g, "")) || 0 }, "financial")} />
+              <Field label="Accumulated profit at the start">
+                <ReadOnly value={opening.accumulated.status === "ok" ? money(opening.accumulated.amount) : opening.accumulated.status === "no-history" ? money(0) : "—"}
+                  bad={opening.accumulated.status === "ok" && opening.accumulated.amount < 0} />
+                <p className="mt-1 text-[11.5px] text-muted-foreground">
+                  {opening.accumulated.status === "ok"
+                    ? <>From <Link className={LINK} href={`/plans/${planId}/historic?area=bs`}>Historic</Link>, Period 1: equity {money(opening.accumulated.equity)} less share capital {money(opening.accumulated.shareCapital)}.
+                        {opening.accumulated.amount < 0 ? " A deficit: no dividend is paid until profits make it good." : " A dividend can never be more than this plus the year's own profit."}</>
+                    : opening.accumulated.status === "no-history"
+                    ? "Nil — a business with no Historic years has no profit built up yet."
+                    : <span className="text-warn">Needs the share capital on <Link className={LINK} href={`/plans/${planId}/historic?area=bs`}>Historic → Balance sheet</Link> to work out. Until then, each year&apos;s dividend is limited to that year&apos;s own profit.</span>}
+                </p>
               </Field>
             </FieldGrid>
           </Section>

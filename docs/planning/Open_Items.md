@@ -620,3 +620,25 @@ Fixed: the profile save says when the move cleared the state and its taxes (`cle
 adopts the cleared row, including the copy the next Financial save reads. Checked live on ZZ Test Walk:
 Auckland under New Zealand, country changed to Australia — the box emptied and the notice read "Australia"
 without a reload; the tax save that followed stored `tax_region: null`. Tax rate put back to 25.
+
+### ~~48. Tax losses and accumulated profit were typed, not read from Historic~~ — **done (§6.148)**
+
+Nic, 27 Sep 2026: with the accounts already in Historic, "Tax losses brought forward" and "Accumulated
+profit at the start" on Plan settings → Financial year & tax should come from them, not be typed. SEQ had
+0 in the first while its latest year (Period 1) lost 71,000 with no tax paid.
+
+- **Tax losses** are worked out from the Historic profit and loss (`engine/historic/opening.ts`): each loss
+  carried forward and used against the next profit, oldest year first. The tab shows the figure and where it
+  came from; "Use my accountant's figure instead" puts a typed figure in its place (a tax return can differ
+  from the accounts), recorded as `tax_losses_from_accountant`. Anyone who had typed a figure keeps it — 0054
+  marks those rows as the accountant's.
+- **Accumulated profit** is equity less share capital from Historic Period 1, shown read-only. Historic →
+  Balance sheet gains "of which share capital (what the owners put in)" and a calculated "of which
+  accumulated profit". Until share capital is given it is not guessed: nil, so each year's dividend is limited
+  to that year's own profit. The template import carries share capital across a reload.
+- The forecast (`planLoad`) and the tab call the same functions, so the tab shows what the forecast uses.
+
+Migration 0054 (share_capital, tax_losses_from_accountant). Checked on SEQ without saving: the tab shows
+71,000 "Period 1's loss, 71,000 still unused" and asks for share capital; Historic shows the two new rows.
+SEQ's own Years 1 and 2 are losses, so the 71,000 is used in Year 4: taxable profit there falls from 86,874
+to 15,874 (17,750 less tax).

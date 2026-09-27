@@ -121,9 +121,9 @@ export async function saveFinancial(planId: string, f: Partial<Financial>): Prom
     first_projected_year: f.first_projected_year ? Math.trunc(Number(f.first_projected_year)) : null,
     tax_rate: Math.max(0, Math.min(100, Number(f.tax_rate) || 0)),
     dividend_rate: Math.max(0, Math.min(100, Number(f.dividend_rate) || 0)),
-    // Losses are never negative; accumulated earnings genuinely can be, and a deficit is the case that matters.
+    // Losses are never negative. Accumulated profit is no longer written here: it is read from Historic (§6.148).
     opening_tax_losses: Math.max(0, Number(f.opening_tax_losses) || 0),
-    opening_retained_earnings: Number(f.opening_retained_earnings) || 0,
+    tax_losses_from_accountant: f.tax_losses_from_accountant === true,
     gst_registered: !!f.gst_registered,
     gst_rate: Math.max(0, Math.min(100, Number(f.gst_rate) || 0)),
     gst_frequency: f.gst_frequency === "monthly" || f.gst_frequency === "annually" ? f.gst_frequency : "quarterly",
@@ -137,7 +137,7 @@ export async function saveFinancial(planId: string, f: Partial<Financial>): Prom
      * are one reason the two can differ; a column type or a default is another, and a screen that trusts
      * the request rather than the row is exactly how the drift started.
      */
-    .select("financial_year_end_month, first_projected_year, tax_rate, dividend_rate, opening_tax_losses, opening_retained_earnings, gst_registered, gst_rate, gst_frequency, tax_region, tax_components, currency")
+    .select("financial_year_end_month, first_projected_year, tax_rate, dividend_rate, opening_tax_losses, tax_losses_from_accountant, opening_retained_earnings, gst_registered, gst_rate, gst_frequency, tax_region, tax_components, currency")
     .single();
   if (error) return failed(error, "save the financial settings");
 

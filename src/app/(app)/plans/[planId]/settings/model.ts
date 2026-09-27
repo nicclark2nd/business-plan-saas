@@ -101,8 +101,14 @@ export type Financial = {
   first_projected_year: number | null;
   tax_rate: number;
   dividend_rate: number;
-  /** What the business brings in with it (§6.37): unrelieved losses, and accumulated profit or deficit. */
+  /**
+   * What the business brings in with it (§6.37). Since §6.148 both are READ FROM HISTORIC: the losses are
+   * worked out from the Historic profit and loss unless `tax_losses_from_accountant` puts the typed figure in
+   * their place; accumulated profit is equity less share capital and is no longer typed here at all. The
+   * column stays, unused, so nothing is lost.
+   */
   opening_tax_losses: number;
+  tax_losses_from_accountant: boolean;
   opening_retained_earnings: number;
   /** GST / VAT (§6.38). Off by default; nothing in the forecast moves until it is on. */
   gst_registered: boolean;

@@ -8,6 +8,7 @@ import { getSession } from "@/lib/plan";
 import { SettingsModule } from "./SettingsModule";
 import type { Settings, Licence, AddBack } from "./model";
 import { LOGO_BUCKET, LOGO_URL_TTL_SECONDS } from "@/engine/plan/logo";
+import { accumulatedProfit, taxLossesFromHistory } from "@/engine/historic/opening";
 
 /** A nullable numeric column, kept nullable: null means nobody has said, and that is not nought (§6.89). */
 const nOrNull = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number(v));
@@ -24,13 +25,15 @@ export default async function SettingsPage({ params, searchParams }: { params: P
     supabase.from(table).select("*", { count: "exact", head: true }).eq("plan_id", planId)
       .then(({ count }) => ({ label: (count ?? 0) === 1 ? label : plural, count: count ?? 0 }));
 
-  const [session, plan, settings, licences, addBacks, ...inventory] = await Promise.all([
+  const [session, plan, settings, licences, addBacks, historic, ...inventory] = await Promise.all([
     getSession(),
     supabase.from("plans").select("business_name, plan_year, archived_at").eq("id", planId).single(),
     supabase.from("plan_settings").select("*").eq("plan_id", planId).maybeSingle(),
     supabase.from("plan_licences").select("id, name, number, issuer, expires_on, sort_order").eq("plan_id", planId).order("sort_order").order("created_at"),
     /* Exit & sale's itemised add-backs (§6.129.3). */
     supabase.from("plan_add_backs").select("id, label, amount, sort_order").eq("plan_id", planId).order("sort_order").order("created_at"),
+    /* What the opening tax and profit position is read from (§6.148). */
+    supabase.from("plan_historic_periods").select("*").eq("plan_id", planId),
     held("plan_products", "product"),
     held("plan_overheads", "overhead"),
     held("plan_people", "person", "people"),
@@ -66,7 +69,8 @@ export default async function SettingsPage({ params, searchParams }: { params: P
     tagline: s.tagline ?? null, contact_email: s.contact_email ?? null, website: s.website ?? null,
     financial_year_end_month: s.financial_year_end_month ?? 6, first_projected_year: s.first_projected_year ?? null,
     tax_rate: Number(s.tax_rate ?? 25), dividend_rate: Number(s.dividend_rate ?? 0),
-    opening_tax_losses: Number(s.opening_tax_losses ?? 0), opening_retained_earnings: Number(s.opening_retained_earnings ?? 0),
+    opening_tax_losses: Number(s.opening_tax_losses ?? 0), tax_losses_from_accountant: s.tax_losses_from_accountant === true,
+    opening_retained_earnings: Number(s.opening_retained_earnings ?? 0),
     gst_registered: !!s.gst_registered, gst_rate: Number(s.gst_rate ?? 10),
     gst_frequency: (s.gst_frequency ?? "quarterly") as "monthly" | "quarterly" | "annually",
     tax_region: s.tax_region ?? null,
@@ -102,7 +106,18 @@ export default async function SettingsPage({ params, searchParams }: { params: P
     : null;
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
   const initialArea = area === "financial" || area === "printing" || area === "exit" || area === "ranges" || area === "ai" || area === "branding" || area === "lifecycle" ? area : "profile";
-  return <SettingsModule planId={planId} initial={initial} mode={mode} initialArea={initialArea} drafting={drafting}
+  /* The same two functions the forecast calls (planLoad), so this tab shows exactly what the forecast uses. */
+  const periods = (historic.data ?? []) as Record<string, unknown>[];
+  const fact = (p: Record<string, unknown>) => ({
+    period_number: Number(p.period_number), net_profit_before_tax: nOrNull(p.net_profit_before_tax),
+    equity: nOrNull(p.equity), share_capital: nOrNull(p.share_capital),
+  });
+  const latest = periods.find((p) => Number(p.period_number) === 1);
+  const opening = {
+    taxLosses: taxLossesFromHistory(periods.map(fact)),
+    accumulated: accumulatedProfit(latest ? fact(latest) : null),
+  };
+  return <SettingsModule planId={planId} initial={initial} mode={mode} initialArea={initialArea} drafting={drafting} opening={opening}
     licences={(licences.data ?? []) as Licence[]} logoUrl={logoUrl}
     archivedAt={plan.data?.archived_at ?? null} inventory={inventory}
     addBacks={(addBacks.data ?? []).map((a) => ({ ...a, amount: Number(a.amount) })) as AddBack[]} />;

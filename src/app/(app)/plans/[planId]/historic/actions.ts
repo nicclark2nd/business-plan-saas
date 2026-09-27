@@ -28,13 +28,19 @@ async function periodEndDate(planId: string, raw: string | number | null | undef
 }
 
 /** Save one period column from the grid: the user typed components; the engine fills the subtotals. */
-export async function savePeriod(planId: string, periodNumber: number, input: { period_end_text?: string; period_length?: number } & PeriodInput): Promise<Result<{ values: PeriodValues; period_end: string | null }>> {
+export async function savePeriod(planId: string, periodNumber: number, input: { period_end_text?: string; period_length?: number; share_capital?: number | null } & PeriodInput): Promise<Result<{ values: PeriodValues; period_end: string | null }>> {
   const supabase = await createClient();
   if (periodNumber < 1 || periodNumber > 4) return { ok: false, error: "Only four periods are kept." };
   const end = await periodEndDate(planId, input.period_end_text);
   if (end === undefined) return { ok: false, error: "Period end should be a year (2026) or a month and year (Jun 2026)." };
   const values = deriveFromComponents(input);
-  const row = { plan_id: planId, period_number: periodNumber, period_end: end, period_length: Math.min(24, Math.max(1, Math.trunc(Number(input.period_length)) || 12)), source: "manual", ...values };
+  /*
+   * Share capital (§6.148) is sent only when the screen has it, so an upsert without it leaves what is stored.
+   * Blank is null — "not given" — never nought: nought would make every cent of equity distributable profit.
+   */
+  const share: { share_capital?: number | null } = input.share_capital === undefined ? {}
+    : { share_capital: input.share_capital === null || !Number.isFinite(Number(input.share_capital)) ? null : Math.max(0, Math.round(Number(input.share_capital) * 100) / 100) };
+  const row = { plan_id: planId, period_number: periodNumber, period_end: end, period_length: Math.min(24, Math.max(1, Math.trunc(Number(input.period_length)) || 12)), source: "manual", ...values, ...share };
   const { data, error, status } = await supabase.from("plan_historic_periods").upsert(row, { onConflict: "plan_id,period_number" }).select("period_number, revenue");
   if (error) return failed(error, "save the period");
   if (!data?.length) return { ok: false, error: `Saved nothing (status ${status}) — the row was rejected silently. Check plan access.` };
@@ -53,6 +59,12 @@ export async function importPeriods(planId: string, periods: { period_number: nu
     rows.push({ plan_id: planId, period_number: p.period_number, period_end: end ?? null, period_length: p.period_length || 12, source: "excel", ...values });
   }
   if (!rows.length) return { ok: false, error: "No periods with numbers were found in that file." };
+  /* The template has no share capital line (§6.148): what the client already gave is carried across the reload. */
+  const { data: kept } = await supabase.from("plan_historic_periods").select("period_number, share_capital").eq("plan_id", planId);
+  for (const r of rows as Record<string, unknown>[]) {
+    const k = (kept ?? []).find((x) => x.period_number === r.period_number);
+    if (k && k.share_capital !== null && k.share_capital !== undefined) r.share_capital = k.share_capital;
+  }
   const { error: delErr } = await supabase.from("plan_historic_periods").delete().eq("plan_id", planId);
   if (delErr) return failed(delErr, "clear the old periods");
   const { error } = await supabase.from("plan_historic_periods").insert(rows);

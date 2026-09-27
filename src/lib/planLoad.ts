@@ -11,6 +11,7 @@ import { productNoun, type Noun } from "@/engine/plan/vocabulary";
 import type { WorkingCapitalDays } from "@/engine/forecast/model";
 import type { WhatIfPlan } from "@/engine/whatif/levers";
 import type { FundingSource } from "@/engine/funding/sources";
+import { accumulatedProfit, openingTaxLosses, taxLossesFromHistory, type HistoricPeriodFacts } from "@/engine/historic/opening";
 
 /**
  * The plan, loaded once, for every screen that runs the forecast on it (§6.41).
@@ -66,13 +67,19 @@ export const loadPlan = cache(async function loadPlan(planId: string): Promise<L
       supabase.from("plan_overheads").select("*").eq("plan_id", planId),
       supabase.from("plan_fixed_assets").select("*").eq("plan_id", planId),
       supabase.from("plan_extraordinary_items").select("*").eq("plan_id", planId),
-      supabase.from("plan_historic_periods").select("*").eq("plan_id", planId).order("period_number").limit(1).maybeSingle(),
+      /* All four now, not just the latest: the losses carried in are read across them (§6.148). */
+      supabase.from("plan_historic_periods").select("*").eq("plan_id", planId).order("period_number"),
       loadFundingRows(planId),
       loadSalariesByYear(planId, firstYear, fyEndMonth),
       loadMarketingByYear(planId),
     ]);
 
-  const h = historic.data;
+  const periods = historic.data ?? [];
+  const h = periods.find((p) => Number(p.period_number) === 1) ?? null;
+  const facts: HistoricPeriodFacts[] = periods.map((p) => ({
+    period_number: Number(p.period_number), net_profit_before_tax: p.net_profit_before_tax,
+    equity: p.equity, share_capital: (p as { share_capital?: number | null }).share_capital ?? null,
+  }));
 
   // The engine's own funding shape, via the converter the Funding module uses — not a second reading.
   const funding: FundingSource[] = fundingRows.map((r) => ({
@@ -112,7 +119,12 @@ export const loadPlan = cache(async function loadPlan(planId: string): Promise<L
       workingCapital: workingCapitalSchedule(s?.working_capital_schedule, impliedFromHistory ?? undefined),
       cashTiming: cashTimingSchedule(s?.cash_flow_assumptions),
       taxRate: Number(s?.tax_rate ?? 25), dividendRate: num(s?.dividend_rate),
-      openingTaxLosses: num(s?.opening_tax_losses), openingRetainedEarnings: num(s?.opening_retained_earnings),
+      /*
+       * READ FROM HISTORIC (§6.148), not typed: the losses the accounts show still unused — or the
+       * accountant's figure when the client chose it — and equity less share capital from the latest year.
+       */
+      openingTaxLosses: openingTaxLosses(taxLossesFromHistory(facts), { chosen: s?.tax_losses_from_accountant === true, amount: num(s?.opening_tax_losses) }),
+      openingRetainedEarnings: accumulatedProfit(h ? facts.find((f) => f.period_number === 1) : null).amount,
       components,
     },
     mode: (session?.profile?.mode ?? "guided") as "guided" | "advanced",
