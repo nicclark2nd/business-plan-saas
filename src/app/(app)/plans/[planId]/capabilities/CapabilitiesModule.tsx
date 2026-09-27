@@ -197,7 +197,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
         band showing the one argument it is making: where the worst month falls against the floor, how much
         borrowing the cash flow carries, where the asking price falls against what the earnings support.
       */}
-      {tab === "grow" && <WorstMonth planId={planId} metrics={grow} input={input} money={money} />}
+      {tab === "grow" && <WorstMonth planId={planId} input={input} money={money} months={months} />}
       {tab === "borrow" && <BorrowingRoom planId={planId} input={input} money={money} />}
       {tab === "sell" && <ValuationRange planId={planId} metrics={sell} input={input} money={money} />}
 
@@ -218,7 +218,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
       */}
       <div className="@container border-t border-border">
       <div className="grid gap-px bg-border @[860px]:grid-cols-2">
-        {tab === "grow" && <GrowPanels P={P} input={input} months={months} money={money} planId={planId} extras={extras} />}
+        {tab === "grow" && <GrowPanels P={P} input={input} money={money} planId={planId} extras={extras} />}
         {tab === "borrow" && <BorrowPanels P={P} facilities={facilities} openingDebt={openingDebt} money={money} planId={planId} extras={extras} input={input} metrics={borrow} />}
         {tab === "sell" && <SellPanels P={P} metrics={sell} input={input} money={money} planId={planId} extras={extras} />}
       </div>
@@ -355,39 +355,65 @@ function Picture({ title, aside, children }: { title: string; aside: React.React
   );
 }
 
-/** Growth's picture: the year in one line — the worst month against the floor, and against zero. */
-function WorstMonth({ planId, metrics, input, money }: {
-  planId: string; metrics: Metric[]; input: CapabilityInput; money: (v: number) => string;
+/**
+ * GROWTH'S PICTURE: HOW SHORT, AND WHEN (§6.156).
+ *
+ * It was a gauge — red, amber and green bands with the worst month as a hairline. Nic, on SEQ: "a little bit
+ * of red, a little bit of yellow and a lot of green AND so what?" The scale ran to three times the floor, so
+ * seventy per cent of the bar was green on a plan that goes overdrawn, and the one fact that mattered — how
+ * far short, and in which month — was not on it at all.
+ *
+ * Now the shortfall is the headline, in the plan's own money, and under it the twelve months against the
+ * floor: red where a month is below it, green where it is not. The same month-by-month chart used to sit
+ * further down the page; it lives here now, once.
+ */
+function WorstMonth({ planId, input, money, months }: {
+  planId: string; input: CapabilityInput; money: (v: number) => string; months: string[];
 }) {
-  const lowCash = metrics.find((x) => x.key === "lowestCash")?.value ?? null;
+  const [ref, width] = useWidth<HTMLDivElement>();
+  const cash = input.monthlyCash;
   const floor = input.growth.cashBuffer;
-  const floorAt = floor !== null && floor > 0 ? floor : 0;
-  const top = Math.max(floorAt * 3, Math.abs(lowCash ?? 0) * 2, 100_000);
+  const hasFloor = floor !== null && floor > 0;
+  const bar = hasFloor ? floor : 0;
+  const low = cash.length ? Math.min(...cash) : null;
+  const lowAt = low === null ? -1 : cash.indexOf(low);
+  const name = (i: number) => months[i] ?? `month ${i + 1}`;
+  const under = cash.map((c, i) => (c < bar ? i : -1)).filter((i) => i >= 0);
+  const short = low === null ? 0 : bar - low;
 
   return (
-    <Picture title="The worst month of Year 1" aside="Closing bank balance at its lowest point">
-      {lowCash === null ? (
+    <Picture title="The worst month of Year 1" aside={hasFloor ? `Dashed line: your floor of ${money(bar)}` : "Against zero — no floor set"}>
+      {low === null ? (
         <Note>No monthly cash forecast yet. Fill in your sales and costs and this draws itself.</Note>
       ) : (
         <>
-          <RangeBar
-            min={Math.min(0, lowCash) - (lowCash < 0 ? Math.abs(lowCash) * 0.2 : 0)} max={top}
-            zones={[
-              { from: Math.min(0, lowCash), to: 0, severity: "bad" },
-              { from: 0, to: floorAt, severity: "warn" },
-              { from: floorAt, to: top, severity: "good" },
-            ]}
-            marks={[
-              ...(floorAt > 0 ? [{ at: floorAt, label: `Your floor ${money(floorAt)}`, below: true }] : []),
-              { at: Math.min(lowCash, top), label: `Lowest ${money(lowCash)}`, tone: lowCash < floorAt ? ("bad" as const) : undefined },
-            ]}
-            ticks={[Math.min(0, lowCash), top / 2, top]} format={(t) => money(t)}
-          />
-          {/* Without a floor the band is only "above or below zero", and the picture says so rather than
-              drawing a line the client never drew. */}
-          {floor === null && (
+          <div className={cn("mt-2 rounded-md border px-4 py-3", short > 0 ? "border-bad/40 bg-bad-soft" : "border-good/40 bg-good-soft")}>
+            <div className={cn("text-[26px] font-semibold leading-tight tabular-nums", short > 0 ? "text-bad" : "text-good")}>
+              {short > 0
+                ? (hasFloor ? <>{money(short)} short <span className="text-[16px] font-medium">of your floor in {name(lowAt)}</span></>
+                  : <>{money(-low)} overdrawn <span className="text-[16px] font-medium">in {name(lowAt)}</span></>)
+                : <>{money(low - bar)} clear <span className="text-[16px] font-medium">{hasFloor ? "of your floor" : "of zero"} at the tightest point</span></>}
+            </div>
+            <p className="mt-1 text-[12.5px] text-foreground/80">
+              {short > 0
+                ? <>The bank goes to {money(low)}. {under.length} of {cash.length} months {under.length === 1 ? "is" : "are"} below {hasFloor ? "the floor" : "zero"}, starting {name(under[0])}.
+                    {" "}That is the cash — or overdraft — the plan has to find.{" "}
+                    <a href={`/plans/${planId}/assumptions?area=cash`} className="font-semibold text-primary hover:underline">Where to fix it</a></>
+                : <>The tightest month is {name(lowAt)}, at {money(low)}. Every month of Year 1 stays above {hasFloor ? "the floor" : "zero"}.</>}
+            </p>
+          </div>
+          <div ref={ref} className="mt-3" style={{ minHeight: 220 }}>
+            {width > 0 && (
+              <Columns width={width} height={220} categories={months.slice(0, cash.length)} values={cash}
+                threshold={hasFloor ? cash.map(() => bar) : undefined}
+                format={money}
+                tone={(i) => (cash[i] < bar ? "bad" : "good")} />
+            )}
+          </div>
+          {/* Without a floor the only line is zero, and the picture says so rather than drawing one nobody set. */}
+          {!hasFloor && (
             <p className="mt-2 text-[12px] text-muted-foreground">
-              No cash floor set, so the only line here is zero — which is a weaker test than any business
+              No cash floor set, so months are only judged against zero — a weaker test than any business
               actually runs to.
               <span className="ml-2 inline-block align-middle"><Pencil planId={planId} fix={{ label: "Set a cash floor", to: "assumptions?area=cash" }} /></span>
             </p>
@@ -586,31 +612,14 @@ const pctFmt = (v: number) => `${Math.round(v * 10) / 10}%`;
 const yearsIn = (ys: number[]) => ys.length === 1 ? `Year ${ys[0]}` : `Years ${ys.slice(0, -1).join(", ")} and ${ys[ys.length - 1]}`;
 const timesFmt = (v: number) => `${Math.round(v * 100) / 100}×`;
 
-function GrowPanels({ P, input, months, money, planId, extras }: {
-  P: Panels; input: CapabilityInput; months: string[]; money: (v: number) => string; planId: string; extras: ExtraFacts;
+function GrowPanels({ P, input, money, planId, extras }: {
+  P: Panels; input: CapabilityInput; money: (v: number) => string; planId: string; extras: ExtraFacts;
 }) {
-  const cash = input.monthlyCash;
-  const floor = input.growth.cashBuffer;
   const growth = [...P.byProduct].filter((p) => p.change !== 0).sort((a, b) => b.change - a.change);
   const margins = [...P.byProduct].filter((p) => p.margin !== null).sort((a, b) => (b.margin ?? 0) - (a.margin ?? 0));
 
   return (
     <>
-      <Panel wide height={240} title="Cash, month by month through Year 1"
-        sub={floor !== null && floor > 0
-          ? <>Closing bank balance each month against your floor of {money(floor)}. Amber is under the floor; red is overdrawn.</>
-          : <>Closing bank balance each month. Red is overdrawn. No floor set, so nothing is marked as too low.</>}>
-        {cash.length
-          ? (w) => (
-            <Columns width={w} height={240} categories={months.slice(0, cash.length)} values={cash}
-              threshold={floor !== null && floor > 0 ? cash.map(() => floor) : undefined}
-              thresholdLabel={floor !== null && floor > 0 ? `Your floor ${money(floor)}` : undefined}
-              format={money}
-              tone={(i) => (cash[i] < 0 ? "bad" : floor !== null && cash[i] < floor ? "warn" : "accent")} />
-          )
-          : <Empty planId={planId}>No monthly cash forecast yet. Fill in your sales and costs and this draws itself.</Empty>}
-      </Panel>
-
       <Panel height={220} title="The cash cycle, year by year" sub="Days cash is tied up: stock days + debtor days − creditor days, from Assumptions">
         {P.has
           ? (w) => (

@@ -764,3 +764,13 @@ Nic, 27 Sep 2026: the screen quoted the dearest loan (12%) and the worst month (
   value" was considered and not used, because a floor is a limit and a cost of capital is a bar to beat. A note
   says neither box changes the forecast.
 Checked on SEQ (read only) and ZZ ("Use 4,000" saved, then cleared back to unset).
+
+### 52. The worst-month picture on Capability to grow had no urgency — **done (§6.156)**
+
+Nic, on SEQ with a 78,048 floor: "a little bit of red, a little bit of yellow and a lot of green AND so what?" The
+gauge's scale ran to three times the floor, so most of it was green on a plan that goes overdrawn, and the
+shortfall itself was not shown. Replaced by (A) a headline, "103,067 short of your floor in Jun", with how many
+months are below the floor, when it starts, and a link to where to fix it (Assumptions → Cash & capital); and
+(B) the twelve months as columns under it, red below the floor and green above, with the floor as a dashed line.
+Above the floor it turns green and says how much room there is at the tightest point. The duplicate "Cash, month
+by month" panel further down the tab was removed.
