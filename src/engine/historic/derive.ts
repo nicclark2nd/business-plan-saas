@@ -121,6 +121,14 @@ export const TEMPLATE_ROWS: Record<string, PeriodField> = {
   "Total Liabilities": "total_liabilities", "Equity": "equity",
 };
 
+/**
+ * SHARE CAPITAL, WHEN THE UPLOAD HAS IT (§6.149). Not a derived period field — equity less share capital is
+ * accumulated profit (§6.148) — but a line an accountant's balance sheet carries, so an upload that includes it
+ * means the owner is never asked for it again (the "never ask twice" rule, SaaS_Requirements §0). An upload
+ * without it leaves Historic to ask, once.
+ */
+export const SHARE_CAPITAL_LABEL = "Share Capital";
+
 /** A parsed template: label → four columns (Period 1 = most recent). */
 export type TemplateSheet = { periodEnd: (string | number | null)[]; periodLength: (number | null)[]; rows: Record<string, (number | null)[]> };
 
@@ -132,6 +140,8 @@ export function periodsFromTemplate(sheet: TemplateSheet) {
       const v = sheet.rows[label]?.[i];
       if (typeof v === "number" && Number.isFinite(v)) { input[field] = v; any = true; }
     }
-    return { period_number: i + 1, period_end: sheet.periodEnd[i] ?? null, period_length: sheet.periodLength[i] ?? 12, present: any, values: deriveFromTotals(input) };
+    const sc = sheet.rows[SHARE_CAPITAL_LABEL]?.[i];
+    const shareCapital = typeof sc === "number" && Number.isFinite(sc) ? sc : null;
+    return { period_number: i + 1, period_end: sheet.periodEnd[i] ?? null, period_length: sheet.periodLength[i] ?? 12, present: any, values: deriveFromTotals(input), shareCapital };
   });
 }

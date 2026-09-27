@@ -643,7 +643,7 @@ Migration 0054 (share_capital, tax_losses_from_accountant). Checked on SEQ witho
 SEQ's own Years 1 and 2 are losses, so the 71,000 is used in Year 4: taxable profit there falls from 86,874
 to 15,874 (17,750 less tax).
 
-### 49. Share capital is not in the upload, and the app has not been checked for double entry — **open**
+### 49. Share capital is not in the upload, and the app has not been checked for double entry — **first half done (§6.149); sweep open**
 
 The "never ask twice" rule (SaaS_Requirements §0, Nic 27 Sep 2026) leaves two follow-ups from §6.148:
 - **Share capital** is the one figure accumulated profit needs that the Historic upload template does not
@@ -652,3 +652,9 @@ The "never ask twice" rule (SaaS_Requirements §0, Nic 27 Sep 2026) leaves two f
   Historic row stays for owners who type their accounts in.
 - **A sweep of every screen** for inputs the plan already holds or can calculate, reported before anything
   is changed.
+
+Share capital in the upload, done (§6.149): the Historic template gains an optional "Share Capital" line under
+an "Equity" heading; the importer reads it per period and shows it in the preview. A file without it leaves
+Historic → Balance sheet to ask, once, as before (Nic: "if this is not uploaded … they can be asked to answer
+the question in its current form"). A reload keeps what was already given when the new file has no line.
+Unit-tested; not driven live, because the browser pane here cannot choose a file to upload.

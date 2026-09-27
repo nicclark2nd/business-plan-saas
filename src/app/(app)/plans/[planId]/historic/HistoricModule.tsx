@@ -10,7 +10,7 @@ import { Toolbar, Meta, Note, CellInput, RemoveButton } from "@/components/modul
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 import { MONTH_SHORT } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
-import { deriveFromComponents, periodRatios, periodsFromTemplate, COMPONENT_INPUTS, TEMPLATE_ROWS, type PeriodField, type PeriodInput, type TemplateSheet } from "@/engine/historic/derive";
+import { deriveFromComponents, periodRatios, periodsFromTemplate, COMPONENT_INPUTS, TEMPLATE_ROWS, SHARE_CAPITAL_LABEL, type PeriodField, type PeriodInput, type TemplateSheet } from "@/engine/historic/derive";
 import { useMoney } from "@/components/MoneyProvider";
 import { savePeriod, importPeriods, deletePeriod, setHasHistory, continueFromHistoric } from "./actions";
 import { PNL_LINES, BS_LINES, type Period, type LineDef } from "./model";
@@ -264,18 +264,18 @@ function ImportArea({ planId, onLoaded }: { planId: string; onLoaded: () => void
       const vals = [1, 2, 3, 4].map((i) => { const v = r[i]; return typeof v === "number" && Number.isFinite(v) ? v : typeof v === "string" && v.trim() && Number.isFinite(Number(v.replace(/[,\s]/g, ""))) ? Number(v.replace(/[,\s]/g, "")) : null; });
       if (label === "Period End") periodEnd = [1, 2, 3, 4].map((i) => (r[i] as string | number | null) ?? null);
       else if (label === "Period Length") periodLength = vals;
-      else if (label in TEMPLATE_ROWS) rows[label] = vals;
+      else if (label in TEMPLATE_ROWS || label === SHARE_CAPITAL_LABEL) rows[label] = vals;
     }
     if (!Object.keys(rows).length) { setError("That doesn't look like the template — no known line labels in column A. Download the template below and fill it in."); return; }
     setSheet({ periodEnd, periodLength, rows });
   };
   const load = () => { if (!preview) return; start(async () => {
-    const r = await importPeriods(planId, preview.map((p) => ({ period_number: p.period_number, period_end: p.period_end, period_length: p.period_length, present: p.present, input: Object.fromEntries(Object.entries(TEMPLATE_ROWS).map(([label, f]) => [f, sheet!.rows[label]?.[p.period_number - 1] ?? undefined])) })));
+    const r = await importPeriods(planId, preview.map((p) => ({ period_number: p.period_number, period_end: p.period_end, period_length: p.period_length, present: p.present, share_capital: p.shareCapital, input: Object.fromEntries(Object.entries(TEMPLATE_ROWS).map(([label, f]) => [f, sheet!.rows[label]?.[p.period_number - 1] ?? undefined])) })));
     if (!r.ok) setError(r.error); else onLoaded();
   }); };
   const download = async () => {
     const XLSX = await import("xlsx");
-    const labels = ["Period End", "Period Length", "Profit & Loss", "Revenue", "Gross Margin", "Net Profit After Tax", "Other Information", "Depreciation & Amortisation", "Interest Paid", "Tax Paid", "Extraordinary Income_Expenses", "Dividends Paid", "Balance Sheet", "Total Assets", "Cash", "Accounts Receivable", "Inventory_WIP", "Total Current Assets", "Fixed Assets", "Liabilities", "Total Liabilities", "Accounts Payable", "Total Current Liabilities", "Funding", "Bank Loans - Current", "Bank Loans - Non Current"];
+    const labels = ["Period End", "Period Length", "Profit & Loss", "Revenue", "Gross Margin", "Net Profit After Tax", "Other Information", "Depreciation & Amortisation", "Interest Paid", "Tax Paid", "Extraordinary Income_Expenses", "Dividends Paid", "Balance Sheet", "Total Assets", "Cash", "Accounts Receivable", "Inventory_WIP", "Total Current Assets", "Fixed Assets", "Liabilities", "Total Liabilities", "Accounts Payable", "Total Current Liabilities", "Funding", "Bank Loans - Current", "Bank Loans - Non Current", "Equity", SHARE_CAPITAL_LABEL];
     const aoa = [["Category", "Period 1", "Period 2", "Period 3", "Period 4"], ...labels.map((l) => [l, ...(l === "Period Length" ? [12, 12, 12, 12] : ["", "", "", ""])])];
     const ws = XLSX.utils.aoa_to_sheet(aoa); ws["!cols"] = [{ wch: 30 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Historic"); XLSX.writeFile(wb, "BizPlanHQ_Historic_Template.xlsx");
@@ -298,7 +298,11 @@ function ImportArea({ planId, onLoaded }: { planId: string; onLoaded: () => void
             </tr></thead>
             <tbody>{show.map((s) => (
               <tr key={s.field} className={cn("border-b border-border", s.label.includes("derived") && "bg-secondary/60")}><td className="h-8 pl-5">{s.label}</td>{preview.map((p) => <td key={p.period_number} className={cn("num px-3 text-right", p.values[s.field] < 0 && "text-bad")}>{p.present ? money(p.values[s.field]) : "—"}</td>)}</tr>
-            ))}</tbody>
+            ))}
+            {/* §6.149 — shown only when the file carries it; otherwise Historic asks for it once, after the load. */}
+            {preview.some((p) => p.shareCapital !== null) && (
+              <tr className="border-b border-border"><td className="h-8 pl-5">Share capital</td>{preview.map((p) => <td key={p.period_number} className="num px-3 text-right">{p.present && p.shareCapital !== null ? money(p.shareCapital) : "—"}</td>)}</tr>
+            )}</tbody>
           </table>
           <div className="flex items-center gap-3 px-5 py-3"><Button type="button" size="sm" onClick={load} disabled={pending}>{pending ? "Loading…" : `Load ${preview.filter((p) => p.present).length} period${preview.filter((p) => p.present).length === 1 ? "" : "s"} into the plan`}</Button><span className="text-xs text-muted-foreground">Replaces anything already entered in Historic.</span></div>
         </>

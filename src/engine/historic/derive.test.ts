@@ -100,3 +100,15 @@ describe("prepayments and accruals", () => {
     expect(d.current_assets).toBe(370);
   });
 });
+
+describe("share capital from the upload (§6.149)", () => {
+  const sheet = (rows: Record<string, (number | null)[]>) => ({ periodEnd: [2026, 2025, null, null], periodLength: [12, 12, null, null], rows });
+  it("reads the Share Capital line when the file has it", () => {
+    const p = periodsFromTemplate(sheet({ "Revenue": [100, 90, null, null], "Share Capital": [100, 100, null, null] }));
+    expect(p.map((x) => x.shareCapital)).toEqual([100, 100, null, null]);
+  });
+  it("leaves it unknown when the file does not — Historic then asks once", () => {
+    const p = periodsFromTemplate(sheet({ "Revenue": [100, 90, null, null] }));
+    expect(p.every((x) => x.shareCapital === null)).toBe(true);
+  });
+});

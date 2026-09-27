@@ -49,21 +49,23 @@ export async function savePeriod(planId: string, periodNumber: number, input: { 
 }
 
 /** Load the four columns of an uploaded template (totals path). Replaces whatever is there. */
-export async function importPeriods(planId: string, periods: { period_number: number; period_end: string | number | null; period_length: number; present: boolean; input: PeriodInput }[]): Promise<Result<{ loaded: number }>> {
+export async function importPeriods(planId: string, periods: { period_number: number; period_end: string | number | null; period_length: number; present: boolean; share_capital?: number | null; input: PeriodInput }[]): Promise<Result<{ loaded: number }>> {
   const supabase = await createClient();
   const rows = [];
   for (const p of periods) {
     if (!p.present) continue;
     const end = await periodEndDate(planId, p.period_end);
     const values = deriveFromTotals(p.input);
-    rows.push({ plan_id: planId, period_number: p.period_number, period_end: end ?? null, period_length: p.period_length || 12, source: "excel", ...values });
+    /* From the file when it has the line (§6.149); otherwise left for the carry-over below, or for Historic to ask. */
+    const sc = typeof p.share_capital === "number" && Number.isFinite(p.share_capital) ? { share_capital: Math.max(0, Math.round(p.share_capital * 100) / 100) } : {};
+    rows.push({ plan_id: planId, period_number: p.period_number, period_end: end ?? null, period_length: p.period_length || 12, source: "excel", ...values, ...sc });
   }
   if (!rows.length) return { ok: false, error: "No periods with numbers were found in that file." };
   /* The template has no share capital line (§6.148): what the client already gave is carried across the reload. */
   const { data: kept } = await supabase.from("plan_historic_periods").select("period_number, share_capital").eq("plan_id", planId);
   for (const r of rows as Record<string, unknown>[]) {
     const k = (kept ?? []).find((x) => x.period_number === r.period_number);
-    if (k && k.share_capital !== null && k.share_capital !== undefined) r.share_capital = k.share_capital;
+    if (r.share_capital === undefined && k && k.share_capital !== null && k.share_capital !== undefined) r.share_capital = k.share_capital;
   }
   const { error: delErr } = await supabase.from("plan_historic_periods").delete().eq("plan_id", planId);
   if (delErr) return failed(delErr, "clear the old periods");
