@@ -1,5 +1,6 @@
 "use client";
 
+import { usePlanYears } from "@/components/PlanYearsProvider";
 import { guarded } from "@/lib/guardedStart";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -49,7 +50,6 @@ type Dlg = { kind: "picker" } | { kind: "edit"; key: string } | null;
 const STEP = GUIDED_STEPS.find((s) => s.id === "funding")?.step ?? 10;
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
 const box = "h-8";
-const YEAR_OPTIONS = YEARS.map((y) => ({ value: String(y), label: `Year ${y}` }));
 /** The dropdown offers the plan's months in the plan's order; the value is the slot, 1–12. */
 const monthOptions = (fyEndMonth: number) => planMonths(fyEndMonth).map((m, i) => ({ value: String(i + 1), label: m }));
 
@@ -571,6 +571,7 @@ function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: 
   row: Row; buysName?: string; fyEndMonth: number; pending: boolean;
   onCancel: () => void; onSave: (r: Row, buys: string) => void;
 }) {
+  const Y = usePlanYears();
   const num = useMoney();
   const MONTH_OPTIONS = monthOptions(fyEndMonth);
   const [d, setD] = useState<Row>(row);
@@ -625,7 +626,7 @@ function SourceDialog({ row, buysName, fyEndMonth, pending, onCancel, onSave }: 
             </div>
             <div>
               <span className={label}>{isLoc ? "Available from" : "Arrives in"}</span>
-              <FieldSelect value={String(d.start_year)} onValueChange={(v) => set({ start_year: Number(v) })} options={YEAR_OPTIONS} />
+              <FieldSelect value={String(d.start_year)} onValueChange={(v) => set({ start_year: Number(v) })} options={YEARS.map((y) => ({ value: String(y), label: Y.label(y) }))} />
             </div>
             <div>
               <span className={label}>Month</span>

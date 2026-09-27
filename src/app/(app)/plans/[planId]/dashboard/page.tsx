@@ -1,3 +1,4 @@
+import { yearLabel } from "@/engine/plan/calendar";
 import Link from "next/link";
 import { readGrowth } from "@/engine/capability/judgements";
 import { getSession } from "@/lib/plan";
@@ -79,7 +80,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
    * five KPI tiles hard-coded to an em dash and a cash panel that said "Not yet", on a plan with five years
    * of statements that agree. The first page a client opens was the last one wired to the engine.
    */
-  const { plan: planInput } = await loadPlan(planId);
+  const { plan: planInput, firstYear } = await loadPlan(planId);
   const run = runForecast(planInput);
   const { forecast, monthly } = run;
   const y1 = forecast.pnl[1];
@@ -276,7 +277,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ plan
           badge={<span className="eyebrow">{hasNumbers ? "Five years" : "Not yet"}</span>}>
           {hasNumbers ? (
             <>
-              <RevenueChart labels={FORECAST_YEARS.map((y) => `Year ${y}`)} revenue={be.map((b) => b.revenue)} breakEven={be.map((b) => b.breakEvenRevenue)} />
+              <RevenueChart labels={FORECAST_YEARS.map((y) => yearLabel(firstYear, y))} revenue={be.map((b) => b.revenue)} breakEven={be.map((b) => b.breakEvenRevenue)} />
               <p className="mt-1 text-[12px] text-muted-foreground">
                 The bar is what you plan to sell; the rule across it is what you have to sell. <Link className="font-semibold text-primary" href={`${base}/break-even`}>Open Break-Even →</Link>
               </p>

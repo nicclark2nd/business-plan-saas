@@ -1,5 +1,6 @@
 "use client";
 
+import { usePlanYears } from "@/components/PlanYearsProvider";
 import { guarded } from "@/lib/guardedStart";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
@@ -56,12 +57,12 @@ type Row = ExtraordinaryRow & { _key: string };
 const STEP = GUIDED_STEPS.find((s) => s.id === "extraordinary")?.step ?? 12;
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
 const box = "h-8";
-const YEAR_OPTIONS = YEARS.map((y) => ({ value: String(y), label: `Year ${y}` }));
 
 export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth, saidNone }: {
   planId: string; initial: ExtraordinaryRow[]; mode: "guided" | "advanced";
   assets: SoldAsset[]; fyEndMonth: number; saidNone: boolean;
 }) {
+  const Y = usePlanYears();
   const num = useMoney();
   const signedText = signedWith(num);
   const MONTHS = planMonths(fyEndMonth);
@@ -218,7 +219,7 @@ export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth,
                 What it does to each year
               </div>
               <Grid>
-                <thead><tr><Th className="w-[24%]" />{YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}</tr></thead>
+                <thead><tr><Th className="w-[24%]" />{YEARS.map((y) => <Th key={y} right>{Y.label(y)}</Th>)}</tr></thead>
                 <tbody>
                   <GridRow><Td className="text-muted-foreground">Money in</Td>{years.map((y) => <Td key={y.year} right className="num">{y.income ? num(y.income) : "—"}</Td>)}</GridRow>
                   <GridRow><Td className="text-muted-foreground">Money out</Td>{years.map((y) => <Td key={y.year} right className="num">{y.expense ? `(${num(y.expense)})` : "—"}</Td>)}</GridRow>
@@ -256,7 +257,7 @@ export function ExtraordinaryModule({ planId, initial, mode, assets, fyEndMonth,
               <tbody>
                 {byYear.map(({ year, months }) => (
                   <GridRow key={year}>
-                    <Td>Year {year}</Td>
+                    <Td>{Y.label(year)}</Td>
                     {months.map((v, i) => (
                       <Td key={i} right className={cn("num", v < 0 && "text-destructive")}>{signedText(v)}</Td>
                     ))}
@@ -323,6 +324,7 @@ function ItemDialog({ row, assets, monthOptions, pending, onCancel, onSave }: {
   monthOptions: { value: string; label: string }[];
   pending: boolean; onCancel: () => void; onSave: (r: Row) => void;
 }) {
+  const Y = usePlanYears();
   const num = useMoney();
   const [d, setD] = useState<Row>(row);
   const set = (patch: Partial<Row>) => setD((x) => ({ ...x, ...patch }));
@@ -370,7 +372,7 @@ function ItemDialog({ row, assets, monthOptions, pending, onCancel, onSave }: {
             </div>
             <div>
               <span className={label}>Happens in</span>
-              <FieldSelect value={String(d.year)} onValueChange={(v) => set({ year: Number(v) })} options={YEAR_OPTIONS} />
+              <FieldSelect value={String(d.year)} onValueChange={(v) => set({ year: Number(v) })} options={YEARS.map((y) => ({ value: String(y), label: Y.label(y) }))} />
             </div>
             <div>
               <span className={label}>Month</span>

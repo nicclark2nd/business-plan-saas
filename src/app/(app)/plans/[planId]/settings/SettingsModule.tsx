@@ -1,5 +1,6 @@
 "use client";
 
+import { usePlanYears } from "@/components/PlanYearsProvider";
 import { guarded } from "@/lib/guardedStart";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { ModuleFrame, ModuleStatusFooter, useModule } from "@/components/module/ModuleFrame";
@@ -68,6 +69,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
   /** Exit & sale's add-backs, itemised (§6.129.3). */
   addBacks: AddBack[];
 }) {
+  const Y = usePlanYears();
   const [area, setArea] = useState<AreaKey>(initialArea);
   /* Which field's draft dialog is open. Null when AI is off, because then no button exists. */
   const [draftOpen, setDraftOpen] = useState<string | null>(null);
@@ -441,7 +443,8 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
       {area === "financial" && (
         <div onBlur={(e) => left(e) && dirty.financial && commit("financial")}>
           <Toolbar><Meta className="ml-0">
-            <b>Year 1 runs {planYearLabel(firstProjectedYear(s.first_projected_year, s.financial_year_end_month), s.financial_year_end_month)}</b> — the year the business is in. Year 5 ends {planYearEnding(firstProjectedYear(s.first_projected_year, s.financial_year_end_month), 5)}.
+            {/* Actual years, then plan years — nothing "current" in between (§6.157). */}
+            <b>Plan years {firstProjectedYear(s.first_projected_year, s.financial_year_end_month)}–{planYearEnding(firstProjectedYear(s.first_projected_year, s.financial_year_end_month), 5)}</b>. {firstProjectedYear(s.first_projected_year, s.financial_year_end_month)} · Year 1 runs {planYearLabel(firstProjectedYear(s.first_projected_year, s.financial_year_end_month), s.financial_year_end_month)}; the last actual year, in Historic, is {firstProjectedYear(s.first_projected_year, s.financial_year_end_month) - 1}.
             {s.first_projected_year === null && <span className="text-warn"> · First projected year is not set, so this is the financial year today falls in.</span>}
           </Meta></Toolbar>
           <Section title="Financial year">
@@ -601,7 +604,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
               </Field>
               <Field label="Aiming to sell in" span={2} hint="Optional. Which year of the plan the sale is pointed at.">
                 <FieldSelect value={exitYear === null ? "" : String(exitYear)}
-                  options={[{ value: "", label: "Not decided" }, ...FORECAST_YEARS.map((y) => ({ value: String(y), label: `Year ${y}` }))]}
+                  options={[{ value: "", label: "Not decided" }, ...FORECAST_YEARS.map((y) => ({ value: String(y), label: Y.label(y) }))]}
                   onValueChange={(v) => { setExitYear(v ? Number(v) : null); yrRef.current = v ? Number(v) : null; commitExit(); }} />
               </Field>
             </FieldGrid>

@@ -1,5 +1,6 @@
 "use client";
 
+import { usePlanYears } from "@/components/PlanYearsProvider";
 /**
  * A five-year statement, and the notes that go under one (§6.76).
  *
@@ -15,12 +16,13 @@ export type StatementRow = [string, (y: number) => number, ("head" | "sub" | "to
 
 /** Five years across, one line per row. Money out shows in brackets, the convention a lender reads. */
 export function Statement({ rows, num }: { rows: StatementRow[]; num: (v: number) => string }) {
+  const Y = usePlanYears();
   const money = (v: number) => (v < 0 ? `(${num(Math.abs(v))})` : v === 0 ? "—" : num(v));
   return (
     <Grid>
       <thead><tr>
         <Th style={{ width: "30%" }} />
-        {FORECAST_YEARS.map((y) => <Th key={y} right style={{ width: 130 }}>Year {y}</Th>)}
+        {FORECAST_YEARS.map((y) => <Th key={y} right style={{ width: 130 }}>{Y.label(y)}</Th>)}
       </tr></thead>
       <tbody>
         {rows.map(([label, get, weight]) => weight === "total" ? (

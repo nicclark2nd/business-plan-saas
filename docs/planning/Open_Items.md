@@ -774,3 +774,23 @@ months are below the floor, when it starts, and a link to where to fix it (Assum
 (B) the twelve months as columns under it, red below the floor and green above, with the floor as a dashed line.
 Above the floor it turns green and says how much room there is at the tightest point. The duplicate "Cash, month
 by month" panel further down the tab was removed.
+
+### 53. A "current" year the plan does not have — **done (§6.157)**
+
+Nic: "there are no current years — there is historical or projected." Sales → Annual projections showed a
+"Current" column (price × units, identical to Year 1) in front of five plan years, the start dropdown read "Year 1 —
+the year you're in now", and the Services tab said "this year". The forecast itself was never affected: the
+engine runs years 1–5 only, and SEQ's Sales and P&L agree (2,182,240 Year 1; 2,892,354 Year 5). Overheads had the
+same column once (§6.47). Fixed app-wide:
+- "Current" column removed from Sales.
+- Every plan-year column, dropdown and chart axis reads "2027 · Year 1" … "2031 · Year 5" (Sales, COGS, Overheads,
+  Salaries, Fixed Assets, One-offs, Funding, Assumptions, Forecast checks, P&L, Cash flow, Balance sheet,
+  Break-even, Dashboard, Plan settings' exit year). One source: `PlanYearsProvider` / `yearLabel`.
+- "The year you're in now" / "the year the business is in" removed from Sales, Plan settings and set-up. Settings
+  now says "Plan years 2027–2031 … the last actual year, in Historic, is 2026".
+- Sales header: "2026 actual 1,997,000 → 2027 plan 2,182,240 (+9.3%)", the whole of the last actual year against the
+  whole of Year 1.
+- The header bar shows "Plan 2027–2031" rather than the report cover year "FY2026", which read as a year in front
+  of Year 1.
+- The set-up form's "Financial year ends in" shows the month name, not "6".
+The printed report already labels its columns by year end ("Jun 2027") and was left as it is.

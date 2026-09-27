@@ -1,5 +1,6 @@
 "use client";
 
+import { usePlanYears } from "@/components/PlanYearsProvider";
 import { guarded } from "@/lib/guardedStart";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -75,6 +76,7 @@ export function AssumptionsModule({
   /** Which tab to open on, so a pencil from Financial Capabilities lands on the box it promised. */
   initialArea: AreaKey;
 }) {
+  const Y = usePlanYears();
   const num = useMoney();
   const router = useRouter();
   const [pending, startRaw] = useTransition();
@@ -200,7 +202,7 @@ export function AssumptionsModule({
           <Grid>
             <thead><tr>
               <Th style={{ width: "28%" }}>Assumption</Th>
-              {FORECAST_YEARS.map((y) => <Th key={y} right style={{ width: 130 }}>Year {y}</Th>)}
+              {FORECAST_YEARS.map((y) => <Th key={y} right style={{ width: 130 }}>{Y.label(y)}</Th>)}
             </tr></thead>
             <tbody>
               <DaysRow label="Debtor days" hint="How long clients take to pay. Each day holds this much in debtors."

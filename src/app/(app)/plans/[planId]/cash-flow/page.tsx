@@ -1,3 +1,4 @@
+import { yearLabel } from "@/engine/plan/calendar";
 import { loadPlan } from "@/lib/planLoad";
 import { FORECAST_YEARS } from "@/engine/forecast/model";
 import { runForecast } from "@/engine/forecast/run";
@@ -33,7 +34,7 @@ export default async function CashFlowPage({ params, searchParams }: {
       netProfit={Object.fromEntries(FORECAST_YEARS.map((y) => [y, checked.pnl[y].netProfit]))}
       months={planMonths(fyEndMonth)}
       yearLabel={planYearLabel(firstYear, fyEndMonth)}
-      yearLabels={FORECAST_YEARS.map((y) => `Year ${y}`)}
+      yearLabels={FORECAST_YEARS.map((y) => yearLabel(firstYear, y))}
       reconciled={checked.reconciled}
       gst={{ registered: components.length > 0 }} gstLabel={taxLabel}
       gstSchedules={gst.schedules}

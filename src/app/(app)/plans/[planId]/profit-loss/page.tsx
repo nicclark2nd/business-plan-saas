@@ -1,3 +1,4 @@
+import { yearLabel } from "@/engine/plan/calendar";
 import { loadPlan } from "@/lib/planLoad";
 import { FORECAST_YEARS } from "@/engine/forecast/model";
 import { runForecast } from "@/engine/forecast/run";
@@ -20,7 +21,7 @@ export default async function ProfitLossPage({ params, searchParams }: {
 }) {
   const { planId } = await params;
   const { area } = await searchParams;
-  const { plan, mode, fyEndMonth, noun } = await loadPlan(planId);
+  const { plan, mode, fyEndMonth, noun, firstYear } = await loadPlan(planId);
   const { sources } = plan;
 
   const { forecast, shapesByYear } = runForecast(plan);
@@ -35,7 +36,7 @@ export default async function ProfitLossPage({ params, searchParams }: {
       months={pnlMonths(shapesByYear[1])}
       services={services}
       monthNames={planMonthNames(fyEndMonth)}
-      yearLabels={FORECAST_YEARS.map((y) => `Year ${y}`)}
+      yearLabels={FORECAST_YEARS.map((y) => yearLabel(firstYear, y))}
       reconciled={forecast.reconciled}
       initialArea={areas.includes((area ?? "") as typeof areas[number]) ? (area as typeof areas[number]) : "year"}
     />

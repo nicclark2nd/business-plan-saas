@@ -1,5 +1,6 @@
 "use client";
 
+import { usePlanYears } from "@/components/PlanYearsProvider";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ModuleFrame, ModuleStatusFooter } from "@/components/module/ModuleFrame";
@@ -50,6 +51,7 @@ export function CashFlowModule({
   gstComponents: { label: string; rate: number; frequency: string; reclaimable: boolean }[];
   initialArea: AreaKey;
 }) {
+  const Y = usePlanYears();
   const money = useMoney();
   const signed = (v: number) => (v < 0 ? `(${money(Math.abs(v))})` : money(v));
   const router = useRouter();
@@ -247,7 +249,7 @@ export function CashFlowModule({
                 <button key={y} type="button" onClick={() => setBridgeYear(y)} aria-pressed={bridgeYear === y}
                   className={cn("px-2.5 py-1 text-[12px] leading-none",
                     bridgeYear === y ? "bg-primary font-semibold text-primary-foreground" : "bg-background text-muted-foreground hover:bg-secondary")}>
-                  Year {y}
+                  {Y.label(y)}
                 </button>
               ))}
             </div>

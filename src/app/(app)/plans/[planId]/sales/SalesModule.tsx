@@ -21,6 +21,7 @@ import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { cn } from "@/lib/utils";
 import { YEARS, yearlyProjection, firstPlanYear, evenDistribution, moderateDistribution, rampUpDistribution, normalizeDistribution, monthlySales, hasValue, impliedPct, type Growth, type MonthlyDistribution } from "@/engine/sales/projection";
 import { productYears, productYear1Months, productYear1Clients, newClientsYear1, planRevenueByYear, planYear1Months, sourceOf, isLinked, bookNow, monthlyFee, recurring } from "@/engine/sales/product";
+import { usePlanYears } from "@/components/PlanYearsProvider";
 import { useMoney } from "@/components/MoneyProvider";
 import { useProductNoun } from "@/components/VocabularyProvider";
 import { upsertProduct, deleteProduct, continueFromSales } from "./actions";
@@ -61,6 +62,8 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
   drafting?: Drafting;
 }) {
   const gst = useGst();
+  /* "2027 · Year 1" — every plan year named by its year (§6.157). */
+  const Y = usePlanYears();
   // What Year 1 actually is, from the two Settings fields that define the financial year (§6.33.1).
   const yearOne = planYearLabel(firstProjectedYear(firstYearEnding, fyEndMonth), fyEndMonth);
   // What this plan calls a line — Products, Services, Treatments (§6.31.1).
@@ -70,8 +73,8 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
   const MONTHS = planMonths(fyEndMonth);          // the plan's own twelve, not January to December
   const startup = hasHistory === false;
   const blank = (): Row => ({ id: `tmp-${crypto.randomUUID()}`, _key: "", name: "", description: "", notes: "", lifecycle: null, average_price: 0, units_sold: 0, start_selling_year: 1, yearly_growth: {}, monthly_distribution: null, sort_order: 0, sold_as: "one_off", opening_clients: 0, client_life_months: 12, life_mode: "fixed", monthly_new_clients: null, clients_from_product_id: null, gst_applies: true });
-  // Year 1 is now: there is no year before it, so the first option names itself rather than inventing one.
-  const startOptions = YEARS.map((y) => ({ value: String(y), label: y === 1 ? "Year 1 — the year you're in now" : `Year ${y}` }));
+  // Five plan years and nothing before them (§6.157): no "year you're in now", just the years by name.
+  const startOptions = YEARS.map((y) => ({ value: String(y), label: Y.label(y) }));
 
   const router = useRouter();
   const [area, setArea] = useState<AreaKey>(initialArea);
@@ -151,10 +154,15 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
     if (fed.length) return <LinkMark feeds title={`Feeds ${fed.map((f) => f.name).join(", ")} — every one sold becomes a client there. Click to open it.`} onClick={() => setDlg({ kind: "product", key: fed[0]._key })} />;
     return null;
   };
-  /** "This year" reconciles against Historic — only lines already earning, and for an ongoing line that is its book. */
-  const current = named.reduce((a, r) => recurring(r) ? a + bookNow(r) : (firstYear(r) === 1 ? a + r.average_price * r.units_sold : a), 0);
-  const gap = historicRevenue ? ((current - historicRevenue) / historicRevenue) * 100 : null;
   const totals = planRevenueByYear(named);
+  /*
+   * THE LAST ACTUAL YEAR AGAINST THE FIRST PLAN YEAR (§6.157). There is no "current" year: there is
+   * Historic, which ended with the last actual year, and the plan, which starts with Year 1. The comparison
+   * is the whole of Year 1 against the whole of the last actual year.
+   */
+  const planY1 = totals[0].value;
+  const gap = historicRevenue ? ((planY1 - historicRevenue) / historicRevenue) * 100 : null;
+  const actualYear = historicEnd ? Number(historicEnd.slice(0, 4)) : Y.firstYear - 1;
   const open = dlg ? (draftNew && draftNew._key === dlg.key ? draftNew : rows.find((r) => r._key === dlg.key)) ?? null : null;
   const close = () => { setDlg(null); setDraftNew(null); };
   const monthTotals = planYear1Months(named);
@@ -164,12 +172,11 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
    */
   const view = useMemo(() => sortRows(named, sort, (r, key) => {
     if (key === "name") return r.name.toLowerCase();
-    if (key === "current") return recurring(r) ? bookNow(r) : firstYear(r) === 0 ? r.average_price * r.units_sold : -1;
     return years(r)[Number(key) - 1]?.revenue ?? 0;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [named, sort]);
   const sortLabel = !sort ? null
-    : `${sort.key === "name" ? noun.one : sort.key === "current" ? (startup ? "base" : "this year") : `Year ${sort.key}`}, ${sort.key === "name" ? (sort.dir === "asc" ? "A to Z" : "Z to A") : sort.dir === "asc" ? "smallest first" : "largest first"}`;
+    : `${sort.key === "name" ? noun.one : Y.label(Number(sort.key))}, ${sort.key === "name" ? (sort.dir === "asc" ? "A to Z" : "Z to A") : sort.dir === "asc" ? "smallest first" : "largest first"}`;
 
 
   return (
@@ -182,9 +189,9 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
       footer={<ModuleFooter planId={planId} moduleId="sales" formId="sales-form" />}
       help={<>
         <h3>What good looks like</h3>
-        <p><b>{noun.many}</b> — one line for each thing you sell that a customer would recognise on a quote. Open a {noun.one} to describe it and set what it sells for and how many you sell{startup ? " in Year 1" : " this year"}; annual sales calculates. Check the total against your accounts before you go further.</p>
+        <p><b>{noun.many}</b> — one line for each thing you sell that a customer would recognise on a quote. Open a {noun.one} to describe it and set what it sells for and how many you sell in {Y.label(1)}; annual sales calculates. Check the total against your accounts before you go further.</p>
         <p><b>Annual projections</b> — five years of sales per {noun.one}. The pencil opens the growth dialog: a % change in price and in units for each year, an empty box is 0 %, negative is fine for a line you are winding down, and the dialog shows what the numbers become before you save.</p>
-        <p><b>Monthly projections</b> — how Year 1 falls across the twelve months. Only the first-year cash flow uses it. Leave it even unless your trade genuinely has a quiet season or a line is launching mid-year.</p>
+        <p><b>Monthly projections</b> — how {Y.label(1)} falls across the twelve months. Only the first-year cash flow uses it. Leave it even unless your trade genuinely has a quiet season or a line is launching mid-year.</p>
         <h3>Where this goes</h3>
         <p>Sales by year → the forecast&apos;s top line, break-even and What-If. Year 1 by month → the twelve-month cash flow. Descriptions → the {many} section of the report.</p>
       </>}
@@ -196,10 +203,11 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
         <>
           <Toolbar>
             <Meta className="ml-0">
-              {named.length ? <>{named.length} {named.length === 1 ? noun.one : many} · {startup ? "Year 1" : "this year"} {num(startup ? totals[0].value : current)}</> : `No ${many} yet`}
-              {!startup && historicRevenue !== null && gap !== null && named.length > 0 && (Math.abs(gap) > 10
-                ? <span className="text-warn"> · {gap > 0 ? "+" : ""}{gap.toFixed(0)}% against Historic {historicEnd?.slice(0, 4) ?? ""} revenue {num(historicRevenue)} — a line is missing or a price × units is off</span>
-                : <> · within {Math.abs(gap).toFixed(0)}% of Historic {historicEnd?.slice(0, 4) ?? ""} revenue</>)}
+              {named.length ? <>{named.length} {named.length === 1 ? noun.one : many} · </> : `No ${many} yet`}
+              {named.length > 0 && (!startup && historicRevenue !== null && gap !== null
+                ? <>{actualYear} actual {num(historicRevenue)} → {Y.year(1)} plan {num(planY1)} ({gap >= 0 ? "+" : ""}{gap.toFixed(1)}%)
+                    {Math.abs(gap) > 10 && <span className="text-warn"> — a big step from last year: check no line is missing, doubled, or priced wrong</span>}</>
+                : <>{Y.year(1)} plan {num(planY1)}</>)}
             </Meta>
             <SortNote sortLabel={sortLabel} onClear={() => setSort(null)} />
           </Toolbar>
@@ -208,13 +216,13 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
               <SortTh label={noun.head} sortKey="name" sort={sort} onSort={setSort} />
               <Th style={{ width: 120 }}>Sold as</Th><Th style={{ width: 120 }}>Lifecycle</Th>
               <Th right style={{ width: 130 }}>Price</Th><Th right style={{ width: 130 }}>Units / clients</Th>
-              <SortTh right style={{ width: 150 }} label={startup ? "Year 1 sales" : "Sales this year"} sortKey={startup ? "1" : "current"} sort={sort} onSort={setSort} />
+              <SortTh right style={{ width: 150 }} label={`${Y.year(1)} sales`} sortKey="1" sort={sort} onSort={setSort} />
               <Th style={{ width: 70 }} />
             </tr></thead>
             <tbody>
               {view.map((r) => (
                 <GridRow key={r._key} className={cn(errors.forKey(`product:${r._key}`) && "[&>td]:bg-bad-soft")} title={errors.forKey(`product:${r._key}`)}>
-                  <Td><NameLink onClick={() => setDlg({ kind: "product", key: r._key })}>{r.name}</NameLink>{mark(r)}<GstFreeTag registered={gst.registered} label={gst.label} applies={r.gst_applies !== false} />{firstYear(r) > 1 && <span className="ml-2 text-xs text-muted-foreground">from Year {firstYear(r)}</span>}</Td>
+                  <Td><NameLink onClick={() => setDlg({ kind: "product", key: r._key })}>{r.name}</NameLink>{mark(r)}<GstFreeTag registered={gst.registered} label={gst.label} applies={r.gst_applies !== false} />{firstYear(r) > 1 && <span className="ml-2 text-xs text-muted-foreground">from {Y.year(firstYear(r))}</span>}</Td>
                   <Td className="text-muted-foreground">{recurring(r) ? "Ongoing client" : "One-off job"}</Td>
                   <Td className="text-muted-foreground">{LIFECYCLE.find((l) => l.value === r.lifecycle)?.label ?? "—"}</Td>
                   <Td right className="num">{recurring(r) ? <>{num(monthlyFee(r))}<span className="text-[11px] text-muted-foreground">/mo</span></> : num(r.average_price)}</Td>
@@ -235,14 +243,19 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
       {area === "annual" && (
         <>
           <Toolbar>
-            <Meta className="ml-0">Sales by year — <b>Year 1 is {yearOne}</b>, the year you are in. Pencil = growth; calendar = monthly split. Each year after Year 1 starts at 0 % change until you say otherwise.</Meta>
+            <Meta className="ml-0">
+              {!startup && historicRevenue !== null && gap !== null
+                ? <><b>{actualYear} actual {num(historicRevenue)} → {Y.year(1)} plan {num(planY1)} ({gap >= 0 ? "+" : ""}{gap.toFixed(1)}%)</b>. </>
+                : null}
+              Plan years {Y.year(1)}–{Y.year(5)}; {Y.label(1)} runs {yearOne}. Pencil = growth; calendar = monthly split. Each year after {Y.year(1)} starts at 0 % change until you say otherwise.
+            </Meta>
             <SortNote sortLabel={sortLabel} onClear={() => setSort(null)} />
           </Toolbar>
           <Grid>
             <thead><tr>
               <SortTh label={noun.head} sortKey="name" sort={sort} onSort={setSort} />
-              <SortTh right style={{ width: 120 }} label={startup ? "Base" : "Current"} sortKey="current" sort={sort} onSort={setSort} />
-              {YEARS.map((y) => <SortTh key={y} right style={{ width: 120 }} label={`Year ${y}`} sortKey={String(y)} sort={sort} onSort={setSort} />)}
+              {/* Five plan years and no "Current" column (§6.157): it repeated Year 1 and read as a sixth year. */}
+              {YEARS.map((y) => <SortTh key={y} right style={{ width: 130 }} label={Y.label(y)} sortKey={String(y)} sort={sort} onSort={setSort} />)}
               <Th style={{ width: 80 }} />
             </tr></thead>
             <tbody>
@@ -251,15 +264,14 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
                 return (
                   <GridRow key={r._key}>
                     <Td><NameLink onClick={() => setDlg({ kind: "growth", key: r._key })}>{r.name}</NameLink>{mark(r)}{recurring(r) && !isLinked(r) && <span className="ml-2 text-xs text-muted-foreground">ongoing</span>}</Td>
-                    <Td right className="num text-muted-foreground">{recurring(r) ? num(bookNow(r)) : fy === 1 ? num(r.average_price * r.units_sold) : `Year ${fy}`}</Td>
                     {p.map((y) => <Td key={y.year} right className={cn("num", y.year < fy && "text-muted-foreground/60")} title={y.clients !== undefined ? `${y.clients} clients at the end of the year` : ""}>{y.year < fy ? "—" : num(y.revenue)}</Td>)}
                     <Td className="whitespace-nowrap text-right"><IconButton title="Edit growth" onClick={() => setDlg({ kind: "growth", key: r._key })}>✎</IconButton><IconButton title="Edit monthly split" onClick={() => setDlg({ kind: "monthly", key: r._key })}>▦</IconButton></Td>
                   </GridRow>
                 );
               })}
-              {named.length === 0 && <tr><Td colSpan={8} className="h-12 text-muted-foreground">Add {many} first.</Td></tr>}
+              {named.length === 0 && <tr><Td colSpan={7} className="h-12 text-muted-foreground">Add {many} first.</Td></tr>}
             </tbody>
-            {named.length > 0 && <FootRow><Td>Total revenue → forecast</Td><Td right className="num">{num(startup ? 0 : current)}</Td>{totals.map((t) => <Td key={t.year} right className="num">{num(t.value)}</Td>)}<Td /></FootRow>}
+            {named.length > 0 && <FootRow><Td>Total revenue → forecast</Td>{totals.map((t) => <Td key={t.year} right className="num">{num(t.value)}</Td>)}<Td /></FootRow>}
           </Grid>
         </>
       )}
@@ -267,7 +279,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
       {area === "monthly" && (
         <>
           <Toolbar>
-            <Meta className="ml-0">Year 1 sales by month — the twelve months the cash flow uses. Pencil to change a {noun.one}&apos;s split.</Meta>
+            <Meta className="ml-0">{Y.label(1)} sales by month — the twelve months the cash flow uses. Pencil to change a {noun.one}&apos;s split.</Meta>
             <SortNote sortLabel={sortLabel} onClear={() => setSort(null)} />
           </Toolbar>
           <Grid>
@@ -285,7 +297,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
                 return (
                   <GridRow key={r._key}>
                     <Td><NameLink onClick={() => setDlg({ kind: "monthly", key: r._key })}>{r.name}</NameLink>{mark(r)}</Td>
-                    {fy > 1 ? <Td colSpan={13} className="text-muted-foreground">Starts in Year {fy} — nothing in the first-year cash flow.</Td>
+                    {fy > 1 ? <Td colSpan={13} className="text-muted-foreground">Starts in {Y.label(fy)} — nothing in the {Y.year(1)} cash flow.</Td>
                       : <>{months.map((v, i) => <Td key={i} right className="num">{num(v)}</Td>)}<Td right className="num font-semibold">{num(y1)}</Td></>}
                     <Td className="text-right">{fy <= 1 && <IconButton title="Edit monthly split" onClick={() => setDlg({ kind: "monthly", key: r._key })}>✎</IconButton>}</Td>
                   </GridRow>
@@ -299,7 +311,7 @@ export function SalesModule({ planId, initial, mode, initialArea, hasHistory, hi
       )}
 
       {open && dlg?.kind === "product" && <ProductDialog key={open._key} planId={planId} drafting={drafting} r={open} others={named.filter((x) => x._key !== open._key && !x.clients_from_product_id && !isNew(x))} onSave={(r) => { save(r); close(); }} onClose={close} />}
-      {open && dlg?.kind === "growth" && <GrowthDialog key={open._key} r={open} source={src(open)} startOptions={startOptions} yearOne={yearOne} onSave={(r) => { save(r); close(); }} onClose={close} />}
+      {open && dlg?.kind === "growth" && <GrowthDialog key={open._key} r={open} source={src(open)} startOptions={startOptions} yl={Y.label} yr={Y.year} onSave={(r) => { save(r); close(); }} onClose={close} />}
       {confirm && (() => {
         const y1 = productYear1Months(confirm.row, src(confirm.row)).reduce((a, b) => a + b, 0);
         const fed = confirm.fed;
@@ -491,7 +503,7 @@ function ProductDialog({ planId, drafting, r, others, onSave, onClose }: { planI
 }
 
 /* ---------- Growth dialog (APeX "Edit Growth Rates") ---------- */
-function GrowthDialog({ r, source, startOptions, yearOne, onSave, onClose }: { r: Row; source: Row | null; startOptions: { value: string; label: string }[]; yearOne: string; onSave: (r: Row) => void; onClose: () => void }) {
+function GrowthDialog({ r, source, startOptions, yl, yr, onSave, onClose }: { r: Row; source: Row | null; startOptions: { value: string; label: string }[]; yl: (y: number) => string; yr: (y: number) => number; onSave: (r: Row) => void; onClose: () => void }) {
   const num = useMoney();
   const [d, setD] = useState<Row>(r);
   const [text, setText] = useState<Record<string, string>>({});
@@ -554,7 +566,7 @@ function GrowthDialog({ r, source, startOptions, yearOne, onSave, onClose }: { r
           <div className="grid grid-cols-[1fr_auto] items-end gap-4">
             <div className="rounded border border-border bg-secondary px-3 py-2">
               <div className="text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">
-                {`Year ${fy} values`}
+                {`${yl(fy)} values`}
               </div>
               {recurring(d)
                 ? <div className="mt-1 flex gap-8 text-[13px]"><span>Fee <b className="num">{num(monthlyFee(d))}</b>/mo</span><span>On the books <b className="num">{d.opening_clients || 0}</b></span><span>Worth <b className="num">{num(bookNow(d))}</b> a year</span></div>
@@ -566,7 +578,7 @@ function GrowthDialog({ r, source, startOptions, yearOne, onSave, onClose }: { r
           <div>
             <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">% change each year</div>
             <div className="grid grid-cols-[110px_repeat(5,1fr)] items-center gap-x-3 gap-y-2">
-              <div /> {YEARS.map((y) => <div key={y} className="text-right text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Year {y}</div>)}
+              <div /> {YEARS.map((y) => <div key={y} className="text-right text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">{yl(y)}</div>)}
               <div className="text-[12.5px] font-semibold">Price</div>{YEARS.map((y) => <div key={y}>{cell(y, "price")}</div>)}
               <div className="text-[12.5px] font-semibold">{recurring(r) ? "Clients" : "Units"}</div>
               {source
@@ -574,8 +586,8 @@ function GrowthDialog({ r, source, startOptions, yearOne, onSave, onClose }: { r
                 : YEARS.map((y) => <div key={y}>{cell(y, "units")}</div>)}
             </div>
             <p className="mt-2 text-[12px] text-muted-foreground">
-              This line starts in <b>Year {fy}</b>{fy === 1 && yearOne ? <> — {yearOne}, the year you are in now</> : null}, so the price and units above <i>are</i> its Year {fy} figures. There is nothing before them to grow from, which is why Year {fy} has no box; the first change you can make is <b>Year {fy + 1}</b>.
-              {fy > 1 && <> If it is already selling, set <b>Starts selling</b> to <b>Year 1</b>.</>}
+              This line starts in <b>{yl(fy)}</b>, so the price and units above <i>are</i> its {yr(fy)} figures. There is nothing before them to grow from, which is why {yr(fy)} has no box{fy < 5 ? <>; the first change you can make is <b>{yr(fy + 1)}</b></> : <>, and it is the plan&apos;s last year</>}.
+              {fy > 1 && <> If it is already selling, set <b>Starts selling</b> to <b>{yl(1)}</b>.</>}
             </p>
           </div>
 
@@ -585,7 +597,7 @@ function GrowthDialog({ r, source, startOptions, yearOne, onSave, onClose }: { r
               {!recurring(d) && <span className="text-[11.5px] text-muted-foreground">— or type the price and the number of units straight in, and the % works itself out</span>}
             </div>
             <div className="grid grid-cols-[110px_repeat(5,1fr)] gap-x-3 gap-y-1.5 rounded border border-border px-3 py-2 text-[13px]">
-              <div /> {YEARS.map((y) => <div key={y} className="text-right text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Year {y}</div>)}
+              <div /> {YEARS.map((y) => <div key={y} className="text-right text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">{yl(y)}</div>)}
               {recurring(d) ? (
                 <>
                   <div className="text-muted-foreground">New clients</div>{proj.map((p) => <div key={p.year} className="num text-right">{p.year < fy ? "—" : Number((p.newClients ?? 0).toFixed(2))}</div>)}

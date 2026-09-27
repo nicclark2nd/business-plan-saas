@@ -1,3 +1,4 @@
+import { yearLabel } from "@/engine/plan/calendar";
 import { loadPlan } from "@/lib/planLoad";
 import { FORECAST_YEARS } from "@/engine/forecast/model";
 import { runForecast } from "@/engine/forecast/run";
@@ -17,7 +18,7 @@ export default async function BalanceSheetPage({ params, searchParams }: {
 }) {
   const { planId } = await params;
   const { area } = await searchParams;
-  const { plan, mode, components, taxLabel, fyEndMonth } = await loadPlan(planId);
+  const { plan, mode, components, taxLabel, fyEndMonth, firstYear } = await loadPlan(planId);
 
   const { checked, monthly } = runForecast(plan);
 
@@ -31,7 +32,7 @@ export default async function BalanceSheetPage({ params, searchParams }: {
       cycleDays={cashCycleDays(plan.workingCapital[1])}
       days={plan.workingCapital[1]}
       monthNames={planMonthNames(fyEndMonth)}
-      yearLabels={FORECAST_YEARS.map((y) => `Year ${y}`)}
+      yearLabels={FORECAST_YEARS.map((y) => yearLabel(firstYear, y))}
       reconciled={checked.reconciled}
       balances={!checked.invariants.some((i) => i.key === "balance-sheet-equation" && !i.passed)}
       gst={{ registered: components.length > 0 }} gstLabel={taxLabel}

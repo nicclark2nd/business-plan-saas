@@ -1,5 +1,6 @@
 "use client";
 
+import { usePlanYears } from "@/components/PlanYearsProvider";
 import { ModuleFrame, ModuleReadOnlyFooter } from "@/components/module/ModuleFrame";
 import { Grid, Th, Td, Row as GridRow, Toolbar, Meta, Note } from "@/components/module/DataGrid";
 import { StatTile, TileRow } from "@/components/chart/core";
@@ -51,6 +52,7 @@ export function ForecastModule({ planId, mode, forecast, gstLabel }: {
    */
   gstLabel: string;
 }) {
+  const Y = usePlanYears();
   const num = useMoney();
   const groups = checkGroups(forecast.invariants);
   const total = forecast.invariants.length;
@@ -112,7 +114,7 @@ export function ForecastModule({ planId, mode, forecast, gstLabel }: {
           <Grid>
             <thead><tr>
               <Th style={{ width: "44%" }}>Check</Th>
-              {FORECAST_YEARS.map((y) => <Th key={y} right style={{ width: 110 }}>Year {y}</Th>)}
+              {FORECAST_YEARS.map((y) => <Th key={y} right style={{ width: 110 }}>{Y.label(y)}</Th>)}
             </tr></thead>
             <tbody>
               {g.rows.map((r) => (

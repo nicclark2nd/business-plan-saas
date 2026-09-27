@@ -1,5 +1,6 @@
 "use client";
 
+import { usePlanYears } from "@/components/PlanYearsProvider";
 import { guarded } from "@/lib/guardedStart";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -40,7 +41,6 @@ type Row = AssetRow & { _key: string };
 const STEP = GUIDED_STEPS.find((s) => s.id === "assets")?.step ?? 11;
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
 const box = "h-8";
-const YEAR_OPTIONS = YEARS.map((y) => ({ value: String(y), label: `Year ${y}` }));
 /** Not a plan year, which is exactly the point: it was here before Year 1 started (§6.55). */
 const OWNED = "owned";
 /** The dropdown offers the plan's months in the plan's order; the value is the slot, 1–12. */
@@ -64,6 +64,7 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth,
   planId: string; initial: AssetRow[]; mode: "guided" | "advanced"; lenders: Record<string, string>;
   cash: AssetCash; fyEndMonth: number; saidNone: boolean;
 }) {
+  const Y = usePlanYears();
   const gst = useGst();
   const num = useMoney();
   const MONTHS = planMonths(fyEndMonth);
@@ -215,7 +216,7 @@ export function AssetsModule({ planId, initial, mode, lenders, cash, fyEndMonth,
               <Th className="w-[12%]">Bought</Th>
               <Th right>Cost</Th>
               <Th right>Life</Th>
-              {YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}
+              {YEARS.map((y) => <Th key={y} right>{Y.label(y)}</Th>)}
               <Th right>Still worth</Th>
               <Th className="w-[76px]" />
             </tr>
@@ -412,6 +413,7 @@ export type Finance = { lender: string; deposit: number; rate: number; term: num
  * fault this app has paid for more than once, and Funding already owns that question for Year 1 by month.
  */
 function CanAfford({ cash, fyEndMonth }: { cash: AssetCash; fyEndMonth: number }) {
+  const Y = usePlanYears();
   const num = useMoney();
   const MONTHS = planMonths(fyEndMonth);
   const signed = (v: number) => (v < 0 ? `(${num(Math.abs(v))})` : num(v));
@@ -432,7 +434,7 @@ function CanAfford({ cash, fyEndMonth }: { cash: AssetCash; fyEndMonth: number }
         <span className="ml-auto text-[11.5px] text-muted-foreground">Opening {num(cash.openingCash)}</span>
       </div>
       <Grid>
-        <thead><tr><Th className="w-[160px]" />{YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}</tr></thead>
+        <thead><tr><Th className="w-[160px]" />{YEARS.map((y) => <Th key={y} right>{Y.label(y)}</Th>)}</tr></thead>
         <tbody>
           <GridRow>
             <Td className="text-muted-foreground">Paid for assets</Td>
@@ -495,6 +497,7 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
   row: Row & { _key: string }; lender: string; fyEndMonth: number; pending: boolean;
   onCancel: () => void; onSave: (r: Row) => void; onFinance: (r: Row, f: Finance) => void;
 }) {
+  const Y = usePlanYears();
   const gst = useGst();
   const num = useMoney();
   const MONTH_OPTIONS = monthOptions(fyEndMonth);
@@ -594,7 +597,7 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
                 onValueChange={(v) => set(v === OWNED
                   ? { already_owned: true, start_year: 1, start_month: 1 }
                   : { already_owned: false, start_year: Number(v) })}
-                options={locked ? YEAR_OPTIONS : [{ value: OWNED, label: "Already owned" }, ...YEAR_OPTIONS]} />
+                options={locked ? YEARS.map((y) => ({ value: String(y), label: Y.label(y) })) : [{ value: OWNED, label: "Already owned" }, ...YEARS.map((y) => ({ value: String(y), label: Y.label(y) }))]} />
             </div>
             <div>
               <span className={label}>Month</span>
@@ -677,7 +680,7 @@ function AssetDialog({ row, lender, fyEndMonth, pending, onCancel, onSave, onFin
             <Grid className="mt-2 min-w-0">
               {/* `table-fixed` shares width evenly unless told otherwise, which clipped the row names to
                   "Depr…" and "Still …" once the table stopped being 900px wide. */}
-              <thead><tr><Th style={{ width: 112 }} />{YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}</tr></thead>
+              <thead><tr><Th style={{ width: 112 }} />{YEARS.map((y) => <Th key={y} right>{Y.label(y)}</Th>)}</tr></thead>
               <tbody>
                 <GridRow><Td>Depreciation</Td>{dep.map((v, i) => <Td key={i} right className="num">{v ? num(v) : "—"}</Td>)}</GridRow>
                 <GridRow><Td>Still worth</Td>{book.map((v, i) => <Td key={i} right className="num">{num(v)}</Td>)}</GridRow>

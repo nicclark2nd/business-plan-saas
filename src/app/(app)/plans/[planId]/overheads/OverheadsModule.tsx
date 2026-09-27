@@ -1,5 +1,6 @@
 "use client";
 
+import { usePlanYears } from "@/components/PlanYearsProvider";
 import { guarded } from "@/lib/guardedStart";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -41,7 +42,6 @@ const isNew = (r: Row) => r.id.startsWith("tmp-");
 const CATEGORY_HINT: Record<string, string> = Object.fromEntries(OVERHEAD_CATEGORIES.map((c) => [c.value, c.hint]));
 const label = "mb-[3px] block text-[11.5px] font-semibold text-muted-foreground";
 const box = "h-8";
-const START_OPTIONS = YEARS.map((y) => ({ value: String(y), label: y === 1 ? "Year 1" : `Year ${y}` }));
 /* Required since §6.136 (open item 27): no "Not set" to choose. "Other" is the answer for a line nothing else describes. */
 const CATEGORY_OPTIONS = OVERHEAD_CATEGORIES.map((c) => ({ value: c.value, label: c.label }));
 
@@ -49,6 +49,7 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
   planId: string; initial: OverheadRow[]; mode: "guided" | "advanced";
   salaries: number[]; marketing: number[]; peopleCount: number; marketingLines: number; onCostPct: number; fyEndMonth: number;
 }) {
+  const Y = usePlanYears();
   const gst = useGst();
   const num = useMoney();
   const MONTHS = planMonths(fyEndMonth);
@@ -162,7 +163,7 @@ export function OverheadsModule({ planId, initial, mode, salaries, marketing, pe
       <Grid>
         {/* Five years, not six. An overhead's amount IS its Year 1 figure, the same as a product's price
             (§6.47) — the old "This year" column put a year in front of Year 1 that the plan does not have. */}
-        <thead><tr><Th>Expense</Th><Th style={{ width: 170 }}>Category</Th>{YEARS.map((y) => <Th key={y} right style={{ width: 110 }}>Year {y}</Th>)}<Th style={{ width: 80 }} /></tr></thead>
+        <thead><tr><Th>Expense</Th><Th style={{ width: 170 }}>Category</Th>{YEARS.map((y) => <Th key={y} right style={{ width: 110 }}>{Y.label(y)}</Th>)}<Th style={{ width: 80 }} /></tr></thead>
         <tbody>
           {lines.map((r) => {
             const synced = r.source !== "entered";
@@ -270,6 +271,7 @@ function IconButton({ children, title, onClick }: { children: React.ReactNode; t
 
 /* ---------- one typed expense ---------- */
 function ExpenseDialog({ r, onSave, onClose }: { r: Row; onSave: (r: Row) => void; onClose: () => void }) {
+  const Y = usePlanYears();
   const gst = useGst();
   const num = useMoney();
   const [d, setD] = useState<Row>(r);
@@ -292,7 +294,7 @@ function ExpenseDialog({ r, onSave, onClose }: { r: Row; onSave: (r: Row) => voi
           <div className="grid grid-cols-4 gap-3">
             <div className="col-span-2"><label className={label}>What it is</label><Input autoFocus value={d.name} placeholder="e.g. Rent" onChange={(e) => setD((x) => ({ ...x, name: e.target.value }))} className={box} /></div>
             <div><label className={label}>Cost in {(d.start_year || 1) === 1 ? "Year 1" : `Year ${d.start_year}`}</label><Input inputMode="decimal" value={d.current_value ? num(d.current_value) : ""} placeholder="0" onChange={(e) => setD((x) => ({ ...x, current_value: parseNum(e.target.value) }))} className={cn(box, "num text-right")} /></div>
-            <div><label className={label}>Starts in</label><FieldSelect value={String(d.start_year || 1)} options={START_OPTIONS} onValueChange={(v) => setD((x) => ({ ...x, start_year: Number(v) }))} /></div>
+            <div><label className={label}>Starts in</label><FieldSelect value={String(d.start_year || 1)} options={YEARS.map((y) => ({ value: String(y), label: Y.label(y) }))} onValueChange={(v) => setD((x) => ({ ...x, start_year: Number(v) }))} /></div>
             {/* Required (§6.136): the report groups overheads by it, and "Other" is there for the line nothing else fits. */}
             <div className="col-span-2"><label className={label}>Category</label>
               <FieldSelect value={d.category ?? ""} options={CATEGORY_OPTIONS} placeholder="Choose one"
@@ -311,7 +313,7 @@ function ExpenseDialog({ r, onSave, onClose }: { r: Row; onSave: (r: Row) => voi
           <div>
             <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">% change each year</div>
             <div className="grid grid-cols-[90px_repeat(5,1fr)] items-center gap-x-3 gap-y-2">
-              <div /> {YEARS.map((y) => <div key={y} className="text-right text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Year {y}</div>)}
+              <div /> {YEARS.map((y) => <div key={y} className="text-right text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">{Y.label(y)}</div>)}
               <div className="text-[12.5px] font-semibold">Change</div>
               {YEARS.map((y) => (
                 <div key={y}>

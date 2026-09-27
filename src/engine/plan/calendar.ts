@@ -150,3 +150,12 @@ export function planYearEndDate(first: number, planYear: number, fyEndMonth: num
  * one before that. Set-up states Year 1, so the four period ends are never asked for again.
  */
 export const historicPeriodYear = (firstYear: number, periodNumber: number) => firstYear - Math.max(1, Math.trunc(periodNumber) || 1);
+
+/**
+ * WHAT A PLAN YEAR IS CALLED (§6.157). Nic: "there are no current years — there is historical or projected."
+ * Every year column names its year: "2027 · Year 1". The number the client reads is the financial year the
+ * plan column covers (the year it ENDS in, §6.33.1), and "Year 1" stays beside it because the rest of the
+ * app's sentences still count in plan years.
+ */
+export const planYearOf = (firstYear: number, planYear: number) => firstYear + planYear - 1;
+export const yearLabel = (firstYear: number, planYear: number) => `${planYearOf(firstYear, planYear)} · Year ${planYear}`;

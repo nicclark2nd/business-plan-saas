@@ -1,5 +1,6 @@
 "use client";
 
+import { usePlanYears } from "@/components/PlanYearsProvider";
 import { guarded } from "@/lib/guardedStart";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -53,6 +54,7 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
   planId: string; products: CostedProduct[]; fixed: FixedCogs[]; mode: "guided" | "advanced"; initialArea: AreaKey;
   historicRevenue: number | null; historicCogs: number | null; historicEnd: string | null; fyEndMonth: number;
 }) {
+  const Y = usePlanYears();
   const gst = useGst();
   const num = useMoney();
   // COGS names the same lines Sales does, so it uses the same word (§6.31.1).
@@ -203,7 +205,7 @@ export function CogsModule({ planId, products, fixed, mode, initialArea, histori
         <>
           <Toolbar><Meta className="ml-0">Production costs that do not move with volume. If it would be there with no sales at all, it belongs in Overheads instead.</Meta></Toolbar>
           <Grid>
-            <thead><tr><Th>Cost</Th>{YEARS.map((y) => <Th key={y} right style={{ width: 110 }}>Year {y}</Th>)}<Th style={{ width: 70 }} /></tr></thead>
+            <thead><tr><Th>Cost</Th>{YEARS.map((y) => <Th key={y} right style={{ width: 110 }}>{Y.label(y)}</Th>)}<Th style={{ width: 70 }} /></tr></thead>
             <tbody>
               {items.filter((f) => f.item_name.trim()).map((f) => {
                 const y = fixedCostByYear(f);
@@ -293,6 +295,7 @@ function IconButton({ children, title, onClick }: { children: React.ReactNode; t
 
 /* ---------- Cost dialog (APeX "Cost Details", per product) ---------- */
 function CostDialog({ p, source, onSave, onClose }: { p: CostedProduct; source: CostedProduct | null; onSave: (p: CostedProduct) => void; onClose: () => void }) {
+  const Y = usePlanYears();
   const num = useMoney();
   const [d, setD] = useState<CostedProduct>(p);
   const [text, setText] = useState<Record<string, string>>({});
@@ -334,7 +337,7 @@ function CostDialog({ p, source, onSave, onClose }: { p: CostedProduct; source: 
           <div>
             <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">% cost rise each year</div>
             <div className="grid grid-cols-[110px_repeat(5,1fr)] items-center gap-x-3 gap-y-2">
-              <div /> {YEARS.map((y) => <div key={y} className="text-right text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Year {y}</div>)}
+              <div /> {YEARS.map((y) => <div key={y} className="text-right text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">{Y.label(y)}</div>)}
               <div className="text-[12.5px] font-semibold">Cost</div>
               {YEARS.map((y) => (
                 <div key={y}>
@@ -351,7 +354,7 @@ function CostDialog({ p, source, onSave, onClose }: { p: CostedProduct; source: 
           <div>
             <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">What that gives</div>
             <div className="grid grid-cols-[110px_repeat(5,1fr)] gap-x-3 gap-y-1.5 rounded border border-border px-3 py-2 text-[13px]">
-              <div /> {YEARS.map((y) => <div key={y} className="text-right text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Year {y}</div>)}
+              <div /> {YEARS.map((y) => <div key={y} className="text-right text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">{Y.label(y)}</div>)}
               <div className="text-muted-foreground">{ongoing ? "Client-months" : "Units"}</div>{years.map((y) => <div key={y.year} className="num text-right">{y.volume || "—"}</div>)}
               <div className="text-muted-foreground">Revenue</div>{years.map((y) => <div key={y.year} className="num text-right">{num(y.revenue)}</div>)}
               <div className="text-muted-foreground">COGS</div>{years.map((y) => <div key={y.year} className="num text-right">{num(y.cost)}</div>)}
@@ -369,6 +372,7 @@ function CostDialog({ p, source, onSave, onClose }: { p: CostedProduct; source: 
 
 /* ---------- Fixed cost item ---------- */
 function ItemDialog({ f, onSave, onClose }: { f: FixRow; onSave: (f: FixRow) => void; onClose: () => void }) {
+  const Y = usePlanYears();
   const gst = useGst();
   const num = useMoney();
   const [d, setD] = useState<FixRow>(f);
@@ -395,7 +399,7 @@ function ItemDialog({ f, onSave, onClose }: { f: FixRow; onSave: (f: FixRow) => 
           <div>
             <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">% rise each year</div>
             <div className="grid grid-cols-[90px_repeat(5,1fr)] items-center gap-x-3 gap-y-2">
-              <div /> {YEARS.map((y) => <div key={y} className="text-right text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Year {y}</div>)}
+              <div /> {YEARS.map((y) => <div key={y} className="text-right text-[11px] font-semibold uppercase tracking-[.05em] text-muted-foreground">{Y.label(y)}</div>)}
               <div className="text-[12.5px] font-semibold">Rise</div>
               {YEARS.map((y) => (
                 <div key={y}>

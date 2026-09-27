@@ -8,6 +8,8 @@ import { MoneyProvider } from "@/components/MoneyProvider";
 import { VocabularyProvider } from "@/components/VocabularyProvider";
 import { GstProvider } from "@/components/GstProvider";
 import { ModeProvider } from "@/components/ModeProvider";
+import { PlanYearsProvider } from "@/components/PlanYearsProvider";
+import { firstProjectedYear } from "@/engine/plan/calendar";
 import { Sidebar } from "@/components/Sidebar";
 import { Brand } from "@/components/Brand";
 import { GUIDED_STEPS } from "@/lib/nav";
@@ -21,7 +23,8 @@ export default async function PlanLayout({ children, params }: { children: React
   const mode = (session.profile?.mode ?? "guided") as "guided" | "advanced";
   const completeness = await getPlanCompleteness(planId);
   const supabase = await createClient();
-  const { data: settings } = await supabase.from("plan_settings").select("currency, product_type, customer_type, country, gst_registered, gst_rate, gst_frequency, tax_region, tax_components").eq("plan_id", planId).maybeSingle();
+  const { data: settings } = await supabase.from("plan_settings").select("currency, product_type, customer_type, country, gst_registered, gst_rate, gst_frequency, tax_region, tax_components, financial_year_end_month, first_projected_year").eq("plan_id", planId).maybeSingle();
+  const firstYear = firstProjectedYear(settings?.first_projected_year, settings?.financial_year_end_month);
   const STATUS: Record<string, string> = { draft: "Working draft", active: "Active", complete: "Complete", archived: "Archived" };
   const doneSteps = GUIDED_STEPS.filter((s) => {
     const sec = completeness.sections.find((x) => x.id === s.id);
@@ -34,12 +37,13 @@ export default async function PlanLayout({ children, params }: { children: React
     <MoneyProvider currency={settings?.currency ?? "AUD"}>
     <VocabularyProvider productType={settings?.product_type ?? null} customerType={settings?.customer_type ?? null}>
     <GstProvider settings={settings}>
+    <PlanYearsProvider firstYear={firstYear}>
     <div className="grid h-screen min-h-[640px] grid-cols-[240px_1fr] grid-rows-[48px_1fr]">
       <header className="col-span-2 flex items-center gap-4 border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground">
         <Link href="/setup" className="flex w-[224px] items-center">
           <Brand variant="reversed" height={22} />
         </Link>
-        <div className="text-[13px] text-sidebar-muted">Plan: <b className="font-semibold text-sidebar-foreground">{plan.business_name}</b> · FY{plan.plan_year}</div>
+        <div className="text-[13px] text-sidebar-muted">Plan: <b className="font-semibold text-sidebar-foreground">{plan.business_name}</b> · Plan {firstYear}–{firstYear + 4}</div>
         <div className="flex-1" />
         <div className="mr-2 flex items-center gap-3 text-xs text-sidebar-muted"><span className="flex items-center gap-1.5"><i className={`block size-1.5 rounded-full ${plan.status === "draft" ? "bg-warn" : "bg-good"}`} />{STATUS[plan.status] ?? plan.status}</span>
           {/* Archived is not a status (§6.58): a complete plan that has been put away is still complete. */}
@@ -66,6 +70,7 @@ export default async function PlanLayout({ children, params }: { children: React
       */}
       <main className="mx-auto min-h-0 w-full max-w-[1800px] overflow-y-auto">{children}</main>
     </div>
+    </PlanYearsProvider>
     </GstProvider>
     </VocabularyProvider>
     </MoneyProvider>

@@ -1,3 +1,4 @@
+import { yearLabel } from "@/engine/plan/calendar";
 import { loadPlan } from "@/lib/planLoad";
 import { FORECAST_YEARS } from "@/engine/forecast/model";
 import { runForecast } from "@/engine/forecast/run";
@@ -37,7 +38,7 @@ export default async function BreakEvenPage({ params, searchParams }: {
       years={years} services={services} crossover={crossover}
       months={monthly.months.map((m) => ({ month: m.month, netOperating: m.netOperating, interestPaid: m.interestPaid }))}
       monthNames={planMonthNames(fyEndMonth)}
-      yearLabels={FORECAST_YEARS.map((y) => `Year ${y}`)}
+      yearLabels={FORECAST_YEARS.map((y) => yearLabel(firstYear, y))}
       yearEnding={planYearEnding(firstYear, 1)}
       reconciled={forecast.reconciled}
       initialArea={areas.includes((area ?? "") as typeof areas[number]) ? (area as typeof areas[number]) : "year"}

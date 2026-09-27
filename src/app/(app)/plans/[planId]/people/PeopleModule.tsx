@@ -1,5 +1,6 @@
 "use client";
 
+import { usePlanYears } from "@/components/PlanYearsProvider";
 import { guarded } from "@/lib/guardedStart";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,7 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
   /** Which tab to open on, so a pencil from Financial Capabilities lands on the box it promised. */
   initialArea: AreaKey;
 }) {
+  const Y = usePlanYears();
   const num = useMoney();
   void currency;
   const fyStart = useMemo(() => planYearStart(planYear, fyEndMonth), [planYear, fyEndMonth]);
@@ -349,7 +351,7 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
         <>
           <Toolbar><Meta className="ml-0">Type the salary in the person&apos;s first year; Adjust % compounds on the year before from the year after that (negative for a cut). The total feeds Overheads.</Meta></Toolbar>
           <Grid>
-            <thead><tr><Th style={{ width: "20%" }}>Name</Th><Th style={{ width: 100 }} />{SALARY_YEARS.map((y) => <Th key={y} right>Year {y}</Th>)}<Th right style={{ width: 150 }} className="max-[1280px]:hidden">Y5 vs first year</Th></tr></thead>
+            <thead><tr><Th style={{ width: "20%" }}>Name</Th><Th style={{ width: 100 }} />{SALARY_YEARS.map((y) => <Th key={y} right>{Y.label(y)}</Th>)}<Th right style={{ width: 150 }} className="max-[1280px]:hidden">Y5 vs first year</Th></tr></thead>
             <tbody>
               {visible.map((r) => {
                 const sy = startYear(r);

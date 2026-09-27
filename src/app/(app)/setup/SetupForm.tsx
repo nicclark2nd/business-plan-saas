@@ -84,11 +84,12 @@ export function SetupForm() {
       <div className="space-y-1.5">
         <Label>Financial year ends in</Label>
         <Select value={fyEnd} onValueChange={(v) => v && setFyEnd(v)}>
-          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+          {/* The month's name, not its number — the box read "6" for June. */}
+          <SelectTrigger className="w-full"><SelectValue>{MONTH_LONG[Number(fyEnd) - 1]}</SelectValue></SelectTrigger>
           <SelectContent>{MONTH_LONG.map((m, i) => <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          Year 1 of the plan will run <b>{planYearLabel(firstYear, Number(fyEnd))}</b> — the year the business is in. You can change it in Plan settings.
+          The plan covers <b>{firstYear}–{firstYear + 4}</b>. {firstYear} · Year 1 runs {planYearLabel(firstYear, Number(fyEnd))}; your last full year of accounts is {firstYear - 1}. You can change it in Plan settings.
         </p>
       </div>
       <FormError>{state?.error}</FormError>
