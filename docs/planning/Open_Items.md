@@ -748,3 +748,19 @@ yet" on a card does not answer that. Four parts:
    the dial reads "From 7 measures — 2 more apply once the business makes a profit". What they could say about
    the loss is on the Operating margin card. The score is unchanged (49 on SEQ).
 4. **Messages for the consultant** — wording proposed, not built.
+
+### 51. Assumptions → Cash & capital asked for what the plan already knew — **done (§6.155)**
+
+Nic, 27 Sep 2026: the screen quoted the dearest loan (12%) and the worst month (−25,019) and still asked for both.
+- **Cost of capital** now shows the dearest loan's rate in its own ink, the figure the dials already used
+  (§6.152). Typing over it wins, and "Use 12%" puts it back.
+- **Cash floor** is a choice, not a fact: the worst month is the forecast's answer and is never offered as the
+  floor. Instead, one month of Year 1 overheads is suggested (SEQ 78,048) with a "Use" button. Nothing is saved
+  unless the client clicks or types.
+- **When the worst month is below the floor** (or below zero with none), an amber box names the month and the
+  shortfall and links the four places that move it: Funding, debtor days, Fixed Assets, Sales/Overheads.
+- **Plain words first** (Nic: the person is likely overwhelmed by terms): "Lowest bank balance you're
+  comfortable with" (the cash floor) and "What your money costs you (% a year)" (the cost of capital). "Target
+  value" was considered and not used, because a floor is a limit and a cost of capital is a bar to beat. A note
+  says neither box changes the forecast.
+Checked on SEQ (read only) and ZZ ("Use 4,000" saved, then cleared back to unset).

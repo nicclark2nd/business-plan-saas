@@ -25,6 +25,7 @@ type AreaKey = "days" | "cash" | "downside";
 type CapKey = "cash_floor" | "cost_of_capital" | "stress_sales_pct" | "stress_margin_pts" | "stress_debtor_days";
 
 /** A stored figure into a box: null becomes empty, and empty is what "nobody has said" looks like. */
+const LINK = "font-medium text-primary underline-offset-2 hover:underline";
 const str = (v: number | null) => (v === null ? "" : String(v));
 /**
  * A box back into a stored figure. An empty box is NULL, not nought — clearing the cash floor unsays the
@@ -51,7 +52,7 @@ const numOrNull = (raw: string): number | null => {
  */
 export function AssumptionsModule({
   planId, mode, revenue, cogs, workingCapital, cashTiming, impliedFromHistory, assumptionsSet,
-  growth, stress, impliedCost, lowestMonth, initialArea,
+  growth, stress, impliedCost, lowestMonth, lowestMonthName = null, suggestedFloor = null, initialArea,
 }: {
   planId: string; mode: "guided" | "advanced";
   /** Year 1–5 revenue and cost of sales, so each day can show what it is worth (§6.43).  */
@@ -68,6 +69,9 @@ export function AssumptionsModule({
   impliedCost: number | null;
   /** The worst month this forecast actually reaches, so a floor is typed against a figure. */
   lowestMonth: number | null;
+  lowestMonthName?: string | null;
+  /** One month of Year 1 overheads — offered as a floor with a button, never saved on the client's behalf. */
+  suggestedFloor?: number | null;
   /** Which tab to open on, so a pencil from Financial Capabilities lands on the box it promised. */
   initialArea: AreaKey;
 }) {
@@ -142,7 +146,13 @@ export function AssumptionsModule({
    * "Not set" means NOT SET, on the tab as well as in the dial. Both flags read the stored values rather
    * than the boxes, so a half-typed figure does not make a tab claim it is answered.
    */
-  const capitalSet = growth.cashBuffer !== null || growth.costOfCapital !== null;
+  /* The cost of capital is answered by the loans when nobody typed one (§6.152), so it counts as set. */
+  const capitalSet = growth.cashBuffer !== null || growth.costOfCapital !== null || impliedCost !== null;
+  const applyCap = (k: CapKey, v: number | null) => { editCap(k, v === null ? "" : String(v)); commitCap(k); };
+  const floorNow = numOrNull(cap.cash_floor);
+  const bar = floorNow ?? 0;
+  const belowBar = lowestMonth !== null && lowestMonth < bar;
+  const typedCost = numOrNull(cap.cost_of_capital);
   const stressSet = stress.salesPct !== null && stress.marginPts !== null && stress.debtorDaysAdded !== null;
 
   return (
@@ -241,31 +251,76 @@ export function AssumptionsModule({
           <Toolbar><Meta className="ml-0">
             {capitalSet
               ? <>Two judgements the forecast cannot make for you. The growth dials read them.</>
-              : <span className="text-warn">Not set yet — the growth capability cannot judge the cash floor or the return until these are answered.</span>}
+              : <span className="text-warn">Not set yet — the growth capability judges the cash against zero until a floor is chosen.</span>}
           </Meta></Toolbar>
           <Section title="Cash & capital">
+            {/*
+              * PLAIN WORDS FIRST, THE TERM SECOND (§6.155). Nic: the person filling this in is likely
+              * overwhelmed by the terms a plan uses. "Target value" was considered and not used — a floor is
+              * a limit, not something to aim for, and a cost of capital is a bar to beat. So each box says
+              * what it IS in everyday words, with the finance term underneath for the adviser.
+              */}
             <FieldGrid>
-              <Field span={2} label="Cash floor"
-                hint={lowestMonth === null
-                  ? "The lowest balance you are willing to let the business reach. Zero is a real answer: it means \u201Cjust don\u2019t go negative\u201D."
-                  : `The lowest balance you are willing to reach. This forecast\u2019s worst month closes at ${num(lowestMonth)}.`}>
-                <FieldInput money placeholder="Not set" disabled={pending}
+              <Field span={2} label="Lowest bank balance you're comfortable with">
+                <FieldInput money placeholder={suggestedFloor === null ? "Not set" : "Not set — judged against zero"} disabled={pending}
                   value={cap.cash_floor} onChange={(e) => editCap("cash_floor", e.target.value)}
                   onBlur={() => commitCap("cash_floor")} />
+                <p className="mt-1 text-[11.5px] text-muted-foreground">
+                  <span className="italic">The cash floor.</span>{" "}
+                  {floorNow === null
+                    ? <>Not set, so every month is only judged against zero.{suggestedFloor !== null && <>{" "}A common choice is one month of overheads: <b className="text-foreground">{num(suggestedFloor)}</b>.{" "}
+                        <button type="button" className={LINK} disabled={pending} onClick={() => applyCap("cash_floor", suggestedFloor)}>Use {num(suggestedFloor)}</button></>}</>
+                    : suggestedFloor !== null && floorNow !== suggestedFloor
+                      ? <>One month of overheads would be {num(suggestedFloor)}.</>
+                      : <>One month of overheads.</>}
+                </p>
               </Field>
-              <Field span={2} label="Cost of capital %"
-                hint={impliedCost === null
-                  ? `What the money funding this plan costs you a year. Growth has to beat it to be worth doing. ${SUGGESTED_COST_OF_CAPITAL}% is a common starting point.`
-                  : `What the money costs you a year. Your dearest loan on Funding is ${impliedCost}%, and equity costs more than debt.`}>
-                <FieldInput numeric placeholder="Not set" disabled={pending}
+              {/*
+                * FROM THE LOANS, NOT ASKED (§6.155). The capability dials already use the dearest loan's rate
+                * when this is blank (§6.152); the box now shows that figure in its own ink instead of "Not set",
+                * so the screen and the dial agree. Typing over it is for a business whose money costs more.
+                */}
+              <Field span={2} label="What your money costs you (% a year)">
+                <FieldInput numeric placeholder={impliedCost === null ? "Not set" : String(impliedCost)} disabled={pending}
+                  className={impliedCost !== null ? "placeholder:text-foreground" : undefined}
                   value={cap.cost_of_capital} onChange={(e) => editCap("cost_of_capital", e.target.value)}
                   onBlur={() => commitCap("cost_of_capital")} />
+                <p className="mt-1 text-[11.5px] text-muted-foreground">
+                  <span className="italic">The cost of capital — the return growth has to beat to be worth doing.</span>{" "}
+                  {impliedCost === null
+                    ? <>{SUGGESTED_COST_OF_CAPITAL}% is a common starting point.</>
+                    : typedCost === null
+                      ? <>Using {impliedCost}%, the rate on your dearest loan on <a className={LINK} href={`/plans/${planId}/funding`}>Funding</a>. Money from investors or the owner usually costs more — type a higher figure if you have one.</>
+                      : <>Your figure. Your dearest loan is {impliedCost}%.{" "}
+                          <button type="button" className={LINK} disabled={pending} onClick={() => applyCap("cost_of_capital", null)}>Use {impliedCost}%</button></>}
+                </p>
               </Field>
             </FieldGrid>
           </Section>
+          {/*
+            * BELOW THE LINE, AND WHERE TO FIX IT (§6.155). The worst month is the forecast's answer, not a
+            * choice, so it is never offered as the floor. When it falls below the floor (or below zero with
+            * none set) the screen says which month, by how much, and the four places that move it.
+            */}
+          {belowBar && lowestMonth !== null && (
+            <div className="mx-5 mb-3 rounded-md border border-warn/40 bg-warn-soft px-4 py-3 text-[12.5px]">
+              <p className="font-semibold text-warn">
+                Your worst month is {lowestMonthName ?? "in Year 1"}: the bank closes at {num(lowestMonth)}
+                {floorNow !== null && floorNow > 0 ? <>, {num(floorNow - lowestMonth)} below your floor of {num(floorNow)}.</> : <>, below zero.</>}
+              </p>
+              <p className="mt-1 text-muted-foreground">To lift it:</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                <li>Add an overdraft or a loan on <a className={LINK} href={`/plans/${planId}/funding`}>Funding</a>.</li>
+                <li>Collect faster: fewer debtor days on <button type="button" className={LINK} onClick={() => setArea("days")}>Days &amp; timing</button>.</li>
+                <li>Buy equipment later, or finance it, on <a className={LINK} href={`/plans/${planId}/assets`}>Fixed Assets</a>.</li>
+                <li>Bring sales forward on <a className={LINK} href={`/plans/${planId}/sales`}>Sales</a>, or trim costs on <a className={LINK} href={`/plans/${planId}/overheads`}>Overheads</a>.</li>
+              </ul>
+            </div>
+          )}
           <Note>
-            Clearing a box is not the same as typing 0. Empty means you have not said, and the dial that
-            reads it stays grey rather than guessing.
+            An empty floor means &ldquo;just don&apos;t go negative&rdquo;. An empty cost of capital uses your dearest
+            loan&apos;s rate when there is one. Neither box changes the forecast — they are the lines the
+            Financial Capabilities page and the dashboard judge it against.
           </Note>
         </>
       )}

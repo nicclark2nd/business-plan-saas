@@ -3,6 +3,7 @@ import { FORECAST_YEARS } from "@/engine/forecast/model";
 import { runForecast } from "@/engine/forecast/run";
 import { impliedCostOfCapital, readGrowth, readStress } from "@/engine/capability/judgements";
 import { AssumptionsModule } from "./AssumptionsModule";
+import { planMonths } from "@/engine/plan/calendar";
 
 /**
  * Assumptions (§6.79). The days themselves come straight off the plan; the forecast is run only so each
@@ -26,11 +27,12 @@ export default async function AssumptionsPage({ params, searchParams }: {
 }) {
   const { planId } = await params;
   const { area } = await searchParams;
-  const { plan, mode, impliedFromHistory, assumptionsSet, settings } = await loadPlan(planId);
+  const { plan, mode, impliedFromHistory, assumptionsSet, settings, fyEndMonth } = await loadPlan(planId);
   const { workingCapital, cashTiming } = plan;
   const run = runForecast(plan);
   const checked = run.checked;
   const monthlyCash = run.monthly?.months?.map((m) => m.closingCash) ?? [];
+  const low = monthlyCash.length ? Math.min(...monthlyCash) : null;
 
   return (
     <AssumptionsModule
@@ -46,7 +48,11 @@ export default async function AssumptionsPage({ params, searchParams }: {
       /* The plan's own dearest borrowing, offered as a starting point and never stored in the client's place. */
       impliedCost={impliedCostOfCapital(plan.sources.funding)}
       /* The lowest month the forecast actually reaches, so a floor is typed against a figure, not into the dark. */
-      lowestMonth={monthlyCash.length ? Math.min(...monthlyCash) : null}
+      lowestMonth={low}
+      /* Which month that is, by name, so the warning says "June" rather than "month 12" (§6.155). */
+      lowestMonthName={low === null ? null : planMonths(fyEndMonth)[monthlyCash.indexOf(low)] ?? null}
+      /* One month of Year 1 overheads: the usual rule of thumb for a floor, offered, never stored unasked. */
+      suggestedFloor={checked.pnl[1].overheads > 0 ? Math.round(checked.pnl[1].overheads / 12) : null}
     />
   );
 }
