@@ -743,4 +743,8 @@ yet" on a card does not answer that. Four parts:
    Needs attention / Holding you back (were Healthy / On track / At risk). Dial: Ready to grow / Needs attention /
    Not ready to grow. "Held in the at-risk band by" now reads "Held under 50 by". Bands, colours and scores are
    unchanged. Borrow and Sell keep the general words until they get their own.
+   **Loss-year charts hidden (§6.154).** Nic: "if they do not affect the business at all … why are they on my
+   screen". Operating leverage and cash conversion no longer appear while the plan makes a loss; the line under
+   the dial reads "From 7 measures — 2 more apply once the business makes a profit". What they could say about
+   the loss is on the Operating margin card. The score is unchanged (49 on SEQ).
 4. **Messages for the consultant** — wording proposed, not built.

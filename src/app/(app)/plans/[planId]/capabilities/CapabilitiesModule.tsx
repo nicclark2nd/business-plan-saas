@@ -77,7 +77,16 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
 
   /* Each card carries its own five years (§6.129.2) — the scores read `value`, never the trend. */
   /* The plan's own ranges laid over the general ones before anything is scored (§6.140). */
-  const grow = useMemo(() => withTrends("grow", applyRanges(growMetrics(input), input.ranges, "grow"), input), [input]);
+  /*
+   * A MEASURE THAT DOES NOT APPLY IS NOT SHOWN (§6.154). Nic: "if they do not affect the business at all and
+   * don't need to be included in the score — then why are they on my screen?" Operating leverage and cash
+   * conversion mean nothing in a loss year, and what they could still say (which way the loss is moving) is
+   * already on the Operating margin card. So they leave the tab until the plan makes a profit, and the line
+   * under the dial says how many are waiting and why.
+   */
+  const growAll = useMemo(() => withTrends("grow", applyRanges(growMetrics(input), input.ranges, "grow"), input), [input]);
+  const grow = useMemo(() => growAll.filter((m) => !m.unscored), [growAll]);
+  const waiting = tab === "grow" ? growAll.length - grow.length : 0;
   const borrow = useMemo(() => withTrends("borrow", applyRanges(borrowMetrics(input), input.ranges, "borrow"), input), [input]);
   const sell = useMemo(() => withTrends("sell", applyRanges(sellMetrics(input), input.ranges, "sell"), input), [input]);
   const P = useMemo(() => buildPanels(input, products), [input, products]);
@@ -133,7 +142,9 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
           </div>
           {band && <div className="mt-2"><Pill s={band} label={DIAL_LABEL[tab][band]} /></div>}
           <p className="mt-2 max-w-[26ch] text-[11.5px] text-muted-foreground">
-            {s.value === null ? "Nothing to score yet" : `From the ${s.covered} of ${s.total} measures this plan can answer`}
+            {s.value === null ? "Nothing to score yet"
+              : s.covered === s.total ? `From ${s.total} measures` : `From the ${s.covered} of ${s.total} measures this plan can answer`}
+            {s.value !== null && waiting > 0 && ` — ${waiting} more ${waiting === 1 ? "applies" : "apply"} once the business makes a profit`}
           </p>
         </div>
 

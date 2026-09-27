@@ -69,8 +69,8 @@ export type Metric = {
   /**
    * NOT A GAP, A DIFFERENT ANSWER (§6.152). Some measures mean nothing in a loss year — leverage, cash
    * conversion — yet the plan still says something the reader needs: which way the loss is moving, and what
-   * the measure reads once there is a profit. The card shows this label where it would say "Not yet", and
-   * the note carries the finding. Still unscored: the dial neither rewards nor punishes it.
+   * the measure reads once there is a profit. Unscored, and — since §6.154 — not shown on the tab either:
+   * the Grow tab leaves these out and says how many are waiting for a profit.
    */
   unscored?: string;
   /** The next step for THIS reading, when the measure's usual one would be wrong for it (§6.152). */
