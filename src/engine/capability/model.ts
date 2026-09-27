@@ -67,6 +67,15 @@ export type Metric = {
   /** Present only when `value` is null: the plain-English thing that would make this answerable. */
   missing?: string;
   /**
+   * NOT A GAP, A DIFFERENT ANSWER (§6.152). Some measures mean nothing in a loss year — leverage, cash
+   * conversion — yet the plan still says something the reader needs: which way the loss is moving, and what
+   * the measure reads once there is a profit. The card shows this label where it would say "Not yet", and
+   * the note carries the finding. Still unscored: the dial neither rewards nor punishes it.
+   */
+  unscored?: string;
+  /** The next step for THIS reading, when the measure's usual one would be wrong for it (§6.152). */
+  action?: string;
+  /**
    * WHERE THE MISSING FIGURE IS ENTERED (§6.129) — the pencil's destination on a greyed dial.
    *
    * `to` is a path under the plan, area included, so the client lands on the tab that holds the box rather

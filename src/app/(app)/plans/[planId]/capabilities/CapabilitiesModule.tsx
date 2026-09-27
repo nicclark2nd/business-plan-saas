@@ -290,7 +290,7 @@ function Card({ m, planId }: { m: Metric; planId: string }) {
     <article className="bg-card px-5 py-4">
       <div className="flex items-start justify-between gap-3">
         <h3 className="text-[13px] font-semibold leading-snug">{m.name}</h3>
-        {s ? <Pill s={s} /> : <span className="eyebrow shrink-0 text-muted-foreground">Not yet</span>}
+        {s ? <Pill s={s} /> : <span className="eyebrow shrink-0 text-muted-foreground">{m.unscored ?? "Not yet"}</span>}
       </div>
 
       <div className="mt-1 flex items-center gap-3">

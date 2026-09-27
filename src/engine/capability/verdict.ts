@@ -159,7 +159,7 @@ export function verdict(
     headline: HEAD[kind][band],
     paragraphs,
     actions: problems
-      .map((p) => { const a = ACTIONS[p.m.key]; return typeof a === "function" ? a(p.m) : a; })
+      .map((p) => { if (p.m.action) return p.m.action; const a = ACTIONS[p.m.key]; return typeof a === "function" ? a(p.m) : a; })
       .filter((a): a is string => !!a)
       .slice(0, 4),
   };

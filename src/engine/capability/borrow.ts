@@ -220,7 +220,7 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
         ? (coc === null ? "How much more this cash flow would carry. It needs a rate to price it at — the cost of capital on the Assumptions step."
           : "Needs a downside case, so the figure is what a bad year supports rather than a good one.")
         : capacityStress <= 0 ? "A stressed year leaves no room for further borrowing at all. What the business already owes uses the cover up."
-        : `Room for about ${m(capacityStress)} more, which would add roughly ${m(capacityService ?? 0)} a year to the ${m(service)} already repaid.`,
+        : `Room for about ${m(capacityStress)} more, which would add roughly ${m(capacityService ?? 0)} a year to the ${m(service)} already repaid.${i.growth.costOfCapitalFrom === "loans" ? ` Priced at ${coc}%, the rate on the dearest loan already in the plan.` : ""}`,
       bench: "Borrow what the bad year carries, not what the good year allows",
       formula: `The largest additional loan whose repayments keep cover at ${LENDER_MIN_DSCR}×, over ${CAPACITY_TERM_YEARS} years at your cost of capital, using stressed cash`,
       reveals: "How much is actually borrowable, as opposed to how much is wanted.",

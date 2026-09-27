@@ -722,3 +722,22 @@ forecast telling the truth, not a fault. 12 unit tests.
 - **Contact email and first person.** An owner's new plan starts with their sign-in email as the cover
   contact. An empty Leadership Team starts with their sign-up name on the first row as Owner, which saves
   when they leave the row. An adviser's plans start blank for both, because the adviser is not the client.
+
+### 50. Financial Capabilities speaks to the reader's question, not to the number — **1 and 2 done (§6.152); 3 and 4 wording proposed**
+
+Nic, 27 Sep 2026: these tabs exist to show whether the business CAN grow, borrow, or sell, and "At risk" or "Not
+yet" on a card does not answer that. Four parts:
+1. **A loss that growth is closing was described as one growth makes bigger.** SEQ: operating loss 87,248 in
+   Year 1, 19,791 in Year 2, and a 72,198 profit in Year 3. The card said "Growing it makes the loss bigger". It
+   now says which way the loss is moving, how much of each extra dollar comes off it, and when profit arrives.
+   Its next step becomes "Keep the growth … the work is funding the months until then". The band is unchanged,
+   because a loss is still a loss.
+2. **"Not yet" covered three different things.** (a) Measures that mean nothing on a loss (operating leverage,
+   cash conversion) now show a "Loss year" label with the reading that applies: 53¢ of each extra dollar off
+   the loss, 55¢ kept as profit from Year 3 to 4, and 74% cash conversion in Year 3. These stay unscored.
+   (b) The cost of capital was asked for although the plan's loans already state what money costs. The dials
+   now use the dearest loan rate (12% on SEQ) and say so; a figure typed on Assumptions still wins, and
+   Assumptions itself is unchanged. SEQ's return on the growth plan is now judged (433%, 7 of 9 measures).
+   (c) Genuinely missing inputs (pipeline, retention) are still asked for.
+3. **Status words per tab** — wording proposed, not built.
+4. **Messages for the consultant** — wording proposed, not built.

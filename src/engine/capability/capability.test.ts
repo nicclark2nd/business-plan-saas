@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { FundingSource } from "@/engine/funding/sources";
 import {
   annualRepayment, borrowingCapacity, over, score, statusOf,
   type CapabilityInput, type Metric,
@@ -10,7 +11,7 @@ import { panels, series, withTrends } from "./series";
 import { buyerQuestions, verdict } from "./verdict";
 import { ageingView, concentration, earningsBridge, executionLines, lenderChecklist, type ExtraFacts } from "./extras";
 import {
-  LENDER_MIN_DSCR, TRANSFER_FACTORS, securityGap, readCollateral, readGrowth, readSale, readStress, readUndrawn,
+  LENDER_MIN_DSCR, TRANSFER_FACTORS, securityGap, readCollateral, readGrowth, readSale, readStress, readUndrawn, withLoanRate,
   type TransferFactor,
 } from "./judgements";
 
@@ -538,9 +539,9 @@ describe("selling", () => {
  */
 describe("reading the stored judgements", () => {
   it("keeps a nought and a silence apart", () => {
-    expect(readGrowth({ cash_floor: 0, cost_of_capital: 11 })).toEqual({ cashBuffer: 0, costOfCapital: 11 });
-    expect(readGrowth({ cash_floor: null, cost_of_capital: null })).toEqual({ cashBuffer: null, costOfCapital: null });
-    expect(readGrowth(null)).toEqual({ cashBuffer: null, costOfCapital: null });
+    expect(readGrowth({ cash_floor: 0, cost_of_capital: 11 })).toEqual({ cashBuffer: 0, costOfCapital: 11, costOfCapitalFrom: "entered" });
+    expect(readGrowth({ cash_floor: null, cost_of_capital: null })).toEqual({ cashBuffer: null, costOfCapital: null, costOfCapitalFrom: null });
+    expect(readGrowth(null)).toEqual({ cashBuffer: null, costOfCapital: null, costOfCapitalFrom: null });
     expect(readGrowth({ cash_floor: "" }).cashBuffer).toBeNull();
   });
 
@@ -619,10 +620,13 @@ describe("a plan that loses money cannot be flattered by its own ratios", () => 
   });
 
   /* And "13.18× · profit is growing faster than sales" on a plan whose loss merely got smaller. */
-  it("will not call a shrinking loss operating leverage", () => {
+  it("will not call a shrinking loss operating leverage — but says which way it is moving (§6.152)", () => {
     const lev = growMetrics(losing()).find((x) => x.key === "operatingLeverage")!;
-    expect(lev.value).toBeNull();
-    expect(lev.missing).toContain("no leverage on a loss");
+    expect(lev.value).toBeNull();                      // still unscored
+    expect(lev.missing).toBeUndefined();               // and not a gap to fill
+    expect(lev.unscored).toBe("Loss year");
+    expect(lev.display).toBe("10¢");                   // 20,000 off the loss on 200,000 more sales
+    expect(lev.note).toContain("no profit to lever yet");
   });
 
   /* A cover of −10.38× is read as a small number by anyone scanning a column of multiples. */
@@ -723,7 +727,8 @@ describe("the five-year line on each card", () => {
     }));
     const c = g.find((x) => x.key === "cashConversion")!;
     expect(c.value).toBeNull();
-    expect(c.missing).toContain("A loss has no share");
+    expect(c.unscored).toBe("Loss year");
+    expect(c.note).toContain("From Year 2");            // the first year with earnings, read instead
   });
 });
 
@@ -943,3 +948,33 @@ describe("security coverage", () => {
   });
 });
 
+describe("the growth tab reads a loss the way it is moving (§6.152)", () => {
+  /* SEQ's own shape: a loss that growth closes, and a profit in Year 3. */
+  const seq = () => growMetrics(full({
+    pnl: {
+      1: pnl(2_182_240, { operatingProfit: -87_248 }), 2: pnl(2_310_234, { operatingProfit: -19_791 }),
+      3: pnl(2_489_334, { operatingProfit: 72_198 }), 4: pnl(2_682_973, { operatingProfit: 178_430 }),
+    },
+  }));
+  it("does not say growth makes the loss bigger when it is making it smaller", () => {
+    const m = seq().find((x) => x.key === "operatingMargin")!;
+    expect(statusOf(m.value, m.bands)).toBe("bad");     // the band is not softened
+    expect(m.note).not.toContain("makes the loss bigger");
+    expect(m.note).toContain("growth is closing the loss");
+    expect(m.note).toContain("from Year 3");
+    expect(m.action).toContain("Keep the growth");
+  });
+  it("gives the leverage from the first profitable year", () => {
+    const lev = seq().find((x) => x.key === "operatingLeverage")!;
+    expect(lev.display).toBe("53¢");
+    expect(lev.note).toContain("From Year 3 to Year 4, about 55¢");
+  });
+  it("uses the dearest loan as the cost of capital only when none was typed", () => {
+    const loan = (rate: number) => ({ id: String(rate), kind: "debt", name: "L", amount: 0, start_year: 1, start_month: 1,
+      loan: { interest_rate: rate } }) as unknown as FundingSource;
+    expect(withLoanRate({ cashBuffer: null, costOfCapital: null }, [loan(9), loan(12)]))
+      .toEqual({ cashBuffer: null, costOfCapital: 12, costOfCapitalFrom: "loans" });
+    expect(withLoanRate({ cashBuffer: null, costOfCapital: 15, costOfCapitalFrom: "entered" }, [loan(12)]).costOfCapital).toBe(15);
+    expect(withLoanRate({ cashBuffer: null, costOfCapital: null }, []).costOfCapital).toBeNull();
+  });
+});

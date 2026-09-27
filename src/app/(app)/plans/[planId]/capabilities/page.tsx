@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { readRanges } from "@/engine/capability/ranges";
-import { readCollateral, readGrowth, readSale, readStress, readUndrawn, type TransferRating } from "@/engine/capability/judgements";
+import { readCollateral, readGrowth, readSale, readStress, readUndrawn, withLoanRate, type TransferRating } from "@/engine/capability/judgements";
 import { getSession } from "@/lib/plan";
 import { loadPlan } from "@/lib/planLoad";
 import { loadSalariesByYear } from "@/lib/planSources";
@@ -206,7 +206,7 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
        * facility on the Funding screen — and the security values come off the very assets the balance sheet
        * is carrying.
        */
-      growth: readGrowth(settings), stress: readStress(settings), sale: readSale(settings, addBacks.data ?? []),
+      growth: withLoanRate(readGrowth(settings), plan.sources.funding), stress: readStress(settings), sale: readSale(settings, addBacks.data ?? []),
       collateral: readCollateral((plan.sources.assets ?? []) as { security_value?: unknown }[]),
       /*
        * THE PLANT ALREADY ON THE BOOKS, AND HOW MUCH OF IT IS LISTED (§6.135). Loan-to-value waits until

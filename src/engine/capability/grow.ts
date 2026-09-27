@@ -72,6 +72,7 @@ export function growMetrics(i: CapabilityInput): Metric[] {
    */
   const buffer = i.growth.cashBuffer;
   const coc = i.growth.costOfCapital;
+  const fromLoans = i.growth.costOfCapitalFrom === "loans";
   const CASH_FIX = { label: "Set a cash floor", to: "assumptions?area=cash" };
 
   /*
@@ -91,6 +92,68 @@ export function growMetrics(i: CapabilityInput): Metric[] {
    */
   const opMargin = y2 && y2.revenue ? over(y2.operatingProfit, y2.revenue) : null;
 
+  /*
+   * WHICH WAY IS THE LOSS MOVING? (§6.152)
+   *
+   * "Growing it makes the loss bigger" was printed on SEQ, whose loss goes from 87,248 in Year 1 to 19,791
+   * in Year 2 and turns into a 72,198 profit in Year 3 — growth is what is FIXING it. The band stays where
+   * it is (a loss is a loss, and the dial must not soften it), but the sentence and the next step have to
+   * describe the plan in front of them, because a consultant acts on the words, not the colour.
+   */
+  const years = [1, 2, 3, 4, 5].filter((y) => i.pnl[y]);
+  const firstProfit = years.find((y) => (i.pnl[y]?.operatingProfit ?? 0) > 0) ?? null;
+  const addedSales = y1 && y2 ? y2.revenue - y1.revenue : 0;
+  /* Of each extra dollar of sales, how much comes off the loss (negative: goes onto it). */
+  const perDollar = y1 && y2 && addedSales > 0 ? over(y2.operatingProfit - y1.operatingProfit, addedSales) : null;
+  const closing = !!y1 && !!y2 && y1.operatingProfit < 0 && y2.operatingProfit > y1.operatingProfit;
+  const cents = (v: number) => `${Math.round(Math.abs(v) * 100)}¢`;
+  const profitFrom = firstProfit === null
+    ? "At that pace it is still losing money in Year 5, so growth alone does not get it there — costs have to move too."
+    : `It makes an operating profit from Year ${firstProfit}.`;
+
+  /*
+   * LEVERAGE ON A LOSS IS NOT MEASURED, BUT IT IS NOT SILENT EITHER (§6.152). What a consultant needs from
+   * this card on a loss-making plan is the direction — what each extra dollar of sales does to the loss —
+   * and, if the plan reaches a profit inside five years, the leverage from then on. Neither is scored.
+   */
+  function lossLeverage(): Partial<Metric> {
+    const pd = perDollar as number;
+    const k = firstProfit;
+    const a = k ? i.pnl[k] : undefined, b = k ? i.pnl[k + 1] : undefined;
+    /*
+     * In the same unit as the loss-year reading — cents of each extra dollar — not a multiple. A leverage
+     * multiple struck off a year that has only just broken even is a huge number (SEQ: 18.92×) that reads
+     * as a typo, while "55¢ of each extra dollar stays as profit" is the same fact, stated usably.
+     */
+    const later = a && b && a.operatingProfit > 0 && b.revenue > a.revenue
+      ? over(b.operatingProfit - a.operatingProfit, b.revenue - a.revenue) : null;
+    return {
+      unscored: "Loss year",
+      display: `${pd >= 0 ? "" : "−"}${cents(pd)}`,
+      sub: pd >= 0 ? "of each extra $1 of sales comes off the loss" : "added to the loss by each extra $1 of sales",
+      note: pd >= 0
+        ? `There is no profit to lever yet, but growth is working on the loss: each extra dollar of sales in Year 2 takes about ${cents(pd)} off it. `
+          + (later !== null ? `${profitFrom} From Year ${k} to Year ${k! + 1}, about ${cents(later)} of each extra dollar of sales ${later >= 0 ? "stays as profit" : "is lost again"}.` : profitFrom)
+        : `Each extra dollar of sales in Year 2 adds about ${cents(pd)} to the loss — costs are rising faster than the sales that pay for them.`,
+      bench: "Unscored in a loss year — the direction of the loss is the reading",
+    };
+  }
+  /* The same for cash conversion: no earnings in Year 1, so the first year that has them. */
+  function lossConversion(): Partial<Metric> {
+    const k = years.find((y) => { const e = ebitda(i.pnl[y]); return e !== null && e > 0 && !!i.cashFlow[y]; }) ?? null;
+    const ek = k ? ebitda(i.pnl[k]) : null;
+    const conv = k && ek ? over(i.cashFlow[k]!.netOperating, ek) : null;
+    return {
+      unscored: "Loss year",
+      display: conv === null ? "—" : pct(conv * 100),
+      sub: conv === null ? undefined : `Year ${k}, the first year with earnings`,
+      note: conv === null
+        ? "Year 1 has no earnings to turn into cash, and none of the five forecast years does either."
+        : `Year 1 has no earnings to turn into cash. From Year ${k}, when it does, about ${pct(conv * 100)} of them arrive in the bank${conv * 100 < 70 ? " — the rest sits in stock and unpaid invoices" : ""}.`,
+      bench: "Unscored in a loss year — 85% or better means earnings are real cash",
+    };
+  }
+
   return [
     {
       key: "operatingMargin", name: "Operating margin", unit: "pct",
@@ -99,6 +162,8 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       min: -20, max: 25, bands: [{ to: 0, s: "bad" }, { to: 5, s: "watch" }, { to: 25, s: "good" }],
       sub: y2 ? `${m(y2.operatingProfit)} on ${m(y2.revenue)} in Year 2` : undefined,
       note: opMargin === null ? "Needs a Year 2 forecast."
+        : opMargin < 0 && closing
+          ? `The plan still loses money in Year 2, but growth is closing the loss: ${m(-y1!.operatingProfit)} lost in Year 1, ${m(-y2!.operatingProfit)} in Year 2${perDollar !== null ? ` — about ${cents(perDollar)} of every extra dollar of sales comes off it` : ""}. ${profitFrom}`
         : opMargin < 0 ? "The plan loses money in Year 2. Growing it makes the loss bigger, not smaller — this is the thing to fix before anything else on this page."
         : opMargin * 100 < 5 ? "There is a profit, but a thin one. Growth will not have much to work with."
         : "The business makes money before it grows, which is what makes growing it worth doing.",
@@ -107,6 +172,11 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       reveals: "Whether there is a profit to grow in the first place.",
       confidence: "High — the plan's own forecast.",
       missing: opMargin === null ? "A Year 2 forecast with sales and costs in it." : undefined,
+      action: opMargin !== null && opMargin < 0 && closing
+        ? (firstProfit !== null
+            ? `Keep the growth — it is what closes the loss, and the plan is in profit from Year ${firstProfit}. The work is funding the months until then.`
+            : "Growth is narrowing the loss but not ending it. Find the overheads that do not need to rise with sales, then grow into the margin that frees.")
+        : undefined,
     },
     {
       key: "revenueGrowth", name: "Revenue growth", unit: "pct",
@@ -152,11 +222,13 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       formula: "% change in operating profit ÷ % change in revenue, Year 1 to Year 2",
       reveals: "Whether growth improves profit or simply needs costs to rise with it.",
       confidence: "High.",
-      missing: opLev === null
-        ? (y1 && y1.operatingProfit <= 0
-            ? "A Year 1 operating profit. There is no leverage on a loss — only a loss that gets bigger or smaller."
-            : "A Year 1 operating profit and some forecast growth.")
-        : undefined,
+      ...(opLev === null && y1 && y1.operatingProfit <= 0 && perDollar !== null ? lossLeverage() : {
+        missing: opLev === null
+          ? (y1 && y1.operatingProfit <= 0
+              ? "A Year 1 operating profit. There is no leverage on a loss — only a loss that gets bigger or smaller."
+              : "A Year 1 operating profit and some forecast growth.")
+          : undefined,
+      }),
     },
     {
       key: "returnOnPlan", name: "Return on the growth plan", unit: "pct",
@@ -171,8 +243,11 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       note: returnOnPlan === null ? "Needs Year 2 capital spending recorded on the Fixed Assets step."
         : coc === null ? `The plan returns ${pct(returnOnPlan * 100)} on what the growth costs. Whether that is enough depends on what your money costs, which nobody has said yet.`
         : returnOnPlan * 100 < coc ? `The extra profit does not clear the ${coc}% the money costs. The plan spends more than the growth returns.`
+        : fromLoans ? `The extra profit clears ${coc}%, the rate on the dearest loan already in the plan.`
         : "The extra profit clears the cost of capital you set.",
-      bench: coc === null ? "It has to beat what the money costs — set that on Assumptions" : `Has to beat the ${coc}% you said the money costs`,
+      bench: coc === null ? "It has to beat what the money costs — set that on Assumptions"
+        : fromLoans ? `Has to beat ${coc}%, your dearest loan on Funding. Equity costs more — set your own figure on Assumptions if you have one`
+        : `Has to beat the ${coc}% you said the money costs`,
       formula: "Extra operating profit in Year 2 ÷ (Year 2 capex + the extra working capital growth ties up)",
       reveals: "Whether the money the growth plan needs earns an adequate return.",
       confidence: "Medium — it assumes Year 2's capex is what buys Year 2's extra profit, which is rarely exactly true.",
@@ -231,9 +306,11 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       formula: "Year 1 cash from operations ÷ Year 1 EBITDA",
       reveals: "Whether forecast profit becomes money in the bank.",
       confidence: "High.",
-      missing: conversion === null
-        ? (e1 !== null && e1 <= 0 ? "Positive earnings. A loss has no share that turns into cash." : "A Year 1 forecast with sales and costs in it.")
-        : undefined,
+      ...(conversion === null && e1 !== null && e1 <= 0 ? lossConversion() : {
+        missing: conversion === null
+          ? (e1 !== null && e1 <= 0 ? "Positive earnings. A loss has no share that turns into cash." : "A Year 1 forecast with sales and costs in it.")
+          : undefined,
+      }),
     },
     {
       key: "lowestCash", name: "Lowest month in Year 1", unit: "money",

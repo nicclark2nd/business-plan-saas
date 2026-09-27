@@ -31,6 +31,11 @@ export type Growth = {
   cashBuffer: number | null;
   /** What the money funding the plan costs, as a percent. Sets the bar the return has to clear. */
   costOfCapital: number | null;
+  /**
+   * Where that figure came from (§6.152): typed on Assumptions, or — when nobody has typed one — the rate
+   * on the dearest loan already on Funding, which the plan knows and should not ask for again.
+   */
+  costOfCapitalFrom?: "entered" | "loans" | null;
 };
 
 export type Stress = {
@@ -92,7 +97,8 @@ export const LENDER_MIN_DSCR = 1.25;
 type Row = Record<string, unknown> | null | undefined;
 
 export function readGrowth(s: Row): Growth {
-  return { cashBuffer: n(s?.cash_floor), costOfCapital: n(s?.cost_of_capital) };
+  const coc = n(s?.cost_of_capital);
+  return { cashBuffer: n(s?.cash_floor), costOfCapital: coc, costOfCapitalFrom: coc === null ? null : "entered" };
 }
 
 export function readStress(s: Row): Stress {
@@ -192,4 +198,16 @@ export function readUndrawn(funding: FundingSource[]): number {
 export function impliedCostOfCapital(funding: FundingSource[]): number | null {
   const rates = funding.map((f) => f.loan?.interest_rate ?? 0).filter((r) => r > 0);
   return rates.length ? Math.round(Math.max(...rates) * 100) / 100 : null;
+}
+
+/**
+ * NOT ASKED TWICE (§6.152, SaaS_Requirements §0). A plan with loans on Funding already says what borrowed
+ * money costs it, so the dials that need a rate use the dearest one and say so, rather than going grey and
+ * asking. It is a floor — equity costs more than debt — and a figure typed on Assumptions always wins.
+ * Only the capability dials read this; Assumptions still shows its own box as the client left it.
+ */
+export function withLoanRate(g: Growth, funding: FundingSource[]): Growth {
+  if (g.costOfCapital !== null) return g;
+  const rate = impliedCostOfCapital(funding);
+  return rate === null ? g : { ...g, costOfCapital: rate, costOfCapitalFrom: "loans" };
 }
