@@ -821,3 +821,21 @@ Stage 2 done (§6.159): every card that exists in both views carries the other v
 the track record (a better band, or sales growth half as much again) the line turns amber and asks "What changes
 to make it true?". On SEQ it fires on sales growth (9.3% vs 5.7%), incremental margin (50.2% vs −24.6%) and cash
 tied up per extra $1 (11¢ vs 91¢).
+
+### 55. Capabilities summary box, Borrow and Sell words, a bad year in plain words — **done (§6.160–§6.162)**
+
+- **§6.160 Summary box.** Three lines above the verdict on every tab, reading both views at once: "What happened"
+  (the accounts), "What the plan asks", and "Talk about first". Written to the consultant ("Talk to the owner
+  about …") for coach, consultant and firm plans, and to the owner otherwise. Every line is chosen by a rule
+  (`engine/capability/summary.ts`), so the same plan always gets the same words. SEQ, Grow: "In 2026 sales grew
+  5.7% and profit fell into a 52,362 loss. / The plan asks for 9.3% growth in 2027 and a bigger loss, with the
+  bank below your floor for 6 of 12 months. / Talk to the owner about how 2027 gets funded before talking about
+  growth."
+- **§6.161 Borrow and Sell words.** Borrow cards: Lender-ready / Needs attention / Lender will decline; dial:
+  Ready to borrow / Needs attention / Not ready to borrow. Sell cards: Adds value / Needs attention / Cuts the price;
+  dial: Ready to sell / Needs attention / Not ready to sell.
+- **§6.162 A bad year.** The Assumptions tab "Downside" is now "A bad year", and each box asks its question in
+  plain words. One "Use these" button fills all three with the worse of the business's own worst year and the
+  common bank test, field by field, and each hint says which it is (SEQ: sales 10%, the bank test, because sales
+  never fell; margin 3.6 points, its own 2026; customers 16 days later, its own 2026). "Downside" wording on
+  Capabilities now reads "a bad year". Checked on ZZ ("Use these" saved the bank test; cleared back to unset).

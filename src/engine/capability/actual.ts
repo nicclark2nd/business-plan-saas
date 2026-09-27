@@ -244,3 +244,38 @@ export function compareWith(m: Metric, other: Metric | undefined, label: string,
   const fasterGrowth = m.key === "revenueGrowth" && done.v > 0 && plan.v > done.v * 1.5;
   return { label, display: other.display, ahead: betterBand || fasterGrowth };
 }
+
+/**
+ * A BAD YEAR, FROM THE ACCOUNTS FIRST (§6.162). The downside asks how far sales could fall, how far the margin
+ * could shrink and how much later customers could pay. The accounts have often answered part of that already —
+ * SEQ's margin fell 3.6 points and its debtors went from 30 to 46 days in 2026. So the suggestion is the worse
+ * of the business's own worst year and the common bank test, field by field, and it says which is which.
+ */
+export type WorstYear = {
+  salesPct: number; marginPts: number; debtorDaysAdded: number;
+  /** The year each of the business's own worst readings came from; null where the accounts show none. */
+  from: { sales: number | null; margin: number | null; days: number | null };
+  /** What the business's own worst year was, before the bank test was laid over it. */
+  own: { salesPct: number; marginPts: number; debtorDaysAdded: number };
+};
+export function worstYear(rows: HistoricRow[], firstYear: number, bank: { salesPct: number; marginPts: number; debtorDaysAdded: number }): WorstYear {
+  const years = [...rows].filter((r) => n(r.revenue) > 0).sort((a, b) => Number(b.period_number) - Number(a.period_number));
+  const own = { salesPct: 0, marginPts: 0, debtorDaysAdded: 0 };
+  const from: WorstYear["from"] = { sales: null, margin: null, days: null };
+  for (let i = 1; i < years.length; i++) {
+    const a = years[i - 1], b = years[i];                      // a is the earlier year, b the one after it
+    const year = firstYear - Number(b.period_number);
+    const fall = ((n(a.revenue) - n(b.revenue)) / n(a.revenue)) * 100;
+    if (fall > own.salesPct) { own.salesPct = r1(fall); from.sales = year; }
+    const gm = (r: HistoricRow) => ((n(r.revenue) - n(r.cogs)) / n(r.revenue)) * 100;
+    const drop = gm(a) - gm(b);
+    if (drop > own.marginPts) { own.marginPts = r1(drop); from.margin = year; }
+    const dd = (r: HistoricRow) => (n(r.accounts_receivable) / n(r.revenue)) * 365;
+    const slower = Math.round(dd(b) - dd(a));
+    if (slower > own.debtorDaysAdded) { own.debtorDaysAdded = slower; from.days = year; }
+  }
+  return {
+    salesPct: Math.max(own.salesPct, bank.salesPct), marginPts: Math.max(own.marginPts, bank.marginPts),
+    debtorDaysAdded: Math.max(own.debtorDaysAdded, bank.debtorDaysAdded), from, own,
+  };
+}

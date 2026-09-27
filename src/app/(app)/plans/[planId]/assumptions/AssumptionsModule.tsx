@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { FORECAST_YEARS, type CashTiming, type WorkingCapitalDays } from "@/engine/forecast/model";
 import { creditorBalance, debtorBalance, inventoryBalance } from "@/engine/forecast/assumptions";
 import { SUGGESTED_COST_OF_CAPITAL, SUGGESTED_STRESS, type Growth, type Stress } from "@/engine/capability/judgements";
+import type { WorstYear } from "@/engine/capability/actual";
 import { continueFromAssumptions, revertToHistoricDays, saveAssumptions, saveCapitalAssumptions } from "./actions";
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
 
@@ -53,7 +54,7 @@ const numOrNull = (raw: string): number | null => {
  */
 export function AssumptionsModule({
   planId, mode, revenue, cogs, workingCapital, cashTiming, impliedFromHistory, assumptionsSet,
-  growth, stress, impliedCost, lowestMonth, lowestMonthName = null, suggestedFloor = null, initialArea,
+  growth, stress, impliedCost, lowestMonth, lowestMonthName = null, suggestedFloor = null, worst = null, initialArea,
 }: {
   planId: string; mode: "guided" | "advanced";
   /** Year 1–5 revenue and cost of sales, so each day can show what it is worth (§6.43).  */
@@ -73,6 +74,8 @@ export function AssumptionsModule({
   lowestMonthName?: string | null;
   /** One month of Year 1 overheads — offered as a floor with a button, never saved on the client's behalf. */
   suggestedFloor?: number | null;
+  /** The worse of the business's own worst year and the bank test, field by field (§6.162). Null with no accounts. */
+  worst?: WorstYear | null;
   /** Which tab to open on, so a pencil from Financial Capabilities lands on the box it promised. */
   initialArea: AreaKey;
 }) {
@@ -170,7 +173,7 @@ export function AssumptionsModule({
       areas={[
         { key: "days", label: "Days & timing", tag: assumptionsSet ? undefined : "not set" },
         { key: "cash", label: "Cash & capital", tag: capitalSet ? undefined : "not set" },
-        { key: "downside", label: "Downside", tag: stressSet ? undefined : "not set" },
+        { key: "downside", label: "A bad year", tag: stressSet ? undefined : "not set" },
       ]}
       area={area} onArea={(k) => setArea(k as AreaKey)} scope={{ label: "Five years" }}
       footer={<ModuleFooter planId={planId} moduleId="assumptions" formId="assumptions-form" />}
@@ -181,11 +184,11 @@ export function AssumptionsModule({
         <p>Leave them all at zero and the forecast assumes every client pays on the day of the job and every bill is settled the same day. That is not conservative — it is the most optimistic cash flow that can be drawn.</p>
         <h3>Cash &amp; capital</h3>
         <p><b>Cash floor</b> is the lowest balance you are willing to let the business reach — not a prediction, a tolerance. <b>Cost of capital</b> is what the money funding the plan costs you a year; growth that returns less than that is spending, not investing.</p>
-        <h3>Downside</h3>
+        <h3>A bad year</h3>
         <p>One bad year, described in three numbers. Nothing here changes the forecast — it is a second, worse reading of the same plan, and it is what the stressed cover figure on Financial Capabilities is measured against. All three have to be answered before that figure can be calculated.</p>
         <h3>Where this goes</h3>
         <p>Days and timing drive every figure on the <b>Cash Flow</b>, and the debtors, stock and creditors on the <b>Balance Sheet</b>. Nothing there touches the profit and loss: when money moves does not change what was earned.</p>
-        <p>Cash &amp; capital and the Downside are read by <b>Financial Capabilities</b> — the growth dials and the stressed debt-service cover. They are stored here so the score means the same thing next week.</p>
+        <p>Cash &amp; capital and A bad year are read by <b>Financial Capabilities</b> — the growth dials and the stressed debt-service cover. They are stored here so the score means the same thing next week.</p>
       </>}
     >
       {err && <Note><span className="text-bad">{err}</span></Note>}
@@ -333,41 +336,72 @@ export function AssumptionsModule({
         * plan becomes them, while these three never touch a forecast figure. A lender reading a stressed
         * debt-service cover has to be told which three numbers made it stressed.
         */}
-      {area === "downside" && (
+      {/*
+        * A BAD YEAR, IN PLAIN WORDS (§6.162). The tab was "Downside" and its boxes were "Sales fall by %" and
+        * "Gross margin falls by points" — a lender's vocabulary. Each box now asks its question the way an owner
+        * would answer it, and one button fills all three from the business's own worst year, or the common bank
+        * test where the accounts show nothing worse.
+        */}
+      {area === "downside" && (() => {
+        const bank = SUGGESTED_STRESS;
+        const pick = worst ?? { salesPct: bank.salesPct, marginPts: bank.marginPts, debtorDaysAdded: bank.debtorDaysAdded, from: { sales: null, margin: null, days: null }, own: { salesPct: 0, marginPts: 0, debtorDaysAdded: 0 } };
+        const whose = (own: number, used: number, yr: number | null, unit: string) =>
+          yr !== null && own >= used ? `your own worst, in ${yr}` : own > 0 && yr !== null ? `the bank test — your worst was ${own}${unit}, in ${yr}` : worst ? "the bank test — your accounts show nothing worse" : "the common bank test";
+        const fill = () => {
+          const next = { stress_sales_pct: pick.salesPct, stress_margin_pts: pick.marginPts, stress_debtor_days: pick.debtorDaysAdded };
+          const text = { stress_sales_pct: String(pick.salesPct), stress_margin_pts: String(pick.marginPts), stress_debtor_days: String(pick.debtorDaysAdded) };
+          capRef.current = { ...capRef.current, ...text };
+          setCap(capRef.current);
+          start(async () => {
+            const r = await saveCapitalAssumptions(planId, next);
+            if (!r.ok) setErr(r.error); else { setErr(undefined); router.refresh(); }
+          });
+        };
+        return (
         <>
           <Toolbar><Meta className="ml-0">
             {stressSet
-              ? <>A bad year, described once. The borrowing capability tests every cover figure against it.</>
-              : <span className="text-warn">Not set yet — stressed debt-service cover cannot be calculated until all three are answered.</span>}
+              ? <>A bad year, described once. Financial Capabilities asks whether the loans would still be repaid in it.</>
+              : <span className="text-warn">Not set yet — without a bad year, nobody can say whether the loans would still be repaid in one.</span>}
           </Meta></Toolbar>
           <Section title="A bad year">
+            <div className="mb-3 flex flex-wrap items-center gap-3 rounded-md border border-border bg-secondary/40 px-3 py-2 text-[12.5px]">
+              <span>
+                Suggested: sales down <b>{pick.salesPct}%</b>, margin down <b>{pick.marginPts} points</b>, customers paying <b>{pick.debtorDaysAdded} days</b> later.
+                {worst ? " The worse of your own accounts and the common bank test." : " The common bank test — there are no accounts to read a worst year from."}
+              </span>
+              <Button size="sm" variant="outline" type="button" disabled={pending} onClick={fill}>Use these</Button>
+            </div>
             <FieldGrid>
-              <Field span={2} label="Sales fall by %"
-                hint={`How far revenue could drop and the business still be recognisable. ${SUGGESTED_STRESS.salesPct}% is a common bank test.`}>
+              <Field span={2} label="In a bad year, sales could fall by (%)">
                 <FieldInput numeric placeholder="Not set" disabled={pending}
                   value={cap.stress_sales_pct} onChange={(e) => editCap("stress_sales_pct", e.target.value)}
                   onBlur={() => commitCap("stress_sales_pct")} />
+                <p className="mt-1 text-[11.5px] text-muted-foreground">Suggested {pick.salesPct}%: {whose(pick.own.salesPct, pick.salesPct, pick.from.sales, "%")}.</p>
               </Field>
-              <Field span={2} label="Gross margin falls by points"
-                hint={`Percentage POINTS, not percent: a 40% margin losing ${SUGGESTED_STRESS.marginPts} points becomes ${40 - SUGGESTED_STRESS.marginPts}%.`}>
+              <Field span={2} label="…your gross margin could shrink by (percentage points)">
                 <FieldInput numeric placeholder="Not set" disabled={pending}
                   value={cap.stress_margin_pts} onChange={(e) => editCap("stress_margin_pts", e.target.value)}
                   onBlur={() => commitCap("stress_margin_pts")} />
+                <p className="mt-1 text-[11.5px] text-muted-foreground">
+                  Points, not percent: a 40% margin down 3 points is 37%. Suggested {pick.marginPts}: {whose(pick.own.marginPts, pick.marginPts, pick.from.margin, " points")}.
+                </p>
               </Field>
-              <Field span={2} label="Customers pay this many days later"
-                hint={`On top of the debtor days on the first tab. ${SUGGESTED_STRESS.debtorDaysAdded} days is what a slow quarter looks like.`}>
+              <Field span={2} label="…and customers could pay this many days later">
                 <FieldInput numeric placeholder="Not set" disabled={pending}
                   value={cap.stress_debtor_days} onChange={(e) => editCap("stress_debtor_days", e.target.value)}
                   onBlur={() => commitCap("stress_debtor_days")} />
+                <p className="mt-1 text-[11.5px] text-muted-foreground">On top of the debtor days on the first tab. Suggested {pick.debtorDaysAdded}: {whose(pick.own.debtorDaysAdded, pick.debtorDaysAdded, pick.from.days, " days")}.</p>
               </Field>
             </FieldGrid>
           </Section>
           <Note>
-            Nothing here changes the forecast. It is a second, worse reading of the same plan, used to ask
-            whether the debt would still be covered — which is the question a lender asks before the good one.
+            Nothing here changes the forecast. It is a second, worse reading of the same plan, used to ask whether
+            the loans would still be repaid — the question a lender asks before the good one.
           </Note>
         </>
-      )}
+        );
+      })()}
 
       {revert && impliedFromHistory && (
         <RevertDays

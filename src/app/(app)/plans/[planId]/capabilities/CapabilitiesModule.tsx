@@ -23,6 +23,7 @@ import { applyRanges } from "@/engine/capability/ranges";
 import { panels as buildPanels, withTrends, type FacilityFacts, type Panels, type ProductFacts } from "@/engine/capability/series";
 import { ageingView, concentration, earningsBridge, executionLines, lenderChecklist, type ExtraFacts, type Line } from "@/engine/capability/extras";
 import { Meter } from "@/components/chart/core";
+import { borrowSummary, growSummary, sellSummary, type SummaryFacts } from "@/engine/capability/summary";
 import { capabilityViews, compareWith, inAccounts, type Comparison, nameYears, yearEndCash, type ActualYear, type HistoricRow, type YearNames } from "@/engine/capability/actual";
 
 /**
@@ -97,12 +98,14 @@ const TONE: Record<Severity, ChartSeverity> = { good: "good", watch: "warn", bad
  * box on the step that owns the figure — Assumptions for the cash floor and the downside, Plan settings for
  * the price, Leadership Team for owner dependence, Fixed Assets for security, Funding for the borrowing.
  */
-export function CapabilitiesModule({ planId, mode, currency, facts, products, facilities, months, openingDebt, extras, history = [], firstYear }: {
+export function CapabilitiesModule({ planId, mode, currency, facts, products, facilities, months, openingDebt, extras, history = [], firstYear, adviser = false }: {
   planId: string; mode: "guided" | "advanced"; currency: string; facts: PlanFacts;
   /** Historic, every period, for the actual view (§6.158). Empty for a business with no accounts. */
   history?: HistoricRow[];
   /** The year Year 1 ends in — to name the plan's years and the last actual one. */
   firstYear: number;
+  /** A coach, consultant or firm: the summary box is written to them, about the owner (§6.160). */
+  adviser?: boolean;
   /** For the panels only (§6.129.2) — each product's five years, and the borrowing the plan carries. */
   products: ProductFacts[]; facilities: FacilityFacts[];
   /** The plan's own twelve months (§6.21), for the month-by-month cash panel. */
@@ -153,6 +156,19 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
     : raw;
   const band = s.value === null ? null : statusOf(s.value, SCORE_BANDS);
   const span = onActual ? views.actual!.span : views.plan.span;
+
+  /*
+   * THREE LINES FOR THE PERSON IN THE ROOM (§6.160): what happened, what the plan asks, what to talk about
+   * first. Both views at once, whichever is showing — it is the gap between them that the conversation is about.
+   */
+  const summary = useMemo(() => {
+    const f: SummaryFacts = {
+      adviser, money,
+      actual: views.actual && actualV ? { growIn: actualV.growIn, posIn: actualV.posIn, year: views.actual.last.year, grow: actualV.grow, borrow: actualV.borrow } : null,
+      plan: { input, firstYear, grow: planV.grow, borrow: planV.borrow, monthNames: months },
+    };
+    return { grow: growSummary, borrow: borrowSummary, sell: sellSummary }[tab](f);
+  }, [adviser, money, views, actualV, planV, input, firstYear, months, tab]);
 
   /* The same card on the other view (§6.159): the track record on the plan, the plan on the accounts. */
   const otherV = actualV ? (onActual ? planV : actualV) : null;
@@ -213,6 +229,15 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
           <span className="text-[12.5px]"><b>Plan: {views.plan.span}</b> <span className="text-muted-foreground">— from your projections. There are no accounts in Historic yet, so there is no actual view.</span></span>
         )}
       </div>
+
+      <section className="border-b border-border bg-accent/40 px-5 py-3.5">
+        <span className="eyebrow">{adviser ? "For the consultant" : "In short"}</span>
+        <dl className="mt-1.5 grid gap-x-4 gap-y-1 text-[13.5px] leading-relaxed @container sm:grid-cols-[170px_minmax(0,1fr)]">
+          <dt className="font-semibold text-muted-foreground">What happened</dt><dd>{summary.happened}</dd>
+          <dt className="font-semibold text-muted-foreground">What the plan asks</dt><dd>{summary.asks}</dd>
+          <dt className="font-semibold text-muted-foreground">{adviser ? "Talk about first" : "Start with"}</dt><dd className="font-semibold">{summary.talk}</dd>
+        </dl>
+      </section>
 
       {/* ---------- the verdict: identical on all three tabs ---------- */}
       {/*
@@ -606,10 +631,10 @@ function BorrowingRoom({ planId, input, money }: {
         <>
           <Note>
             {(capBase ?? 0) > 0
-              ? <>The base case supports about {money(capBase ?? 0)} more. What a BAD year supports is the figure that matters, and that needs a downside to be described.</>
+              ? <>The base case supports about {money(capBase ?? 0)} more. What a BAD year supports is the figure that matters, and that needs a bad year to be described.</>
               : <>Even the base case supports nothing further — what this business already repays uses the cover up. Describe a bad year and the picture can show how far short it falls.</>}
           </Note>
-          <Pencil planId={planId} fix={{ label: "Set the downside", to: "assumptions?area=downside" }} />
+          <Pencil planId={planId} fix={{ label: "Describe a bad year", to: "assumptions?area=downside" }} />
         </>
       ) : (
         <>

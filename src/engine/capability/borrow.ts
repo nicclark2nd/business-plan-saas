@@ -43,7 +43,7 @@ const times = (v: number) => `${r2(v)}×`;
 export const CAPACITY_TERM_YEARS = 5;
 
 const FIX_COST = { label: "Set the cost of capital", to: "assumptions?area=cash" };
-const FIX_STRESS = { label: "Set the downside", to: "assumptions?area=downside" };
+const FIX_STRESS = { label: "Describe a bad year", to: "assumptions?area=downside" };
 const FIX_SECURITY = { label: "Value the security", to: "assets" };
 
 /**
@@ -194,17 +194,17 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
       min: 0.5, max: 3, bands: [{ to: 1, s: "bad" }, { to: LENDER_MIN_DSCR, s: "bad" }, { to: 1.5, s: "watch" }, { to: 3, s: "good" }],
       sub: stressSet
         ? `Sales −${i.stress.salesPct}%, margin −${i.stress.marginPts} pts, paid ${i.stress.debtorDaysAdded} days later`
-        : "The downside has not been described yet",
+        : "A bad year has not been described yet",
       note: dscrStress === null
         ? (!stressSet ? "A bad year has to be described before it can be tested. Three numbers on the Assumptions step, and this answers." : noDebt)
-        : dscrStress < 1 ? "The downside you described leaves the business unable to make its repayments."
-        : dscrStress < LENDER_MIN_DSCR ? "The downside takes cover below what a lender requires — there is no cushion."
-        : "Even with your downside applied, the repayments are still covered.",
+        : dscrStress < 1 ? "In the bad year you described, the business could not make its repayments."
+        : dscrStress < LENDER_MIN_DSCR ? "In the bad year you described, cover falls below what a lender requires — there is no cushion."
+        : "Even in the bad year you described, the repayments are still covered.",
       bench: "Debt that only works in the good case is debt that fails in the bad one",
       formula: "Year 1 cash, less the gross profit on lost sales, less the margin squeeze, less the cash stuck in slower debtors — divided by the same repayments.",
       reveals: "Whether a plausible bad year would compromise repayment.",
       confidence: "Medium — an arithmetic overlay on the forecast, not a second forecast run. The three settings are yours.",
-      missing: dscrStress === null ? (!stressSet ? "A downside case on the Assumptions step." : noDebt) : undefined,
+      missing: dscrStress === null ? (!stressSet ? "A bad year, described on Assumptions." : noDebt) : undefined,
       fix: dscrStress === null ? (!stressSet ? FIX_STRESS : { label: "Add the borrowing", to: "funding" }) : undefined,
     },
     {
@@ -223,14 +223,14 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
         : `${m(capacityBase)} if the base case holds`,
       note: capacityStress === null
         ? (coc === null ? "How much more this cash flow would carry. It needs a rate to price it at — the cost of capital on the Assumptions step."
-          : "Needs a downside case, so the figure is what a bad year supports rather than a good one.")
+          : "Needs a bad year described, so the figure is what a bad year supports rather than a good one.")
         : capacityStress <= 0 ? "A stressed year leaves no room for further borrowing at all. What the business already owes uses the cover up."
         : `Room for about ${m(capacityStress)} more, which would add roughly ${m(capacityService ?? 0)} a year to the ${m(service)} already repaid.${i.growth.costOfCapitalFrom === "loans" ? ` Priced at ${coc}%, the rate on the dearest loan already in the plan.` : ""}`,
       bench: "Borrow what the bad year carries, not what the good year allows",
       formula: `The largest additional loan whose repayments keep cover at ${LENDER_MIN_DSCR}×, over ${CAPACITY_TERM_YEARS} years at your cost of capital, using stressed cash`,
       reveals: "How much is actually borrowable, as opposed to how much is wanted.",
       confidence: `Medium — same basis as the stressed cover above, priced over a ${CAPACITY_TERM_YEARS}-year term. A real loan on the Funding step is the exact answer.`,
-      missing: capacityStress === null ? (coc === null ? "A cost of capital on the Assumptions step." : "A downside case on the Assumptions step.") : undefined,
+      missing: capacityStress === null ? (coc === null ? "A cost of capital on the Assumptions step." : "A bad year, described on Assumptions.") : undefined,
       fix: capacityStress === null ? (coc === null ? FIX_COST : FIX_STRESS) : undefined,
     },
     {

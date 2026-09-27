@@ -247,6 +247,11 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
       extras={extras}
       history={(periods.data ?? []).map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v]))) as HistoricRow[]}
       firstYear={firstYear}
+      adviser={(() => {
+        const org = session?.plans.find((p) => p.id === planId)?.organisations as { kind?: string } | { kind?: string }[] | null | undefined;
+        const kind = Array.isArray(org) ? org[0]?.kind : org?.kind;
+        return !!kind && kind !== "owner";
+      })()}
     />
   );
 }

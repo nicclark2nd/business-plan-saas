@@ -1,7 +1,9 @@
 import { loadPlan } from "@/lib/planLoad";
 import { FORECAST_YEARS } from "@/engine/forecast/model";
 import { runForecast } from "@/engine/forecast/run";
-import { impliedCostOfCapital, readGrowth, readStress } from "@/engine/capability/judgements";
+import { SUGGESTED_STRESS, impliedCostOfCapital, readGrowth, readStress } from "@/engine/capability/judgements";
+import { worstYear, type HistoricRow } from "@/engine/capability/actual";
+import { createClient } from "@/lib/supabase/server";
 import { AssumptionsModule } from "./AssumptionsModule";
 import { planMonths } from "@/engine/plan/calendar";
 
@@ -27,7 +29,11 @@ export default async function AssumptionsPage({ params, searchParams }: {
 }) {
   const { planId } = await params;
   const { area } = await searchParams;
-  const { plan, mode, impliedFromHistory, assumptionsSet, settings, fyEndMonth } = await loadPlan(planId);
+  const { plan, mode, impliedFromHistory, assumptionsSet, settings, fyEndMonth, firstYear } = await loadPlan(planId);
+  /* The business's own worst year, for the bad-year suggestion (§6.162). */
+  const supabase = await createClient();
+  const { data: periods } = await supabase.from("plan_historic_periods").select("period_number, revenue, cogs, accounts_receivable").eq("plan_id", planId);
+  const worst = worstYear(((periods ?? []) as unknown as HistoricRow[]).map((r) => ({ ...r, revenue: Number(r.revenue), cogs: Number(r.cogs), accounts_receivable: Number(r.accounts_receivable) })), firstYear, SUGGESTED_STRESS);
   const { workingCapital, cashTiming } = plan;
   const run = runForecast(plan);
   const checked = run.checked;
@@ -52,6 +58,7 @@ export default async function AssumptionsPage({ params, searchParams }: {
       /* Which month that is, by name, so the warning says "June" rather than "month 12" (§6.155). */
       lowestMonthName={low === null ? null : planMonths(fyEndMonth)[monthlyCash.indexOf(low)] ?? null}
       /* One month of Year 1 overheads: the usual rule of thumb for a floor, offered, never stored unasked. */
+      worst={periods && periods.length > 1 ? worst : null}
       suggestedFloor={checked.pnl[1].overheads > 0 ? Math.round(checked.pnl[1].overheads / 12) : null}
     />
   );

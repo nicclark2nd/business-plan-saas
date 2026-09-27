@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { actualYear, capabilityViews, compareWith, inAccounts, nameYears, yearEndCash, type HistoricRow } from "./actual";
+import { actualYear, capabilityViews, compareWith, inAccounts, nameYears, worstYear, yearEndCash, type HistoricRow } from "./actual";
 import type { CapabilityInput, Metric } from "./model";
 import { growMetrics } from "./grow";
 
@@ -92,5 +92,20 @@ describe("the other view's reading on each card (§6.159)", () => {
   it("has nothing to say when either side has no figure", () => {
     expect(compareWith(card("m", 3, "3%"), undefined, "x", true)).toBeNull();
     expect(compareWith(card("m", null, "—"), card("m", 3, "3%"), "x", true)).toBeNull();
+  });
+});
+
+describe("a bad year, from the accounts first (§6.162)", () => {
+  const bank = { salesPct: 10, marginPts: 1.5, debtorDaysAdded: 10 };
+  it("takes the business's own worst where it is worse than the bank test, and says which year", () => {
+    const w = worstYear(rows, 2027, bank);
+    expect(w.own.debtorDaysAdded).toBe(16);                 // 30 → 46 debtor days in 2026
+    expect(w.from.days).toBe(2026);
+    expect(w.debtorDaysAdded).toBe(16);
+    expect(w.salesPct).toBe(10);                            // sales never fell, so the bank test
+    expect(w.from.sales).toBeNull();
+  });
+  it("is the bank test with no accounts", () => {
+    expect(worstYear([], 2027, bank)).toMatchObject({ salesPct: 10, marginPts: 1.5, debtorDaysAdded: 10 });
   });
 });
