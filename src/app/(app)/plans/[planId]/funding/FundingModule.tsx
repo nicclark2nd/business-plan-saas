@@ -24,7 +24,9 @@ import {
   loanSummary, loanByYear, loanMonths, rbfMonths, fundingInMonths, rbfCap, rbfCost, fundingTotals, adequacy, interestByYear, debtByYear,
   type FundingKind, type FundingSource,
 } from "@/engine/funding/sources";
-import { upsertFunding, deleteFunding, saveOpeningCash, continueFromFunding } from "./actions";
+import { upsertFunding, deleteFunding, saveOpeningCash, continueFromFunding, saveExistingDebt } from "./actions";
+import { ExistingLoans } from "./ExistingLoans";
+import { existingDebtFromHistory, readExistingTerms, type ExistingDebtTerms, type HistoricLoanRow } from "@/engine/funding/existing";
 import {
   KIND_LABEL, KIND_CARDS, LOAN_TYPES, REPAYMENT_TYPES, FREQUENCIES, isAssetBacked, loanOf, rbfOf,
   type FundingRow, type LoanType,
@@ -53,8 +55,10 @@ const monthOptions = (fyEndMonth: number) => planMonths(fyEndMonth).map((m, i) =
 
 export type CashInput = { revenueMonths: number[]; cogsMonths: number[]; overheadsMonths: number[]; capexMonths: number[] };
 
-export function FundingModule({ planId, initial, mode, openingCash, openingFromHistory, bought, cap, cash, year1, fyEndMonth, saidNone, initialArea = "sources", lender }: {
+export function FundingModule({ planId, initial, mode, openingCash, openingFromHistory, bought, cap, cash, year1, fyEndMonth, saidNone, initialArea = "sources", lender, existing }: {
   planId: string; initial: FundingRow[]; mode: "guided" | "advanced";
+  /** The loans already owed when the plan starts: Historic's two latest years, and what the client changed (§6.150). */
+  existing: { rows: HistoricLoanRow[]; stored: unknown } | null;
   openingCash: number; openingFromHistory: boolean;
   /** What each asset-backed loan bought, by loan id — the thing's own name (§6.52.2). */
   bought: Record<string, string>;
@@ -91,11 +95,36 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
   const once = useSaveOnce();
 
   const lines = useMemo(() => (draft ? [...rows, draft] : rows), [rows, draft]);
-  const sources: FundingSource[] = useMemo(() => lines.map((r) => ({
-    id: r.id, kind: r.kind, name: r.name, amount: r.amount,
-    start_year: r.start_year, start_month: r.start_month,
-    loan: loanOf(r), rbf: rbfOf(r), equity_percent: r.equity_percent,
-  })), [lines]);
+  /*
+   * THE LOANS ALREADY OWED (§6.150), through the same reading the forecast makes. They join the sources so
+   * the cash check, the interest and the debt owed all include them — and add nothing to money raised.
+   */
+  const [terms, setTerms] = useState<ExistingDebtTerms>(() => readExistingTerms(existing?.stored));
+  const debt = useMemo(() => (existing ? existingDebtFromHistory(existing.rows, terms) : null), [existing, terms]);
+  const worked = useMemo(() => (existing ? existingDebtFromHistory(existing.rows, null) : null), [existing]);
+  const sources: FundingSource[] = useMemo(() => [
+    ...lines.map((r) => ({
+      id: r.id, kind: r.kind, name: r.name, amount: r.amount,
+      start_year: r.start_year, start_month: r.start_month,
+      loan: loanOf(r), rbf: rbfOf(r), equity_percent: r.equity_percent,
+    })),
+    ...(debt?.source ? [debt.source] : []),
+  ], [lines, debt]);
+
+  const saveTerms = (next: ExistingDebtTerms) => {
+    const before = terms;
+    setTerms(next);
+    setAdjusted(undefined);
+    start(async () => {
+      const res = await saveExistingDebt(planId, {
+        interest_rate: next.interest_rate ?? null, term_months: next.term_months ?? null, repayment_type: next.repayment_type ?? null,
+      });
+      if (!res.ok) { setTerms(before); errors.raise({ key: "existing", message: res.error, label: "Loans already owed" }); return; }
+      errors.clear("existing");
+      if (res.data) setTerms(res.data);          // the screen shows what was stored (§6.121)
+      router.refresh();
+    });
+  };
 
   const totals = fundingTotals(sources);
   const check = adequacy(sources, {
@@ -215,6 +244,7 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
       </Toolbar>
 
       <div className="min-h-0 overflow-auto px-3 pb-3">
+        {debt && worked && <ExistingLoans planId={planId} debt={debt} worked={worked} terms={terms} onChange={saveTerms} />}
         <Grid>
           <thead>
             <tr>
@@ -292,7 +322,8 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
           if (r.kind === "revenue_linked") return { r, months: rbfMonths(rbfOf(r)!, cash.revenueMonths).slice(0, 12), note: "share of sales" };
           return null;
         }).filter(Boolean) as { r: Row; months: number[]; note: string }[];
-        const outTotals = MONTHS.map((_, i) => paying.reduce((a, l) => a + (l.months[i] ?? 0), 0));
+        const owedOut = debt?.source?.loan ? loanMonths(debt.source.loan).slice(0, 12).map((x) => x.payment) : null;
+        const outTotals = MONTHS.map((_, i) => paying.reduce((a, l) => a + (l.months[i] ?? 0), 0) + (owedOut?.[i] ?? 0));
         return (
           <div className="min-h-0 overflow-auto px-3 pb-3">
             <Toolbar><Meta className="ml-0">Year 1 funding by month — when the money lands, and what goes back out to service it.</Meta></Toolbar>
@@ -318,9 +349,17 @@ export function FundingModule({ planId, initial, mode, openingCash, openingFromH
                     <Td />
                   </GridRow>
                 ))}
-                {lines.length === 0 && <tr><Td colSpan={15} className="h-12 text-muted-foreground">No funding in the plan yet.</Td></tr>}
+                {owedOut && (
+                  <GridRow key="out-existing">
+                    <Td className="text-muted-foreground">Loans already owed<span className="ml-2 text-[11px]">repayments</span></Td>
+                    {owedOut.map((v, i) => <Td key={i} right className="num text-muted-foreground">{v ? `(${num(v)})` : "—"}</Td>)}
+                    <Td right className="num font-semibold text-muted-foreground">({num(owedOut.reduce((a, b) => a + b, 0))})</Td>
+                    <Td />
+                  </GridRow>
+                )}
+                {lines.length === 0 && !owedOut && <tr><Td colSpan={15} className="h-12 text-muted-foreground">No funding in the plan yet.</Td></tr>}
               </tbody>
-              {lines.length > 0 && (
+              {(lines.length > 0 || owedOut) && (
                 <FootRow>
                   <Td>Net funding</Td>
                   {MONTHS.map((_, i) => <Td key={i} right className="num">{num((arriving[i] ?? 0) - (outTotals[i] ?? 0))}</Td>)}

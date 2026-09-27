@@ -232,3 +232,22 @@ export async function saveLenderHistory(planId: string, h: {
   revalidatePath(`/plans/${planId}`, "layout");
   return { ok: true };
 }
+
+/**
+ * THE LOANS ALREADY OWED — only what the client changed from the worked-out terms (§6.150). The balance is
+ * never stored here: it is Historic's. A null clears that one change and the Historic figure comes back.
+ * Gives back what was stored, so the screen shows the plan's figure and not the one typed (§6.121).
+ */
+export async function saveExistingDebt(planId: string, t: {
+  interest_rate: number | null; term_months: number | null; repayment_type: "amortised" | "interest_only" | null;
+}): Promise<Result<{ interest_rate: number | null; term_months: number | null; repayment_type: "amortised" | "interest_only" | null }>> {
+  const rate = t.interest_rate === null || !Number.isFinite(Number(t.interest_rate)) ? null : Math.round(pct(t.interest_rate, 100) * 100) / 100;
+  const term = t.term_months === null || !Number.isFinite(Number(t.term_months)) ? null : Math.min(360, Math.max(1, Math.trunc(Number(t.term_months))));
+  const type = t.repayment_type === "amortised" || t.repayment_type === "interest_only" ? t.repayment_type : null;
+  const stored = { interest_rate: rate, term_months: term, repayment_type: type };
+  const value = rate === null && term === null && type === null ? null : stored;
+  const supabase = await createClient();
+  const { error } = await supabase.from("plan_settings").upsert({ plan_id: planId, existing_debt: value }, { onConflict: "plan_id" });
+  if (error) return failed(error, "save the loans already owed");
+  touch(planId); return { ok: true, data: stored };
+}

@@ -288,6 +288,11 @@ export type FundingSource = {
   rbf?: RevenueLinked | null;           // revenue-linked only
   grant?: Grant | null;                 // grant only — carries when it is EARNED, not just when it lands
   equity_percent?: number | null;
+  /**
+   * Already owed when the plan starts (§6.150): carried from Historic, costing interest and repayments, but
+   * nothing arrives — `amount` is 0 — so it is never counted as money raised.
+   */
+  existing?: boolean;
 };
 
 /** Money in, by month, across the five years — every kind of source, on the month it lands. */

@@ -11,6 +11,7 @@ import { FundingModule } from "./FundingModule";
 import { firstProjectedYear } from "@/engine/plan/calendar";
 import { openingCashFor } from "@/engine/forecast/assemble";
 import { loadCapTable, loadFundingRows } from "@/lib/planSources";
+import { existingDebtFromHistory } from "@/engine/funding/existing";
 
 /**
  * Funding comes after Sales, COGS and Overheads precisely so it can answer the question APeX never asks:
@@ -23,7 +24,7 @@ export default async function FundingPage({ params, searchParams }: {
   /* `?area=lender` — the pencil on the lender checklist lands on the answers, not the loan list (§6.129.3). */
   const { area } = await searchParams;
   const supabase = await createClient();
-  const [session, rows, cap, products, fixedCogs, overheads, people, spend, assets, oneOffs, settings, historic] = await Promise.all([
+  const [session, rows, cap, products, fixedCogs, overheads, people, spend, assets, oneOffs, settings, historic, loans, changed] = await Promise.all([
     getSession(),
     /**
      * The five funding tables, read by the ONE loader (§6.32.3). This page carried its own copy of that
@@ -44,6 +45,10 @@ export default async function FundingPage({ params, searchParams }: {
     supabase.from("plan_extraordinary_items").select("*").eq("plan_id", planId),
     supabase.from("plan_settings").select("opening_cash, on_cost_pct, financial_year_end_month, first_projected_year, no_funding, repayments_on_time, covenant_history, guarantee_offered, guarantee_by").eq("plan_id", planId).maybeSingle(),
     supabase.from("plan_historic_periods").select("cash").eq("plan_id", planId).order("period_number").limit(1).maybeSingle(),
+    /* The loans already owed: the latest two years, for the balance and the rate (§6.150). */
+    supabase.from("plan_historic_periods").select("period_number, bank_loans_current, bank_loans_non_current, interest_paid").eq("plan_id", planId).in("period_number", [1, 2]),
+    /* On its own, so a database a migration behind loses only the client's changes, never the page (0055). */
+    supabase.from("plan_settings").select("existing_debt").eq("plan_id", planId).maybeSingle(),
   ]);
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
 
@@ -99,8 +104,12 @@ export default async function FundingPage({ params, searchParams }: {
     (assets.data ?? []).filter((a) => a.funding_debt_id).map((a) => [a.funding_debt_id as string, String(a.name ?? "")]),
   );
 
+  /* The same reading the forecast makes (`loadPlan`), so this screen and the statements carry one loan. */
+  const existing = existingDebtFromHistory(loans.data ?? [], changed.data?.existing_debt);
+
   return (
     <FundingModule
+      existing={existing ? { rows: loans.data ?? [], stored: changed.data?.existing_debt ?? null } : null}
       planId={planId} initial={rows} mode={mode}
       openingCash={openingCashFor(historic.data, Number(settings.data?.opening_cash ?? 0))}
       openingFromHistory={!!historic.data}

@@ -128,7 +128,9 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
     const { plan, fyEndMonth, firstYear, settings } = await loadPlan(planId);
     currency = (settings?.currency as string | undefined) ?? "AUD";
     months = planMonths(fyEndMonth);
-    openingDebt = (plan.opening.bankLoansCurrent ?? 0) + (plan.opening.bankLoansNonCurrent ?? 0);
+    /* Once the loans already owed carry a rate they are a facility row of their own (§6.150), so the
+       "brought forward" line would count them twice. */
+    openingDebt = plan.opening.bankLoansModelled ? 0 : (plan.opening.bankLoansCurrent ?? 0) + (plan.opening.bankLoansNonCurrent ?? 0);
     const run = runForecast(plan);
     const f = run.checked ?? run.forecast;
 

@@ -767,14 +767,15 @@ function BorrowPanels({ P, facilities, openingDebt, money, planId, extras, input
             </table>
             {openingDebt > 0 && (
               <p className="mt-2 text-[11.5px] text-muted-foreground">
-                The last line is bank debt from the Historic balance sheet. The forecast repays it, but it has no
-                rate or term on Funding — add it there as a loan and every figure on this tab becomes exact.
+                The last line is bank debt from the Historic balance sheet. Its rate could not be worked out from
+                last year&apos;s interest, so the forecast holds it flat — add the rate on Funding, under
+                &ldquo;Loans already owed&rdquo;, and every figure on this tab becomes exact.
               </p>
             )}
           </div>
         ) : openingDebt > 0 ? (
-          <Empty planId={planId} fix={{ label: "Itemise it on Funding", to: "funding" }}>
-            {money(openingDebt)} of bank debt from the last balance sheet, and no loans itemised on Funding.
+          <Empty planId={planId} fix={{ label: "Add its rate on Funding", to: "funding" }}>
+            {money(openingDebt)} of bank debt from the last balance sheet, with no rate yet — so the forecast cannot cost it.
           </Empty>
         ) : (
           <Empty planId={planId} fix={{ label: "Add the borrowing", to: "funding" }}>No loans in the plan.</Empty>

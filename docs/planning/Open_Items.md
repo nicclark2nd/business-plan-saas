@@ -643,7 +643,7 @@ Migration 0054 (share_capital, tax_losses_from_accountant). Checked on SEQ witho
 SEQ's own Years 1 and 2 are losses, so the 71,000 is used in Year 4: taxable profit there falls from 86,874
 to 15,874 (17,750 less tax).
 
-### 49. Share capital is not in the upload, and the app has not been checked for double entry — **first half done (§6.149); sweep open**
+### 49. Share capital is not in the upload, and the app has not been checked for double entry — **share capital done (§6.149); sweep done; fix 1 done (§6.150); fixes 2–5 open**
 
 The "never ask twice" rule (SaaS_Requirements §0, Nic 27 Sep 2026) leaves two follow-ups from §6.148:
 - **Share capital** is the one figure accumulated profit needs that the Historic upload template does not
@@ -681,3 +681,25 @@ Asked again or not used — in priority order:
    Fix: default from the country, with a note that small-business rates vary, and changeable.
 5. **Small ones.** Contact email on the cover could start as the sign-in email; the first Leadership Team row
    could start with the signed-in person's name.
+
+**Fix 1 done, 27 Sep 2026 (§6.150) — the loans already owed.** Funding shows them in a block above the list:
+the balance from Historic, and the three terms worked out from the accounts, each saying where it came from.
+- Rate: last year's interest paid over the average of this year's and last year's loan balances
+  (SEQ: 18,638 on about 180,412 → 10.33%).
+- Term: the balance over what falls due within twelve months (SEQ: 188,823 against 98,849 → 23 months).
+- Repayment: paid down if any falls due within the year, otherwise interest only (then running past Year 5).
+The client changes one only if the accounts got it wrong, and "Use the Historic figure" puts it back. Only the
+changes are stored (`plan_settings.existing_debt`, migration 0055) — never the balance. The one thing ever
+asked is the rate, and only when Historic has no interest paid; until then the debt is carried flat, as before,
+and the block and Financial Capabilities both say so.
+
+Engine: one more loan on the funding list with nothing arriving in the bank (`amount: 0`, `existing: true`),
+and `opening.bankLoansModelled` stops the balance sheet adding the Historic balance a second time. The same
+reading (`existingDebtFromHistory`) feeds `loadPlan` and the Funding screen. It is not money raised: funding
+totals and the report's funding table leave it out. Financial Capabilities lists it as a facility and drops
+the "brought forward" line, which would now count it twice.
+
+Checked on SEQ without saving: Year 1 interest 4,433 → 19,577; loans owed at Year 1 131,132 (94,954 of it the
+old loans), gone by Year 2; the balance sheet balances every year. **SEQ's cash now goes negative** —
+(25,019) at Year 1 and (162,372) at Year 2 — because 93,869 of real repayments are now in Year 1. That is the
+forecast telling the truth, not a fault. 12 unit tests.

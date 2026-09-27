@@ -102,6 +102,11 @@ export type OpeningBalance = {
   /** Debt the business already owes when the plan starts. Funding covers new money; this is what is there. */
   bankLoansCurrent: number;
   bankLoansNonCurrent: number;
+  /**
+   * True when the loans above are carried by a schedule on the funding list (§6.150) — the opening balance
+   * then runs down with its repayments instead of being added, flat, to every year-end as well.
+   */
+  bankLoansModelled?: boolean;
   otherCurrentLiabilities: number;
   otherNonCurrentLiabilities: number;
   equity: number;
@@ -397,8 +402,8 @@ export function buildForecast(input: ForecastInput): Forecast {
     const totalAssets = currentAssets + nonCurrentAssets;
     // Debt the business already had plus debt the plan raises. Dropping the opening balance is how a
     // balance sheet comes out short by exactly what the business owes its bank (§6.32.4).
-    const debtCurrent = n(b.debtCurrent) + n(o.bankLoansCurrent);
-    const debtNonCurrent = n(b.debtNonCurrent) + n(o.bankLoansNonCurrent);
+    const debtCurrent = n(b.debtCurrent) + (o.bankLoansModelled ? 0 : n(o.bankLoansCurrent));
+    const debtNonCurrent = n(b.debtNonCurrent) + (o.bankLoansModelled ? 0 : n(o.bankLoansNonCurrent));
     const currentLiabilities = ap + accrued + taxPayable + gstPayable + debtCurrent
       + n(b.deferredIncomeCurrent) + n(o.otherCurrentLiabilities);
     const nonCurrentLiabilities = debtNonCurrent + n(b.deferredIncomeNonCurrent) + n(o.otherNonCurrentLiabilities);

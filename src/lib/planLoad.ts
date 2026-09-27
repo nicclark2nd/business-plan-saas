@@ -11,6 +11,7 @@ import { productNoun, type Noun } from "@/engine/plan/vocabulary";
 import type { WorkingCapitalDays } from "@/engine/forecast/model";
 import type { WhatIfPlan } from "@/engine/whatif/levers";
 import type { FundingSource } from "@/engine/funding/sources";
+import { existingDebtFromHistory, type ExistingDebt } from "@/engine/funding/existing";
 import { accumulatedProfit, openingTaxLosses, taxLossesFromHistory, type HistoricPeriodFacts } from "@/engine/historic/opening";
 
 /**
@@ -41,6 +42,8 @@ export type LoadedPlan = {
   /** The plan's word for what it sells (§6.31). */
   noun: Noun;
   settings: Record<string, unknown> | null;
+  /** The loans already owed when the plan starts, and where each of their terms came from (§6.150). */
+  existingDebt: ExistingDebt | null;
 };
 
 const num = (v: unknown) => Number(v ?? 0) || 0;
@@ -87,6 +90,13 @@ export const loadPlan = cache(async function loadPlan(planId: string): Promise<L
     start_year: r.start_year, start_month: r.start_month,
     loan: loanOf(r), rbf: rbfOf(r), grant: grantOf(r), equity_percent: r.equity_percent,
   }));
+  /*
+   * THE LOANS ALREADY OWED (§6.150): one more loan on the list, nothing arriving in the bank. While its
+   * rate cannot be worked out and has not been given, it stays off the list and the balance sheet carries
+   * the Historic figure flat, as before — never a guessed rate.
+   */
+  const existing = existingDebtFromHistory(periods, s?.existing_debt);
+  if (existing?.source) funding.push(existing.source);
 
   const sources = {
     products: products.data ?? [], costProducts: products.data ?? [], fixedCogs: fixedCogs.data ?? [],
@@ -115,7 +125,7 @@ export const loadPlan = cache(async function loadPlan(planId: string): Promise<L
   return {
     plan: {
       sources,
-      opening: assembleOpening(h ?? null, num(s?.opening_cash), num(s?.opening_tax_payable)),
+      opening: { ...assembleOpening(h ?? null, num(s?.opening_cash), num(s?.opening_tax_payable)), bankLoansModelled: !!existing?.source },
       workingCapital: workingCapitalSchedule(s?.working_capital_schedule, impliedFromHistory ?? undefined),
       cashTiming: cashTimingSchedule(s?.cash_flow_assumptions),
       taxRate: Number(s?.tax_rate ?? 25), dividendRate: num(s?.dividend_rate),
@@ -135,5 +145,6 @@ export const loadPlan = cache(async function loadPlan(planId: string): Promise<L
     assumptionsSet: !!stored && Object.keys(stored).length > 0,
     noun: productNoun(s?.product_type as string | null),
     settings: (s ?? null) as Record<string, unknown> | null,
+    existingDebt: existing,
   };
 });
