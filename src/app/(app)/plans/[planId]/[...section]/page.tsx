@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { navLabel, GUIDED_STEPS } from "@/lib/nav";
 import { getCompleteness } from "@/lib/plan";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,8 @@ import { Card, CardContent } from "@/components/ui/card";
  * step of the guided path and the entire reason a client filled in the other fourteen. They walk the whole
  * way, click the deliverable, and are told to go and read a markdown file.
  *
- * Six menu items land here: Business plan, Recommendations, and the four unbuilt Assets modules. Each says
+ * Menu items that land here: Recommendations, and anything else not yet built. (The Assets registers were
+ * built in §6.147 and redirect to their screen.) Each says
  * what the screen is for and what to do in the meantime. None of them name a file, promise a date, or
  * pretend the thing exists.
  */
@@ -28,14 +30,15 @@ const BLURB: Record<string, { what: string; meanwhile?: string }> = {
     what: "Observations drawn from your own figures — where the margin is thin, which costs move fastest, where the cash gets tight.",
     meanwhile: "Nothing here is guesswork you need to supply. It reads what you have already entered.",
   },
-  social: { what: "The accounts and audiences the business reaches people through." },
-  memberships: { what: "Industry bodies, accreditations and subscriptions the business holds." },
-  ip: { what: "Trade marks, designs, registered names and anything else the business owns that is not physical." },
 };
+
+/* Built since (§6.147): an old link to one of these goes to its area on the Assets screen, not here. */
+const MOVED: Record<string, string> = { social: "registers?area=social", memberships: "registers?area=memberships", ip: "registers?area=ip" };
 
 export default async function SectionPage({ params }: { params: Promise<{ planId: string; section: string[] }> }) {
   const { planId, section } = await params;
   const id = section[0];
+  if (MOVED[id]) redirect(`/plans/${planId}/${MOVED[id]}`);
   const step = GUIDED_STEPS.find((s) => s.id === id)?.step;
   const label = navLabel(id);
   const blurb = BLURB[id];

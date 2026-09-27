@@ -18,6 +18,7 @@ import { buildLadder } from "@/engine/plan/ladder";
 import { AREA_LABEL } from "@/engine/whatif/goals";
 import { SPEND_LABEL } from "../marketing/model";
 import { ROLE_LABEL } from "../people/model";
+import { ipTypeLabel } from "../registers/model";
 import { BS_LINES, PNL_LINES } from "../historic/model";
 import { FREQUENCIES, LOAN_TYPES, REPAYMENT_TYPES } from "../funding/model";
 
@@ -108,7 +109,7 @@ export async function gatherReport(planId: string) {
    * SALE AND LENDER FIGURES (§6.130.2), asked for by name in queries of their own for the reason the ladder's
    * are (§6.82): a column that is not there fails this query alone, not the whole plan.
    */
-  const [saleRow, addBackRows, ratingRows, successionRows] = await Promise.all([
+  const [saleRow, addBackRows, ratingRows, successionRows, membershipRows, ipRows] = await Promise.all([
     supabase.from("plan_settings")
       .select("asking_price, multiple_low, multiple_high, intended_exit_year, multiple_sources, multiple_found_on, repayments_on_time, covenant_history, guarantee_offered, guarantee_by")
       .eq("plan_id", planId).maybeSingle().then((r) => {
@@ -118,6 +119,9 @@ export async function gatherReport(planId: string) {
     rows(supabase.from("plan_add_backs").select("label, amount").eq("plan_id", planId).order("sort_order").order("created_at"), "plan_add_backs"),
     rows(supabase.from("plan_transfer_ratings").select("factor, score, note").eq("plan_id", planId), "plan_transfer_ratings"),
     rows(supabase.from("plan_people_succession").select("person_id, dependency, successor_person_id, successor_external, cover, cover_amount, notes").eq("plan_id", planId), "plan_people_succession"),
+    /* The Assets registers that print (§6.147). Social media stays on screen: Nic's call, 27 Sep 2026. */
+    rows(supabase.from("plan_memberships").select("organisation_name, description").eq("plan_id", planId).order("sort_order").order("created_at"), "plan_memberships"),
+    rows(supabase.from("plan_ip").select("name, ip_type, description").eq("plan_id", planId).order("sort_order").order("created_at"), "plan_ip"),
   ]);
   /* Nullable through every layer (§6.89): `n()` would turn "not priced" into a business priced at nothing. */
   const orNull = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
@@ -252,6 +256,10 @@ export async function gatherReport(planId: string) {
       name: String(l.name ?? ""), number: text(l.number), issuer: text(l.issuer),
       expires: l.expires_on ? new Date(String(l.expires_on)).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) : null,
     })).filter((l) => l.name),
+    memberships: membershipRows.map((m) => ({ name: String(m.organisation_name ?? "").trim(), description: text(m.description) })).filter((m) => m.name),
+    intellectualProperty: ipRows.map((r) => ({
+      name: String(r.name ?? "").trim(), type: ipTypeLabel(r.ip_type as string | null), description: text(r.description),
+    })).filter((r) => r.name),
 
     market: {
       size: text(marketing?.market_size), trends: text(marketing?.market_trends),

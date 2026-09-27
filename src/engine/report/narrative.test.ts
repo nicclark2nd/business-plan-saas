@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { whatWeSell, ourPeople } from "./narrative";
+import { whatWeSell, ourPeople, theBusiness } from "./narrative";
 import type { ReportInput } from "./build";
 
 /**
@@ -74,5 +74,24 @@ describe("key-person risk under Our People (§6.146)", () => {
     expect(text).toContain("None identified");
     expect(text).toContain("Insured — 500000");
     expect(text).toContain("Jo Smith: Every quote goes through Jo.");
+  });
+});
+
+describe("memberships and intellectual property under The Business (§6.147)", () => {
+  const bare = { profile: { established: null, industry: null, legalStructure: null, country: null }, framework: { purpose: null, fieldOfPlay: null }, licences: [], owners: [] } as unknown as Partial<ReportInput>;
+  const titles = (i: ReportInput) => (theBusiness(i)?.children ?? []).filter(Boolean).map((c) => (c as { title: string }).title);
+
+  it("prints nothing for registers with no rows", () => {
+    expect(theBusiness(input({ ...bare, memberships: [], intellectualProperty: [] }))).toBeNull();
+  });
+  it("prints each register with its rows, after Licences", () => {
+    const i = input({ ...bare,
+      memberships: [{ name: "Master Builders Queensland", description: "Contract templates" }],
+      intellectualProperty: [{ name: "SEQ Concreting logo", type: "Trade mark", description: "Registered 2145678" }] });
+    expect(titles(i)).toEqual(["Memberships and accreditations", "Intellectual property"]);
+    const text = JSON.stringify(theBusiness(i));
+    expect(text).toContain("Master Builders Queensland");
+    expect(text).toContain("Trade mark");
+    expect(text).not.toContain("instagram");
   });
 });

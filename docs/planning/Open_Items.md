@@ -50,11 +50,27 @@ Live on ZZ Test Walk: two test people; High + Insured 500,000 + a note saved and
 offered "The business depends heavily on Test Owner and no successor is identified"; naming Test Deputy as
 successor took it away; the report printed the row and the note. Both test people removed afterwards.
 
-### 3. The Assets group is three stubs — **Build**
+### ~~3. The Assets group is three stubs~~ — **done (§6.147)**
 
 `social`, `memberships` and `ip` all carry `tag: "soon"` in the nav. A client sees three menu items
 that go nowhere. Either build them or take them out of the nav until they exist; a "soon" that has
 been soon for a while is a promise with no date on it.
+
+Built (§6.147, 27 Sep 2026). One **Assets** screen with three areas — Social media (platform, address or
+handle, what it is for), Memberships (organisation, what it gives the business) and Intellectual property
+(name, type, description) — on the tables from 0002, so no migration. The three menu items lose their
+"soon" tag and each opens its own area; switching area moves the URL so the menu lights the right one; old
+/social, /memberships and /ip links redirect. Descriptive only: nothing reaches the forecast. In the report,
+Memberships and accreditations and Intellectual property print under The Business after Licences; social
+media stays on screen (Nic's call). Live on ZZ Test Walk: a row in each register saved and survived a reload,
+the report printed the membership and the trade mark and not the social account, and all three were removed.
+The menu itself shows these items only in Advanced mode, which was not switched on for the check.
+
+**Route is `registers`, not `assets`.** `assets` is Fixed Assets (step 12). The first version of this screen
+was written into that folder and replaced Fixed Assets' four files; caught from `git status` before the
+commit left the machine, Fixed Assets restored byte for byte from the commit before, and this screen moved
+to its own route. Checked live afterwards: /assets is Fixed Assets step 12 again; /ip lands on
+/registers?area=ip, and a row there saved, reloaded and was removed.
 
 ---
 

@@ -53,6 +53,28 @@ export function theBusiness(i: ReportInput): Draft {
     ],
   };
 
+  /* §6.147 — the Assets registers a lender or buyer reads. Each appears only when it has a row. */
+  const ip: Draft = !i.intellectualProperty?.length ? null : {
+    title: "Intellectual property",
+    blocks: [
+      para(COPY.intellectualProperty(i.businessName)),
+      { kind: "table",
+        columns: [{ label: "Name", width: 220 }, { label: "Type", width: 150 }, { label: "Description" }],
+        rows: i.intellectualProperty.map((r) => [
+          cell(r.name), cell(r.type ?? "—", { muted: !r.type }), cell(r.description ?? "—", { muted: !r.description }),
+        ]) },
+    ],
+  };
+  const memberships: Draft = !i.memberships?.length ? null : {
+    title: "Memberships and accreditations",
+    blocks: [
+      para(COPY.memberships(i.businessName)),
+      { kind: "table",
+        columns: [{ label: "Organisation", width: 260 }, { label: "What it gives the business" }],
+        rows: i.memberships.map((m) => [cell(m.name), cell(m.description ?? "—", { muted: !m.description })]) },
+    ],
+  };
+
   const ownership: Draft = i.owners.length === 0 ? null : {
     title: "Ownership",
     blocks: [
@@ -66,7 +88,7 @@ export function theBusiness(i: ReportInput): Draft {
     kept.length ? { title: "The business at a glance", blocks: [para(COPY.glance(i.businessName)), { kind: "facts" as const, rows: kept }] } : null,
     written("Why the business exists", i.framework.purpose),
     written("Where we compete", i.framework.fieldOfPlay),
-    licences, ownership,
+    licences, memberships, ip, ownership,
   ];
   return children.some(Boolean) ? { title: "The Business", children } : null;
 }

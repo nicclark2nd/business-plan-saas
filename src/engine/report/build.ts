@@ -88,6 +88,9 @@ export type ReportInput = {
   extraordinary: { name: string; amount: number; year: number; income: boolean }[];
   owners: { name: string; share: number | null; role: string | null }[];
   licences: { name: string; number: string | null; issuer: string | null; expires: string | null }[];
+  /** Assets registers that print (§6.147). Optional so older fixtures need not carry them. */
+  memberships?: { name: string; description: string | null }[];
+  intellectualProperty?: { name: string; type: string | null; description: string | null }[];
   /** Market and brand prose, as typed on Marketing. */
   market: {
     size: string | null; trends: string | null; positioning: string | null;

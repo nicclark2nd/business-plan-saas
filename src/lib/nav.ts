@@ -131,9 +131,14 @@ export const NAV: NavGroup[] = [
    * plan. A client who clicked Outlets was sent to a coming-soon page for a screen they had already
    * filled in. A second door to a furnished room is worse than no door: it makes a client doubt the room.
    */
+  /*
+   * BUILT (§6.147). One Assets screen with three areas; each item deep-links to its own, the way the
+   * financial statements deep-link into the forecast, so the menu lights the one on screen.
+   */
   { group: "Assets", items: [
-    { id: "social", label: "Social Media", tag: "soon" }, { id: "memberships", label: "Membership", tag: "soon" },
-    { id: "ip", label: "Intellectual Property", tag: "soon" },
+    { id: "social", label: "Social Media", href: "registers?area=social" },
+    { id: "memberships", label: "Membership", href: "registers?area=memberships" },
+    { id: "ip", label: "Intellectual Property", href: "registers?area=ip" },
   ] },
   { group: "Strategy (AI)", items: [{ id: "strategy", label: "Recommendations", tag: "soon" }] },
 ];

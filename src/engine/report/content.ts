@@ -188,6 +188,10 @@ export const COPY = {
 
   // ---- the narrative sections (§6.86) -------------------------------------
   glance: (name: string) => `${name} in brief.`,
+  intellectualProperty: (name: string) =>
+    `What ${name} owns that is not equipment: its names, marks, designs and know-how. Recorded here, not valued in the figures.`,
+  memberships: (name: string) =>
+    `The industry bodies and accreditations ${name} belongs to.`,
   licences: (name: string) =>
     `What ${name} is licensed, registered and insured to do. These belong to the business rather than to any individual, and they are what the business is permitted to trade on.`,
   whatWeSell: (name: string, many: string) =>
