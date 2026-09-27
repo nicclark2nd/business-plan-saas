@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { firstProjectedYear, historicPeriodYear } from "@/engine/plan/calendar";
 import { createClient } from "@/lib/supabase/server";
 import { deriveFromComponents, deriveFromTotals, type PeriodInput, type PeriodValues } from "@/engine/historic/derive";
 import { parseMonth } from "../people/model";
@@ -12,13 +13,19 @@ type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string
 const touch = (planId: string) => revalidatePath(`/plans/${planId}`, "layout");
 
 /** "2026" → last day of the plan's financial year 2026; "Jun 2026" → 2026-06-30; ISO passes through. */
-async function periodEndDate(planId: string, raw: string | number | null | undefined): Promise<string | null | undefined> {
-  if (raw === null || raw === undefined || raw === "") return null;
-  const s = String(raw).trim();
+async function periodEndDate(planId: string, raw: string | number | null | undefined, periodNumber: number): Promise<string | null | undefined> {
   const supabase = await createClient();
-  const { data } = await supabase.from("plan_settings").select("financial_year_end_month").eq("plan_id", planId).maybeSingle();
+  const { data } = await supabase.from("plan_settings").select("financial_year_end_month, first_projected_year").eq("plan_id", planId).maybeSingle();
   const fyEnd = data?.financial_year_end_month ?? 6;
   const lastDay = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);   // m is 1-based; day 0 of next month
+  /*
+   * NOT ASKED FOR (§6.151). Set-up already said when Year 1 ends, so Period 1 is the financial year before it
+   * and each earlier period the year before that. Typed only when the accounts are for a different year.
+   */
+  if (raw === null || raw === undefined || String(raw).trim() === "") {
+    return lastDay(historicPeriodYear(firstProjectedYear(data?.first_projected_year, fyEnd), periodNumber), fyEnd);
+  }
+  const s = String(raw).trim();
   if (/^\d{4}$/.test(s)) return lastDay(Number(s), fyEnd);
   const month = parseMonth(s);
   if (month === undefined) return undefined;
@@ -31,7 +38,7 @@ async function periodEndDate(planId: string, raw: string | number | null | undef
 export async function savePeriod(planId: string, periodNumber: number, input: { period_end_text?: string; period_length?: number; share_capital?: number | null } & PeriodInput): Promise<Result<{ values: PeriodValues; period_end: string | null }>> {
   const supabase = await createClient();
   if (periodNumber < 1 || periodNumber > 4) return { ok: false, error: "Only four periods are kept." };
-  const end = await periodEndDate(planId, input.period_end_text);
+  const end = await periodEndDate(planId, input.period_end_text, periodNumber);
   if (end === undefined) return { ok: false, error: "Period end should be a year (2026) or a month and year (Jun 2026)." };
   const values = deriveFromComponents(input);
   /*
@@ -54,7 +61,7 @@ export async function importPeriods(planId: string, periods: { period_number: nu
   const rows = [];
   for (const p of periods) {
     if (!p.present) continue;
-    const end = await periodEndDate(planId, p.period_end);
+    const end = await periodEndDate(planId, p.period_end, p.period_number);
     const values = deriveFromTotals(p.input);
     /* From the file when it has the line (§6.149); otherwise left for the carry-over below, or for Historic to ask. */
     const sc = typeof p.share_capital === "number" && Number.isFinite(p.share_capital) ? { share_capital: Math.max(0, Math.round(p.share_capital * 100) / 100) } : {};

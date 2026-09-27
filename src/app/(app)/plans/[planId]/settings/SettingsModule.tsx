@@ -23,6 +23,7 @@ import { PAGE_SIZE_LABEL, defaultPageSizeFor } from "@/engine/report/pageSize";
 import { DangerArea, type PlanInventory } from "./DangerArea";
 import { LicenceSection } from "./LicenceSection";
 import { LogoSection } from "./LogoSection";
+import { countryDefault } from "@/engine/plan/countryDefaults";
 import { legalStructuresFor, CUSTOMER_TYPES, PRODUCT_TYPES, COUNTRIES, CURRENCIES, MONTHS, profileMissing, type Settings, type Profile, type Financial, type Licence, type AddBack } from "./model";
 import { CellInput, RemoveButton, FootRow } from "@/components/module/DataGrid";
 import { useMoney } from "@/components/MoneyProvider";
@@ -71,6 +72,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
   /* Which field's draft dialog is open. Null when AI is off, because then no button exists. */
   const [draftOpen, setDraftOpen] = useState<string | null>(null);
   const [s, setS] = useState(initial);
+  const byCountry = countryDefault(s.country);
   const [established, setEstablished] = useState(formatMonth(initial.date_established));
   /*
    * TWO FLAGS, NOT ONE SLOT (§6.142). This was a single "profile" | "financial" value, and the State box
@@ -140,7 +142,8 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
          * those two fields goes with it.
          */
         if (res.data?.clearedTax) {
-          const cleared = { tax_region: null, tax_components: [] };
+          /* …and the currency and tax rate that followed the country, if they did (§6.151). */
+          const cleared = { tax_region: null, tax_components: [], ...(res.data.followed ?? {}) };
           ref.current = { ...ref.current, ...cleared };
           setS((x) => ({ ...x, ...cleared }));
         }
@@ -423,7 +426,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
               <Field label="Tagline" span={4} error={errors.forField("tagline")} hint="The line under your name on the cover. What the business does, in its own words — not the industry.">
                 <FieldInput value={s.tagline ?? ""} placeholder="e.g. Concreting &amp; civil works" onChange={(e) => edit({ tagline: e.target.value }, "profile")} />
               </Field>
-              <Field label="Contact email" span={2} error={errors.forField("contact_email")} hint="Printed at the foot of the cover. Not your sign-in address.">
+              <Field label="Contact email" span={2} error={errors.forField("contact_email")} hint="Printed at the foot of the cover. Changing it does not change how you sign in.">
                 <FieldInput value={s.contact_email ?? ""} placeholder="e.g. hello@example.com" onChange={(e) => edit({ contact_email: e.target.value }, "profile")} />
               </Field>
               <Field label="Main website" span={2} error={errors.forField("website")} hint="Printed without the https:// and the www.">
@@ -445,12 +448,25 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
             <FieldGrid>
               <Field label="Financial year ends in" span={2}><FieldSelect value={String(s.financial_year_end_month)} options={MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))} onValueChange={(v) => edit({ financial_year_end_month: Number(v) }, "financial", true)} /></Field>
               <Field label="First projected year" hint="The year Year 1 ends in. With these two fields the plan knows its own calendar."><FieldInput numeric inputMode="numeric" value={s.first_projected_year ?? ""} placeholder={String(currentFinancialYear(s.financial_year_end_month))} onChange={(e) => edit({ first_projected_year: Number(e.target.value.replace(/\D/g, "")) || null }, "financial")} /></Field>
-              <Field label="Currency"><FieldSelect value={s.currency} options={opts(CURRENCIES)} onValueChange={(v) => edit({ currency: v }, "financial", true)} /></Field>
+              <Field label="Currency" hint={byCountry && s.currency === byCountry.currency ? `Follows the country, ${s.country}.` : undefined}><FieldSelect value={s.currency} options={opts(CURRENCIES)} onValueChange={(v) => edit({ currency: v }, "financial", true)} /></Field>
             </FieldGrid>
           </Section>
           <Section title="Tax and distributions">
             <FieldGrid>
-              <Field label="Company tax rate %" hint="Applied to profit before tax in the forecast."><FieldInput numeric value={String(s.tax_rate)} onChange={(e) => edit({ tax_rate: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 }, "financial")} /></Field>
+              {/*
+                * FROM THE COUNTRY (§6.151). The usual small-company rate there, said so, with what moves it —
+                * and the way back to it when the box has been changed. Still a box: the accountant decides.
+                */}
+              <Field label="Company tax rate %">
+                <FieldInput numeric value={String(s.tax_rate)} onChange={(e) => edit({ tax_rate: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 }, "financial")} />
+                <p className="mt-1 text-[11.5px] text-muted-foreground">
+                  {!byCountry ? "Applied to profit before tax in the forecast."
+                    : Number(s.tax_rate) === byCountry.taxRate
+                      ? <>The usual small-company rate for {s.country}.{byCountry.note ? ` ${byCountry.note}` : ""} Check it with your accountant.</>
+                      : <>Your figure. The usual small-company rate for {s.country} is {byCountry.taxRate}%.{" "}
+                          <button type="button" className={LINK} onClick={() => edit({ tax_rate: byCountry.taxRate }, "financial", true)}>Use {byCountry.taxRate}%</button></>}
+                </p>
+              </Field>
               <Field label="Dividend %" hint="Share of after-tax profit paid out to owners. Never more than the company has made."><FieldInput numeric value={String(s.dividend_rate)} onChange={(e) => edit({ dividend_rate: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 }, "financial")} /></Field>
               {/*
                 * READ FROM HISTORIC, NOT ASKED FOR AGAIN (§6.148). Nic: if the accounts are already in

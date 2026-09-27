@@ -8,7 +8,7 @@ import { ModuleFrame, ModuleFooter, useModule } from "@/components/module/Module
 import { useSaveErrors } from "@/components/module/saveErrors";
 import { Toolbar, Meta, Note, CellInput, RemoveButton } from "@/components/module/DataGrid";
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
-import { MONTH_SHORT } from "@/engine/plan/calendar";
+import { MONTH_SHORT, historicPeriodYear } from "@/engine/plan/calendar";
 import { cn } from "@/lib/utils";
 import { deriveFromComponents, periodRatios, periodsFromTemplate, COMPONENT_INPUTS, TEMPLATE_ROWS, SHARE_CAPITAL_LABEL, type PeriodField, type PeriodInput, type TemplateSheet } from "@/engine/historic/derive";
 import { useMoney } from "@/components/MoneyProvider";
@@ -30,8 +30,11 @@ const endText = (iso: string | null, fyEnd: number) => {
   return m === fyEnd ? String(y) : `${MONTH_SHORT[m - 1]} ${y}`;   // a real calendar month, from a real date
 };
 
-export function HistoricModule({ planId, initial, hasHistory, mode, initialArea, fyEndMonth, loadError }: {
-  planId: string; initial: Period[]; hasHistory: boolean | null; mode: "guided" | "advanced"; initialArea: AreaKey; fyEndMonth: number; loadError?: string | null;
+export function HistoricModule({ planId, initial, hasHistory, mode, initialArea, fyEndMonth, firstYear, loadError }: {
+  planId: string; initial: Period[]; hasHistory: boolean | null; mode: "guided" | "advanced"; initialArea: AreaKey; fyEndMonth: number;
+  /** The year Year 1 ends in — Period 1 is the year before it, so the period ends are never asked for (§6.151). */
+  firstYear: number;
+  loadError?: string | null;
 }) {
   const [area, setArea] = useState<AreaKey>(initialArea);
   const [cols, setCols] = useState<Col[]>(() => PERIODS.map((n) => {
@@ -129,8 +132,13 @@ export function HistoricModule({ planId, initial, hasHistory, mode, initialArea,
               </thead>
               <tbody>
                 <tr className="border-b border-border bg-secondary/40">
-                  <td className="py-1 pl-5 text-muted-foreground">Period end <span className="text-[11px]">(year, or month year)</span></td>
-                  {cols.map((c) => <td key={c.n} data-col={c.n} className="px-3 py-1" onBlur={(e) => leftCol(e, c.n) && commit(c.n)}><CellInput value={c.period_end_text} placeholder={c.n === 1 ? "e.g. 2026" : ""} className="text-right" onChange={(e) => edit(c.n, { period_end_text: e.target.value })} /></td>)}
+                  {/*
+                    * FROM SET-UP, NOT ASKED AGAIN (§6.151). An empty box shows the year that follows from the
+                    * plan's first projected year, in the same ink as a typed one, and the save stores exactly
+                    * that. Typing over it is for accounts that end in a different year.
+                    */}
+                  <td className="py-1 pl-5 text-muted-foreground">Period end <span className="text-[11px]">(from Plan settings — change it if your accounts differ)</span></td>
+                  {cols.map((c) => <td key={c.n} data-col={c.n} className="px-3 py-1" onBlur={(e) => leftCol(e, c.n) && commit(c.n)}><CellInput value={c.period_end_text} placeholder={String(historicPeriodYear(firstYear, c.n))} className="text-right placeholder:text-foreground" onChange={(e) => edit(c.n, { period_end_text: e.target.value })} /></td>)}
                 </tr>
                 <tr className="border-b border-border bg-secondary/40">
                   <td className="py-1 pl-5 text-muted-foreground">Period length <span className="text-[11px]">(months)</span></td>

@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { currentFinancialYear } from "@/engine/plan/calendar";
+import { GENERIC_TAX_RATE, countryDefault } from "@/engine/plan/countryDefaults";
 
 /**
  * Remember the view preference. Deliberately does NOT revalidate: Guided vs Advanced changes which items
@@ -50,7 +51,16 @@ export async function completeSetup(_: SetupState, formData: FormData): Promise<
     .select("id").single();
   if (planErr) { console.error("create the plan", planErr); return { error: "Couldn't create the plan. Try again." }; }
 
-  await supabase.from("plan_settings").update({ country, currency, financial_year_end_month: fyEndMonth, first_projected_year: firstProjectedYear }).eq("plan_id", plan.id);
+  /*
+   * NOT ASKED TWICE (§6.151). The country gives the tax rate; and an owner planning their own business
+   * already gave the email the cover prints — they signed in with it. An adviser's sign-in address belongs
+   * on no client's cover, so theirs starts blank. Both stay changeable in Plan settings.
+   */
+  await supabase.from("plan_settings").update({
+    country, currency, financial_year_end_month: fyEndMonth, first_projected_year: firstProjectedYear,
+    tax_rate: countryDefault(country)?.taxRate ?? GENERIC_TAX_RATE,
+    ...(kind === "owner" && user.email ? { contact_email: user.email } : {}),
+  }).eq("plan_id", plan.id);
   await supabase.from("profiles").update({ default_organisation_id: org.id }).eq("id", user.id);
   redirect(`/plans/${plan.id}/dashboard`);
 }

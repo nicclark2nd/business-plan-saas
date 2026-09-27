@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { followCountry } from "@/engine/plan/countryDefaults";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { parseMonth } from "../people/model";
@@ -25,7 +26,7 @@ import { adjustableMeasures, validPair } from "@/engine/capability/ranges";
  * email address" and does not say WHICH box is a message the client has to go hunting with.
  */
 type Result =
-  | { ok: true; data?: { date_established: string | null; clearedTax?: boolean } }
+  | { ok: true; data?: { date_established: string | null; clearedTax?: boolean; followed?: { currency?: string; tax_rate?: number } } }
   | { ok: false; error: string; field?: string };
 
 /**
@@ -74,14 +75,19 @@ export async function saveProfile(planId: string, p: Partial<Profile> & { establ
    * whichever screen changes the country.
    */
   const country = p.country?.trim() || null;
-  const { data: was } = await supabase.from("plan_settings").select("country").eq("plan_id", planId).maybeSingle();
+  const { data: was } = await supabase.from("plan_settings").select("country, currency, tax_rate").eq("plan_id", planId).maybeSingle();
   const movedCountry = p.country !== undefined && (was?.country ?? null) !== country;
+  /*
+   * AND ITS CURRENCY AND TAX RATE FOLLOW (§6.151) — but only while they are still the old country's own
+   * defaults, so a choice the client made on purpose is never overwritten by a change of country.
+   */
+  const followed = movedCountry ? followCountry(was?.country, country, { currency: was?.currency, tax_rate: was?.tax_rate === null || was?.tax_rate === undefined ? null : Number(was.tax_rate) }) : {};
 
   const [plans, settings] = await Promise.all([
     supabase.from("plans").update({ business_name: name, ...(planYear ? { plan_year: planYear } : {}) }).eq("id", planId),
     supabase.from("plan_settings").upsert({
       plan_id: planId,
-      ...(movedCountry ? { tax_region: null, tax_components: [] } : {}),
+      ...(movedCountry ? { tax_region: null, tax_components: [], ...followed } : {}),
       date_established: established ?? null,
       industry: p.industry?.trim() || null,
       country,
@@ -100,7 +106,7 @@ export async function saveProfile(planId: string, p: Partial<Profile> & { establ
   if (error) return failed(error, "save the profile");
   touch(planId);
   /* Says when the move cleared the state and its taxes, so the screen shows what is stored (§6.144.1). */
-  return { ok: true, data: { date_established: established ?? null, ...(movedCountry ? { clearedTax: true } : {}) } };
+  return { ok: true, data: { date_established: established ?? null, ...(movedCountry ? { clearedTax: true, followed } : {}) } };
 }
 
 /** The clamped fields, with the wording the screen uses, so a note can name the box the client is looking at. */

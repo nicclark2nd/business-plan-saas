@@ -144,3 +144,9 @@ export function planYearEndDate(first: number, planYear: number, fyEndMonth: num
   const d = new Date(Date.UTC(year, end, 0));
   return d.toISOString().slice(0, 10);
 }
+
+/**
+ * The year Historic Period `n` ends in (§6.151): Period 1 is the financial year before Year 1, Period 2 the
+ * one before that. Set-up states Year 1, so the four period ends are never asked for again.
+ */
+export const historicPeriodYear = (firstYear: number, periodNumber: number) => firstYear - Math.max(1, Math.trunc(periodNumber) || 1);

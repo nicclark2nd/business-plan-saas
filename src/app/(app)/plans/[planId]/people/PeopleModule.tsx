@@ -28,8 +28,10 @@ const draftOf = (r?: Succession | null): SuccDraft => r
 const nameOf = (p: Pick<Person, "name" | "first_name" | "last_name">) =>
   p.name || [p.first_name, p.last_name].filter(Boolean).join(" ") || "Unnamed";
 
-export function PeopleModule({ planId, initial, mode, cap, currency, planYear, fyEndMonth, ratings, initialArea }: {
+export function PeopleModule({ planId, initial, mode, cap, currency, planYear, fyEndMonth, ratings, initialArea, me = null }: {
   planId: string; initial: PeopleData; mode: "guided" | "advanced";
+  /** The signed-in owner's name from sign-up, for the empty grid's first row (§6.151). Null for an adviser. */
+  me?: { first: string; last: string } | null;
   /** The whole business's ownership, composed once (§6.54) — this screen holds only part of it. */
   cap: CapTable;
   currency: string; planYear: number; fyEndMonth: number;
@@ -50,7 +52,8 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
   const blankCap = (personId: string, id = `tmp-new-cap-${personId}`): Cap => ({ id, _key: id, person_id: personId, kind: "responsibility", description: "", internal: false, sort_order: 0 });
   const [people, setPeople] = useState<Row[]>(() => initial.people.length
     ? initial.people.map((p) => ({ ...p, first_name: p.first_name ?? "", last_name: p.last_name ?? "", role: p.role ?? "employee", salary_adjustments: p.salary_adjustments ?? {}, started_text: formatMonth(p.started_on), _key: p.id }))
-    : [blankPerson()]);
+    /* The owner's own name, from sign-up, on the first row (§6.151) — typed for them, saved with the row. */
+    : [me ? { ...blankPerson(), first_name: me.first, last_name: me.last, role: "owner", _dirty: true } : blankPerson()]);
   const [caps, setCaps] = useState<Cap[]>(() => [
     ...initial.capabilities.map((c) => ({ ...c, _key: c.id })),
     ...initial.people.filter((p) => !initial.capabilities.some((c) => c.person_id === p.id)).map((p) => blankCap(p.id)),

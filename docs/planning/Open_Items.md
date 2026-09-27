@@ -643,7 +643,7 @@ Migration 0054 (share_capital, tax_losses_from_accountant). Checked on SEQ witho
 SEQ's own Years 1 and 2 are losses, so the 71,000 is used in Year 4: taxable profit there falls from 86,874
 to 15,874 (17,750 less tax).
 
-### 49. Share capital is not in the upload, and the app has not been checked for double entry — **share capital done (§6.149); sweep done; fix 1 done (§6.150); fixes 2–5 open**
+### 49. Share capital is not in the upload, and the app has not been checked for double entry — **Done: share capital (§6.149), sweep, fix 1 (§6.150), fixes 2–5 (§6.151)**
 
 The "never ask twice" rule (SaaS_Requirements §0, Nic 27 Sep 2026) leaves two follow-ups from §6.148:
 - **Share capital** is the one figure accumulated profit needs that the Historic upload template does not
@@ -703,3 +703,22 @@ Checked on SEQ without saving: Year 1 interest 4,433 → 19,577; loans owed at Y
 old loans), gone by Year 2; the balance sheet balances every year. **SEQ's cash now goes negative** —
 (25,019) at Year 1 and (162,372) at Year 2 — because 93,869 of real repayments are now in Year 1. That is the
 forecast telling the truth, not a fault. 12 unit tests.
+
+**Fixes 2–5 done, 27 Sep 2026 (§6.151).**
+- **Historic period ends.** Period n ends in the financial year `first projected year − n`
+  (`historicPeriodYear`). An empty box shows that year in the same ink as a typed one, and a save or an
+  upload without a period end stores it. Typing over it is for accounts that end in a different year. On ZZ
+  (Year 1 ending June 2027) the four read 2026, 2025, 2024, 2023, which are the years SEQ had to type.
+- **Currency and tax rate follow the country** (`engine/plan/countryDefaults.ts`). Set-up now offers the
+  same 13 countries as Plan settings (its own copy had drifted to 7), the currency follows the country
+  there, and a new plan gets that country's rate. Changing the country in Plan settings moves the currency
+  and rate with it, but only while they are still the old country's defaults, so a choice made on purpose
+  is kept. Settings says where the rate came from, what moves it, and offers "Use X%" when it has been
+  changed. Checked on ZZ: Australia → New Zealand gave NZD and 28% after a reload; back to Australia gave
+  AUD and 25%. Existing plans keep their stored rate. Nothing is changed behind the client's back.
+- **Rates used** are the usual small-company rates (checked Sep 2026), each with its note in the app:
+  AU 25, NZ 28, US 21 (federal), UK 19 (small profits; 25% by £250k), CA 12 (federal + provincial small
+  business), SG 17, IE 12.5, ZA 27, IN 25, PH 20, TH 20, MY 17, ID 22.
+- **Contact email and first person.** An owner's new plan starts with their sign-in email as the cover
+  contact. An empty Leadership Team starts with their sign-up name on the first row as Owner, which saves
+  when they leave the row. An adviser's plans start blank for both, because the adviser is not the client.

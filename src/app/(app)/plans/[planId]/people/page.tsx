@@ -32,10 +32,19 @@ export default async function PeoplePage({ params, searchParams }: {
     succession: (succession.data ?? []).map((r) => ({ ...r, cover_amount: r.cover_amount === null ? null : Number(r.cover_amount) })),
   } as PeopleData;
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
+  /*
+   * WHO IS FILLING THIS IN (§6.151). An owner planning their own business gave their name at sign-up, so
+   * the empty grid's first row starts with it rather than asking again. An adviser's name is not the
+   * client's, so theirs starts empty. Nothing is saved until the row is.
+   */
+  const org = session?.plans.find((p) => p.id === planId)?.organisations as { kind?: string } | { kind?: string }[] | null | undefined;
+  const kind = Array.isArray(org) ? org[0]?.kind : org?.kind;
+  const full = (session?.profile?.full_name ?? "").trim();
+  const me = kind === "owner" && full ? { first: full.split(/\s+/)[0], last: full.split(/\s+/).slice(1).join(" ") } : null;
 
   return (
     <PeopleModule
-      planId={planId} initial={data} mode={mode} cap={cap}
+      planId={planId} initial={data} mode={mode} cap={cap} me={me}
       currency={settings.data?.currency ?? "AUD"}
       /*
        * THE FIFTH PLACE (§6.33.1, §6.126).

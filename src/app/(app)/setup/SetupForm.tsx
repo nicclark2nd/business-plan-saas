@@ -16,8 +16,9 @@ const KINDS = [
   { value: "consultant", title: "I'm a consultant", desc: "I deliver plans as part of an engagement." },
   { value: "accounting_firm", title: "We're an accounting firm", desc: "We add planning to the work we do for clients." },
 ];
-const COUNTRIES = ["Australia", "United States", "New Zealand", "United Kingdom", "Canada", "Singapore", "Other"];
-const CURRENCIES = ["AUD", "USD", "NZD", "GBP", "CAD", "SGD", "EUR"];
+/* The same two lists Plan settings offers — one list, one place (§6.41). This copy had drifted to seven. */
+import { COUNTRIES, CURRENCIES } from "@/app/(app)/plans/[planId]/settings/model";
+import { countryDefault, followCountry } from "@/engine/plan/countryDefaults";
 
 export function SetupForm() {
   const [state, action, pending] = useActionState(completeSetup, undefined);
@@ -64,7 +65,13 @@ export function SetupForm() {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5"><Label>Country</Label>
-          <Select value={country} onValueChange={(v) => v && setCountry(v)}>
+          {/* The currency follows the country unless it has been changed by hand (§6.151). */}
+          <Select value={country} onValueChange={(v) => {
+            if (!v) return;
+            const moved = followCountry(country, v, { currency, tax_rate: countryDefault(country)?.taxRate ?? null });
+            if (moved.currency) setCurrency(moved.currency);
+            setCountry(v);
+          }}>
             <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
             <SelectContent>{COUNTRIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
           </Select></div>
