@@ -563,9 +563,14 @@ Fixed: `dirty` is two flags; each saver clears only its own, and a tab change sa
 Checked live on ZZ: the same sequence now keeps the industry (footer says "Unsaved" until it saves); an
 industry and a state typed together both saved on leaving the section.
 
-### 47. After a country change, the State box still shows the old state — **open**
+### ~~47. After a country change, the State box still shows the old state~~ — **done (§6.144.1)**
 
 Changing country clears the stored state on the server (§6.39.1), but the screen keeps showing it — the
 legal-notice line read "Victoria, New Zealand" until a reload — and the next Financial save would write
 it back. Seen on ZZ Test Walk 27 Sep 2026. The profile save should hand back what it cleared, and the
 screen adopt it (§6.121).
+
+Fixed: the profile save says when the move cleared the state and its taxes (`clearedTax`), and the screen
+adopts the cleared row, including the copy the next Financial save reads. Checked live on ZZ Test Walk:
+Auckland under New Zealand, country changed to Australia — the box emptied and the notice read "Australia"
+without a reload; the tax save that followed stored `tax_region: null`. Tax rate put back to 25.

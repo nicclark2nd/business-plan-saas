@@ -20,7 +20,7 @@ import { adjustableMeasures, validPair } from "@/engine/capability/ranges";
  * email address" and does not say WHICH box is a message the client has to go hunting with.
  */
 type Result =
-  | { ok: true; data?: { date_established: string | null } }
+  | { ok: true; data?: { date_established: string | null; clearedTax?: boolean } }
   | { ok: false; error: string; field?: string };
 
 /**
@@ -94,7 +94,8 @@ export async function saveProfile(planId: string, p: Partial<Profile> & { establ
   const error = plans.error ?? settings.error;
   if (error) return failed(error, "save the profile");
   touch(planId);
-  return { ok: true, data: { date_established: established ?? null } };
+  /* Says when the move cleared the state and its taxes, so the screen shows what is stored (§6.144.1). */
+  return { ok: true, data: { date_established: established ?? null, ...(movedCountry ? { clearedTax: true } : {}) } };
 }
 
 /** The clamped fields, with the wording the screen uses, so a note can name the box the client is looking at. */

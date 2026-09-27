@@ -122,6 +122,17 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
           setS((x) => ({ ...x, date_established: res.data!.date_established }));
           setEstablished(formatMonth(res.data.date_established));
         }
+        /*
+         * A NEW COUNTRY TAKES THE OLD STATE WITH IT, ON THE SCREEN TOO (§6.144.1). The server cleared the
+         * state and its taxes, but the box went on showing "Victoria" under New Zealand — and the next
+         * Financial save wrote it straight back. The screen adopts the cleared row, and any unsent edit to
+         * those two fields goes with it.
+         */
+        if (res.data?.clearedTax) {
+          const cleared = { tax_region: null, tax_components: [] };
+          ref.current = { ...ref.current, ...cleared };
+          setS((x) => ({ ...x, ...cleared }));
+        }
         return;
       }
 
