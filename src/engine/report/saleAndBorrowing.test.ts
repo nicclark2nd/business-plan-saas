@@ -46,6 +46,13 @@ describe("sale readiness and borrowing", () => {
     expect(typed).toContain("owner's own figure");
   });
 
+  it("says a wider range is wider, and whose market each figure is (§6.143)", () => {
+    const sources = [{ title: "Broker A", url: "https://a.com", low: 2, high: 3, market: "Cafe, Australia" }, { title: "Valuer B", url: "https://b.com", low: 2, high: 3 }];
+    const t = text(saleAndBorrowing(input({ sale: { ...empty.sale, multipleLow: 2, multipleHigh: 3, sources, foundOn: "26 September 2026" } })));
+    expect(t).toContain("Broker A (for Cafe, Australia)");
+    expect(t).toContain("wider sector or nearby markets");
+  });
+
   it("will not value a business that is not earning", () => {
     const d = saleAndBorrowing({ ...input({ sale: { ...empty.sale, askingPrice: 500_000, multipleLow: 2, multipleHigh: 3 } }),
       forecast: { pnl: { 1: { operatingProfit: -50_000, depreciation: 10_000 } } } } as unknown as ReportInput);

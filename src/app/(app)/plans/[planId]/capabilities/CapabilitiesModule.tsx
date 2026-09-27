@@ -518,7 +518,8 @@ function ValuationRange({ planId, metrics, input, money }: {
       {/* A searched range says so (§6.130): the dial weighing 3 should never rest on a figure of unknown origin. */}
       {sale.multipleFound && (
         <p className="mt-2 text-[11.5px] text-muted-foreground">
-          Range from {sale.multipleFound.sources} published sources, found{" "}
+          Range from {sale.multipleFound.sources} published sources
+          {sale.multipleFound.wider ? " in the wider sector or nearby markets" : ""}, found{" "}
           {new Date(`${sale.multipleFound.on}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })}.
         </p>
       )}

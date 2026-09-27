@@ -61,7 +61,16 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
   const [draftOpen, setDraftOpen] = useState<string | null>(null);
   const [s, setS] = useState(initial);
   const [established, setEstablished] = useState(formatMonth(initial.date_established));
-  const [dirty, setDirty] = useState<"profile" | "financial" | null>(null);
+  /*
+   * TWO FLAGS, NOT ONE SLOT (§6.142). This was a single "profile" | "financial" value, and the State box
+   * sits on the profile tab but saves through the financial saver. Leaving it cleared the one slot, so an
+   * industry typed just before was never sent — and the footer said "All changes saved". Each saver now
+   * clears only its own flag.
+   */
+  type Which = "profile" | "financial";
+  const [dirty, setDirtyFlags] = useState<Record<Which, boolean>>({ profile: false, financial: false });
+  const setDirty = (which: Which, on = true) => setDirtyFlags((d) => (d[which] === on ? d : { ...d, [which]: on }));
+  const commitAll = () => { if (dirty.profile) commit("profile"); if (dirty.financial) commit("financial"); };
   /** What the last save changed on the way in, if anything. Cleared the moment the client types again. */
   const [adjusted, setAdjusted] = useState<string>();
   /**
@@ -87,9 +96,8 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
     setS((x) => ({ ...x, ...changes })); setDirty(which); setAdjusted(undefined);
     if (immediate) queueMicrotask(() => commit(which));
   };
-  const commit = (which: "profile" | "financial" | null) => {
-    if (!which) return;
-    setDirty(null);
+  const commit = (which: Which) => {
+    setDirty(which, false);
     start(async () => {
       /* Never reached the server: the tab is unsaved again, so leaving a box retries it (§6.138). */
       try { await commitBody(which); } catch (e) { setDirty(which); throw e; }
@@ -297,7 +305,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
         { key: "branding", label: "Branding" },
         { key: "lifecycle", label: "Archive & delete" },
       ]}
-      area={area} onArea={(k) => { commit(dirty); setArea(k as AreaKey); }}
+      area={area} onArea={(k) => { commitAll(); setArea(k as AreaKey); }}
       scope={{ label: s.business_name || "This plan" }}
       footer={<ModuleStatusFooter planId={planId} />}
       help={<>
@@ -311,10 +319,10 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
         <p>Debtor, stock and creditor days, tax timing and CapEx are forecast assumptions, not settings. They live with the forecast, defaulted from your historic figures.</p>
       </>}
     >
-      <PendingBridge pending={pending || licBusy} dirty={!!dirty} adjusted={adjusted} />
+      <PendingBridge pending={pending || licBusy} dirty={dirty.profile || dirty.financial} adjusted={adjusted} />
 
       {area === "profile" && (
-        <div onBlur={(e) => left(e) && dirty === "profile" && commit("profile")}>
+        <div onBlur={(e) => left(e) && dirty.profile && commit("profile")}>
           <Toolbar><Meta className="ml-0">{missing.length ? <>Reports need {missing.length} more field{missing.length === 1 ? "" : "s"}: <b>{missing.map((k) => k.replace(/_/g, " ")).join(", ")}</b>.</> : "Everything a report\u2019s business overview needs is here."}</Meta></Toolbar>
           <Section title="Business">
             <FieldGrid>
@@ -353,7 +361,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
                       onValueChange={(v) => edit({ tax_region: v, tax_components: regimeFor(s.country, v).components }, "financial", true)} />
                   : <FieldInput value={s.tax_region ?? ""} placeholder="e.g. Queensland"
                       onChange={(e) => edit({ tax_region: e.target.value }, "financial")}
-                      onBlur={() => commit("financial")} />}
+                      onBlur={() => dirty.financial && commit("financial")} />}
               </Field>
               <Field label="Legal structure" span={2} hint="Grouped by liability; your country's names come first."><FieldSelect value={s.legal_structure} groups={legalStructuresFor(s.country)} placeholder="Choose" onValueChange={(v) => edit({ legal_structure: v }, "profile", true)} /></Field>
               <Field label="Type of customer" span={2} hint="Changes the word the app uses for the people you sell to."><FieldSelect value={s.customer_type} options={opts(CUSTOMER_TYPES)} placeholder="Choose" onValueChange={(v) => edit({ customer_type: v }, "profile", true)} /></Field>
@@ -404,7 +412,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
       )}
 
       {area === "financial" && (
-        <div onBlur={(e) => left(e) && dirty === "financial" && commit("financial")}>
+        <div onBlur={(e) => left(e) && dirty.financial && commit("financial")}>
           <Toolbar><Meta className="ml-0">
             <b>Year 1 runs {planYearLabel(firstProjectedYear(s.first_projected_year, s.financial_year_end_month), s.financial_year_end_month)}</b> — the year the business is in. Year 5 ends {planYearEnding(firstProjectedYear(s.first_projected_year, s.financial_year_end_month), 5)}.
             {s.first_projected_year === null && <span className="text-warn"> · First projected year is not set, so this is the financial year today falls in.</span>}
@@ -534,7 +542,7 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
             <ComparableSearch aiOn={s.ai_enabled} industry={s.industry} country={s.country}
               found={found} search={search} busy={pending || search === "searching"}
               onSearch={runSearch} onUse={takeRange} onDismiss={() => setSearch(null)}
-              onGo={(k) => { commit(dirty); setArea(k); }} />
+              onGo={(k) => { commitAll(); setArea(k); }} />
           </Section>
           {/*
             ADD-BACKS, ONE LINE EACH (§6.129.3). A buyer's accountant does not accept "85,000 of add-backs";

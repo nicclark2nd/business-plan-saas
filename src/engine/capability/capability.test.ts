@@ -555,8 +555,10 @@ describe("reading the stored judgements", () => {
   it("says where a searched range came from, and only when both halves are there", () => {
     const src = [{ title: "A", url: "https://a.com", low: 3, high: 4 }, { title: "B", url: "https://b.com", low: 3, high: 4 }];
     expect(readSale({ multiple_low: 3, multiple_high: 4, multiple_sources: src, multiple_found_on: "2026-09-26" }).multipleFound)
-      .toEqual({ sources: 2, on: "2026-09-26" });
+      .toEqual({ sources: 2, on: "2026-09-26", wider: false });
     expect(readSale({ multiple_low: 3, multiple_high: 4, multiple_sources: src }).multipleFound).toBeNull();
+    const wide = [{ ...src[0], market: "Food service, Australia" }, src[1]];
+    expect(readSale({ multiple_low: 3, multiple_high: 4, multiple_sources: wide, multiple_found_on: "2026-09-26" }).multipleFound?.wider).toBe(true);
   });
 
   /*

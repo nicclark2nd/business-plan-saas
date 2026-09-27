@@ -137,8 +137,11 @@ export const COPY = {
   /* Sale readiness and borrowing (§6.130.2) — printed only for the parts the owner has actually answered. */
   saleIntro: (name: string, year = 1) =>
     `What ${name} is worth to a buyer, and what a buyer would have to believe to pay it. Every earnings figure here is the plan's own Year ${year}${year === 1 ? "" : ", the year the sale is aimed at"}, before interest, tax, depreciation and amortisation (EBITDA).`,
-  saleRangeSourced: (day: string) =>
-    `The range comes from published figures for similar businesses, found ${day}. They are averages across many sales; where this business sits inside the range depends on how much of it runs without its owner.`,
+  saleRangeSourced: (day: string, wider = false) =>
+    (wider
+      ? `Too little was published on this industry in this country, so the range comes from published figures for the wider sector or nearby markets, found ${day}. It is a starting point rather than a close comparable.`
+      : `The range comes from published figures for similar businesses, found ${day}.`)
+    + " They are averages across many sales; where this business sits inside the range depends on how much of it runs without its owner.",
   saleRangeOwn:
     "The range is the owner's own figure for what similar businesses have sold for.",
   saleNoEarnings:

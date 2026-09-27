@@ -442,7 +442,7 @@ now strip it. Left alone: boxes that already format as you type (sales price, CO
 lines, salaries, marketing spend) — they show commas already, though they re-format mid-typing — and
 percentages, days, months, counts and multiples.
 
-### 42. The searched comparable range clears the two-site minimum by exactly two — **watch**
+### 42. The searched comparable range clears the two-site minimum by exactly two — **steps 1 and 2 done (§6.143); watch**
 
 §6.130's first live runs on SEQ (Commercial concreting, Australia, AUD 1–5 million) came back twice with
 the same answer in about 15–20 seconds: 2× to 3.5× EBITDA from two sites — creditte.com.au ("Trade and
@@ -482,6 +482,33 @@ comparable; (2) tighten what counts as a site: drop social and forum hosts (Link
 Reddit, Quora) and ask for small-business figures only; (3) SDE-to-EBITDA, only if misses with SDE set
 aside start to show up.
 
+**Steps 1 and 2 built (§6.143, 27 Sep 2026).**
+- A miss runs one wider search: the wider sector, plus only the market written down in `NEARBY`
+  (Australia ↔ New Zealand, UK ↔ Ireland, US ↔ Canada, Singapore ↔ Malaysia; any other country widens
+  the sector at home only). Each wider figure must name its market, and one outside those countries is
+  dropped. The card, the accepted line, the Financial Capabilities line and the report all say "wider".
+  Each search is metered, so a widened search counts as two.
+- Social and forum hosts are never a site. Each figure carries a size; "larger" (mid-market, private
+  equity, listed, a corporate or overseas buyer) is left out and counted on the card.
+
+Live on ZZ Test Walk after the change (debug field used, then removed):
+- Cafe, New Zealand: first build widened to "Coffee, New Zealand" (a NZ Herald story on a corporate
+  buyout) and "Cafes, Thailand" — which is why the market list is fixed in code and news is ruled out.
+  After: an honest miss — one qualifying site (creditte, Australia); 4–5 SDE figures and 2–3 larger deals
+  left out.
+- Mobile dog grooming, Australia: miss. The wider pass offered "Automotive services, Australia" as the
+  sector; the prompt now says only a sector a buyer would compare with, and the card names each figure's
+  market, but code cannot judge sectors.
+- Physiotherapy clinic, Australia: the LinkedIn post is gone, leaving one site (Brandcom) — a miss rather
+  than a range resting on a post.
+- IT managed services, UK: found, 5× to 8.5×. The model labelled ICON's M&A snapshot "small", so the size
+  filter is only as good as that label.
+
+**Correction to the first measurement.** The first nine runs showed nothing set aside on the misses, and
+this note concluded SDE would not have rescued them. The second runs of the same misses set aside 2–5 SDE
+figures each — New Zealand's own transaction data (Bizstats) is quoted on SDE. Step 3 (SDE-to-EBITDA from
+the plan's leadership pay) is now the step most likely to turn a miss into a range.
+
 ### ~~43. The What-If "Turn into goals" dialog still offers a quarter~~ — **done (§6.139)**
 
 The quarter pickers are gone. In their place a due date — once at the top for all, then per goal — which
@@ -515,7 +542,7 @@ Checked live on ZZ Test Walk: Operating margin 95 / 98 turned the card and summa
 plan's sentence; "Use general" put back Healthy, the original sentence and a grow score of 78. ZZ has no
 security value, so the loan-to-value change rests on its unit test.
 
-### 46. A profile edit is lost when the State box is left next — **open**
+### ~~46. A profile edit is lost when the State box is left next~~ — **done (§6.142)**
 
 Business profile tracks unsaved work in one slot (`dirty`: "profile" | "financial"). The "Main state of
 operation" box sits on the profile tab but saves through the financial saver, and leaving it calls
@@ -524,3 +551,14 @@ name, tagline, email) is never sent, and the footer says "All changes saved". Re
 26 Sep 2026: typed an industry, clicked into State, pressed Tab — the only request was the financial save,
 and the industry was gone after a reload. Choosing a state from the list (`edit(…, "financial", true)`)
 takes the same path. Fix: track the two as separate flags so one save cannot clear the other's.
+
+Fixed: `dirty` is two flags; each saver clears only its own, and a tab change saves whichever are set.
+Checked live on ZZ: the same sequence now keeps the industry (footer says "Unsaved" until it saves); an
+industry and a state typed together both saved on leaving the section.
+
+### 47. After a country change, the State box still shows the old state — **open**
+
+Changing country clears the stored state on the server (§6.39.1), but the screen keeps showing it — the
+legal-notice line read "Victoria, New Zealand" until a reload — and the next Financial save would write
+it back. Seen on ZZ Test Walk 27 Sep 2026. The profile save should hand back what it cleared, and the
+screen adopt it (§6.121).

@@ -10,7 +10,7 @@ import { checkLogo, logoObjectPath, LOGO_BUCKET } from "@/engine/plan/logo";
 import { checkEmail, checkWebsite } from "@/engine/plan/contact";
 import { failed } from "@/lib/actionFailed";
 import { adjustments, adjustedNote, type Watched } from "@/lib/adjusted";
-import { multiplesAsk, multiplesMessages, readMultiples, checkAccepted, type MultiplesReading, type MultipleSource } from "@/engine/ai/multiples";
+import { multiplesAsk, multiplesMessages, readMultiples, checkAccepted, afterWider, type MultiplesAsk, type MultiplesReading, type MultipleSource } from "@/engine/ai/multiples";
 import { searchOnce, AiUnavailable } from "@/lib/ai/provider";
 import { guardDraft } from "../ai/guard";
 import { adjustableMeasures, validPair } from "@/engine/capability/ranges";
@@ -224,18 +224,33 @@ export async function findMultiples(planId: string): Promise<MultiplesReading> {
     return { ok: false, setAside: 0, reason: `Set the ${asked.missing.join(" and ")} on Business Profile first — a comparable has to know what the business is and where.` };
   }
 
-  const gate = await guardDraft(planId, "multiples_search");
-  if (!gate.ok) {
-    const j = await gate.response.json().catch(() => null) as { error?: string } | null;
-    return { ok: false, setAside: 0, reason: j?.error ?? "The search could not start." };
-  }
+  /*
+   * Each search passes the gate and is metered on its own (§6.119), so a search that widens counts as two.
+   * Only a "couldn't find" widens: a refused gate or a dropped connection is reported as it is (§6.143).
+   */
+  const once = async (ask: MultiplesAsk): Promise<MultiplesReading> => {
+    const gate = await guardDraft(planId, "multiples_search");
+    if (!gate.ok) {
+      const j = await gate.response.json().catch(() => null) as { error?: string } | null;
+      throw new SearchStopped(j?.error ?? "The search could not start.");
+    }
+    try {
+      const { text, cited } = await searchOnce(multiplesMessages(ask));
+      return readMultiples(text, cited, ask);
+    } catch (e) {
+      throw new SearchStopped(e instanceof AiUnavailable ? e.message : "The search stopped before it finished. Try again in a moment.");
+    }
+  };
   try {
-    const { text, cited } = await searchOnce(multiplesMessages(asked.ask));
-    return readMultiples(text, cited, asked.ask);
+    const first = await once(asked.ask);
+    if (first.ok) return first;
+    return afterWider(first, await once({ ...asked.ask, wider: true }));
   } catch (e) {
-    return { ok: false, setAside: 0, reason: e instanceof AiUnavailable ? e.message : "The search stopped before it finished. Try again in a moment." };
+    return { ok: false, setAside: 0, reason: e instanceof SearchStopped ? e.message : "The search stopped before it finished. Try again in a moment." };
   }
 }
+
+class SearchStopped extends Error {}
 
 /** The client accepted the range on the card. Stored with its sources and today's date, together or not at all. */
 export async function acceptMultiples(planId: string, x: { low: number; high: number; sources: MultipleSource[] }):

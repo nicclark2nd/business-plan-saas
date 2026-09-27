@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import type { MultiplesReading, MultipleSource } from "@/engine/ai/multiples";
+import { isWider, widerScope, type MultiplesReading, type MultipleSource } from "@/engine/ai/multiples";
 
 /**
  * WHAT SIMILAR BUSINESSES SOLD FOR (§6.130) — the button, the card and the record, under the two boxes.
@@ -14,6 +14,9 @@ import type { MultiplesReading, MultipleSource } from "@/engine/ai/multiples";
  *   decisive dial rests on is not one to land unseen.
  * - **Accepted:** a line saying where it came from and when, with the sources one click away. Typing over
  *   either box makes the range the client's own, and the line goes (the save clears it on the server).
+ *
+ * A WIDER RANGE SAYS SO, EVERYWHERE IT APPEARS (§6.143). The headline, each source's own market, and the
+ * accepted line — so nobody later mistakes the wider sector's figures for this industry's.
  */
 const LINK = "font-medium text-primary underline-offset-2 hover:underline";
 const x = (n: number) => `${n}×`;
@@ -25,8 +28,11 @@ function Sources({ sources }: { sources: MultipleSource[] }) {
     <ul className="grid gap-1">
       {sources.map((s) => (
         <li key={s.url} className="flex items-baseline justify-between gap-4 text-[12px]">
-          {/* A search result is somebody else's page: no referrer, no handle back to this one. */}
-          <a href={s.url} target="_blank" rel="noopener noreferrer" className={`${LINK} min-w-0 truncate`} title={s.url}>{s.title}</a>
+          <span className="min-w-0">
+            {/* A search result is somebody else's page: no referrer, no handle back to this one. */}
+            <a href={s.url} target="_blank" rel="noopener noreferrer" className={`${LINK} block truncate`} title={s.url}>{s.title}</a>
+            {s.market && <span className="block text-[11px] text-muted-foreground">For {s.market}</span>}
+          </span>
           <span className="num shrink-0 text-muted-foreground">{span(s.low, s.high)}</span>
         </li>
       ))}
@@ -52,6 +58,12 @@ export function ComparableSearch({ aiOn, industry, country, found, search, busy,
       Those read lower than EBITDA for the same business, so they were left out rather than mixed in.
     </p>
   );
+  const tooLarge = (n = 0) => n > 0 && (
+    <p className="text-[11.5px] text-muted-foreground">
+      {n === 1 ? "One figure came" : `${n} figures came`} from larger deals — mid-market, private-equity or listed
+      companies — which sell at higher multiples than a small business, so {n === 1 ? "it was" : "they were"} left out.
+    </p>
+  );
 
   if (!aiOn) {
     return (
@@ -70,7 +82,8 @@ export function ComparableSearch({ aiOn, industry, country, found, search, busy,
       {found && !search && (
         <details className="text-[12px] text-muted-foreground">
           <summary className="cursor-pointer">
-            Range from {found.sources.length} published sources, found {day(found.on)}. Type over it to use your own.
+            Range from {found.sources.length} published sources{isWider(found.sources) ? " in the wider sector or nearby markets" : ""},
+            found {day(found.on)}. Type over it to use your own.
           </summary>
           <div className="mt-2"><Sources sources={found.sources} /></div>
         </details>
@@ -97,7 +110,8 @@ export function ComparableSearch({ aiOn, industry, country, found, search, busy,
 
       {search === "searching" && (
         <p className="text-[12px] text-muted-foreground" role="status">
-          Searching published sales of {industry} businesses in {country}. This can take up to half a minute.
+          Searching published sales of {industry} businesses in {country}. This can take up to half a minute, or a
+          minute if it has to widen the search.
         </p>
       )}
 
@@ -105,12 +119,27 @@ export function ComparableSearch({ aiOn, industry, country, found, search, busy,
         <div className="grid gap-2.5 rounded-md border bg-card p-3.5" role="status">
           {search.ok ? (
             <>
-              <p className="text-[13px]">
-                Published sales of {industry} businesses in {country} put the range at{" "}
-                <b className="num">{span(search.low, search.high)}</b> yearly earnings (EBITDA).
-              </p>
+              {search.wider ? (
+                <>
+                  <p className="text-[13px]">
+                    Too little was published on {industry} businesses in {country}, so the search widened
+                    to {widerScope(country ?? "")}. Those put the range at{" "}
+                    <b className="num">{span(search.low, search.high)}</b> yearly earnings (EBITDA).
+                  </p>
+                  <p className="text-[11.5px] text-muted-foreground">
+                    A wider comparable is a starting point, not a match. Each source below says which industry and
+                    country its figure is for — check the range with a broker before resting a price on it.
+                  </p>
+                </>
+              ) : (
+                <p className="text-[13px]">
+                  Published sales of {industry} businesses in {country} put the range at{" "}
+                  <b className="num">{span(search.low, search.high)}</b> yearly earnings (EBITDA).
+                </p>
+              )}
               <Sources sources={search.sources} />
               {setAside(search.setAside)}
+              {tooLarge(search.tooLarge)}
               <p className="text-[11.5px] text-muted-foreground">
                 These are averages across many sales. Where this business sits in the range depends on how much of it
                 runs without you, which is what a broker or accountant can judge.
@@ -124,6 +153,7 @@ export function ComparableSearch({ aiOn, industry, country, found, search, busy,
             <>
               <p className="text-[12.5px]">{search.reason}</p>
               {setAside(search.setAside)}
+              {tooLarge(search.tooLarge)}
               <div><Button type="button" size="sm" variant="ghost" onClick={onDismiss}>Dismiss</Button></div>
             </>
           )}

@@ -3,7 +3,7 @@ import { cell, num, type Block, type Draft } from "./blocks";
 import { COPY } from "./content";
 import { bridgeFrom } from "../capability/extras";
 import { TRANSFER_FACTORS, saleYear } from "../capability/judgements";
-import type { MultipleSource } from "../ai/multiples";
+import { isWider, type MultipleSource } from "../ai/multiples";
 
 /**
  * SALE READINESS AND BORROWING (§6.130.2, open item 37).
@@ -79,8 +79,8 @@ export function saleAndBorrowing(i: ReportInput): Draft {
         { kind: "lead", text: "Where the range comes from" },
         { kind: "table",
           columns: [{ label: "Source", width: 230 }, { label: "Address" }, { label: "Range", numeric: true, width: 90 }],
-          rows: sale.sources.map((s) => [cell(s.title), cell(s.url, { muted: true }), num(s.low === s.high ? x(s.low) : `${x(s.low)}–${x(s.high)}`)]) },
-        { kind: "note", text: COPY.saleRangeSourced(sale.foundOn ?? "recently") },
+          rows: sale.sources.map((s) => [cell(s.market ? `${s.title} (for ${s.market})` : s.title), cell(s.url, { muted: true }), num(s.low === s.high ? x(s.low) : `${x(s.low)}–${x(s.high)}`)]) },
+        { kind: "note", text: COPY.saleRangeSourced(sale.foundOn ?? "recently", isWider(sale.sources)) },
       );
     } else if (ranged) {
       blocks.push({ kind: "note", text: COPY.saleRangeOwn });
