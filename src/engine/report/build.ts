@@ -106,6 +106,11 @@ export type ReportInput = {
    * the boundary rather than inside a renderer, so no future section can forget.
    */
   capabilities: { personId: string; kind: string; description: string }[];
+  /** Key-person risk (§6.146): Medium and High only, High first. Optional so older fixtures need not carry it. */
+  keyPersonRisk?: {
+    name: string; position: string | null; dependency: "High" | "Medium"; successor: string;
+    cover: "none" | "quoted" | "insured"; coverAmount: number | null; notes: string | null;
+  }[];
   swot: { quadrant: string; text: string; response: string | null }[];
   /**
    * The goals ladder (§6.125.2) — 1, 3 and 5 years, the measures beside them and the next ninety days.

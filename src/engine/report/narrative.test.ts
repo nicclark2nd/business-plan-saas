@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { whatWeSell } from "./narrative";
+import { whatWeSell, ourPeople } from "./narrative";
 import type { ReportInput } from "./build";
 
 /**
@@ -54,5 +54,25 @@ describe("what opens the What We Sell section", () => {
   /* The statement does not conjure a section out of a plan that sells nothing. */
   it("prints no section at all when there are no lines", () => {
     expect(whatWeSell(input({ productLines: [], productsServices: "Anything at all." }))).toBeNull();
+  });
+});
+
+describe("key-person risk under Our People (§6.146)", () => {
+  const team = { people: [{ id: "a", name: "Jo Smith", position: "Managing Director", role: "Owner", share: 100 }], capabilities: [] };
+  const kids = (i: ReportInput) => ourPeople(i)?.children?.filter(Boolean) as { title: string; blocks: unknown[] }[];
+
+  it("prints nothing until someone is rated Medium or High", () => {
+    expect(kids(input(team)).map((c) => c.title)).toEqual(["The team"]);
+    expect(kids(input({ ...team, keyPersonRisk: [] })).map((c) => c.title)).toEqual(["The team"]);
+  });
+  it("names the person, who would step in and the cover, with any notes", () => {
+    const risk = kids(input({ ...team, keyPersonRisk: [
+      { name: "Jo Smith", position: "Managing Director", dependency: "High", successor: "None identified", cover: "insured", coverAmount: 500000, notes: "Every quote goes through Jo." },
+    ] })).find((c) => c.title === "Key-person risk");
+    const text = JSON.stringify(risk);
+    expect(text).toContain("Jo Smith, Managing Director");
+    expect(text).toContain("None identified");
+    expect(text).toContain("Insured — 500000");
+    expect(text).toContain("Jo Smith: Every quote goes through Jo.");
   });
 });

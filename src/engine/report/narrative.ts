@@ -309,6 +309,23 @@ export function ourPeople(i: ReportInput): Draft {
               num(p.share ? `${p.share}%` : "—"),
             ]) },
         ] },
+      /* §6.146 — nothing prints until somebody is rated Medium or High on Risk & Succession. */
+      ...(i.keyPersonRisk?.length ? [{
+        title: "Key-person risk",
+        blocks: [
+          para(COPY.keyPersonRisk(i.businessName)),
+          { kind: "table" as const,
+            columns: [{ label: "Name", width: 180 }, { label: "Dependency", width: 90 }, { label: "Who would step in" }, { label: "Cover" }],
+            rows: i.keyPersonRisk.map((r) => [
+              cell(r.position ? `${r.name}, ${r.position}` : r.name), cell(r.dependency),
+              cell(r.successor, { muted: r.successor === "None identified" }),
+              cell(r.cover === "none" ? "None"
+                : `${r.cover === "insured" ? "Insured" : "Quoted"}${r.coverAmount ? ` — ${i.money(r.coverAmount)}` : ""}`, { muted: r.cover === "none" }),
+            ]) },
+          ...(i.keyPersonRisk.some((r) => r.notes)
+            ? [{ kind: "list" as const, items: i.keyPersonRisk.filter((r) => r.notes).map((r) => `${r.name}: ${r.notes}`) }] : []),
+        ],
+      }] : []),
       ...listOr(i.people.filter((p) => i.capabilities.some((c) => c.personId === p.id)), (p) => ({
         title: p.name,
         blocks: [

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
-import { PERSON_ROLES, CAPABILITY_KINDS, parseMonth, type Person, type Capability, type CapabilityKind } from "./model";
+import { PERSON_ROLES, CAPABILITY_KINDS, DEPENDENCY_LEVELS, COVER_KINDS, parseMonth, type Person, type Capability, type CapabilityKind, type Dependency, type Cover, type SuccessorChoice, type Succession } from "./model";
 import { TRANSFER_FACTORS, type TransferFactor } from "@/engine/capability/judgements";
 import { nextHref } from "@/lib/nav";
 import { failed } from "@/lib/actionFailed";
@@ -109,6 +109,46 @@ export async function saveTransferRating(planId: string, factor: TransferFactor,
     .upsert({ plan_id: planId, factor, score: n, note: text }, { onConflict: "plan_id,factor" });
   if (error) return failed(error, "save that judgement");
   touch(planId); return { ok: true };
+}
+
+// ---------- risk & succession, per person (§6.146) ----------
+/**
+ * One person's row, or none. A null dependency deletes the row and everything on it, because a successor
+ * or a cover figure for someone whose importance is not judged is an answer to a question not asked.
+ * The successor must be someone else on this plan's team; the cover amount only stands beside a quote or
+ * a policy, and is never negative. The stored row comes back so the screen shows what was kept (§6.121).
+ */
+export async function saveSuccession(planId: string, personId: string, s: {
+  dependency: Dependency | null; successor: SuccessorChoice; cover: Cover; coverAmount: number | null; notes: string;
+}): Promise<Result<Succession | null>> {
+  const supabase = await createClient();
+  const { data: people, error: readError } = await supabase.from("plan_people").select("id, role").eq("plan_id", planId);
+  if (readError) return failed(readError, "read the team");
+  const me = (people ?? []).find((p) => p.id === personId);
+  if (!me) return { ok: false, error: "That person is no longer on the Leadership Team." };
+  if (me.role === "contractor") return { ok: false, error: "Contractors are not part of succession — change their role first." };
+
+  if (s.dependency === null) {
+    const { error } = await supabase.from("plan_people_succession").delete().eq("plan_id", planId).eq("person_id", personId);
+    if (error) return failed(error, "clear that row");
+    touch(planId); return { ok: true, data: null };
+  }
+  if (!(DEPENDENCY_LEVELS as readonly string[]).includes(s.dependency)) return { ok: false, error: "Dependency should be Low, Medium or High." };
+  const cover: Cover = (COVER_KINDS as readonly string[]).includes(s.cover) ? s.cover : "none";
+  const named = s.successor !== "none" && s.successor !== "external" ? s.successor : null;
+  if (named && (named === personId || !(people ?? []).some((p) => p.id === named))) {
+    return { ok: false, error: "The successor has to be someone else on the Leadership Team." };
+  }
+  const amount = cover === "none" || s.coverAmount === null || !Number.isFinite(Number(s.coverAmount)) ? null : Math.max(0, Number(s.coverAmount));
+
+  const { data, error } = await supabase.from("plan_people_succession").upsert({
+    plan_id: planId, person_id: personId, dependency: s.dependency,
+    successor_person_id: named, successor_external: s.successor === "external",
+    cover, cover_amount: amount, notes: s.notes.trim() || null,
+  }, { onConflict: "person_id" }).select("person_id, dependency, successor_person_id, successor_external, cover, cover_amount, notes").single();
+  if (error) return failed(error, "save that row");
+  touch(planId);
+  return { ok: true, data: { ...data, cover_amount: data.cover_amount === null ? null : Number(data.cover_amount) } as Succession };
 }
 
 export async function continueFromPeople(planId: string, intent: "next" | "later") {

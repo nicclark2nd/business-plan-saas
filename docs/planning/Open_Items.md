@@ -25,7 +25,7 @@ The question is what "done" means for the last step: the document has been downl
 prior step is complete? Something the client ticks themselves? Each is defensible and they behave
 differently, which is why this is a decision and not a build.
 
-### 2. `plan_people_succession` is a table with no screen — **Build**
+### ~~2. `plan_people_succession` is a table with no screen~~ — **done (§6.146)**
 
 A column with no editor is not data (§6.89). The table exists, nothing writes to it, and the SWOT
 weakness that §6.94 deleted comes back the moment it does — a plan that names no successor for a
@@ -38,6 +38,17 @@ was deleted rather than added to — a table of real names holding no data reads
 failed to fill in. So this item is unchanged and slightly sharper: the missing thing is a successor,
 a dependency level and a key-person cover figure PER PERSON, and it now has an obvious home to be built
 into.
+
+Built (§6.146, 27 Sep 2026). Leadership Team → Risk & Succession now opens with **Key people**, one row per
+person (contractors left out): Dependency (Not judged / Low / Medium / High), Successor (None identified /
+External hire / someone else on the team), Key-person cover (None / Quoted / Insured, with an amount), Notes.
+A row is stored only once a dependency is chosen, so "not judged" never prints as Medium; setting it back
+clears the row. The six business-level ratings sit under it as "The business without its owner". The SWOT
+weakness is back — High dependency with no successor — and the report prints a "Key-person risk" part under
+Our People for anyone rated Medium or High, High first, notes included. No migration: the table is from 0007.
+Live on ZZ Test Walk: two test people; High + Insured 500,000 + a note saved and survived a reload; SWOT
+offered "The business depends heavily on Test Owner and no successor is identified"; naming Test Deputy as
+successor took it away; the report printed the row and the note. Both test people removed afterwards.
 
 ### 3. The Assets group is three stubs — **Build**
 

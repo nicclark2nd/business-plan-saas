@@ -108,7 +108,7 @@ export async function gatherReport(planId: string) {
    * SALE AND LENDER FIGURES (§6.130.2), asked for by name in queries of their own for the reason the ladder's
    * are (§6.82): a column that is not there fails this query alone, not the whole plan.
    */
-  const [saleRow, addBackRows, ratingRows] = await Promise.all([
+  const [saleRow, addBackRows, ratingRows, successionRows] = await Promise.all([
     supabase.from("plan_settings")
       .select("asking_price, multiple_low, multiple_high, intended_exit_year, multiple_sources, multiple_found_on, repayments_on_time, covenant_history, guarantee_offered, guarantee_by")
       .eq("plan_id", planId).maybeSingle().then((r) => {
@@ -117,6 +117,7 @@ export async function gatherReport(planId: string) {
       }),
     rows(supabase.from("plan_add_backs").select("label, amount").eq("plan_id", planId).order("sort_order").order("created_at"), "plan_add_backs"),
     rows(supabase.from("plan_transfer_ratings").select("factor, score, note").eq("plan_id", planId), "plan_transfer_ratings"),
+    rows(supabase.from("plan_people_succession").select("person_id, dependency, successor_person_id, successor_external, cover, cover_amount, notes").eq("plan_id", planId), "plan_people_succession"),
   ]);
   /* Nullable through every layer (§6.89): `n()` would turn "not priced" into a business priced at nothing. */
   const orNull = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
@@ -305,6 +306,27 @@ export async function gatherReport(planId: string) {
      * FILTERED AT THE BOUNDARY (§6.86). The People screen tells a client, in those words, that development
      * areas are "never printed in an external report". This line is where that promise is kept.
      */
+    /*
+     * KEY-PERSON RISK (§6.146): people rated Medium or High, High first. Low is left out — a lender reads
+     * this section for exposure, and a list padded with people nobody would miss hides the one that matters.
+     * Contractors never had a row. A successor who has left the team reads as nobody identified.
+     */
+    keyPersonRisk: successionRows
+      .filter((s) => s.dependency === "high" || s.dependency === "medium")
+      .map((s) => {
+        const who = people.find((p) => p.id === s.person_id);
+        const heir = s.successor_person_id ? people.find((p) => p.id === s.successor_person_id) : null;
+        return {
+          name: String(who?.name ?? "").trim(), position: text(who?.position),
+          dependency: s.dependency === "high" ? "High" as const : "Medium" as const,
+          successor: heir ? String(heir.name ?? "").trim() || "None identified" : s.successor_external ? "External hire" : "None identified",
+          cover: s.cover === "insured" ? "insured" as const : s.cover === "quoted" ? "quoted" as const : "none" as const,
+          coverAmount: orNull(s.cover_amount),
+          notes: text(s.notes),
+        };
+      })
+      .filter((r) => r.name)
+      .sort((a, b) => (a.dependency === b.dependency ? 0 : a.dependency === "High" ? -1 : 1)),
     capabilities: caps.filter((c) => c.internal !== true && c.kind !== "development").map((c) => ({
       personId: String(c.person_id), kind: String(c.kind ?? ""), description: String(c.description ?? ""),
     })).filter((c) => c.description.trim()),

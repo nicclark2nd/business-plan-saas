@@ -210,6 +210,8 @@ export const COPY = {
   spendNote:
     "These budgets are already in the overheads in the financial plan; they are set out here so the intent behind the figure is visible rather than buried in a total.",
 
+  keyPersonRisk: (name: string) =>
+    `Who ${name} depends on most, who would step in if they could not, and the cover in place if they were lost.`,
   people: (name: string) =>
     `The people who run ${name}, what each is responsible for, and the experience behind it. Development areas that individuals are working on are deliberately not included.`,
 

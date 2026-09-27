@@ -13,7 +13,7 @@ export default async function PeoplePage({ params, searchParams }: {
   const { planId } = await params;
   const { area } = await searchParams;
   const supabase = await createClient();
-  const [session, cap, people, capabilities, settings, ratings] = await Promise.all([
+  const [session, cap, people, capabilities, settings, ratings, succession] = await Promise.all([
     getSession(),
     // Who owns the business, composed once and shown the same way on Funding (§6.54).
     loadCapTable(planId),
@@ -25,8 +25,12 @@ export default async function PeoplePage({ params, searchParams }: {
      * dashboard reads the same rows rather than asking a second time (§6.41).
      */
     supabase.from("plan_transfer_ratings").select("factor, score, note").eq("plan_id", planId),
+    supabase.from("plan_people_succession").select("person_id, dependency, successor_person_id, successor_external, cover, cover_amount, notes").eq("plan_id", planId),
   ]);
-  const data = { people: people.data ?? [], capabilities: capabilities.data ?? [] } as PeopleData;
+  const data = {
+    people: people.data ?? [], capabilities: capabilities.data ?? [],
+    succession: (succession.data ?? []).map((r) => ({ ...r, cover_amount: r.cover_amount === null ? null : Number(r.cover_amount) })),
+  } as PeopleData;
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
 
   return (

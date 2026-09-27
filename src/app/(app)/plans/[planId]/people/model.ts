@@ -19,7 +19,28 @@ export type Person = {
   salary_adjustments: SalaryAdjustments | null; sort_order: number;
 };
 export type Capability = { id: string; person_id: string; kind: CapabilityKind; description: string; internal: boolean; sort_order: number };
-export type PeopleData = { people: Person[]; capabilities: Capability[] };
+/**
+ * RISK & SUCCESSION, PER PERSON (§6.146). The table has existed since 0007 with nothing writing it.
+ * A row exists only once a dependency is chosen: "not judged" is the absence of a row, never a default
+ * of "medium" the client did not pick (§6.89).
+ */
+export const DEPENDENCY_LEVELS = ["low", "medium", "high"] as const;
+export type Dependency = (typeof DEPENDENCY_LEVELS)[number];
+export const DEPENDENCY_LABEL: Record<Dependency, string> = { low: "Low", medium: "Medium", high: "High" };
+export const COVER_KINDS = ["none", "quoted", "insured"] as const;
+export type Cover = (typeof COVER_KINDS)[number];
+export const COVER_LABEL: Record<Cover, string> = { none: "None", quoted: "Quoted", insured: "Insured" };
+export type Succession = {
+  person_id: string; dependency: Dependency;
+  successor_person_id: string | null; successor_external: boolean;
+  cover: Cover; cover_amount: number | null; notes: string | null;
+};
+/** Who would step in: a named person on the team, an outside hire, or nobody yet. */
+export type SuccessorChoice = "none" | "external" | string;
+export const successorOf = (s: Pick<Succession, "successor_person_id" | "successor_external">): SuccessorChoice =>
+  s.successor_person_id ?? (s.successor_external ? "external" : "none");
+
+export type PeopleData = { people: Person[]; capabilities: Capability[]; succession: Succession[] };
 
 /** Calendar order here on purpose: these parse and print a real start date, not a plan slot. */
 import { MONTH_SHORT as MONTHS } from "@/engine/plan/calendar";

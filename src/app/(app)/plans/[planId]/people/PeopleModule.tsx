@@ -14,12 +14,19 @@ import { ConfirmDelete } from "@/components/module/ConfirmDelete";
 import { SALARY_YEARS, planYearStart, startYearFromDate, tenureLabel, salarySchedule, scheduleChangeFromFirstYear, totalSalariesByYear } from "@/engine/people/salary";
 import { useMoney } from "@/components/MoneyProvider";
 import { TRANSFER_FACTORS, type TransferFactor, type TransferRating } from "@/engine/capability/judgements";
-import { upsertPerson, deletePerson, upsertCapability, deleteCapability, saveTransferRating, continueFromPeople } from "./actions";
-import { PERSON_ROLES, ROLE_LABEL, CAPABILITY_KINDS, KIND_LABEL, formatMonth, type Person, type Capability, type CapabilityKind, type PeopleData } from "./model";
+import { upsertPerson, deletePerson, upsertCapability, deleteCapability, saveTransferRating, saveSuccession, continueFromPeople } from "./actions";
+import { PERSON_ROLES, ROLE_LABEL, CAPABILITY_KINDS, KIND_LABEL, DEPENDENCY_LEVELS, DEPENDENCY_LABEL, COVER_KINDS, COVER_LABEL, formatMonth, successorOf, type Person, type Capability, type CapabilityKind, type PeopleData, type Dependency, type Cover, type SuccessorChoice, type Succession } from "./model";
 
 type Row = Person & { _key: string; started_text: string; _dirty?: boolean; _state?: "saving" | "saved" };
 type Cap = Capability & { _key: string; _dirty?: boolean };
 type AreaKey = "people" | "salary" | "cap" | "risk";
+/** One person's Risk & Succession row as the screen holds it; the amount stays the typed string. */
+type SuccDraft = { dependency: Dependency | null; successor: SuccessorChoice; cover: Cover; coverAmount: string; notes: string };
+const draftOf = (r?: Succession | null): SuccDraft => r
+  ? { dependency: r.dependency, successor: successorOf(r), cover: r.cover, coverAmount: r.cover_amount === null ? "" : String(r.cover_amount), notes: r.notes ?? "" }
+  : { dependency: null, successor: "none", cover: "none", coverAmount: "", notes: "" };
+const nameOf = (p: Pick<Person, "name" | "first_name" | "last_name">) =>
+  p.name || [p.first_name, p.last_name].filter(Boolean).join(" ") || "Unnamed";
 
 export function PeopleModule({ planId, initial, mode, cap, currency, planYear, fyEndMonth, ratings, initialArea }: {
   planId: string; initial: PeopleData; mode: "guided" | "advanced";
@@ -112,6 +119,35 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
   /* The id each row was stored under, by `_key` — what a removal queued behind a first save deletes. */
   const stored = useRef(new Map<string, string>());
   const capIds = useRef(new Map<string, string>());
+
+  /*
+   * ----- Risk & Succession, per person (§6.146) -----
+   *
+   * Written to its ref on the edit, like the transfer notes, so a note typed straight after a dependency is
+   * chosen is not lost. Saved per person in a queue. What comes back is adopted field by field, and only
+   * where the client has not typed something newer since the save went (§6.121) — otherwise a slow save
+   * would put an old note back over a new one.
+   */
+  const [succ, setSucc] = useState<Record<string, SuccDraft>>(() => Object.fromEntries(initial.succession.map((r) => [r.person_id, draftOf(r)])));
+  const succRef = useRef(succ);
+  const editSucc = (id: string, p: Partial<SuccDraft>) => {
+    const next = { ...succRef.current, [id]: { ...(succRef.current[id] ?? draftOf()), ...p } };
+    succRef.current = next;
+    setSucc(next);
+  };
+  const commitSucc = (id: string) => start(() => serial(`succ:${id}`, async () => {
+    const sent = succRef.current[id] ?? draftOf();
+    const raw = sent.coverAmount.replace(/[^0-9.]/g, "");
+    const res = await saveSuccession(planId, id, {
+      dependency: sent.dependency, successor: sent.successor, cover: sent.cover,
+      coverAmount: raw === "" ? null : Number(raw), notes: sent.notes,
+    });
+    if (!res.ok) { errors.raise({ key: `succ-${id}`, message: res.error, label: "Risk & Succession" }); return; }
+    errors.clear(`succ-${id}`);
+    const kept = draftOf(res.data), now = succRef.current[id] ?? draftOf();
+    const keys = Object.keys(kept) as (keyof SuccDraft)[];
+    editSucc(id, Object.fromEntries(keys.map((k) => [k, now[k] === sent[k] ? kept[k] : now[k]])) as Partial<SuccDraft>);
+  }));
   const putPeople = (fn: (ps: Row[]) => Row[]) => { const next = fn(peopleRef.current); peopleRef.current = next; setPeople(next); };
   const putCaps = (fn: (cs: Cap[]) => Cap[]) => { const next = fn(capsRef.current); capsRef.current = next; setCaps(next); };
   const patch = (key: string, p: Partial<Row>) => putPeople((ps) => ps.map((r) => (r._key === key ? { ...r, ...p } : r)));
@@ -226,7 +262,7 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
      * screen promised it "feeds key-person risk in funding, SBA and sale reports". It now does something, so
      * it stops claiming to be unbuilt.
      */
-    { key: "risk", label: "Risk & Succession", count: scored.length || undefined },
+    { key: "risk", label: "Risk & Succession", count: (scored.length + Object.values(succ).filter((d) => d.dependency).length) || undefined },
   ];
 
   return (
@@ -372,6 +408,88 @@ export function PeopleModule({ planId, initial, mode, cap, currency, planYear, f
         */}
       {area === "risk" && (
         <>
+          {/*
+            * KEY PEOPLE, ONE ROW EACH (§6.146). The per-person half §6.129 left for later: how much the
+            * business leans on each person, who would step in, and what cover is in place. Contractors are
+            * left out — they are not part of the business a buyer takes on. A row is saved only once a
+            * dependency is chosen, so "not judged" never prints as "Medium" in a report.
+            */}
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[.06em] text-muted-foreground">Key people</div>
+          {(() => {
+            const team = people.filter((p) => p.id && p.role !== "contractor");
+            const shown = scope ? team.filter((p) => p._key === scope) : team;
+            if (!team.length) return <Note>Add the team on the People tab first — each person gets a row here.</Note>;
+            const judged = team.filter((p) => succ[p.id]?.dependency).length;
+            return (
+              <>
+                <Toolbar><Meta className="ml-0">
+                  How much the business leans on each person, and who would step in.{" "}
+                  <span className={judged === team.length ? undefined : "text-warn"}>{judged} of {team.length} judged.</span>
+                </Meta></Toolbar>
+                <Grid>
+                  <thead><tr>
+                    <Th style={{ width: "19%" }}>Person</Th>
+                    <Th style={{ width: 118 }}>Dependency</Th>
+                    <Th style={{ width: 180 }}>Successor</Th>
+                    <Th style={{ width: 112 }}>Key-person cover</Th>
+                    <Th style={{ width: 120 }} className="text-right">Cover amount</Th>
+                    <Th>Notes</Th>
+                  </tr></thead>
+                  <tbody>
+                    {shown.map((p) => {
+                      const d = succ[p.id] ?? draftOf();
+                      const off = d.dependency === null;
+                      const others = team.filter((o) => o.id !== p.id);
+                      /* A successor who has since left the team reads as nobody, not as a stray id. */
+                      const successor = d.successor === "none" || d.successor === "external" || others.some((o) => o.id === d.successor) ? d.successor : "none";
+                      return (
+                        <Row key={p._key}>
+                          <Td wrap>
+                            <b>{nameOf(p)}</b>
+                            {p.position && <div className="text-[11.5px] leading-snug text-muted-foreground">{p.position}</div>}
+                          </Td>
+                          <Td>
+                            <CellSelect value={d.dependency ?? "unset"}
+                              options={[{ value: "unset", label: "Not judged" }, ...DEPENDENCY_LEVELS.map((v) => ({ value: v, label: DEPENDENCY_LABEL[v] }))]}
+                              onValueChange={(v) => { editSucc(p.id, { dependency: v === "unset" ? null : v as Dependency }); commitSucc(p.id); }} />
+                          </Td>
+                          <Td>
+                            <CellSelect value={successor} disabled={off}
+                              options={[{ value: "none", label: "None identified" }, { value: "external", label: "External hire" },
+                                ...others.map((o) => ({ value: o.id, label: nameOf(o) }))]}
+                              onValueChange={(v) => { editSucc(p.id, { successor: v }); commitSucc(p.id); }} />
+                          </Td>
+                          <Td>
+                            <CellSelect value={d.cover} disabled={off}
+                              options={COVER_KINDS.map((v) => ({ value: v, label: COVER_LABEL[v] }))}
+                              onValueChange={(v) => { editSucc(p.id, { cover: v as Cover, ...(v === "none" ? { coverAmount: "" } : {}) }); commitSucc(p.id); }} />
+                          </Td>
+                          <Td>
+                            <CellInput money disabled={off || d.cover === "none"} placeholder={d.cover === "none" ? "—" : d.cover === "quoted" ? "Amount quoted" : "Sum insured"}
+                              value={d.coverAmount}
+                              onChange={(e) => editSucc(p.id, { coverAmount: e.target.value })}
+                              onBlur={() => commitSucc(p.id)} />
+                          </Td>
+                          <Td>
+                            <CellTextarea disabled={off} placeholder={off ? "Choose a dependency first" : "Optional — what would happen, and the plan for it"}
+                              value={d.notes}
+                              onChange={(e) => editSucc(p.id, { notes: e.target.value })}
+                              onBlur={() => commitSucc(p.id)} />
+                          </Td>
+                        </Row>
+                      );
+                    })}
+                  </tbody>
+                </Grid>
+                <Note>
+                  A High dependency with no successor is offered as a weakness on SWOT, and people rated Medium or
+                  High print in the report&apos;s key-person risk section, notes included. Setting a person back to Not
+                  judged clears their row.
+                </Note>
+              </>
+            );
+          })()}
+          <div className="mb-1 mt-6 text-[11px] font-semibold uppercase tracking-[.06em] text-muted-foreground">The business without its owner</div>
           <Toolbar><Meta className="ml-0">
             If the owner stopped turning up, would the business still work? Six judgements, 1 weak to 5 strong.{" "}
             {transferAvg === null
