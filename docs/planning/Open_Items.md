@@ -723,7 +723,7 @@ forecast telling the truth, not a fault. 12 unit tests.
   contact. An empty Leadership Team starts with their sign-up name on the first row as Owner, which saves
   when they leave the row. An adviser's plans start blank for both, because the adviser is not the client.
 
-### 50. Financial Capabilities speaks to the reader's question, not to the number — **1 and 2 done (§6.152); 3 and 4 wording proposed**
+### 50. Financial Capabilities speaks to the reader's question, not to the number — **1, 2 done (§6.152); 3 done for Grow (§6.153); 4 open**
 
 Nic, 27 Sep 2026: these tabs exist to show whether the business CAN grow, borrow, or sell, and "At risk" or "Not
 yet" on a card does not answer that. Four parts:
@@ -739,5 +739,8 @@ yet" on a card does not answer that. Four parts:
    now use the dearest loan rate (12% on SEQ) and say so; a figure typed on Assumptions still wins, and
    Assumptions itself is unchanged. SEQ's return on the growth plan is now judged (433%, 7 of 9 measures).
    (c) Genuinely missing inputs (pipeline, retention) are still asked for.
-3. **Status words per tab** — wording proposed, not built.
+3. **Status words per tab — done for Capability to grow (§6.153).** Nic chose the words. Cards: Supports growth /
+   Needs attention / Holding you back (were Healthy / On track / At risk). Dial: Ready to grow / Needs attention /
+   Not ready to grow. "Held in the at-risk band by" now reads "Held under 50 by". Bands, colours and scores are
+   unchanged. Borrow and Sell keep the general words until they get their own.
 4. **Messages for the consultant** — wording proposed, not built.

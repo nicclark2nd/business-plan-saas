@@ -150,7 +150,7 @@ export function verdict(
   if (!problems.length) {
     paragraphs.push({
       lead: "Nothing is flagged.",
-      body: "Every measure this page can compute sits in its healthy band. That is worth saying plainly — and worth re-reading once the forecast changes.",
+      body: "Every measure this page can compute is in its best band. That is worth saying plainly — and worth re-reading once the forecast changes.",
     });
   }
 

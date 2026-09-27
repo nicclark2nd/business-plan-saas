@@ -10,7 +10,7 @@ import { navGroup } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { moneyFormatter } from "@/engine/plan/money";
 import {
-  SCORE_BANDS, SEVERITY_LABEL, borrowingCapacity, score, statusOf,
+  SCORE_BANDS, CARD_LABEL, DIAL_LABEL, borrowingCapacity, score, statusOf,
   type CapabilityInput, type Metric, type Severity,
 } from "@/engine/capability/model";
 import { LENDER_MIN_DSCR, TRANSFER_FACTORS, saleYear } from "@/engine/capability/judgements";
@@ -131,7 +131,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
             band === "good" && "text-good", band === "watch" && "text-warn", band === "bad" && "text-bad")}>
             {s.value ?? "—"}<span className="text-[15px] font-normal text-muted-foreground">/100</span>
           </div>
-          {band && <div className="mt-2"><Pill s={band} /></div>}
+          {band && <div className="mt-2"><Pill s={band} label={DIAL_LABEL[tab][band]} /></div>}
           <p className="mt-2 max-w-[26ch] text-[11.5px] text-muted-foreground">
             {s.value === null ? "Nothing to score yet" : `From the ${s.covered} of ${s.total} measures this plan can answer`}
           </p>
@@ -169,7 +169,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
           */}
           {s.capped.length > 0 && (
             <p className="mt-3 rounded border border-border bg-secondary/50 px-3 py-2 text-[12px] text-muted-foreground">
-              Held in the at-risk band by <b className="font-semibold text-foreground">
+              Held under 50 by <b className="font-semibold text-foreground">
                 {s.capped.map((k) => metrics.find((m) => m.key === k)?.name ?? k).join(" and ")}
               </b>. A measure this decisive cannot be averaged out by the ones that are going well.
             </p>
@@ -193,7 +193,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
       {/* ---------- the measures ---------- */}
       <div className="@container">
         <div className="grid gap-px bg-border @[640px]:grid-cols-2 @[1000px]:grid-cols-3">
-          {metrics.map((m) => <Card key={m.key} m={m} planId={planId} />)}
+          {metrics.map((m) => <Card key={m.key} m={m} planId={planId} labels={CARD_LABEL[tab]} />)}
         </div>
       </div>
 
@@ -228,12 +228,12 @@ function Dial({ value }: { value: number | null }) {
   );
 }
 
-function Pill({ s }: { s: Severity }) {
+function Pill({ s, label }: { s: Severity; label: string }) {
   return (
     <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11.5px] font-semibold",
       s === "good" && "bg-good-soft text-good", s === "watch" && "bg-warn-soft text-warn", s === "bad" && "bg-bad-soft text-bad")}>
       <i className={cn("size-1.5 rounded-full", s === "good" && "bg-good", s === "watch" && "bg-warn", s === "bad" && "bg-bad")} />
-      {SEVERITY_LABEL[s]}
+      {label}
     </span>
   );
 }
@@ -284,13 +284,13 @@ function Gauge({ m, s }: { m: Metric; s: Severity | null }) {
   );
 }
 
-function Card({ m, planId }: { m: Metric; planId: string }) {
+function Card({ m, planId, labels }: { m: Metric; planId: string; labels: Record<Severity, string> }) {
   const s = statusOf(m.value, m.bands);
   return (
     <article className="bg-card px-5 py-4">
       <div className="flex items-start justify-between gap-3">
         <h3 className="text-[13px] font-semibold leading-snug">{m.name}</h3>
-        {s ? <Pill s={s} /> : <span className="eyebrow shrink-0 text-muted-foreground">{m.unscored ?? "Not yet"}</span>}
+        {s ? <Pill s={s} label={labels[s]} /> : <span className="eyebrow shrink-0 text-muted-foreground">{m.unscored ?? "Not yet"}</span>}
       </div>
 
       <div className="mt-1 flex items-center gap-3">

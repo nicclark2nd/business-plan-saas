@@ -171,6 +171,22 @@ export const SEVERITY_LABEL: Record<Severity, string> = {
   good: "Healthy", watch: "On track", bad: "At risk",
 };
 
+/**
+ * THE WORDS ANSWER THE TAB'S QUESTION (§6.153). Nic, 27 Sep 2026: "At risk" and "Healthy" describe a
+ * number, and the Capability to grow tab asks whether the business can grow. On that tab a card says what
+ * the measure does to growth, and the dial says whether the business is ready. Same bands, same colours,
+ * same scores — only the words. Borrow and Sell keep the general words until they get their own.
+ */
+type Tabbed = "grow" | "borrow" | "sell";
+export const CARD_LABEL: Record<Tabbed, Record<Severity, string>> = {
+  grow: { good: "Supports growth", watch: "Needs attention", bad: "Holding you back" },
+  borrow: SEVERITY_LABEL, sell: SEVERITY_LABEL,
+};
+export const DIAL_LABEL: Record<Tabbed, Record<Severity, string>> = {
+  grow: { good: "Ready to grow", watch: "Needs attention", bad: "Not ready to grow" },
+  borrow: SEVERITY_LABEL, sell: SEVERITY_LABEL,
+};
+
 /* ------------------------------------------------------------------ *
  * What the engine is handed                                           *
  * ------------------------------------------------------------------ */
