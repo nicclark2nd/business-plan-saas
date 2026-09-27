@@ -3,7 +3,7 @@ import { cell, num, type Block, type Draft } from "./blocks";
 import { COPY } from "./content";
 import { bridgeFrom } from "../capability/extras";
 import { TRANSFER_FACTORS, saleYear } from "../capability/judgements";
-import { isWider, type MultipleSource } from "../ai/multiples";
+import { isWider, convertedFrom, type MultipleSource } from "../ai/multiples";
 
 /**
  * SALE READINESS AND BORROWING (§6.130.2, open item 37).
@@ -38,6 +38,7 @@ export type LenderFacts = {
 
 const has = (s: string | null | undefined): s is string => !!s && s.trim().length > 0;
 const x = (n: number) => `${Number(n.toFixed(2))}×`;
+const span = (lo: number, hi: number) => (lo === hi ? x(lo) : `${x(lo)}–${x(hi)}`);
 
 export function saleAndBorrowing(i: ReportInput): Draft {
   const { sale, lender, money } = i;
@@ -79,8 +80,11 @@ export function saleAndBorrowing(i: ReportInput): Draft {
         { kind: "lead", text: "Where the range comes from" },
         { kind: "table",
           columns: [{ label: "Source", width: 230 }, { label: "Address" }, { label: "Range", numeric: true, width: 90 }],
-          rows: sale.sources.map((s) => [cell(s.market ? `${s.title} (for ${s.market})` : s.title), cell(s.url, { muted: true }), num(s.low === s.high ? x(s.low) : `${x(s.low)}–${x(s.high)}`)]) },
-        { kind: "note", text: COPY.saleRangeSourced(sale.foundOn ?? "recently", isWider(sale.sources)) },
+          rows: sale.sources.map((s) => [
+            cell([s.title, s.market ? `for ${s.market}` : "", s.sde ? `quoted as ${span(s.sde.low, s.sde.high)} owner earnings` : ""]
+              .filter(Boolean).join(" — ")),
+            cell(s.url, { muted: true }), num(span(s.low, s.high))]) },
+        { kind: "note", text: COPY.saleRangeSourced(sale.foundOn ?? "recently", isWider(sale.sources), convertedFrom(sale.sources)?.factor) },
       );
     } else if (ranged) {
       blocks.push({ kind: "note", text: COPY.saleRangeOwn });

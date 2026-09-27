@@ -10,7 +10,12 @@ import { checkLogo, logoObjectPath, LOGO_BUCKET } from "@/engine/plan/logo";
 import { checkEmail, checkWebsite } from "@/engine/plan/contact";
 import { failed } from "@/lib/actionFailed";
 import { adjustments, adjustedNote, type Watched } from "@/lib/adjusted";
-import { multiplesAsk, multiplesMessages, readMultiples, checkAccepted, afterWider, type MultiplesAsk, type MultiplesReading, type MultipleSource } from "@/engine/ai/multiples";
+import { multiplesAsk, multiplesMessages, readMultiples, checkAccepted, afterWider, pickOwner, sdeBasis, type MultiplesAsk, type MultiplesReading, type MultipleSource, type SdeInput } from "@/engine/ai/multiples";
+import { loadPlan } from "@/lib/planLoad";
+import { runForecast } from "@/engine/forecast/run";
+import { ebitda } from "@/engine/capability/model";
+import { readSale, saleYear } from "@/engine/capability/judgements";
+import { planYearStart, startYearFromDate, salaryForYear } from "@/engine/people/salary";
 import { searchOnce, AiUnavailable } from "@/lib/ai/provider";
 import { guardDraft } from "../ai/guard";
 import { adjustableMeasures, validPair } from "@/engine/capability/ranges";
@@ -211,6 +216,39 @@ export async function saveExit(planId: string, e: Partial<Exit>): Promise<{ ok: 
  * The profile is checked BEFORE the gate, so a plan with no industry is told what is missing without
  * spending one of the day's allowance on a search that could not have been about anything.
  */
+/**
+ * WHAT CONVERTS SDE FOR THIS PLAN (§6.145): the sale year's normalised EBITDA — the same forecast run and
+ * the same add-backs the price dial divides by (§6.67) — and one owner's pay in that year. Worked out on
+ * the server and never sent to the search: only industry, country and band leave the building (§6.130).
+ * Anything that cannot be read is "no earnings", so SDE is set aside rather than converted on a guess.
+ */
+async function sdeFor(planId: string): Promise<SdeInput> {
+  try {
+    const supabase = await createClient();
+    const [{ plan, settings, firstYear, fyEndMonth }, addBacks, people] = await Promise.all([
+      loadPlan(planId),
+      supabase.from("plan_add_backs").select("amount").eq("plan_id", planId),
+      supabase.from("plan_people").select("name, first_name, last_name, pct_shareholding, annual_salary, salary_adjustments, started_on, role").eq("plan_id", planId),
+    ]);
+    const run = runForecast(plan);
+    const f = run.checked ?? run.forecast;
+    const sale = readSale(settings, addBacks.data ?? []);
+    const year = saleYear(sale);
+    const e = ebitda(f.pnl?.[year]);
+    const earnings = e === null ? null : Math.round((e + (sale.addBacks ?? 0)) * 100) / 100;
+    const fyStart = planYearStart(firstYear, fyEndMonth);
+    const owner = pickOwner((people.data ?? []).filter((p) => p.role !== "contractor").map((p) => ({
+      name: (p.name as string | null)?.trim() || [p.first_name, p.last_name].filter(Boolean).join(" ") || "the owner",
+      pct: p.pct_shareholding === null ? null : Number(p.pct_shareholding),
+      pay: Math.round(salaryForYear(Number(p.annual_salary ?? 0), p.salary_adjustments ?? null, startYearFromDate(p.started_on, fyStart), year) * 100) / 100,
+    })));
+    return sdeBasis(earnings, owner, year);
+  } catch (e) {
+    console.error("sde basis", planId, e);
+    return { ok: false, why: "earnings" };
+  }
+}
+
 export async function findMultiples(planId: string): Promise<MultiplesReading> {
   const supabase = await createClient();
   const [settings, history] = await Promise.all([
@@ -237,11 +275,12 @@ export async function findMultiples(planId: string): Promise<MultiplesReading> {
     }
     try {
       const { text, cited } = await searchOnce(multiplesMessages(ask));
-      return readMultiples(text, cited, ask);
+      return readMultiples(text, cited, ask, await sde);
     } catch (e) {
       throw new SearchStopped(e instanceof AiUnavailable ? e.message : "The search stopped before it finished. Try again in a moment.");
     }
   };
+  const sde = sdeFor(planId);
   try {
     const first = await once(asked.ask);
     if (first.ok) return first;

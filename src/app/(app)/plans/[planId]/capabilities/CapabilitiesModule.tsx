@@ -520,7 +520,9 @@ function ValuationRange({ planId, metrics, input, money }: {
         <p className="mt-2 text-[11.5px] text-muted-foreground">
           Range from {sale.multipleFound.sources} published sources
           {sale.multipleFound.wider ? " in the wider sector or nearby markets" : ""}, found{" "}
-          {new Date(`${sale.multipleFound.on}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })}.
+          {new Date(`${sale.multipleFound.on}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })}
+          {sale.multipleFound.converted
+            ? `, ${sale.multipleFound.converted.count} converted from owner earnings at ×${sale.multipleFound.converted.factor}` : ""}.
         </p>
       )}
     </Picture>

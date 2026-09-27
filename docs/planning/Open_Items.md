@@ -442,7 +442,7 @@ now strip it. Left alone: boxes that already format as you type (sales price, CO
 lines, salaries, marketing spend) — they show commas already, though they re-format mid-typing — and
 percentages, days, months, counts and multiples.
 
-### 42. The searched comparable range clears the two-site minimum by exactly two — **steps 1 and 2 done (§6.143); watch**
+### 42. The searched comparable range clears the two-site minimum by exactly two — **steps 1–3 done (§6.143, §6.145); watch**
 
 §6.130's first live runs on SEQ (Commercial concreting, Australia, AUD 1–5 million) came back twice with
 the same answer in about 15–20 seconds: 2× to 3.5× EBITDA from two sites — creditte.com.au ("Trade and
@@ -515,6 +515,25 @@ income and publish the most small-business sales; Singapore stays Malaysia's onl
 flatter the others. Live on ZZ: Cafe, Thailand found 3 sites on the first search (2× to 3.5×) without
 widening; Cafe, Indonesia widened to "the wider sector, Malaysia and Thailand" and still missed, with 5
 larger-deal figures left out.
+
+**Step 3 built (§6.145, 27 Sep 2026): SDE converted in the open.** SDE is earnings before one owner is
+paid, so with this plan's normalised EBITDA for the sale year (E) and one owner's pay that year (P), an SDE
+multiple m is m × (E + P) / E in EBITDA terms. One owner, not the leadership wage bill — that is what SDE
+adds back, and the leadership total would have inflated it. The owner is the largest shareholder on the
+payroll, or the only paid person; with neither, or E not positive, SDE stays set aside and the card says
+what would allow it ("mark who owns the business…"). Worked out on the server from the same forecast and
+add-backs the price dial uses; nothing about it goes to the search. Each converted figure keeps its SDE
+numbers and factor, and the card, the accepted line, Financial Capabilities and the report show them. The
+card warns that pay already added back makes it read high. A figure that converts above 30× is dropped.
+
+Live on ZZ Test Walk (Cafe, New Zealand): with nobody on the leadership team, the card asked for the owner
+to be marked. With a test owner (100%, 120,000) it found New Zealand's own figures — Bizstats 2×–2.2× SDE
+and Auxo 2×–3× SDE — converted at ×1.27 (436,800 + 120,000 over 436,800) to 2.5× to 3.3×. Accepted, it
+showed "2 converted from owner earnings at ×1.27" in settings and on Capability to sell. The test owner,
+the range, the industry and the AI switch were then put back. The report wording is covered by its test.
+
+Known limit: the conversion is fixed when the range is found. If the owner's pay or the earnings change a
+lot later, search again.
 
 ### ~~43. The What-If "Turn into goals" dialog still offers a quarter~~ — **done (§6.139)**
 

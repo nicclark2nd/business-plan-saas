@@ -31,19 +31,59 @@ import type { Message } from "./prompt";
  * 7. **SIZE, NOT ONLY COUNT.** A figure the model marks as a larger deal — mid-market, private equity, a
  *    listed company — is left out and counted, because those sell at multiples a small business will not.
  *
+ * 8. **SDE IS CONVERTED, IN THE OPEN, OR SET ASIDE (§6.145).** Owner earnings (SDE) are earnings before one
+ *    owner is paid, so the same price is a smaller multiple of SDE than of EBITDA. With this plan's own
+ *    normalised EBITDA for the sale year (E) and one owner's pay that year (P), SDE is E + P, and an SDE
+ *    multiple m is m × (E + P) / E in EBITDA terms. One owner, not the leadership team: that is what SDE
+ *    adds back. The owner is the largest shareholder on the payroll, or the only person on it; with
+ *    neither, or with E not positive, nothing is converted and the card says what would allow it. Every
+ *    converted figure keeps its SDE numbers and the factor, so the card and the report show the working.
+ *
  * Pure: the same inputs give the same messages and the same reading, so what goes out and what is believed
  * are both tested rather than hoped.
  */
 
-/** `market` is the industry and country a figure is for — only kept from a wider search, where it differs. */
-export type MultipleSource = { title: string; url: string; low: number; high: number; market?: string };
+/**
+ * `market` is the industry and country a figure is for — only kept from a wider search, where it differs.
+ * `sde` is the figure as the source quoted it on owner earnings, and the factor it was converted at (rule 8).
+ */
+export type MultipleSource = {
+  title: string; url: string; low: number; high: number; market?: string;
+  sde?: { low: number; high: number; factor: number };
+};
+
+/** What converts SDE for this plan: the sale year, its normalised EBITDA, and whose pay is added back. */
+export type SdeBasis = { year: number; earnings: number; owner: string; ownerPay: number; factor: number };
+/** Why SDE could not be converted: no owner on the payroll, or no positive earnings to divide by. */
+export type SdeBlocked = "owner" | "earnings";
+export type SdeInput = { ok: true; basis: SdeBasis } | { ok: false; why: SdeBlocked };
+export type OwnerCandidate = { name: string; pct: number | null; pay: number };
+
+/** The largest shareholder with pay; failing that, the only paid person. A tie goes to the first listed. */
+export function pickOwner(people: OwnerCandidate[]): OwnerCandidate | null {
+  const paid = people.filter((p) => Number.isFinite(p.pay) && p.pay > 0);
+  const owners = paid.filter((p) => (p.pct ?? 0) > 0);
+  if (owners.length) return owners.reduce((a, b) => ((b.pct ?? 0) > (a.pct ?? 0) ? b : a));
+  return paid.length === 1 ? paid[0] : null;
+}
+
+export function sdeBasis(earnings: number | null, owner: OwnerCandidate | null, year: number): SdeInput {
+  if (earnings === null || !Number.isFinite(earnings) || earnings <= 0) return { ok: false, why: "earnings" };
+  if (!owner) return { ok: false, why: "owner" };
+  return { ok: true, basis: { year, earnings, owner: owner.name, ownerPay: owner.pay, factor: Math.round(((earnings + owner.pay) / earnings) * 100) / 100 } };
+}
 
 export type MultiplesAsk = { industry: string; country: string; band: string | null; wider?: boolean };
 
-/** `setAside`: quoted on SDE or revenue. `tooLarge`: from a larger deal than a small business. */
+/**
+ * `setAside`: quoted on a basis that was not used (revenue, other, or SDE that could not be converted).
+ * `tooLarge`: from a larger deal. `converted`/`sde`: SDE figures converted and the basis used (rule 8).
+ * `sdeWhy`: SDE figures were found but could not be converted, and why.
+ */
+type Counts = { setAside: number; tooLarge?: number; wider?: boolean; converted?: number; sde?: SdeBasis; sdeWhy?: SdeBlocked };
 export type MultiplesReading =
-  | { ok: true; low: number; high: number; sources: MultipleSource[]; setAside: number; tooLarge?: number; wider?: boolean }
-  | { ok: false; reason: string; setAside: number; tooLarge?: number; wider?: boolean };
+  | ({ ok: true; low: number; high: number; sources: MultipleSource[] } & Counts)
+  | ({ ok: false; reason: string } & Counts);
 
 /** Hosts whose pages are posts, not publications (rule 6). A subdomain counts: au.linkedin.com is LinkedIn. */
 export const NOT_PUBLISHED = ["linkedin.com", "facebook.com", "instagram.com", "x.com", "twitter.com", "medium.com",
@@ -156,12 +196,13 @@ const median = (xs: number[]) => {
 const r1 = (x: number) => Math.round(x * 10) / 10;
 
 /** The model's reply, held to the four rules above. `cited` is every URL the search itself returned. */
-export function readMultiples(text: string, cited: string[], ask: MultiplesAsk): MultiplesReading {
+export function readMultiples(text: string, cited: string[], ask: MultiplesAsk, sde: SdeInput | null = null): MultiplesReading {
   const where = ask.wider
     ? `${ask.industry} businesses in ${ask.country}, or for ${widerScope(ask.country)}`
     : `${ask.industry} businesses in ${ask.country}`;
   const none = (setAside = 0, tooLarge = 0): MultiplesReading => ({
-    ok: false, setAside, tooLarge, wider: !!ask.wider,
+    ok: false, setAside, tooLarge, wider: !!ask.wider, ...(sde?.ok ? { sde: sde.basis } : {}),
+    ...(sdeSeen && sde && !sde.ok ? { sdeWhy: sde.why } : {}),
     reason: `Couldn't find at least ${MIN_SOURCES} published sources giving EBITDA multiples for ${where}. A business broker or your accountant will know the range.`,
   });
 
@@ -171,8 +212,14 @@ export function readMultiples(text: string, cited: string[], ask: MultiplesAsk):
     const a = t.indexOf("{"), b = t.lastIndexOf("}");
     raw = a >= 0 && b > a ? JSON.parse(t.slice(a, b + 1)) : null;
   } catch { raw = null; }
-  const list = raw && typeof raw === "object" && Array.isArray((raw as { sources?: unknown }).sources)
-    ? (raw as { sources: unknown[] }).sources : [];
+  const basisOf = (x: unknown) => String((x as { basis?: unknown } | null)?.basis ?? "").trim().toUpperCase();
+  /* EBITDA figures first, so a site quoting both is counted on the figure that needs no conversion. */
+  const list = (raw && typeof raw === "object" && Array.isArray((raw as { sources?: unknown }).sources)
+    ? (raw as { sources: unknown[] }).sources : [])
+    .map((x, i) => ({ x, i })).sort((a, b) => Number(basisOf(a.x) !== "EBITDA") - Number(basisOf(b.x) !== "EBITDA") || a.i - b.i)
+    .map(({ x }) => x);
+  const conv = sde?.ok ? sde.basis : null;
+  let sdeSeen = false;
 
   const returned = new Set(cited.map((u) => norm(u)?.key).filter(Boolean) as string[]);
   const seenHosts = new Set<string>();
@@ -187,20 +234,30 @@ export function readMultiples(text: string, cited: string[], ask: MultiplesAsk):
     if (isPost(n.host)) continue;                                     // rule 6: a post, not a publication
     const lo = Number(s.low), hi = s.high === undefined || s.high === null ? lo : Number(s.high);
     if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo <= 0 || hi > CEILING || lo > hi) continue;
-    if (String(s.basis ?? "").trim().toUpperCase() !== "EBITDA") { setAside++; continue; }   // rule 3
+    const basis = basisOf(s);
+    if (basis === "SDE") sdeSeen = true;
+    if (basis !== "EBITDA" && !(basis === "SDE" && conv)) { setAside++; continue; }             // rules 3 and 8
     if (String(s.size ?? "").trim().toLowerCase() === "larger") { tooLarge++; continue; }     // rule 7
-    if (seenHosts.has(n.host)) continue;                              // rule 4 counts sites, not pages
-    seenHosts.add(n.host);
     const market = ask.wider && typeof s.market === "string" ? clip(s.market, 80) : "";
     if (ask.wider && !inMarket(market, [ask.country, ...nearby(ask.country)])) continue;   // rule 5: unnamed or too far
-    kept.push({ title: clip(String(s.title ?? n.host), 140) || n.host, url: String(s.url), low: r1(lo), high: r1(hi), ...(market ? { market } : {}) });
+    const fromSde = basis === "SDE" && !!conv;
+    const f = fromSde ? conv!.factor : 1;
+    if (hi * f > CEILING) continue;                                   // converted past anything a small sale fetches
+    if (seenHosts.has(n.host)) continue;                              // rule 4 counts sites, not pages
+    seenHosts.add(n.host);
+    kept.push({
+      title: clip(String(s.title ?? n.host), 140) || n.host, url: String(s.url), low: r1(lo * f), high: r1(hi * f),
+      ...(market ? { market } : {}), ...(fromSde ? { sde: { low: r1(lo), high: r1(hi), factor: f } } : {}),
+    });
   }
 
   if (kept.length < MIN_SOURCES) return none(setAside, tooLarge);
   const sources = kept.slice(0, MAX_SOURCES);
   const low = r1(median(sources.map((s) => s.low)));
   const high = Math.max(low, r1(median(sources.map((s) => s.high))));
-  return { ok: true, low, high, sources, setAside, tooLarge, wider: !!ask.wider };
+  const used = sources.filter((x) => x.sde).length;
+  return { ok: true, low, high, sources, setAside, tooLarge, wider: !!ask.wider,
+    ...(conv ? { sde: conv } : {}), ...(used ? { converted: used } : {}), ...(sdeSeen && sde && !sde.ok ? { sdeWhy: sde.why } : {}) };
 }
 
 /**
@@ -218,7 +275,10 @@ export function checkAccepted(x: { low: unknown; high: unknown; sources: unknown
     const lo = Number(s?.low), hi = Number(s?.high);
     if (!n || !Number.isFinite(lo) || !Number.isFinite(hi) || lo <= 0 || hi > CEILING || lo > hi) return { ok: false };
     const market = typeof s.market === "string" ? clip(s.market, 80) : "";
-    sources.push({ title: clip(String(s.title ?? n.host), 140), url: String(s.url), low: r1(lo), high: r1(hi), ...(market ? { market } : {}) });
+    const d = s.sde as { low?: unknown; high?: unknown; factor?: unknown } | undefined;
+    const sde = d && [d.low, d.high, d.factor].every((v) => Number.isFinite(Number(v)) && Number(v) > 0)
+      ? { low: r1(Number(d.low)), high: r1(Number(d.high)), factor: Number(d.factor) } : null;
+    sources.push({ title: clip(String(s.title ?? n.host), 140), url: String(s.url), low: r1(lo), high: r1(hi), ...(market ? { market } : {}), ...(sde ? { sde } : {}) });
   }
   return { ok: true, low: r1(low), high: r1(high), sources };
 }
@@ -229,5 +289,12 @@ export const isWider = (sources: { market?: unknown }[] | null | undefined): boo
 
 /** The two readings of a search that widened, told as one: the wider result, with both searches' left-outs. */
 export function afterWider(first: MultiplesReading, wider: MultiplesReading): MultiplesReading {
-  return { ...wider, setAside: first.setAside + wider.setAside, tooLarge: (first.tooLarge ?? 0) + (wider.tooLarge ?? 0) };
+  const why = wider.sdeWhy ?? first.sdeWhy;
+  return { ...wider, setAside: first.setAside + wider.setAside, tooLarge: (first.tooLarge ?? 0) + (wider.tooLarge ?? 0), ...(why ? { sdeWhy: why } : {}) };
+}
+
+/** How many of a stored range's figures were converted from SDE, and at what factor (rule 8). */
+export function convertedFrom(sources: { sde?: { factor?: unknown } }[] | null | undefined): { count: number; factor: number } | null {
+  const c = (sources ?? []).filter((s) => s?.sde && Number.isFinite(Number(s.sde.factor)));
+  return c.length ? { count: c.length, factor: Number(c[0].sde!.factor) } : null;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { multiplesAsk, multiplesMessages, readMultiples, revenueBand, checkAccepted, afterWider, isWider, widerScope } from "./multiples";
+import { multiplesAsk, multiplesMessages, readMultiples, revenueBand, checkAccepted, afterWider, isWider, widerScope, pickOwner, sdeBasis, convertedFrom } from "./multiples";
 
 const ask = { industry: "Concreting", country: "Australia", band: "AUD 1–5 million" };
 const src = (url: string, low: number, high: number, basis = "EBITDA", title = "T", more: Record<string, string> = {}) => ({ url, low, high, basis, title, ...more });
@@ -165,5 +165,48 @@ describe("Southeast Asia borrows from its neighbours (§6.144)", () => {
   });
   it("lets the Philippines and Indonesia borrow from Malaysia and Thailand", () => {
     expect(multiplesMessages({ ...th, country: "Philippines" })[1].content).toContain("in Philippines or Malaysia or Thailand");
+  });
+});
+
+describe("owner earnings converted in the open (§6.145)", () => {
+  const cited = ["https://brokera.com.au/report", "https://valuer-b.com/guide", "https://c.org/x"];
+  const basis = sdeBasis(400_000, { name: "Jo", pct: 60, pay: 100_000 }, 2);
+
+  it("adds back one owner's pay: the largest shareholder on the payroll", () => {
+    expect(pickOwner([{ name: "A", pct: 20, pay: 90_000 }, { name: "B", pct: 60, pay: 120_000 }, { name: "C", pct: null, pay: 150_000 }])?.name).toBe("B");
+    expect(pickOwner([{ name: "A", pct: 100, pay: 0 }, { name: "B", pct: null, pay: 80_000 }])?.name).toBe("B");   // the only one paid
+    expect(pickOwner([{ name: "A", pct: null, pay: 80_000 }, { name: "B", pct: null, pay: 90_000 }])).toBeNull(); // nobody marked, two paid
+  });
+  it("works out SDE as earnings plus that pay, and says why when it cannot", () => {
+    expect(basis).toEqual({ ok: true, basis: { year: 2, earnings: 400_000, owner: "Jo", ownerPay: 100_000, factor: 1.25 } });
+    expect(sdeBasis(-5, { name: "Jo", pct: 60, pay: 100_000 }, 1)).toEqual({ ok: false, why: "earnings" });
+    expect(sdeBasis(400_000, null, 1)).toEqual({ ok: false, why: "owner" });
+  });
+  it("converts SDE figures, keeps them as quoted, and counts them as sites", () => {
+    const r = readMultiples(reply([src("https://brokera.com.au/report", 3, 4), src("https://valuer-b.com/guide", 2, 3, "SDE")]), cited, ask, basis);
+    expect(r).toMatchObject({ ok: true, converted: 1, setAside: 0 });
+    const conv = (r as { sources: { sde?: unknown; low: number; high: number }[] }).sources[1];
+    expect(conv).toMatchObject({ low: 2.5, high: 3.8, sde: { low: 2, high: 3, factor: 1.25 } });
+  });
+  it("counts a site on its EBITDA figure when it quotes both", () => {
+    const r = readMultiples(reply([src("https://valuer-b.com/guide", 2, 3, "SDE"), src("https://valuer-b.com/guide", 3, 4), src("https://brokera.com.au/report", 3, 4)]), cited, ask, basis);
+    expect((r as { sources: { url: string; sde?: unknown }[] }).sources.every((s) => !s.sde)).toBe(true);
+  });
+  it("still sets revenue aside, and sets SDE aside with the reason when it cannot convert", () => {
+    const list = reply([src("https://brokera.com.au/report", 3, 4), src("https://valuer-b.com/guide", 2, 3, "SDE"), src("https://c.org/x", 0.5, 0.7, "revenue")]);
+    expect(readMultiples(list, cited, ask, basis)).toMatchObject({ ok: true, setAside: 1, converted: 1 });
+    expect(readMultiples(list, cited, ask, { ok: false, why: "owner" })).toMatchObject({ ok: false, setAside: 2, sdeWhy: "owner" });
+  });
+  it("drops a figure that converts past anything a small sale fetches", () => {
+    const tiny = sdeBasis(10_000, { name: "Jo", pct: 100, pay: 200_000 }, 1);   // ×21
+    const r = readMultiples(reply([src("https://brokera.com.au/report", 3, 4), src("https://valuer-b.com/guide", 2, 3, "SDE")]), cited, ask, tiny);
+    expect(r.ok).toBe(false);
+  });
+  it("keeps the working through the accept check, and reads it back", () => {
+    const c = checkAccepted({ low: 2.5, high: 3.8, sources: [
+      { title: "A", url: "https://a.com", low: 2.5, high: 3.8, sde: { low: 2, high: 3, factor: 1.25 } }, { title: "B", url: "https://b.com", low: 3, high: 4 },
+    ] });
+    expect(c.ok && c.sources[0].sde).toEqual({ low: 2, high: 3, factor: 1.25 });
+    expect(convertedFrom(c.ok ? c.sources : [])).toEqual({ count: 1, factor: 1.25 });
   });
 });

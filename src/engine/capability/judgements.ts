@@ -1,5 +1,5 @@
 import type { FundingSource } from "@/engine/funding/sources";
-import { isWider } from "@/engine/ai/multiples";
+import { isWider, convertedFrom } from "@/engine/ai/multiples";
 
 /**
  * THE FIGURES THE CAPABILITY DIALS NEED THAT THE FORECAST CANNOT PRODUCE (§6.129), read in one place.
@@ -57,7 +57,7 @@ export type Sale = {
    * When the range was accepted from a web search, how many sources and on what day (§6.130), so the tab
    * can say so beside it. Absent or null: the client typed it.
    */
-  multipleFound?: { sources: number; on: string; wider?: boolean } | null;
+  multipleFound?: { sources: number; on: string; wider?: boolean; converted?: { count: number; factor: number } | null } | null;
   /** Which forecast year the sale is aimed at, if the client has said. */
   exitYear: number | null;
 };
@@ -127,7 +127,8 @@ export function readSale(s: Row, addBacks: { amount?: unknown }[] = []): Sale {
     multipleLow: n(s?.multiple_low), multipleHigh: n(s?.multiple_high),
     multipleFound: Array.isArray(s?.multiple_sources) && typeof s?.multiple_found_on === "string"
       ? { sources: (s.multiple_sources as unknown[]).length, on: s.multiple_found_on as string,
-          wider: isWider(s.multiple_sources as { market?: unknown }[]) } : null,
+          wider: isWider(s.multiple_sources as { market?: unknown }[]),
+          converted: convertedFrom(s.multiple_sources as { sde?: { factor?: unknown } }[]) } : null,
     exitYear: n(s?.intended_exit_year),
   };
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { isWider, widerScope, type MultiplesReading, type MultipleSource } from "@/engine/ai/multiples";
+import { isWider, widerScope, convertedFrom, type MultiplesReading, type MultipleSource, type SdeBasis, type SdeBlocked } from "@/engine/ai/multiples";
 
 /**
  * WHAT SIMILAR BUSINESSES SOLD FOR (§6.130) — the button, the card and the record, under the two boxes.
@@ -15,12 +15,16 @@ import { isWider, widerScope, type MultiplesReading, type MultipleSource } from 
  * - **Accepted:** a line saying where it came from and when, with the sources one click away. Typing over
  *   either box makes the range the client's own, and the line goes (the save clears it on the server).
  *
+ * A CONVERTED FIGURE SHOWS ITS WORKING (§6.145): the SDE multiple as quoted, the earnings and whose pay it
+ * was converted with, and a warning that pay already added back makes it read high.
+ *
  * A WIDER RANGE SAYS SO, EVERYWHERE IT APPEARS (§6.143). The headline, each source's own market, and the
  * accepted line — so nobody later mistakes the wider sector's figures for this industry's.
  */
 const LINK = "font-medium text-primary underline-offset-2 hover:underline";
 const x = (n: number) => `${n}×`;
 const span = (lo: number, hi: number) => (lo === hi ? x(lo) : `${x(lo)} to ${x(hi)}`);
+const whole = (n: number) => Math.round(n).toLocaleString("en-AU");
 const day = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
 
 function Sources({ sources }: { sources: MultipleSource[] }) {
@@ -32,6 +36,11 @@ function Sources({ sources }: { sources: MultipleSource[] }) {
             {/* A search result is somebody else's page: no referrer, no handle back to this one. */}
             <a href={s.url} target="_blank" rel="noopener noreferrer" className={`${LINK} block truncate`} title={s.url}>{s.title}</a>
             {s.market && <span className="block text-[11px] text-muted-foreground">For {s.market}</span>}
+            {s.sde && (
+              <span className="block text-[11px] text-muted-foreground">
+                Quoted as {span(s.sde.low, s.sde.high)} owner earnings (SDE), converted at ×{s.sde.factor}
+              </span>
+            )}
           </span>
           <span className="num shrink-0 text-muted-foreground">{span(s.low, s.high)}</span>
         </li>
@@ -52,10 +61,31 @@ export function ComparableSearch({ aiOn, industry, country, found, search, busy,
   onDismiss: () => void;
   onGo: (area: "ai" | "profile") => void;
 }) {
-  const setAside = (n: number) => n > 0 && (
+  const setAside = (n: number, sdeUsed = false) => n > 0 && (
     <p className="text-[11.5px] text-muted-foreground">
-      {n === 1 ? "One other figure was" : `${n} other figures were`} quoted on owner earnings (SDE) or on revenue.
-      Those read lower than EBITDA for the same business, so they were left out rather than mixed in.
+      {sdeUsed
+        ? <>{n === 1 ? "One other figure was" : `${n} other figures were`} quoted on revenue or another basis, which
+            does not convert to EBITDA, so {n === 1 ? "it was" : "they were"} left out.</>
+        : <>{n === 1 ? "One other figure was" : `${n} other figures were`} quoted on owner earnings (SDE) or on revenue.
+            Those read lower than EBITDA for the same business, so they were left out rather than mixed in.</>}
+    </p>
+  );
+  const converted = (n = 0, b?: SdeBasis) => n > 0 && b && (
+    <p className="text-[11.5px] text-muted-foreground">
+      {n === 1 ? "One of these was" : `${n} of these were`} quoted on owner earnings (SDE), which are earnings before
+      the owner is paid. They were converted with this plan&apos;s Year {b.year} figures: normalised EBITDA of{" "}
+      {whole(b.earnings)} plus {b.owner}&apos;s pay of {whole(b.ownerPay)} is {whole(b.earnings + b.ownerPay)} of owner
+      earnings, so each SDE multiple is ×{b.factor} in EBITDA terms. If part of that pay is already an add-back, this
+      reads high — lean to the lower end.
+    </p>
+  );
+  const sdeWhy = (why?: SdeBlocked) => why && (
+    <p className="text-[11.5px] text-muted-foreground">
+      {why === "owner"
+        ? <>Some figures were quoted on owner earnings (SDE). Mark who owns the business — their shareholding — on{" "}
+            Leadership Team, with their pay, and the app can convert them.</>
+        : <>Some figures were quoted on owner earnings (SDE). They can be converted once the plan shows positive
+            earnings (EBITDA) in the sale year.</>}
     </p>
   );
   const tooLarge = (n = 0) => n > 0 && (
@@ -76,6 +106,7 @@ export function ComparableSearch({ aiOn, industry, country, found, search, busy,
   }
 
   const ready = !!industry?.trim() && !!country?.trim();
+  const foundConv = found ? convertedFrom(found.sources) : null;
 
   return (
     <div className="mt-3 grid max-w-[760px] gap-3">
@@ -83,7 +114,8 @@ export function ComparableSearch({ aiOn, industry, country, found, search, busy,
         <details className="text-[12px] text-muted-foreground">
           <summary className="cursor-pointer">
             Range from {found.sources.length} published sources{isWider(found.sources) ? " in the wider sector or nearby markets" : ""},
-            found {day(found.on)}. Type over it to use your own.
+            found {day(found.on)}{foundConv ? `, ${foundConv.count} converted from owner earnings at ×${foundConv.factor}` : ""}.
+            Type over it to use your own.
           </summary>
           <div className="mt-2"><Sources sources={found.sources} /></div>
         </details>
@@ -138,7 +170,9 @@ export function ComparableSearch({ aiOn, industry, country, found, search, busy,
                 </p>
               )}
               <Sources sources={search.sources} />
-              {setAside(search.setAside)}
+              {converted(search.converted, search.sde)}
+              {setAside(search.setAside, !!search.sde)}
+              {sdeWhy(search.sdeWhy)}
               {tooLarge(search.tooLarge)}
               <p className="text-[11.5px] text-muted-foreground">
                 These are averages across many sales. Where this business sits in the range depends on how much of it
@@ -152,7 +186,8 @@ export function ComparableSearch({ aiOn, industry, country, found, search, busy,
           ) : (
             <>
               <p className="text-[12.5px]">{search.reason}</p>
-              {setAside(search.setAside)}
+              {setAside(search.setAside, !!search.sde)}
+              {sdeWhy(search.sdeWhy)}
               {tooLarge(search.tooLarge)}
               <div><Button type="button" size="sm" variant="ghost" onClick={onDismiss}>Dismiss</Button></div>
             </>
