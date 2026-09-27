@@ -658,3 +658,26 @@ an "Equity" heading; the importer reads it per period and shows it in the previe
 Historic → Balance sheet to ask, once, as before (Nic: "if this is not uploaded … they can be asked to answer
 the question in its current form"). A reload keeps what was already given when the new file has no line.
 Unit-tested; not driven live, because the browser pane here cannot choose a file to upload.
+
+**The sweep, 27 Sep 2026 — findings, nothing changed yet.** Every screen's inputs were checked against what
+the client has already entered or uploaded, or what could be worked out from it.
+
+Already right (derived, not asked): opening cash (Funding reads Historic), tax losses and accumulated profit
+(§6.148), working-capital days (defaults from Historic), Leadership Team salaries in Overheads, the cap table
+(People + Funding composed once), products and services statement (asked once, on Sales).
+
+Asked again or not used — in priority order:
+1. **Existing bank loans.** Historic holds them (SEQ: 98,849 due within a year, 89,974 after). The forecast
+   carries the balance flat — no interest, no repayments (SEQ's 4,433 of Year 1 interest is the two new
+   equipment loans only). The only way to cost them is to add them again on Funding, which counts the debt
+   twice and books the money as fresh cash. Both a double entry and a wrong forecast. Fix: Funding shows the
+   loans already on the balance sheet and asks only what the accounts cannot give — rate, term, repayment.
+2. **Historic period ends.** Set-up asks the financial year end and the first projected year; Historic then asks
+   "Period end" for each of four years (SEQ typed 2026, 2025, 2024, 2023). They follow from set-up: Period 1
+   ends the year before Year 1. Fix: filled in, changeable when the accounts are a different year.
+3. **Currency.** Set-up and Plan settings ask country and currency separately; changing country leaves the
+   currency alone. Fix: currency follows the country, changeable for a business that trades in another.
+4. **Company tax rate.** Every plan starts at 25% whatever the country (New Zealand 28%, United States 21%).
+   Fix: default from the country, with a note that small-business rates vary, and changeable.
+5. **Small ones.** Contact email on the cover could start as the sign-in email; the first Leadership Team row
+   could start with the signed-in person's name.
