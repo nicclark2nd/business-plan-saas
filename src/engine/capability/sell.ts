@@ -43,8 +43,8 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
   const m = i.money;
   const sale = i.sale;
   const FIX_PRICE = { label: "Set the asking price", to: "settings?area=exit" };
-  const FIX_RANGE = { label: "Set the similar-sales range", to: "settings?area=exit" };
-  const FIX_TRANSFER = { label: "Score the six factors", to: "people?area=risk" };
+  const FIX_RANGE = { label: "Add what similar businesses sold for", to: "settings?area=exit" };
+  const FIX_TRANSFER = { label: "Score the six new-owner questions", to: "people?area=risk" };
 
   const e1 = ebitda(y1);
   /* Normalised: what a buyer would inherit, once the seller's own costs are put back. */
@@ -99,7 +99,7 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
   const leadershipShare = i.leadershipPay !== null && normalised && normalised > 0
     ? over(i.leadershipPay, normalised) : null;
   /* 1,580% is not a reading anyone can use; "15.8× the earnings" is (§6.163). */
-  const shareShown = (v: number) => (v > 1 ? `${r1(v)}× earnings` : pct(v * 100));
+  const shareShown = (v: number) => (v > 1 ? `${r1(v)}× profit` : pct(v * 100));
   const intensity = bs1 && y1?.revenue ? over(bs1.fixedAssets, y1.revenue) : null;
 
   /* Both or neither: a range with one end is not a range, and the price dial needs a top to judge against. */
@@ -109,7 +109,7 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
 
   return [
     {
-      key: "priceMultiple", name: "Asking price ÷ normalised EBITDA", unit: "x",
+      key: "priceMultiple", name: "Asking price ÷ profit", unit: "x",
       /*
        * THIS IS THE DECISIVE MEASURE, so it is the one that must not be judged on half its inputs. A price
        * with no comparable range has nothing to be too high against, so the value waits — and because the
@@ -122,13 +122,13 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       bands: ranged
         ? [{ to: high, s: "good" }, { to: high + 0.4, s: "watch" }, { to: Number.MAX_SAFE_INTEGER, s: "bad" }]
         : [{ to: Number.MAX_SAFE_INTEGER, s: "good" }],
-      sub: price && normalisedSale ? `${m(price)} against ${m(normalisedSale)} of Year ${sy} earnings (after add-backs)` : undefined,
+      sub: price && normalisedSale ? `${m(price)} against ${m(normalisedSale)} of Year ${sy} profit (after add-backs)` : undefined,
       note: multiple === null ? "The one number a buyer looks at first."
-        : !ranged ? `The price is ${r2(multiple)}× earnings. To know if that is high or low, it needs what similar businesses sold for.`
+        : !ranged ? `The price is ${r2(multiple)}× profit. To know if that is high or low, it needs what similar businesses sold for.`
         : multiple > high ? `Higher than similar businesses have sold for. At ${high}× the price would be ${m(normalisedSale! * high)}.`
         : multiple < low ? "Lower than similar businesses have sold for — the price may be too low."
         : "In line with what similar businesses have sold for.",
-      bench: ranged ? `Similar businesses sold for ${low}× to ${high}× earnings` : "Add what similar businesses sold for in Plan settings",
+      bench: ranged ? `Similar businesses sold for ${low}× to ${high}× profit` : "Add what similar businesses sold for in Plan settings",
       formula: `Asking price ÷ (Year ${sy} EBITDA + owner add-backs)${sy === 1 && sale.exitYear === null ? " — Year 1 until a sale year is chosen in Plan settings → Exit & sale" : ", the year the sale is aimed at"}`,
       reveals: "Whether the price can be justified against what similar businesses actually changed hands for.",
       confidence: "The arithmetic is exact; the comparable range is your judgement, and it is the part a buyer will argue with.",
@@ -137,7 +137,7 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       fix: multiple === null ? FIX_PRICE : !ranged ? FIX_RANGE : undefined,
     },
     {
-      key: "normalisedMargin", name: "Normalised EBITDA margin", unit: "pct",
+      key: "normalisedMargin", name: "Profit margin after add-backs", unit: "pct",
       value: normalisedMargin === null ? null : r1(normalisedMargin * 100),
       display: normalisedMargin === null ? "—" : pct(normalisedMargin * 100),
       min: 0, max: 30, bands: [{ to: 8, s: "bad" }, { to: 12, s: "watch" }, { to: 30, s: "good" }],
@@ -189,7 +189,7 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       formula: `The average of the ${TRANSFER_FACTORS.length} judgements scored on Leadership Team → Risk & Succession, each 1 to 5`,
       reveals: "Whether there is a business here or an owner with customers.",
       confidence: "It is a judgement, yours or your client's. It is the softest thing on this page and often the most important.",
-      missing: transfer === null ? `All ${TRANSFER_FACTORS.length} factors scored on Leadership Team → Risk & Succession.` : undefined,
+      missing: transfer === null ? `All six new-owner questions scored on Leadership Team → Risk & Succession.` : undefined,
       fix: transfer === null ? FIX_TRANSFER : undefined,
     },
     {

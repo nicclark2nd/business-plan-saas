@@ -977,3 +977,10 @@ projection step and scored on the Plan view, after.)
   shown and a link to check it). SEQ actual: payments 103,638 → 50,233, cash from trading −149,459 → +100,727,
   cover 0× → 2.01×; score stays 49 because the bad year (margin −40 points) still fails. SEQ plan 2027: cover 0 →
   0.88× with every fix, overdraft 30,000 for the −25,019 month.
+- **§6.177** What fixes it — Capability to sell. A buyer prices one year (the sale year; the latest actual year on the
+  accounts), so the levers are pulled there: the profit and payment levers against the year before it (profit first,
+  since a buyer prices profit), then the price — what the fixed-up profit supports at the top of what similar
+  businesses sold for (`sellLevers`). Beneath the table, what profit the asking price would need (`profitForPrice`).
+  Story in plain words; "normalised EBITDA" renamed on the cards to "Asking price ÷ profit" and "Profit margin after
+  add-backs". SEQ actual: profit after add-backs 32,638 → 193,023, price 1,000,000 → 670,000, sell 33 → 88; keeping
+  1,000,000 needs 285,714 of profit a year. SEQ plan (sale year 2028): 76,876 → 110,024, price → 380,000.

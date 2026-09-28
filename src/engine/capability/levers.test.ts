@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { capabilityViews, type HistoricRow } from "./actual";
 import { buildView } from "./views";
-import { borrowLevers, borrowStory, growLevers, growStory, growWith, leverTable, moveLine, viewWith, withMoves } from "./levers";
+import { borrowLevers, borrowStory, growLevers, growStory, growWith, leverTable, moveLine, profitForPrice, sellLevers, sellStory, viewWith, withMoves } from "./levers";
 import { annualRepayment } from "./model";
 import type { CapabilityInput } from "./model";
 
@@ -100,5 +100,34 @@ describe("what fixes it — Borrow (§6.176)", () => {
     const pos = { ...base.posIn, monthlyCash: [10_000, -25_019, 5_000] };
     const od = borrowLevers(pos, [], [], {}, true).find((l) => l.key === "overdraft")!;
     expect(od.label).toBe("Arrange an overdraft of 30,000");
+  });
+});
+
+describe("what fixes it — Sell (§6.177)", () => {
+  const priced = { ...plan, sale: { askingPrice: 1_000_000, addBacks: 85_000, multipleLow: 2, multipleHigh: 3.5, exitYear: null } } as typeof plan;
+  const views = capabilityViews(priced, rows, 2027);
+  const a = views.actual!;
+  const base = buildView(a, money, a.last);
+  const levers = withMoves(sellLevers(base.posIn, growLevers(base.growIn), 1), a, a.last, false, money, base.sell, "sell");
+
+  it("leads with the profit levers and ends with the price the fixed-up profit supports", () => {
+    expect(levers[0].profit).toBeGreaterThan(0);
+    const price = levers[levers.length - 1];
+    expect(price.key).toBe("price");
+    const gain = levers.reduce((t, l) => t + l.profit, 0);
+    const earnings = -52_362 + 11_835 + 85_000 + gain;
+    expect(price.price).toEqual({ from: 1_000_000, to: Math.floor((earnings * 3.5) / 10_000) * 10_000 });
+  });
+
+  it("says what profit the asking price needs", () => {
+    expect(profitForPrice(base.posIn)).toEqual({ price: 1_000_000, needed: 285_714.29, high: 3.5 });
+  });
+
+  it("re-scores the sale with every fix, and tells the story in plain words", () => {
+    const after = viewWith(a, a.last, levers, false, money, "sell");
+    expect(after.score!).toBeGreaterThan(base.scores.sell.value!);
+    const s = sellStory(base.posIn, 1, "2026", true)!;
+    expect(s).toContain("With 85,000 of owner add-backs, a buyer would have seen");
+    expect(s).toContain("Similar businesses sold for 2–3.5 times profit");
   });
 });

@@ -18,9 +18,9 @@ import type { ActualYear, YearNames } from "./actual";
 type PlanFacts = Omit<CapabilityInput, "money">;
 export type ViewInput = { grow: PlanFacts; position: PlanFacts; growNames: YearNames; positionNames: YearNames };
 
-export type LeverKey = "overheads" | "margin" | "debtors" | "stock" | "loans" | "overdraft";
+export type LeverKey = "overheads" | "margin" | "debtors" | "stock" | "loans" | "overdraft" | "price";
 /** Which tab the levers are for: it decides which year they change and which cards they are measured on. */
-export type LeverKind = "grow" | "borrow";
+export type LeverKind = "grow" | "borrow" | "sell";
 export type Lever = {
   key: LeverKey;
   /** "Hold overheads to sales growth" */
@@ -37,6 +37,8 @@ export type Lever = {
   target: "overheadsCap" | "grossMargin" | "debtorDays" | "loanTermMonths" | null;
   /** Loan payments saved in the judged year (the loan lever). */
   saves?: number;
+  /** The asking price now and the price the profit supports (the price lever). */
+  price?: { from: number; to: number };
   /** For the payment levers: the days now and the days aimed at. */
   days?: { from: number; to: number };
   effect: Effect;
@@ -49,6 +51,10 @@ type Effect = {
   serviceCut: number; reclass: number;
   /** An overdraft arranged but not used — counts towards the cash runway. */
   undrawnAdd: number;
+  /** The position-input year the lever changes (Borrow: 1; Sell: the sale year). */
+  slot?: number;
+  /** A new asking price (the price lever). */
+  priceTo?: number;
 };
 const NONE: Effect = { cogsCut: 0, overheadsCut: 0, arCut: 0, invCut: 0, serviceCut: 0, reclass: 0, undrawnAdd: 0 };
 
@@ -140,6 +146,8 @@ function sum(levers: Pick<Lever, "effect">[]): Effect {
     e.serviceCut += x.serviceCut; e.reclass += x.reclass; e.undrawnAdd += x.undrawnAdd;
     if (x.debtorDays !== undefined) e.debtorDays = x.debtorDays;
     if (x.inventoryDays !== undefined) e.inventoryDays = x.inventoryDays;
+    if (x.slot !== undefined) e.slot = Math.max(e.slot ?? 1, x.slot);
+    if (x.priceTo !== undefined) e.priceTo = x.priceTo;
   }
   return e;
 }
@@ -186,15 +194,16 @@ export function withLevers(v: ViewInput, last: ActualYear | null, levers: Pick<L
     ...last, pnl: pnlWith(last.pnl, e), balanceSheet: bsWith(last.balanceSheet, e), cashFlow: cfWith(last.cashFlow, e),
     days: daysWith(last.days, e)!, debtService: Math.max(0, last.debtService - e.serviceCut),
   } : null;
-  if (kind === "borrow") {
-    const p = v.position;
+  if (kind === "borrow" || kind === "sell") {
+    const p = v.position, k = e.slot ?? 1;
     const position: PlanFacts = {
       ...p,
-      pnl: withYear(p.pnl, 1, (x) => pnlWith(x, e)), balanceSheet: withYear(p.balanceSheet, 1, (x) => bsWith(x, e)),
-      cashFlow: withYear(p.cashFlow, 1, (x) => cfWith(x, e)),
-      days: Object.fromEntries(Object.entries(p.days).map(([k, d]) => [k, k === "1" ? daysWith(d, e)! : d])) as PlanFacts["days"],
-      debtService: withYear(p.debtService, 1, (x) => Math.max(0, x - e.serviceCut)),
+      pnl: withYear(p.pnl, k, (x) => pnlWith(x, e)), balanceSheet: withYear(p.balanceSheet, k, (x) => bsWith(x, e)),
+      cashFlow: withYear(p.cashFlow, k, (x) => cfWith(x, e)),
+      days: Object.fromEntries(Object.entries(p.days).map(([key, d]) => [key, key === String(k) ? daysWith(d, e)! : d])) as PlanFacts["days"],
+      debtService: withYear(p.debtService, k, (x) => Math.max(0, x - e.serviceCut)),
       undrawn: p.undrawn + e.undrawnAdd,
+      sale: e.priceTo !== undefined ? { ...p.sale, askingPrice: e.priceTo } : p.sale,
     };
     return { v: { ...v, position }, last: nextLast };
   }
@@ -238,8 +247,9 @@ export function withMoves(levers: Omit<Lever, "moves">[], v: ViewInput, last: Ac
 const RANK = { bad: 0, watch: 1, good: 2 } as const;
 
 /** What a lever is worth, in the words the page uses beside it. */
-export const worth = (l: Pick<Lever, "profit" | "cash" | "saves" | "key" | "effect">, money: (x: number) => string) =>
-  l.saves ? `${money(l.saves)} a year less in loan payments`
+export const worth = (l: Pick<Lever, "profit" | "cash" | "saves" | "key" | "effect" | "price">, money: (x: number) => string) =>
+  l.price ? `${money(l.price.from)} → ${money(l.price.to)}`
+  : l.saves ? `${money(l.saves)} a year less in loan payments`
   : l.key === "overdraft" ? `${money(l.effect.undrawnAdd)} to fall back on`
   : l.profit > 0 ? `+${money(l.profit)} a year` : `+${money(l.cash)} cash`;
 
@@ -289,6 +299,17 @@ export function leverTable(levers: Lever[], v: ViewInput, last: ActualYear | nul
     moneyRow("Operating profit", v.grow.pnl[2]?.operatingProfit, after.input.pnl[2]?.operatingProfit);
     add(last ? "Cash at the year end" : "Lowest month", last ? "yearEndCash" : "lowestCash");
     add("Cash conversion cycle", "cashCycle");
+  } else if (kind === "sell") {
+    const k = levers.reduce((s, l) => Math.max(s, l.effect.slot ?? 1), 1);
+    const add2 = (label: string, key: string) => add(label, key);
+    const nowE = v.position.pnl[k], thenE = after.input.pnl[k];
+    const adds = v.position.sale.addBacks ?? 0;
+    if (nowE && thenE) moneyRow("Profit after add-backs", nowE.operatingProfit + nowE.depreciation + adds, thenE.operatingProfit + thenE.depreciation + adds);
+    moneyRow("Asking price", v.position.sale.askingPrice ?? undefined, after.input.sale.askingPrice ?? undefined, false);
+    add2("Asking price ÷ profit", "priceMultiple");
+    add2("Profit margin after add-backs", "normalisedMargin");
+    add2("Cash return on the asking price", "fcfYield");
+    add2("Free cash flow", "freeCashFlow");
   } else {
     moneyRow("Loan payments for the year", v.position.debtService[1], after.input.debtService[1], false);
     moneyRow("Cash from trading", v.position.cashFlow[1]?.netOperating, after.input.cashFlow[1]?.netOperating);
@@ -299,7 +320,7 @@ export function leverTable(levers: Lever[], v: ViewInput, last: ActualYear | nul
   }
   const moved = rows.filter((r) => r.now !== r.after);
   /* The score row always shows — "still 49" is the answer when the levers are not enough. */
-  const label = kind === "grow" ? "Capability to grow" : "Capability to borrow";
+  const label = kind === "grow" ? "Capability to grow" : kind === "borrow" ? "Capability to borrow" : "Capability to sell";
   if (base.score !== null && after.score !== null) moved.push({ label, now: `${base.score}/100`, after: `${after.score}/100`, better: after.score > base.score });
   return moved;
 }
@@ -395,6 +416,63 @@ export function borrowStory(pos: CapabilityInput, names: YearNames, last: Actual
   const debt = bs.debtCurrent + bs.debtNonCurrent;
   if (debt > 0) out.push(`The business ${t("owed", "owes")} ${m(debt)} at the end of the year, and ${m(bs.debtCurrent)} of it ${t("was", "is")} due within the next year.`);
   out.push(bs.cash < 0 ? `The bank ${t("was", "is")} overdrawn by ${m(-bs.cash)} at the year end.` : `The year ${t("ended", "ends")} with ${m(bs.cash)} in the bank.`);
+  return out.join(" ");
+}
+
+/* ------------------------------------------------------------------ *
+ * Sell's levers (§6.177)                                              *
+ * ------------------------------------------------------------------ */
+
+/**
+ * SELL'S LEVERS: the profit and payment levers, pulled on the sale year (a buyer prices that year's profit),
+ * then the price — what the profit, with those fixes, supports at the top of what similar businesses sold
+ * for. The price comes last because it depends on the others.
+ */
+export function sellLevers(pos: CapabilityInput, profit: Omit<Lever, "moves">[], slot: number): Omit<Lever, "moves">[] {
+  /* A buyer prices profit, so the profit levers lead; cash levers after; the price last, because it depends on them. */
+  const m = pos.money, out: Omit<Lever, "moves">[] = profit.map((l) => ({ ...l, effect: { ...l.effect, slot } }))
+    .sort((a, b) => b.profit - a.profit || b.cash - a.cash);
+  const p = pos.pnl[slot], sale = pos.sale;
+  const price = sale.askingPrice !== null && sale.askingPrice > 0 ? sale.askingPrice : null;
+  const high = sale.multipleHigh;
+  if (!p || price === null || high === null || !(high > 0)) return out;
+  const gain = profit.reduce((t, l) => t + l.profit, 0);
+  const earnings = p.operatingProfit + p.depreciation + (sale.addBacks ?? 0) + gain;
+  if (earnings <= 0) return out;
+  const supported = Math.floor((earnings * high) / 10_000) * 10_000;
+  if (supported >= price || supported < 10_000) return out;
+  out.push({
+    key: "price", target: null, profit: 0, cash: 0, price: { from: price, to: supported },
+    label: "Lower the asking price",
+    detail: `That is ${high}× the profit after add-backs${gain > 0 ? " with the fixes above" : ""} (${m(earnings)}) — the top of what similar businesses sold for. It is ${m(price)} now.`,
+    effect: { ...NONE, slot, priceTo: supported },
+  });
+  return out;
+}
+
+/** The profit a buyer would need to see to pay the asking price, at the top of the range — or null. */
+export function profitForPrice(pos: CapabilityInput): { price: number; needed: number; high: number } | null {
+  const sale = pos.sale;
+  if (sale.askingPrice === null || !(sale.askingPrice > 0) || sale.multipleHigh === null || !(sale.multipleHigh > 0)) return null;
+  return { price: sale.askingPrice, needed: r2(sale.askingPrice / sale.multipleHigh), high: sale.multipleHigh };
+}
+
+/** How Sell's dials connect — plain words, past tense on the accounts, present on the plan. */
+export function sellStory(pos: CapabilityInput, slot: number, year: string, past: boolean): string | null {
+  const m = pos.money, p = pos.pnl[slot], sale = pos.sale;
+  if (!p) return null;
+  const t = (was: string, is: string) => (past ? was : is);
+  const e = p.operatingProfit + p.depreciation, adds = sale.addBacks ?? 0, earned = e + adds;
+  const out: string[] = [];
+  out.push(e < 0
+    ? `In ${year} the business ${t("made", "makes")} a loss of ${m(-e)} before interest, tax and depreciation.`
+    : `In ${year} the business ${t("made", "makes")} ${m(e)} before interest, tax and depreciation.`);
+  if (adds > 0) out.push(`With ${m(adds)} of owner add-backs, a buyer ${t("would have seen", "would see")} ${earned < 0 ? `a loss of ${m(-earned)}` : `${m(earned)} of profit`}.`);
+  const lo = sale.multipleLow, hi = sale.multipleHigh, price = sale.askingPrice;
+  if (earned > 0 && lo !== null && hi !== null) out.push(`Similar businesses sold for ${lo}–${hi} times profit, which puts this one at about ${m(earned * lo)}–${m(earned * hi)}.`);
+  if (price !== null && price > 0) out.push(earned > 0
+    ? `The asking price is ${m(price)} — about ${r1(price / earned)} times that profit.`
+    : `The asking price is ${m(price)}, but there is no profit to base a price on.`);
   return out.join(" ");
 }
 
