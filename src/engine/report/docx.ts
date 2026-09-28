@@ -19,7 +19,7 @@ import { walk } from "./blocks";
 import { rasterise } from "./rasterise";
 import { PAGE_DIMENSIONS, type PageSize } from "./pageSize";
 import { imageSize } from "./imageSize";
-import { PLAN_STYLES, S, PAGE_BREAK_STYLES, ACCENT, MUTED, HAIRLINE } from "./docxStyles";
+import { planStyles, S, PAGE_BREAK_STYLES, ACCENT, MUTED, HAIRLINE } from "./docxStyles";
 import { applyStylePageBreaks } from "./docxPatch";
 import { COPY } from "./content";
 
@@ -163,7 +163,7 @@ const MARGIN = 1134;
 const COVER_FOOT = 1566;
 const PAGE_FOOT = 708;
 
-function sectionToDocx(s: Section, pngs: Map<string, Buffer>): (Paragraph | Table)[] {
+function sectionToDocx(s: Section, pngs: Map<string, Buffer>, accent: string = ACCENT): (Paragraph | Table)[] {
   const top = s.number.endsWith(".0");
   /*
    * EVERY top-level section starts a page, 1.0 included (§6.97.2) — a rule that now lives on `Heading1`
@@ -198,11 +198,11 @@ function sectionToDocx(s: Section, pngs: Map<string, Buffer>): (Paragraph | Tabl
          here is what stopped the style from having any effect (§6.107.3). */
       children: [
         text(`${s.number}  `, { bold: true, color: MUTED }),
-        text(s.title, { bold: true, color: ACCENT }),
+        text(s.title, { bold: true, color: accent }),
       ],
     }),
     ...s.blocks.flatMap((b, i) => blockToDocx(b, pngs, HOLDS_ON.has(s.blocks[i + 1]?.kind))),
-    ...s.children.flatMap((c) => sectionToDocx(c, pngs)),
+    ...s.children.flatMap((c) => sectionToDocx(c, pngs, accent)),
   ];
 }
 
@@ -215,7 +215,10 @@ export type DocxLogo = { data: Buffer; type: "png" | "jpg" };
 
 export async function renderDocx(
   doc: ReportDoc, omitted: { label: string }[], pageSize: PageSize = "a4", logo?: DocxLogo | null,
+  /** The Planner's report (§6.180): the firm's colour on headings and rules, as six hex digits. */
+  opts: { accent?: string; logoOf?: string } = {},
 ): Promise<Buffer> {
+  const accent = opts.accent ?? ACCENT;
   const flat = walk(doc.sections);
 
   /**
@@ -267,7 +270,7 @@ export async function renderDocx(
       children: [new ImageRun({
         type: logo.type === "jpg" ? "jpg" : "png", data: logo.data,
         transformation: scaled(110),
-        altText: { name: "Logo", title: "Logo", description: `${doc.businessName} logo` },
+        altText: { name: "Logo", title: "Logo", description: `${opts.logoOf ?? doc.businessName} logo` },
       })],
     })] : []),
     /*
@@ -382,7 +385,7 @@ export async function renderDocx(
         children: [new ImageRun({
           type: logo.type === "jpg" ? "jpg" : "png", data: logo.data,
           transformation: scaled(26),
-          altText: { name: "Logo", title: "Logo", description: `${doc.businessName} logo` },
+          altText: { name: "Logo", title: "Logo", description: `${opts.logoOf ?? doc.businessName} logo` },
         })],
       })] })
     : undefined;
@@ -437,7 +440,7 @@ export async function renderDocx(
     properties: { page: page(PAGE_FOOT) },
     ...(header ? { headers: { default: header } } : {}),
     footers: { default: footer },
-    children: [...frontMatter, ...doc.sections.flatMap((s) => sectionToDocx(s, pngs)), ...tail],
+    children: [...frontMatter, ...doc.sections.flatMap((s) => sectionToDocx(s, pngs, accent)), ...tail],
   };
 
   const document = new Document({
@@ -445,7 +448,7 @@ export async function renderDocx(
     title: `${doc.businessName} — ${doc.subtitle}`,
     description: `${doc.subtitle} for ${doc.businessName}, ${doc.date}`,
     /* Every named style the plan uses, and the pagination rules that hang off them (§6.97). */
-    styles: PLAN_STYLES,
+    styles: planStyles(accent),
     /*
      * ASK WORD TO WORK THE FIELDS OUT ON OPEN (§6.107). The contents' page numbers are PAGEREF fields and a
      * field that has never been calculated shows its placeholder. Without this a client opens their plan to

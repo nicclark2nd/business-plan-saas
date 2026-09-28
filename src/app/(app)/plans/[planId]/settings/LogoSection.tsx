@@ -17,8 +17,15 @@ import { uploadLogo, removeLogo } from "./actions";
  * instantly instead of after the upload; checking on the server side means a client who bypasses this
  * screen is still refused. Neither alone is enough.
  */
-export function LogoSection({ planId, path, url, onPending }: {
+export function LogoSection({ planId, path, url, onPending, title = "Logo", blurb, upload = uploadLogo, remove = removeLogo, readOnly = false }: {
   planId: string;
+  /** The firm's letterhead reuses this box (§6.180): its own title, words and actions. */
+  title?: string;
+  blurb?: React.ReactNode;
+  upload?: (planId: string, form: FormData) => Promise<{ ok: true } | { ok: false; error: string }>;
+  remove?: (planId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  /** Shown but not changeable — a Planner who is not the firm's admin. */
+  readOnly?: boolean;
   /** The stored object path, or null. */
   path: string | null;
   /** A signed URL for it, minted on the server for this request (§6.94). */
@@ -43,7 +50,7 @@ export function LogoSection({ planId, path, url, onPending }: {
     const form = new FormData();
     form.set("logo", f);
     start(async () => {
-      const res = await uploadLogo(planId, form);
+      const res = await upload(planId, form);
       if (file.current) file.current.value = "";
       if (!res.ok) report(false, res.error);
       else { report(false); router.refresh(); }
@@ -54,14 +61,14 @@ export function LogoSection({ planId, path, url, onPending }: {
     setConfirming(false);
     report(true);
     start(async () => {
-      const res = await removeLogo(planId);
+      const res = await remove(planId);
       if (!res.ok) report(false, res.error);
       else { report(false); router.refresh(); }
     });
   };
 
   return (
-    <Section title="Logo">
+    <Section title={title}>
       <div className="flex items-start gap-5">
         {/* A checkerboard behind it, because most logos are transparent PNGs and a white mark on a white
             card looks like a failed upload. */}
@@ -73,7 +80,7 @@ export function LogoSection({ planId, path, url, onPending }: {
 
         <div className="min-w-0 flex-1">
           <p className="text-[13px]">
-            It goes on the <b>cover of the business plan</b> and in the header of every page after it, on the screen and in the Word download.
+            {blurb ?? <>It goes on the <b>cover of the business plan</b> and in the header of every page after it, on the screen and in the Word download.</>}
           </p>
           <p className="mt-1 text-[11.5px] text-muted-foreground">
             {LOGO_TYPES_LABEL}, up to {LOGO_MAX_LABEL}. A transparent PNG sits best on the cover.
@@ -82,7 +89,7 @@ export function LogoSection({ planId, path, url, onPending }: {
           </p>
           {error && <p className="mt-2 text-[12.5px] text-bad">{error}</p>}
 
-          <div className="mt-3 flex items-center gap-2">
+          {!readOnly && <div className="mt-3 flex items-center gap-2">
             <input ref={file} type="file" accept={LOGO_ACCEPT} className="hidden"
               onChange={(e) => choose(e.target.files?.[0])} />
             <Button type="button" size="sm" disabled={pending} onClick={() => file.current?.click()}>
@@ -98,7 +105,7 @@ export function LogoSection({ planId, path, url, onPending }: {
                 <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => setConfirming(false)}>Keep it</Button>
               </>
             )}
-          </div>
+          </div>}
         </div>
       </div>
     </Section>

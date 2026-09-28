@@ -62,3 +62,10 @@ export const LOGO_BUCKET = "plan-logos";
 
 /** How long a signed URL lives. Long enough to render a page, short enough that a copied link dies. */
 export const LOGO_URL_TTL_SECONDS = 60 * 30;
+
+/**
+ * THE FIRM'S LOGO (§6.180) — the Planner's letterhead, one per firm, at `<organisation id>/logo.<ext>` in
+ * its own private bucket (0058). Same file rules as the plan's logo: `checkLogo` is called for both.
+ */
+export const FIRM_LOGO_BUCKET = "firm-logos";
+export const firmLogoObjectPath = (orgId: string, ext: "png" | "jpg") => `${orgId}/logo.${ext}`;

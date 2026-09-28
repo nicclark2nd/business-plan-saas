@@ -29,7 +29,8 @@
  */
 import { AlignmentType, BorderStyle, type IStylesOptions } from "docx";
 
-export const ACCENT = "1F3A5F";
+const BASE_ACCENT = "1F3A5F";
+export const ACCENT = BASE_ACCENT;
 export const MUTED = "6B7280";
 export const INK = "111827";
 export const HAIRLINE = "D1D5DB";
@@ -81,7 +82,12 @@ export const PAGE_BREAK_STYLES: readonly string[] = ["Heading1", S.contentsTitle
 
 const HAIR = { style: BorderStyle.SINGLE, size: 4, color: HAIRLINE };
 
-export const PLAN_STYLES: IStylesOptions = {
+/**
+ * THE STYLES, IN ONE COLOUR OR ANOTHER (§6.180). The business plan is always the app's navy; the Planner's
+ * report takes the firm's own colour on its headings, cover and rules. One stylesheet, one argument —
+ * a second copy of these hundred lines for the report would drift from this one within a month (§6.41).
+ */
+export const planStyles = (ACCENT: string = BASE_ACCENT): IStylesOptions => ({
   default: {
     document: { run: { font: "Calibri", size: 20, color: INK }, paragraph: { spacing: { line: 276 } } },
 
@@ -256,4 +262,6 @@ export const PLAN_STYLES: IStylesOptions = {
         border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: ACCENT, space: 6 } },
       } },
   ],
-};
+});
+
+export const PLAN_STYLES = planStyles();

@@ -999,3 +999,14 @@ projection step and scored on the Plan view, after.)
   as drafting (signed in, AI on for the plan, daily ceiling), zero-retention, 1,000 tokens. Saved in
   `plan_briefings` (migration 0057) with the score and verdict at the time, so the page says when the figures have
   moved on since. Next: the branded Word report (firm logo, name and colour — its own migration).
+- **§6.180** The Planner's report — Financial Capabilities as a Word file under the firm's letterhead. Download on
+  the Financial Capabilities page ("Download the Planner's report", with how many of the six briefings are saved
+  and how many are out of date). Contents: At a glance (the three scores on both views, the plan's scores year by
+  year and when each capability is ready, the agreed targets against the plan); then Grow, Borrow and Sell, each
+  with "From the accounts" and "From the plan" — score and verdict, the Planner's saved briefing, the "In short"
+  lines, the story, the fixes in order, the before/after table and every measure with how to improve it; then the
+  information still needed. Built by `capabilityReport` from `readTab`, rendered by the business plan's own Word
+  renderer (now taking an accent colour). The firm's letterhead — name, colour, logo — is set once on Plan
+  settings → Branding, by a firm admin (migration 0058: `organisations.logo_path`, `brand_colour`, private bucket
+  `firm-logos`). A light colour prints a shade darker so headings stay readable (`readable`, 3:1 on white). A
+  business planning for itself gets its own logo and the app's navy.

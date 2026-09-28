@@ -25,7 +25,7 @@ import type { AgreedTargets, TargetCheck } from "@/engine/capability/targets";
 import { type Lever, type WithLeversRow } from "@/engine/capability/levers";
 import { Briefing } from "./Briefing";
 import type { SavedBriefing } from "./actions";
-import { leverValue, readTab, readViews } from "@/engine/capability/read";
+import { leverValue, readTab, readViews, type ReadViews } from "@/engine/capability/read";
 import { compareWith, type Comparison, type HistoricRow, type YearNames } from "@/engine/capability/actual";
 
 /**
@@ -197,6 +197,8 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
         ) : (
           <span className="text-[12.5px]"><b>Plan: {views.plan.span}</b> <span className="text-muted-foreground">— from your projections. There are no accounts in Historic yet, so there is no actual view.</span></span>
         )}
+        {/* The Planner's report (§6.180): everything on these tabs, with the saved briefings, as a Word file. */}
+        <ReportLink planId={planId} adviser={adviser} notes={notes} RV={RV} />
       </div>
 
       <section className="border-b border-border bg-accent/40 px-5 py-3.5">
@@ -356,6 +358,34 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
       </div>
       )}
     </ModuleFrame>
+  );
+}
+
+/**
+ * THE PLANNER'S REPORT (§6.180) — the download, and how many of its notes are written. A note saved before
+ * the figures moved is counted as out of date, so nobody sends a client a note about a score that has
+ * since changed without reading it again.
+ */
+function ReportLink({ planId, adviser, notes, RV }: { planId: string; adviser: boolean; notes: Record<string, SavedBriefing>; RV: ReadViews }) {
+  const views = RV.actualV ? (["actual", "plan"] as const) : (["plan"] as const);
+  const expected = views.length * 3;
+  let saved = 0, stale = 0;
+  for (const t of ["grow", "borrow", "sell"] as const) for (const v of views) {
+    const n = notes[`${t}:${v}`];
+    if (!n) continue;
+    saved++;
+    const V = v === "actual" ? RV.actualV : RV.planV;
+    if (V && n.score !== (V.scores[t].value ?? null)) stale++;
+  }
+  return (
+    <div className="ml-auto flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px]">
+      <span className="text-muted-foreground">
+        {saved} of {expected} {adviser ? "briefings" : "notes"} saved{stale > 0 && <span className="font-semibold text-warn"> · {stale} out of date</span>}
+      </span>
+      <a href={`/plans/${planId}/capabilities/report`} className="rounded-md border border-input bg-background px-3 py-1.5 font-semibold text-foreground hover:bg-secondary">
+        {adviser ? "Download the Planner's report" : "Download the report"} <span className="font-normal text-muted-foreground">(Word)</span>
+      </a>
+    </div>
   );
 }
 
