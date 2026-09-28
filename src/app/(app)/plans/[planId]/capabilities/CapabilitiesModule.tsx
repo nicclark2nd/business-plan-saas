@@ -145,12 +145,21 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
 
   /* The same card on the other view (§6.159): the track record on the plan, the plan on the accounts. */
   const otherV = actualV ? (onActual ? planV : actualV) : null;
-  const otherLabel = !views.actual ? ""
-    : onActual ? (tab === "grow" ? `The plan, ${views.plan.span.replace(" onward", "")}` : `The plan, ${firstYear}`)
-    : (tab === "grow" ? `Track record, ${views.actual.span}` : `Actual, ${views.actual.last.year}`);
+  /*
+   * THE YEAR THE OTHER CARD READS, NAMED AS THAT YEAR (§6.168). Nic, on Operating margin: "The plan,
+   * 2026 → 2027: −4%" — does that mean a projected year? It is 2027 alone; the span belongs only to the
+   * measures that compare one year with the next. A single-year measure names its single year: 2027 for
+   * the plan (the sale year on Sell), the latest actual year for the accounts.
+   */
+  const TWO_YEAR = new Set(["revenueGrowth", "incrementalMargin", "operatingLeverage", "returnOnPlan", "workingCapitalPerDollar"]);
+  const planYear = tab === "sell" ? firstYear + saleYear(input.sale) - 1 : firstYear;
+  const otherLabel = (key: string) => !views.actual ? ""
+    : onActual
+      ? (TWO_YEAR.has(key) ? `The plan, ${views.plan.span.replace(" onward", "")}` : `The plan, ${planYear}`)
+      : (TWO_YEAR.has(key) ? `Track record, ${views.actual.span}` : `Actual, ${views.actual.last.year}`);
   const otherOf = (m: Metric): Comparison | null => {
     if (!otherV) return null;
-    return compareWith(m, otherV[tab].find((x) => x.key === m.key), otherLabel, !onActual);
+    return compareWith(m, otherV[tab].find((x) => x.key === m.key), otherLabel(m.key), !onActual);
   };
 
   return (

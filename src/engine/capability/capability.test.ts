@@ -722,13 +722,22 @@ describe("the five-year line on each card", () => {
   /* The sixth costume (§6.129.1): two negatives made a positive, and SEQ read 186.8% · Healthy. */
   it("will not call a loss converting into a loss 'cash conversion'", () => {
     const g = growMetrics(full({
-      pnl: { 1: pnl(2_000_000, { operatingProfit: -140_000 }), 2: pnl(2_200_000) },
-      cashFlow: { 1: cf(-137_633), 2: cf(100_000) },
+      pnl: { 1: pnl(2_000_000), 2: pnl(2_200_000, { operatingProfit: -140_000 }), 3: pnl(2_400_000) },
+      cashFlow: { 1: cf(100_000), 2: cf(-137_633), 3: cf(100_000) },
     }));
     const c = g.find((x) => x.key === "cashConversion")!;
     expect(c.value).toBeNull();
     expect(c.unscored).toBe("Loss year");
-    expect(c.note).toContain("From Year 2");            // the first year with earnings, read instead
+    expect(c.note).toContain("From Year 3");            // the first later year with earnings, read instead
+  });
+
+  /* §6.168: the growth tab judges Year 2 (the growth year) — never the year before it. */
+  it("reads cash conversion on the growth year, not the year before", () => {
+    const g = growMetrics(full({
+      pnl: { 1: pnl(2_000_000), 2: pnl(2_200_000, { operatingProfit: -140_000 }) },
+      cashFlow: { 1: cf(100_000), 2: cf(-137_633) },
+    }));
+    expect(g.find((x) => x.key === "cashConversion")!.value).toBeNull();
   });
 });
 

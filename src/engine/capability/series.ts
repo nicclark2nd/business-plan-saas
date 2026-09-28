@@ -129,7 +129,7 @@ const SPECS: Record<CapabilityKind, Record<string, TrendSpec>> = {
     incrementalMargin: { of: series.incMargin, unit: "pct", at: 0, label: STEPS },
     cashCycle: { of: series.cashCycle, unit: "raw", at: 0, label: FIVE },
     workingCapitalPerDollar: { of: series.wcPerDollar, unit: "raw", at: 0, label: STEPS },
-    cashConversion: { of: series.conversion, unit: "pct", at: 0, label: FIVE },
+    cashConversion: { of: series.conversion, unit: "pct", at: 1, label: FIVE },
   },
   borrow: {
     dscr: { of: series.dscr, unit: "raw", at: 0, label: FIVE },

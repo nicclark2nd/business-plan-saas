@@ -893,3 +893,10 @@ projection step and scored on the Plan view, after.)
   into the 0–100 dials. Pages wrap their module in `TargetsProvider`; `ModuleFrame` draws `TargetStrip`; the
   forecast only runs for it when a target shown on that step is agreed. Tested on SEQ with four targets agreed,
   then all taken back.
+- **§6.168** Nic, on the Actual view's Operating margin: "The plan, 2026 → 2027: −4%" — is that a projected
+  year? The tile is 2026 actual; the comparison line is the plan's 2027 alone. Single-year measures now name
+  their single year ("The plan, 2027" / "Actual, 2026"; the sale year on Sell); only the measures that compare
+  two years keep the span. Checking this found Operating cash conversion on the Grow tab reading slot 1 — the
+  year BEFORE the one judged: on the accounts it scored 2025's 67.7% against a 2026 that made a loss, and on
+  the plan it read 2026 actual. It now reads the growth year like Operating margin; SEQ's actual grow score moves
+  40 → 42 (the card waits for a profit instead of scoring the wrong year). Plan score unchanged at 49.

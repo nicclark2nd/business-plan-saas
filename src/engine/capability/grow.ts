@@ -19,7 +19,7 @@ const pct = (v: number) => `${r1(v)}%`;
 export function growMetrics(i: CapabilityInput): Metric[] {
   const y1 = i.pnl[1], y2 = i.pnl[2];
   const bs1 = i.balanceSheet[1], bs2 = i.balanceSheet[2];
-  const cf1 = i.cashFlow[1];
+  const cf2 = i.cashFlow[2];
   const d1 = i.days[1];
   const m = i.money;
 
@@ -42,13 +42,18 @@ export function growMetrics(i: CapabilityInput): Metric[] {
   const wcPerDollar = owc1 !== null && owc2 !== null && y1 && y2 && y2.revenue !== y1.revenue
     ? over(owc2 - owc1, y2.revenue - y1.revenue) : null;
 
-  const e1 = ebitda(y1);
+  /*
+   * THE GROWTH YEAR, LIKE OPERATING MARGIN (§6.168). This read slot 1 — which on the accounts view is the
+   * year BEFORE the latest (SEQ: 2025's 67.7%, scored against a 2026 that made a loss), and on the plan view
+   * is the last actual year rather than the plan. Slot 2 is the year the tab is judging on both views.
+   */
+  const e1 = ebitda(y2);
   /*
    * CASH CONVERSION NEEDS EARNINGS TO CONVERT (§6.129.1, the sixth costume). SEQ read "186.8% · Healthy"
    * because operating cash of −137,633 divided by EBITDA of −76,054 is a positive number. Two negatives do
    * not make a business that turns its profit into cash; they make one that has neither.
    */
-  const conversion = cf1 && e1 !== null && e1 > 0 ? over(cf1.netOperating, e1) : null;
+  const conversion = cf2 && e1 !== null && e1 > 0 ? over(cf2.netOperating, e1) : null;
 
   const ccc = d1 ? d1.inventoryDays + d1.debtorDays - d1.creditorDays : null;
 
@@ -140,7 +145,7 @@ export function growMetrics(i: CapabilityInput): Metric[] {
   }
   /* The same for cash conversion: no earnings in Year 1, so the first year that has them. */
   function lossConversion(): Partial<Metric> {
-    const k = years.find((y) => { const e = ebitda(i.pnl[y]); return e !== null && e > 0 && !!i.cashFlow[y]; }) ?? null;
+    const k = years.find((y) => { const e = ebitda(i.pnl[y]); return y > 2 && e !== null && e > 0 && !!i.cashFlow[y]; }) ?? null;
     const ek = k ? ebitda(i.pnl[k]) : null;
     const conv = k && ek ? over(i.cashFlow[k]!.netOperating, ek) : null;
     return {
@@ -148,8 +153,8 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       display: conv === null ? "—" : pct(conv * 100),
       sub: conv === null ? undefined : `Year ${k}, the first year with earnings`,
       note: conv === null
-        ? "Year 1 has no earnings to turn into cash, and none of the five forecast years does either."
-        : `Year 1 has no earnings to turn into cash. From Year ${k}, when it does, about ${pct(conv * 100)} of them arrive in the bank${conv * 100 < 70 ? " — the rest sits in stock and unpaid invoices" : ""}.`,
+        ? "Year 2 has no earnings to turn into cash, and no later year does either."
+        : `Year 2 has no earnings to turn into cash. From Year ${k}, when it does, about ${pct(conv * 100)} of them arrive in the bank${conv * 100 < 70 ? " — the rest sits in stock and unpaid invoices" : ""}.`,
       bench: "Unscored in a loss year — 85% or better means earnings are real cash",
     };
   }
@@ -300,11 +305,11 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       min: 0, max: 130, bands: [{ to: 70, s: "bad" }, { to: 85, s: "watch" }, { to: 130, s: "good" }],
       note: conversion === null && e1 !== null && e1 <= 0
         ? "There are no earnings to convert — the business makes a loss before interest, tax and depreciation, so no share of it can arrive as cash."
-        : conversion === null ? "Needs a Year 1 forecast with an operating profit."
+        : conversion === null ? "Needs a Year 2 forecast with an operating profit."
         : conversion * 100 < 70 ? "Profit is not turning into cash — most of it is sitting in stock and unpaid invoices."
         : "Most of the profit the plan forecasts actually arrives as cash.",
       bench: "85% or better means earnings are real cash",
-      formula: "Year 1 cash from operations ÷ Year 1 EBITDA",
+      formula: "Year 2 cash from operations ÷ Year 2 EBITDA",
       reveals: "Whether forecast profit becomes money in the bank.",
       confidence: "High.",
       ...(conversion === null && e1 !== null && e1 <= 0 ? lossConversion() : {
