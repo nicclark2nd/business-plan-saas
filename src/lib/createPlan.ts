@@ -44,6 +44,7 @@ export async function createPlan(orgId: string, userId: string, p: NewPlan): Pro
   if (error || !plan) {
     /* The database's allowance (0062): the one refusal worth putting in words, with where to go next. */
     if (/plan limit reached/.test(error?.message ?? "")) return { error: "limit" };
+    if (/account on hold/.test(error?.message ?? "")) return { error: "This account is on hold, so nothing new can be added. Contact BizPlanHQ to lift it." };
     console.error("create the plan", error);
     return { error: "Couldn't create the plan. Try again." };
   }

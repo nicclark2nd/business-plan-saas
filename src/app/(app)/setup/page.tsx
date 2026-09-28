@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/plan";
 import { loadMyFirm } from "@/lib/myFirm";
+import { isPlatformAdmin } from "@/lib/platform";
 import { SetupForm } from "./SetupForm";
 import { PlanCard } from "./PlanCard";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ export default async function SetupPage() {
             <div><div className="eyebrow">Your plans</div><h1 className="text-2xl font-semibold">Welcome back{session.profile?.full_name ? `, ${session.profile.full_name.split(" ")[0]}` : ""}</h1></div>
             <div className="flex items-center gap-2">
               {/* An owner's subscription (§6.185) — consultants never reach this page; theirs is in their own area. */}
+              {(await isPlatformAdmin()) && <Button variant="outline" size="sm" render={<Link href="/admin" />}>Site Admin</Button>}
               <Button variant="outline" size="sm" render={<Link href="/billing" />}>Billing</Button>
               <form action="/auth/signout" method="post"><Button variant="outline" size="sm" type="submit">Sign out</Button></form>
             </div>

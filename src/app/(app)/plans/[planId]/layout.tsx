@@ -15,6 +15,8 @@ import { Brand } from "@/components/Brand";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { loadFirm } from "@/lib/firm";
 import { plannerCard } from "@/lib/clientAccess";
+import { holdOf } from "@/lib/platform";
+import { OnHoldBanner } from "@/components/OnHoldBanner";
 
 export default async function PlanLayout({ children, params }: { children: React.ReactNode; params: Promise<{ planId: string }> }) {
   const { planId } = await params;
@@ -28,6 +30,8 @@ export default async function PlanLayout({ children, params }: { children: React
   const backToFirm = !!firm?.isPlanner && firm.adviser;
   /* A client of a firm sees who their Planner is (§6.183); a Planner does not see a card about themselves. */
   const planner = firm?.isPlanner ? null : await plannerCard(planId);
+  /* On hold (§6.186): read-only for everyone in the account, clients included — said at the top of every screen. */
+  const hold = plan.organisation_id ? await holdOf(plan.organisation_id) : null;
   const supabase = await createClient();
   const { data: settings } = await supabase.from("plan_settings").select("currency, product_type, customer_type, country, gst_registered, gst_rate, gst_frequency, tax_region, tax_components, financial_year_end_month, first_projected_year").eq("plan_id", planId).maybeSingle();
   const firstYear = firstProjectedYear(settings?.first_projected_year, settings?.financial_year_end_month);
@@ -75,7 +79,7 @@ export default async function PlanLayout({ children, params }: { children: React
         ModuleFrame's `h-full` (percentage heights need a resolved parent) and the module bars would stop
         spanning their own frame (§6.36).
       */}
-      <main className="mx-auto min-h-0 w-full max-w-[1800px] overflow-y-auto">{children}</main>
+      <main className="mx-auto min-h-0 w-full max-w-[1800px] overflow-y-auto"><OnHoldBanner hold={hold} />{children}</main>
     </div>
     </PlanYearsProvider>
     </GstProvider>

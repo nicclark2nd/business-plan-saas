@@ -1090,3 +1090,17 @@ projection step and scored on the Plan view, after.)
   (`src/lib/stripe.ts`), signature check and object readers pure and tested (`src/engine/billing`). Database
   tests: new `billing.sql` (8 blocks) — all four files pass. Env: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
   BILLING_DB_SECRET (names in .env.example).
+- **§6.186** The consultant's own area, part 5 — Site Admin (Nic, as owner of BizPlanHQ). Who is a site admin is
+  decided in SQL only (`platform_admins`, no policies, no screen, no API path). `/admin` — every account (firms
+  and owners): admin email, kind, subscription and level, plans in use of allowance and archived, people, clients
+  with a login, AI calls in 30 days, last activity, joined; search and filters (firms, owners, paying, on hold).
+  `/admin/accounts/[id]` — one account read-only ("view as" without becoming them): people, plans with who looks
+  after each and the client's login, billing; the figures inside plans are NOT shown and the site admin is never a
+  member of any plan. Actions: **put on hold** (with a reason the account sees) / lift — ON HOLD IS READ-ONLY:
+  `can_write_plan` refuses every write for the account's people and its clients, a trigger refuses new plans, and
+  a banner says so at the top of every screen; and **plans given by BizPlanHQ** (sets `granted_plans`).
+  `/admin/log` — every look and change, by whom and when, written in the same transaction by the database
+  (`platform_audit`, no update or delete path). Anyone else gets a 404. Links: "Site Admin" in the firm header and
+  on the plan list, for site admins only. Migration 0063; database tests `platform.sql` (5 blocks) — all five
+  files pass. Deferred: "create a sample plan" (needs a sample-plan template first) and "terms agreed" (there is
+  no terms-of-service acceptance yet).
