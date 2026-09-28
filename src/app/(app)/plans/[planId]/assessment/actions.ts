@@ -46,7 +46,11 @@ export async function saveTarget(planId: string, kind: TargetKind, value: number
   if (v === null) delete targets[kind];
   else targets[kind] = { value: v, proposed: p, agreed_at: new Date().toISOString().slice(0, 10) };
 
-  const patch: Record<string, unknown> = { plan_id: planId, agreed_targets: targets };
+  /*
+   * Taking back the last target returns the column to null — "not worked through" — so the step is open again.
+   * `{}` is kept for its one meaning: the Planner continued past accounts that showed nothing to fix.
+   */
+  const patch: Record<string, unknown> = { plan_id: planId, agreed_targets: Object.keys(targets).length ? targets : null };
   let setting: number | null = null;
   if (kind === "cashFloor") {
     const now = row?.cash_floor === null || row?.cash_floor === undefined ? null : Number(row.cash_floor);

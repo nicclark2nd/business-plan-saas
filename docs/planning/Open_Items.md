@@ -874,7 +874,8 @@ projection step and scored on the Plan view, after.)
   agreeing writes them through (`cash_floor`, `existing_debt.term_months`) — never asked twice — but only into an
   empty setting or one still holding what was last agreed; a figure typed on Assumptions or Funding since is left
   alone and the screen says so. The step is done once anything is agreed, or when the Planner continues past
-  accounts that showed nothing to fix (stored as `{}`). `agreed_targets` is read in its own query in `plan.ts`, so
+  accounts that showed nothing to fix (stored as `{}`). Taking back the last target returns the column to null, so the step
+  reopens (caught testing on SEQ: it had stayed ticked). `agreed_targets` is read in its own query in `plan.ts`, so
   a database without 0056 does not blank the rest of the completeness read.
 - **§6.166 (5)** "When the business is ready" on the Financial Capabilities Plan view: grow, borrow and sell scored
   for each plan year on its own (that year moved to slot 1, through the same `buildView`), with the year each one
