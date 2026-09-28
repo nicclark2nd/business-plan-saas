@@ -50,15 +50,15 @@ export default async function AssessmentPage({ params }: { params: Promise<{ pla
     const x = f.extras, facts = f.facts, h1 = f.history.find((r) => Number(r.period_number) === 1);
     const stressSet = facts.stress.salesPct !== null && facts.stress.marginPts !== null && facts.stress.debtorDaysAdded !== null;
     const asks = [
-      { label: "The largest customers, and each one's share of sales", why: "A lender and a buyer both ask how much rests on one customer.", done: x.customers.length > 0, to: "marketing?area=market" },
-      { label: "How late the debtors are (an aged debtors report)", why: "Separates slow payers from bad debts.", done: (x.ageing.current ?? 0) + (x.ageing.d30 ?? 0) + (x.ageing.d60 ?? 0) + (x.ageing.d90 ?? 0) > 0, to: "historic?area=bs" },
-      { label: "Repayment history, covenants and guarantees", why: "The half of a credit application the numbers do not answer.", done: x.lender.onTime !== null, to: "funding?area=lender" },
-      { label: "Whether it would run without the owner (six factors)", why: "Decides whether it can be sold, and at what multiple.", done: facts.transfer.filter((t) => t.score > 0).length >= 6, to: "people?area=risk" },
-      { label: "What a bad year would look like", why: "A lender tests the loans against it before the good year.", done: stressSet, to: "assumptions?area=downside" },
-      { label: "What the equipment is worth as security", why: "What a lender could lend against.", done: facts.collateral !== null, to: "assets" },
-      { label: "Owner add-backs (costs a new owner would not carry)", why: "A buyer values earnings after these; a lender tests them.", done: x.addBackLines.length > 0 || (facts.sale.addBacks ?? 0) > 0, to: "settings?area=exit" },
-      { label: "Share capital (what the owners put in)", why: "Splits equity into money put in and profit kept, which limits dividends.", done: h1?.share_capital !== null && h1?.share_capital !== undefined, to: "historic?area=bs" },
-      { label: "Work quoted and customers kept from last year", why: "The evidence behind any growth the plan will claim.", done: x.pipeline !== null || x.retention !== null, to: "marketing" },
+      { label: "The biggest customers, and each one's share of sales", why: "Lenders and buyers both ask how much depends on one customer.", done: x.customers.length > 0, to: "marketing?area=market" },
+      { label: "How late customers are paying (an aged debtors report)", why: "Shows slow payers apart from people who will never pay.", done: (x.ageing.current ?? 0) + (x.ageing.d30 ?? 0) + (x.ageing.d60 ?? 0) + (x.ageing.d90 ?? 0) > 0, to: "historic?area=bs" },
+      { label: "Loan payment history, loan conditions and guarantees", why: "The part of a loan application the numbers cannot answer.", done: x.lender.onTime !== null, to: "funding?area=lender" },
+      { label: "Whether it would run without the owner (six questions)", why: "Decides whether it can be sold, and for how much.", done: facts.transfer.filter((t) => t.score > 0).length >= 6, to: "people?area=risk" },
+      { label: "What a bad year would look like", why: "A lender checks the loans against a bad year first.", done: stressSet, to: "assumptions?area=downside" },
+      { label: "What the equipment is worth to a lender", why: "What a lender could lend against.", done: facts.collateral !== null, to: "assets" },
+      { label: "Owner add-backs (costs a new owner would not have)", why: "A buyer prices the business after these, and a lender checks them.", done: x.addBackLines.length > 0 || (facts.sale.addBacks ?? 0) > 0, to: "settings?area=exit" },
+      { label: "Share capital (what the owners put in)", why: "Shows how much is money put in and how much is profit kept — this limits dividends.", done: h1?.share_capital !== null && h1?.share_capital !== undefined, to: "historic?area=bs" },
+      { label: "Work quoted, and customers kept from last year", why: "The proof behind any growth the plan shows.", done: x.pipeline !== null || x.retention !== null, to: "marketing" },
     ];
 
     data = {

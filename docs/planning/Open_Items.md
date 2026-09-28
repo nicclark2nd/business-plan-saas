@@ -957,3 +957,11 @@ projection step and scored on the Plan view, after.)
   sentences, past tense on the accounts and present on the plan; "floor" is always "cash floor" (the name on
   Assumptions); "overheads" in cash cover reads "running costs"; the verdict headlines, next-step actions and the
   score notes are plain. Borrow and Sell get the same pass when their levers are built.
+- **§6.175** Nic: "It worked well, please expand to the other tabs." The same plain-English pass across the rest of
+  Financial Capabilities and step 8: every Borrow and Sell card (notes, benchmarks, pencils), the verdict headlines,
+  questions and next-step actions, the For-the-Planner box on both views, the Borrow and Sell pictures and panels
+  (lender checklist, loans table, customers, add-backs bridge, buyer questions), the help, the readiness timeline,
+  the target checks, and the Planner's assessment (issues, bridges, the list of things to collect, help). Terms kept
+  as names (debt service cover, EBITDA) with plain sentences around them; "debtors" → unpaid invoices / getting paid,
+  "facility/drawn/undrawn" → loan/borrowed/not yet used, "covenant breaches" → broken loan conditions, "customer
+  concentration" → biggest customer, "security" → what a lender could lend against, "base case" → normal year.

@@ -28,7 +28,7 @@ export function profitBridge(prev: ActualYear, last: ActualYear): BridgeStep[] {
   return [
     { label: `Operating profit, ${prev.year}`, value: prev.pnl.operatingProfit, kind: "start" },
     { label: "More sales, at last year's margin", value: sales, kind: "step" },
-    { label: "Gross margin moving", value: margin, kind: "step" },
+    { label: "Change in gross margin", value: margin, kind: "step" },
     { label: "Overheads", value: overheads, kind: "step" },
     { label: "Depreciation", value: dep, kind: "step" },
     ...(Math.abs(other) >= 1 ? [{ label: "Other", value: other, kind: "step" as const }] : []),
@@ -56,11 +56,11 @@ export function cashBridge(prev: ActualYear, last: ActualYear): BridgeStep[] {
     { label: `Cash at the end of ${prev.year}`, value: start, kind: "start" },
     { label: "Operating profit", value: last.pnl.operatingProfit, kind: "step" },
     { label: "Depreciation added back", value: last.pnl.depreciation, kind: "step" },
-    { label: "Customers paying slower (debtors)", value: debtors, kind: "step" },
+    { label: "Customers paying slower", value: debtors, kind: "step" },
     { label: "Stock and work in progress", value: stock, kind: "step" },
-    { label: "Suppliers (creditors)", value: creditors, kind: "step" },
+    { label: "Paying suppliers", value: creditors, kind: "step" },
     { label: "Interest and tax", value: interestTax, kind: "step" },
-    { label: "Spent on assets", value: capex, kind: "step" },
+    { label: "Spent on equipment", value: capex, kind: "step" },
     { label: "Loans repaid", value: repaid, kind: "step" },
     ...(Math.abs(other) >= 1 ? [{ label: "New borrowing, owner money and other", value: other, kind: "step" as const }] : []),
     { label: `Cash at the end of ${last.year}`, value: end, kind: "end" },
@@ -114,12 +114,12 @@ export function issuesFrom(prev: ActualYear | null, last: ActualYear, money: (v:
     const five = annualRepayment(debt, rate, 5) ?? debt / 5;
     out.push({
       key: "loans", area: "borrow", urgent: true, size: dueNext + interest - Math.max(0, netOp),
-      title: "The loans cannot be repaid from trading",
-      finding: `${m(dueNext)} of loans fall due in ${y + 1}, with about ${m(interest)} of interest — and trading ${netOp < 0 ? `used ${m(-netOp)} of cash` : `produced only ${m(netOp)}`} in ${y}.`,
-      cause: "The repayment schedule is shorter than the business's cash can carry.",
-      direction: `Spread the ${m(debt)} owed over five years: about ${m(five)} a year in repayments and interest, against about ${m(dueNext + interest)} on the current schedule.`,
+      title: "The loans cannot be paid from trading",
+      finding: `${m(dueNext)} of loans are due in ${y + 1}, plus about ${m(interest)} of interest. But in ${y} trading ${netOp < 0 ? `used up ${m(-netOp)} of cash` : `only brought in ${m(netOp)}`}.`,
+      cause: "The loans have to be paid back faster than the business can manage.",
+      direction: `Spread the ${m(debt)} owed over five years. That is about ${m(five)} a year in payments and interest, instead of about ${m(dueNext + interest)} now.`,
       where: { label: "Funding", to: "funding" },
-      ask: "Will the bank extend the term, or allow interest-only for a year? What security does it already hold?",
+      ask: "Will the bank give more time to pay, or allow interest-only for a year? What does the bank already hold as security?",
       target: { kind: "loanTermMonths", value: 60 },
     } as Issue);
   }
@@ -129,12 +129,12 @@ export function issuesFrom(prev: ActualYear | null, last: ActualYear, money: (v:
     const cover = last.balanceSheet.cash / monthlyOh;
     out.push({
       key: "cash", area: "borrow", urgent: last.balanceSheet.cash < 0, size: monthlyOh - last.balanceSheet.cash,
-      title: "Almost no cash cushion",
-      finding: `${y} ended with ${m(last.balanceSheet.cash)} in the bank — about ${r1(Math.max(0, cover))} months of overheads.`,
-      cause: "Profit and working capital have not been turning into cash, so every slow month lands on the overdraft.",
-      direction: `Build the plan to hold a cash floor of at least one month of overheads, about ${m(monthlyOh)}, and fund any gap before it opens.`,
+      title: "Almost no cash to fall back on",
+      finding: `${y} ended with ${m(last.balanceSheet.cash)} in the bank — about ${r1(Math.max(0, cover))} months of running costs.`,
+      cause: "Profit has not been turning into cash, so every slow month falls on the overdraft.",
+      direction: `Plan to keep at least one month of running costs in the bank — about ${m(monthlyOh)} — and arrange funding before the bank runs low.`,
       where: { label: "Assumptions → Cash & capital", to: "assumptions?area=cash" },
-      ask: "Is there an overdraft, and how close to the limit did the account get during the year?",
+      ask: "Is there an overdraft, and how close to the limit did it get during the year?",
       target: { kind: "cashFloor", value: Math.round(monthlyOh) },
     } as Issue);
   }
@@ -145,12 +145,12 @@ export function issuesFrom(prev: ActualYear | null, last: ActualYear, money: (v:
     if (drop >= 1) {
       out.push({
         key: "margin", area: "grow", urgent: false, size: (drop / 100) * rev,
-        title: "Gross margin slipped",
-        finding: `Gross margin fell from ${r1(gm(prev))}% to ${r1(gm(last))}% — about ${m((drop / 100) * rev)} of profit on ${y}'s sales.`,
-        cause: "Prices did not keep up with direct costs, or the mix of work moved to thinner jobs.",
-        direction: `Plan gross margin back to ${r1(gm(prev))}% — set it through prices on Sales and costs on COGS.`,
+        title: "Gross margin dropped",
+        finding: `Gross margin dropped from ${r1(gm(prev))}% to ${r1(gm(last))}%. On ${y}'s sales, that cost about ${m((drop / 100) * rev)} of profit.`,
+        cause: "Prices did not keep up with costs, or more of the work was lower-profit jobs.",
+        direction: `Plan to get gross margin back to ${r1(gm(prev))}%, through prices on Sales and costs on COGS.`,
         where: { label: "COGS", to: "cogs" },
-        ask: "Did prices go up last year? Which jobs lost margin — materials, labour, or how they were quoted?",
+        ask: "Did prices go up last year? Which jobs made less profit — because of materials, labour, or how they were quoted?",
         target: { kind: "grossMargin", value: r1(gm(prev)) },
       } as Issue);
     }
@@ -162,10 +162,10 @@ export function issuesFrom(prev: ActualYear | null, last: ActualYear, money: (v:
       const ahead = last.pnl.overheads - prev.pnl.overheads * (1 + Math.max(0, salesGrowth));
       out.push({
         key: "overheads", area: "grow", urgent: false, size: ahead,
-        title: "Overheads grew faster than sales",
-        finding: `Overheads rose ${m(last.pnl.overheads - prev.pnl.overheads)} (${r1(ohGrowth * 100)}%) while sales rose ${r1(salesGrowth * 100)}% — about ${m(ahead)} more than sales growth would explain.`,
-        cause: "Costs were added ahead of the sales that pay for them — people, premises or systems.",
-        direction: `Hold overheads at ${y}'s ${m(last.pnl.overheads)} and let them grow only with sales.`,
+        title: "Overheads went up faster than sales",
+        finding: `Overheads went up ${m(last.pnl.overheads - prev.pnl.overheads)} (${r1(ohGrowth * 100)}%) while sales only went up ${r1(salesGrowth * 100)}%. That is about ${m(ahead)} more than the extra sales would need.`,
+        cause: "Costs were added before the sales to pay for them — people, premises or systems.",
+        direction: `Keep overheads at ${y}'s ${m(last.pnl.overheads)}, and only let them grow when sales do.`,
         where: { label: "Overheads", to: "overheads" },
         ask: `Which of ${y}'s new costs were one-offs, and which are permanent? Did they buy capacity for more sales?`,
         target: { kind: "overheadsCap", value: Math.round(last.pnl.overheads) },
@@ -179,12 +179,12 @@ export function issuesFrom(prev: ActualYear | null, last: ActualYear, money: (v:
       const tied = Math.max(0, last.balanceSheet.accountsReceivable - (prev.pnl.revenue > 0 ? (prev.balanceSheet.accountsReceivable / prev.pnl.revenue) * rev : 0));
       out.push({
         key: "debtors", area: "borrow", urgent: false, size: tied,
-        title: "Customers are paying slower",
-        finding: `Customers took ${dLast} days to pay in ${y}, up from ${dPrev} — about ${m(tied)} more cash sitting in unpaid invoices.`,
-        cause: "Slower payers, bigger jobs on longer terms, or invoices going out late.",
-        direction: `Plan debtor days at ${dPrev} on Assumptions, and agree how collections get there.`,
+        title: "Customers are paying more slowly",
+        finding: `Customers took ${dLast} days to pay in ${y}, up from ${dPrev}. That kept about ${m(tied)} more cash out of the bank.`,
+        cause: "Some customers paying late, big jobs with longer payment terms, or invoices being sent late.",
+        direction: `Plan for customers to pay in ${dPrev} days (on Assumptions), and agree how to get there.`,
         where: { label: "Assumptions → Days & timing", to: "assumptions?area=days" },
-        ask: "Who are the slowest payers? Are invoices going out when the work is done, and are deposits taken on big jobs?",
+        ask: "Who pays slowest? Do invoices go out when the work is done, and are deposits taken on big jobs?",
         target: { kind: "debtorDays", value: dPrev },
       } as Issue);
     }
@@ -194,12 +194,12 @@ export function issuesFrom(prev: ActualYear | null, last: ActualYear, money: (v:
   if (last.pnl.operatingProfit < 0 && !out.some((i) => i.key === "margin" || i.key === "overheads")) {
     out.push({
       key: "loss", area: "grow", urgent: false, size: -last.pnl.operatingProfit,
-      title: "The business is trading at a loss",
-      finding: `${y} made an operating loss of ${m(-last.pnl.operatingProfit)}.`,
-      cause: "Gross profit does not cover the overheads.",
-      direction: `Break even needs ${m(-last.pnl.operatingProfit)} more gross profit or that much less in overheads — plan which, before any growth.`,
+      title: "The business is losing money",
+      finding: `${y} made a loss of ${m(-last.pnl.operatingProfit)}.`,
+      cause: "The profit on sales does not cover the overheads.",
+      direction: `To break even, the business needs ${m(-last.pnl.operatingProfit)} more profit on sales, or that much less in overheads. Decide which before planning any growth.`,
       where: { label: "Overheads", to: "overheads" },
-      ask: "Which lever is realistic — price, volume, direct cost or overheads — and by when?",
+      ask: "What is realistic — higher prices, more sales, lower job costs or lower overheads — and by when?",
       target: { kind: "breakEven", value: 0 },
     } as Issue);
   }

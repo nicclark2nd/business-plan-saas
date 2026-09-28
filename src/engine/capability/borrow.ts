@@ -42,9 +42,9 @@ const times = (v: number) => `${r2(v)}×`;
  */
 export const CAPACITY_TERM_YEARS = 5;
 
-const FIX_COST = { label: "Set the cost of capital", to: "assumptions?area=cash" };
-const FIX_STRESS = { label: "Describe a bad year", to: "assumptions?area=downside" };
-const FIX_SECURITY = { label: "Value the security", to: "assets" };
+const FIX_COST = { label: "Set what your money costs", to: "assumptions?area=cash" };
+const FIX_STRESS = { label: "Set up a bad year", to: "assumptions?area=downside" };
+const FIX_SECURITY = { label: "Add lending values", to: "assets" };
 
 /**
  * CASH AVAILABLE FOR DEBT SERVICE, defined once.
@@ -163,7 +163,7 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
   /* What that headroom would cost a year, so a client can weigh it against the repayments they already make. */
   const capacityService = capacityStress !== null && coc !== null ? annualRepayment(capacityStress, coc, CAPACITY_TERM_YEARS) : null;
 
-  const noDebt = "This plan carries no borrowing, so there is nothing to cover. Add a loan on the Funding step and every figure here answers.";
+  const noDebt = "This plan has no loans, so there is nothing to repay. Add a loan on the Funding step and these figures will fill in.";
 
   return [
     {
@@ -172,15 +172,15 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
       display: dscr === null ? "—" : times(dscr),
       min: 0.5, max: 3, bands: [{ to: 1, s: "bad" }, { to: LENDER_MIN_DSCR, s: "bad" }, { to: 1.5, s: "watch" }, { to: 3, s: "good" }],
       /* §6.115.1 once more: "−137,633 available" is a minus sign asked to carry a whole sentence. */
-      sub: !hasDebt ? `Lenders look for ${LENDER_MIN_DSCR}× or better`
-        : noCash ? `${m(service)} of repayments, and nothing coming out of trading to make them with`
-        : `${m(base ?? 0)} available against ${m(service)} of repayments`,
+      sub: !hasDebt ? `Lenders want ${LENDER_MIN_DSCR}× or better`
+        : noCash ? `${m(service)} of loan payments, and no cash coming in from trading to pay them`
+        : `${m(base ?? 0)} of cash from trading against ${m(service)} of loan payments`,
       note: dscr === null ? noDebt
-        : noCash ? `Year 1 operations consume ${m(Math.abs(base ?? 0))} rather than producing any. There is no cash to repay from at all, so the cover is nil.`
-        : dscr < 1 ? "The plan does not generate enough cash to make the repayments it has committed to."
-        : dscr < LENDER_MIN_DSCR ? `Below the ${LENDER_MIN_DSCR}× most lenders require. This debt is large for this cash flow, before anything is added to it.`
-        : `Passes, with ${m((base ?? 0) - service * LENDER_MIN_DSCR)} a year of room above the ${LENDER_MIN_DSCR}× minimum.`,
-      bench: `${LENDER_MIN_DSCR}× is the common minimum; 1.0× means no cushion at all`,
+        : noCash ? `In Year 1 the business uses up ${m(Math.abs(base ?? 0))} of cash instead of making any. There is nothing left to pay the loans with.`
+        : dscr < 1 ? "The plan does not bring in enough cash to make its loan payments."
+        : dscr < LENDER_MIN_DSCR ? `Below the ${LENDER_MIN_DSCR}× most lenders ask for. The loans are already too big for the cash coming in, before borrowing any more.`
+        : `Passes, with ${m((base ?? 0) - service * LENDER_MIN_DSCR)} a year to spare above the ${LENDER_MIN_DSCR}× lenders want.`,
+      bench: `Lenders usually want ${LENDER_MIN_DSCR}× or more. 1.0× means there is nothing to spare`,
       formula: "Cash from operations before interest ÷ the principal and interest the plan repays in Year 1",
       reveals: "The central repayment test, on the debt the plan actually carries.",
       confidence: "Medium — it rests on the Year 1 forecast being right.",
@@ -193,14 +193,14 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
       display: dscrStress === null ? "—" : times(dscrStress),
       min: 0.5, max: 3, bands: [{ to: 1, s: "bad" }, { to: LENDER_MIN_DSCR, s: "bad" }, { to: 1.5, s: "watch" }, { to: 3, s: "good" }],
       sub: stressSet
-        ? `Sales −${i.stress.salesPct}%, margin −${i.stress.marginPts} pts, paid ${i.stress.debtorDaysAdded} days later`
-        : "A bad year has not been described yet",
+        ? `Bad year: sales down ${i.stress.salesPct}%, margin down ${i.stress.marginPts} points, customers paying ${i.stress.debtorDaysAdded} days later`
+        : "No bad year has been set up yet",
       note: dscrStress === null
-        ? (!stressSet ? "A bad year has to be described before it can be tested. Three numbers on the Assumptions step, and this answers." : noDebt)
-        : dscrStress < 1 ? "In the bad year you described, the business could not make its repayments."
-        : dscrStress < LENDER_MIN_DSCR ? "In the bad year you described, cover falls below what a lender requires — there is no cushion."
-        : "Even in the bad year you described, the repayments are still covered.",
-      bench: "Debt that only works in the good case is debt that fails in the bad one",
+        ? (!stressSet ? "Set up a bad year first — three numbers on the Assumptions step — and this fills in." : noDebt)
+        : dscrStress < 1 ? "In the bad year you set up, the business could not make its loan payments."
+        : dscrStress < LENDER_MIN_DSCR ? "In the bad year you set up, the business could just pay the loans, but with less to spare than a lender wants."
+        : "Even in the bad year you set up, the loan payments are still covered.",
+      bench: "A loan that only works in a good year will fail in a bad one",
       formula: "Year 1 cash, less the gross profit on lost sales, less the margin squeeze, less the cash stuck in slower debtors — divided by the same repayments.",
       reveals: "Whether a plausible bad year would compromise repayment.",
       confidence: "Medium — an arithmetic overlay on the forecast, not a second forecast run. The three settings are yours.",
@@ -225,14 +225,14 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
       ...(capacityStress !== null ? { unscored: capacityStress <= 0 ? "No room to borrow" : "Room to borrow" } : {}),
       /* §6.115.1: "0 if the base case holds" beside a grey dial is a figure nobody can read. Say it. */
       sub: capacityBase === null ? undefined
-        : capacityBase <= 0 ? "Even the base case supports nothing further"
-        : `${m(capacityBase)} if the base case holds`,
+        : capacityBase <= 0 ? "Even a normal year leaves no room for more borrowing"
+        : `${m(capacityBase)} in a normal year`,
       note: capacityStress === null
-        ? (coc === null ? "How much more this cash flow would carry. It needs a rate to price it at — the cost of capital on the Assumptions step."
-          : "Needs a bad year described, so the figure is what a bad year supports rather than a good one.")
-        : capacityStress <= 0 ? "A stressed year leaves no room for further borrowing at all. What the business already owes uses the cover up."
-        : `Room for about ${m(capacityStress)} more, which would add roughly ${m(capacityService ?? 0)} a year to the ${m(service)} already repaid.${i.growth.costOfCapitalFrom === "loans" ? ` Priced at ${coc}%, the rate on the dearest loan already in the plan.` : ""}`,
-      bench: "Borrow what the bad year carries, not what the good year allows",
+        ? (coc === null ? "How much more the business could borrow. It needs an interest rate to work this out — set what your money costs on the Assumptions step."
+          : "Set up a bad year first, so this shows what a bad year could support — not a good one.")
+        : capacityStress <= 0 ? "In a bad year there is no room to borrow more. The loans the business already has use up all the spare cash."
+        : `The business could borrow about ${m(capacityStress)} more. That would add about ${m(capacityService ?? 0)} a year to the ${m(service)} it already pays.${i.growth.costOfCapitalFrom === "loans" ? ` Worked out at ${coc}%, the rate on the most expensive loan in the plan.` : ""}`,
+      bench: "Borrow what a bad year can carry, not what a good year allows",
       formula: `The largest additional loan whose repayments keep cover at ${LENDER_MIN_DSCR}×, over ${CAPACITY_TERM_YEARS} years at your cost of capital, using stressed cash`,
       reveals: "How much is actually borrowable, as opposed to how much is wanted.",
       confidence: `Medium — same basis as the stressed cover above, priced over a ${CAPACITY_TERM_YEARS}-year term. A real loan on the Funding step is the exact answer.`,
@@ -246,12 +246,12 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
       min: 0, max: 6, bands: [{ to: 2.5, s: "good" }, { to: 3.5, s: "watch" }, { to: 6, s: "bad" }],
       sub: debtNow !== null && bs1 ? `${m(debtNow)} of debt against ${m(bs1.cash)} of cash` : undefined,
       note: leverage === null && e1 !== null && e1 <= 0
-        ? `The business loses ${m(Math.abs(e1))} before interest, tax and depreciation. There are no earnings for the debt to be measured against.`
+        ? `The business loses ${m(Math.abs(e1))} before interest, tax and depreciation. There is no profit to compare the debt with.`
         : leverage === null ? "Needs a Year 1 forecast with a balance sheet."
-        : leverage > 3.5 ? "Debt is high against earnings — most lenders will baulk before the cover test is even reached."
-        : leverage > 2.5 ? "Debt is getting heavy against earnings."
-        : "Debt stays modest against what the business earns.",
-      bench: "Most lenders prefer under 2.5× for a small business",
+        : leverage > 3.5 ? "Debt is high compared with profit. Most lenders will say no before looking any further."
+        : leverage > 2.5 ? "Debt is getting high compared with profit."
+        : "Debt is small compared with what the business earns.",
+      bench: "Most lenders like to see under 2.5× for a small business",
       formula: "(Debt at the end of Year 1 − cash) ÷ EBITDA",
       reveals: "The size of the debt burden relative to earnings.",
       confidence: "High.",
@@ -263,7 +263,7 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
       ...(leverage === null && e1 !== null && e1 <= 0 ? { unscored: NO_EARNINGS } : {}),
       missing: leverage === null
         ? (e1 !== null && e1 <= 0
-            ? `The business loses ${m(Math.abs(e1))} before interest, tax and depreciation, so there are no earnings for the debt to be measured against. This answers as soon as it makes money.`
+            ? `The business loses ${m(Math.abs(e1))} before interest, tax and depreciation, so there is no profit to compare the debt with. This fills in once it makes money.`
             : "A Year 1 forecast with a balance sheet.")
         : undefined,
     },
@@ -272,12 +272,12 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
       value: interestCover === null ? null : r2(interestCover),
       display: interestCover === null ? "—" : times(interestCover),
       min: 0, max: 12, bands: [{ to: 2, s: "bad" }, { to: 3, s: "watch" }, { to: 12, s: "good" }],
-      note: interestCover === null ? "No interest in the plan yet, which is its own answer."
+      note: interestCover === null ? "There is no interest to pay in the plan yet."
         : rawInterestCover !== null && rawInterestCover <= 0
-          ? `There is no operating profit to cover the interest. The ${m(y1?.interest ?? 0)} of interest is being paid out of a loss, before a dollar of principal.`
-        : interestCover < 1 ? "Operating profit does not cover the interest, let alone any principal."
-        : interestCover < 3 ? "Operating profit barely covers the interest, before any principal is repaid."
-        : "Interest is comfortably covered — though this test ignores principal, which the cover test above does not.",
+          ? `There is no profit to pay the interest from. The ${m(y1?.interest ?? 0)} of interest is paid out of a loss — before paying back any of the loan itself.`
+        : interestCover < 1 ? "Profit does not even cover the interest, let alone paying back the loan."
+        : interestCover < 3 ? "Profit only just covers the interest, before paying back any of the loan."
+        : "Profit covers the interest easily. (This test leaves out paying back the loan itself — the test above includes it.)",
       bench: "3× or better",
       formula: "Operating profit ÷ the interest in the Year 1 forecast",
       reveals: "Capacity to pay interest — not the debt itself.",
@@ -291,9 +291,9 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
       display: current === null ? "—" : r2(current).toFixed(2),
       min: 0, max: 3, bands: [{ to: 1, s: "bad" }, { to: 1.5, s: "watch" }, { to: 3, s: "good" }],
       note: current === null ? "Needs a forecast balance sheet."
-        : current < 1 ? "Short-term bills exceed short-term assets — the business is technically illiquid."
-        : current < 1.5 ? "Adequate, but there is not much slack."
-        : "Comfortable short-term position.",
+        : current < 1 ? "Bills due within a year are bigger than what the business can turn into cash within a year."
+        : current < 1.5 ? "OK, but there is not much to spare."
+        : "Comfortable — there is more coming in than going out in the short term.",
       bench: "1.5 or better",
       formula: "Current assets ÷ current liabilities, end of Year 1",
       reveals: "Broad short-term liquidity.",
@@ -306,8 +306,8 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
       display: quick === null ? "—" : r2(quick).toFixed(2),
       min: 0, max: 2.5, bands: [{ to: 0.8, s: "bad" }, { to: 1, s: "watch" }, { to: 2.5, s: "good" }],
       note: quick === null ? "Needs a forecast balance sheet."
-        : quick < 1 ? "Meeting short-term bills depends on selling stock, which cannot be relied on in a bad month."
-        : "Short-term bills can be met without shifting stock.",
+        : quick < 1 ? "Paying the bills depends on selling stock, which cannot be counted on in a bad month."
+        : "Short-term bills can be paid without having to sell stock.",
       bench: "1.0 or better",
       formula: "(Cash + receivables) ÷ current liabilities, end of Year 1",
       reveals: "Liquidity without relying on selling inventory.",
@@ -319,14 +319,14 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
       value: runway === null ? null : r1(runway),
       display: runway === null ? "—" : `${r1(runway)} months`,
       min: 0, max: 6, bands: [{ to: 1.5, s: "bad" }, { to: 3, s: "watch" }, { to: 6, s: "good" }],
-      sub: i.undrawn ? `Includes ${m(i.undrawn)} of committed undrawn facility` : undefined,
+      sub: i.undrawn ? `Includes ${m(i.undrawn)} of loan money agreed but not yet used` : undefined,
       note: runway === null ? "Needs a forecast balance sheet and cash flow."
-        : runway < 0 ? "The bank is overdrawn at the end of the year, so there is no runway at all — any shortfall has to be borrowed."
-        : runway < 0.5 ? `About ${Math.max(1, Math.round(runway * 30))} days of cover. One slow payer or one bad month and the business is on the phone to the bank.`
-        : runway < 1.5 ? "About a month of cover. One slow payer or one bad month and the business is on the phone to the bank."
-        : runway < 3 ? "Enough to absorb a slow month, not a slow quarter."
-        : "Enough cover to absorb a poor run without borrowing.",
-      bench: "Two to three months",
+        : runway < 0 ? "The bank is overdrawn at the end of the year, so there is nothing to fall back on. Any shortfall has to be borrowed."
+        : runway < 0.5 ? `About ${Math.max(1, Math.round(runway * 30))} days of cash. One slow payer or one bad month and the business has to call the bank.`
+        : runway < 1.5 ? "About a month of cash. One slow payer or one bad month and the business has to call the bank."
+        : runway < 3 ? "Enough to get through a slow month, but not a slow few months."
+        : "Enough cash to get through a bad patch without borrowing.",
+      bench: "Two to three months of cash is healthy",
       formula: "(Cash at the end of Year 1 + undrawn facilities from the Funding step) ÷ average monthly cash paid out",
       reveals: "How long the business could survive a shortfall.",
       confidence: "High, if the undrawn facility really is committed — it is taken as the facility total on Funding less what has been drawn.",
@@ -337,22 +337,22 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
       value: lvr === null ? null : r1(lvr * 100),
       display: lvr === null ? "—" : pct(lvr * 100),
       min: 0, max: 100, bands: [{ to: 65, s: "good" }, { to: 75, s: "watch" }, { to: 100, s: "bad" }],
-      sub: gap ? `${m(gap.listed)} of ${m(gap.plant)} of existing plant listed`
-        : i.collateral ? `${m(debtNow ?? 0)} of debt against ${m(i.collateral)} of security` : "No asset has a security value yet",
-      note: gap ? "Waits until the plant already on the books is listed. Against only part of it, the whole debt would look as though it rested on a machine or two."
-        : lvr === null ? "How much of the security behind this business is already spoken for."
-        : lvr * 100 > 75 ? "Above the 75% most lenders stop at. There is little security left to offer for anything further."
-        : lvr * 100 > 65 ? "Inside what a lender will consider, but close to the 75% most stop at — little security left to spare."
-        : "Inside the range a lender will normally consider, with security to spare.",
+      sub: gap ? `${m(gap.listed)} of ${m(gap.plant)} of existing equipment listed`
+        : i.collateral ? `${m(debtNow ?? 0)} of debt against ${m(i.collateral)} of assets a lender could lend against` : "No asset has a lending value yet",
+      note: gap ? "This waits until the equipment the business already owns is listed. Against only part of it, the whole debt would look like it rests on a machine or two."
+        : lvr === null ? "How much of what the business owns is already used to back loans."
+        : lvr * 100 > 75 ? "Above the 75% most lenders stop at. There is little left to offer a lender for more borrowing."
+        : lvr * 100 > 65 ? "Inside what a lender will accept, but close to the 75% most stop at. Not much left to spare."
+        : "Inside what a lender will normally accept, with room to spare.",
       /* §6.141: the sentence names the general 75%, so a plan's own range must replace it. */
       citesGeneral: !gap && lvr !== null,
-      bench: "75% is a common ceiling on secured lending",
+      bench: "Most lenders stop at 75%",
       formula: "Debt at the end of Year 1 ÷ what a lender would advance against the assets",
       reveals: "Whether there is security left behind the business.",
       confidence: "Medium — a figure you put against each asset is not a bank valuation.",
-      missing: gap ? `The plant already on your balance sheet (${m(gap.plant)}), listed on Fixed Assets with what a lender would advance against it.`
-        : lvr === null ? "A security value against at least one asset on the Fixed Assets step." : undefined,
-      fix: gap ? { label: "List the existing plant", to: "assets" } : lvr === null ? FIX_SECURITY : undefined,
+      missing: gap ? `The equipment already on your balance sheet (${m(gap.plant)}), listed on Fixed Assets with what a lender would lend against each item.`
+        : lvr === null ? "A lending value against at least one asset on the Fixed Assets step." : undefined,
+      fix: gap ? { label: "List the equipment you own", to: "assets" } : lvr === null ? FIX_SECURITY : undefined,
     },
   ];
 }

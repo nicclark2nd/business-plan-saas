@@ -42,13 +42,13 @@ describe("the plan against its agreed targets (§6.167)", () => {
     const c = Object.fromEntries(checkTargets(all, facts, money).map((x) => [x.kind, x]));
     expect(c.grossMargin.plan).toBe("Plan has 39.1% in 2027");
     expect(c.grossMargin.met).toBe(false);
-    expect(c.grossMargin.gap).toBe("2.9 points short — about 58,000 of gross profit on 2027's sales");
+    expect(c.grossMargin.gap).toBe("2.9 points short — about 58,000 less profit on 2027's sales");
     expect(c.overheadsCap.gap).toBe("25,165 over");
     expect(c.breakEven.plan).toBe("Plan has a loss of 63,000");
-    expect(c.debtorDays.gap).toBe("16 days slower — about 87,671 more sitting in unpaid invoices");
-    expect(c.loanTermMonths.gap).toBe("36 months shorter, so each year's repayments are higher");
+    expect(c.debtorDays.gap).toBe("16 days slower — about 87,671 more cash stuck in unpaid invoices");
+    expect(c.loanTermMonths.gap).toBe("36 months shorter, so the yearly payments are higher");
     expect(c.cashFloor.plan).toBe("Lowest month overdrawn by 12,400, Mar 2029");
-    expect(c.cashFloor.gap).toBe("80,720 under the floor at its lowest");
+    expect(c.cashFloor.gap).toBe("80,720 below the cash floor at its lowest");
   });
 
   it("says met, and says when the plan has nothing to read yet", () => {
@@ -56,7 +56,7 @@ describe("the plan against its agreed targets (§6.167)", () => {
     expect(checkTargets(all, good, money).every((x) => x.met === true && x.gap === null)).toBe(true);
     const empty = checkTargets(all, { firstYear: 2027, y1: null, debtorDays: null, loanTermMonths: null, lowestCash: null }, money);
     expect(empty.every((x) => x.met === null)).toBe(true);
-    expect(empty.find((x) => x.kind === "loanTermMonths")!.plan).toBe("The plan carries the loans flat until their rate is in");
+    expect(empty.find((x) => x.kind === "loanTermMonths")!.plan).toBe("The plan cannot work out the loan payments until the interest rate is in");
   });
 
   it("shows each step only its own targets", () => {

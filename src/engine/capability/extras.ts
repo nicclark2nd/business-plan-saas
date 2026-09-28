@@ -57,7 +57,7 @@ export function executionLines(x: ExtraFacts, i: CapabilityInput): Line[] {
   if (!x.capacity.length) {
     lines.push({
       label: "What the business depends on", display: "Not said", pct: null, status: null,
-      detail: "Premises, equipment, crews, systems — and how much of each is used now.",
+      detail: "Premises, equipment, crews, systems — and how much of each is being used now.",
       fix: { label: "Name them on Operations", to: "operations?area=capacity" },
     });
   }
@@ -67,7 +67,7 @@ export function executionLines(x: ExtraFacts, i: CapabilityInput): Line[] {
       label: c.name, pct: p === null ? null : Math.min(100, p),
       display: p === null ? "Not measured" : `${r1(p)}% used`,
       status: p === null ? null : p >= 90 ? "bad" : p >= 75 ? "watch" : "good",
-      detail: p === null ? undefined : p >= 90 ? "At its limit — growth stops here until it is lifted." : p >= 75 ? "Room for a little more, not for the plan's growth as well." : undefined,
+      detail: p === null ? undefined : p >= 90 ? "Full — growth stops here until this is increased." : p >= 75 ? "Room for a little more, but not for all the growth in the plan." : undefined,
       fix: p === null ? { label: "Measure it", to: "operations?area=capacity" } : undefined,
     });
   }
@@ -85,15 +85,15 @@ export function executionLines(x: ExtraFacts, i: CapabilityInput): Line[] {
   const y1 = i.pnl[1], y2 = i.pnl[2];
   const growth = y1 && y2 ? y2.revenue - y1.revenue : null;
   if (x.pipeline === null) {
-    lines.push({ label: "Quoted work against next year's growth", display: "Not said", pct: null, status: null,
-      fix: { label: "Add the pipeline", to: "marketing?area=sales" } });
+    lines.push({ label: "Quoted work compared with next year's growth", display: "Not said", pct: null, status: null,
+      fix: { label: "Add quoted work", to: "marketing?area=sales" } });
   } else if (growth === null || growth <= 0) {
     lines.push({ label: "Quoted work in the pipeline", display: money0(m, x.pipeline), pct: null, status: "good",
-      detail: "The forecast plans no growth next year, so there is nothing for the pipeline to cover." });
+      detail: "The plan has no growth next year, so the quoted work does not need to cover any." });
   } else {
     const cover = x.pipeline / growth;
     lines.push({
-      label: "Quoted work against next year's growth", display: `${r1(cover)}×`, pct: Math.min(100, Math.round((cover / 2) * 100)),
+      label: "Quoted work compared with next year's growth", display: `${r1(cover)}×`, pct: Math.min(100, Math.round((cover / 2) * 100)),
       status: cover >= 1.5 ? "good" : cover >= 1 ? "watch" : "bad",
       detail: `${money0(m, x.pipeline)} weighted pipeline for ${money0(m, growth)} of planned growth.`,
     });
@@ -119,7 +119,7 @@ export function ageingView(x: ExtraFacts): Ageing {
   if (x.newBusiness) return { state: "new" };
   const a = x.ageing;
   const parts = [a.current, a.d30, a.d60, a.d90];
-  if (parts.every((p) => p === null)) return { state: "missing", fix: { label: "Split the debtors by age", to: "historic?area=bs" } };
+  if (parts.every((p) => p === null)) return { state: "missing", fix: { label: "Add how late invoices are", to: "historic?area=bs" } };
   const v = parts.map((p) => p ?? 0);
   const total = v.reduce((t, p) => t + p, 0);
   const overdue = v[1] + v[2] + v[3];
@@ -145,7 +145,7 @@ export function lenderChecklist(x: ExtraFacts, i: CapabilityInput, borrow: Metri
     ? { label: "Years trading", display: "Not said", pct: null, status: null, fix: { label: "Add the date established", to: "settings" } }
     : { label: "Years trading", display: `${r1(x.yearsTrading)} years`, pct: null,
       status: x.yearsTrading >= 3 ? "good" : x.yearsTrading >= 1 ? "watch" : "bad",
-      detail: x.yearsTrading < 2 ? "Most lenders want two full years of accounts before they lend unsecured." : undefined });
+      detail: x.yearsTrading < 2 ? "Most lenders want two full years of accounts before they lend without security." : undefined });
 
   L.push(x.leadership.count === 0
     ? { label: "Management track record", display: "No one listed", pct: null, status: null, fix: { label: "Add the leadership team", to: "people" } }
@@ -164,30 +164,30 @@ export function lenderChecklist(x: ExtraFacts, i: CapabilityInput, borrow: Metri
     L.push({
       label: "Forecast against last year", display: `${g >= 0 ? "+" : "−"}${r1(Math.abs(g) * 100)}%`, pct: null,
       status: g > 0.3 ? "bad" : g > 0.05 || g < -0.05 ? "watch" : "good",
-      detail: g > 0.15 ? "The plan's first year is well above what the business actually did last year. A lender will ask what changes."
-        : g > 0.05 ? "The plan's first year is above what the business actually did last year. Reasonable, but a lender will want the reason."
-        : g < -0.05 ? "The plan's first year is below what the business actually did last year. A lender will ask why."
-        : "The plan's first year sits close to what the business actually did last year.",
+      detail: g > 0.15 ? "The plan's first year is well above what the business did last year. A lender will ask what is changing."
+        : g > 0.05 ? "The plan's first year is higher than what the business did last year. That is fine, but a lender will want to know why."
+        : g < -0.05 ? "The plan's first year is lower than what the business did last year. A lender will ask why."
+        : "The plan's first year is close to what the business did last year.",
     });
   } else {
     L.push({ label: "Forecast against last year", display: "No history", pct: null, status: "watch",
-      detail: "No year of actual trading to test the forecast against — the lender takes it on trust or not at all." });
+      detail: "There are no past accounts to check the plan against, so a lender has to trust it or say no." });
   }
 
   const lvr = borrow.find((b) => b.key === "lvr");
   L.push(!lvr || lvr.value === null
-    ? { label: "Security", display: "Not valued", pct: null, status: null, fix: { label: "Value the security", to: "assets" } }
+    ? { label: "Security", display: "Not valued", pct: null, status: null, fix: { label: "Add lending values", to: "assets" } }
     : { label: "Security", display: `${lvr.display} loan to value`, pct: null,
       status: lvr.value <= 65 ? "good" : lvr.value <= 75 ? "watch" : "bad" });
 
   const top = [...x.customers].filter((c) => c.share !== null).sort((a, b) => (b.share ?? 0) - (a.share ?? 0))[0];
   L.push(!x.customers.length
-    ? { label: "Customer concentration", display: "Not said", pct: null, status: null, fix: { label: "Add the largest customers", to: "marketing?area=market" } }
+    ? { label: "Biggest customer", display: "Not said", pct: null, status: null, fix: { label: "Add the biggest customers", to: "marketing?area=market" } }
     : !top
-      ? { label: "Customer concentration", display: "Shares not given", pct: null, status: null, fix: { label: "Add each customer's share", to: "marketing?area=market" } }
-      : { label: "Customer concentration", display: `${r1(top.share!)}% from ${top.name}`, pct: null,
+      ? { label: "Biggest customer", display: "Shares not given", pct: null, status: null, fix: { label: "Add each customer's share", to: "marketing?area=market" } }
+      : { label: "Biggest customer", display: `${r1(top.share!)}% from ${top.name}`, pct: null,
         status: top.share! <= 15 ? "good" : top.share! <= 25 ? "watch" : "bad",
-        detail: top.share! > 20 ? "One customer is a large share of the revenue the loan is repaid from." : undefined });
+        detail: top.share! > 20 ? "One customer makes up a big share of the sales the loan is paid back from." : undefined });
 
   const fixL = { label: "Answer it on Funding", to: "funding?area=lender" };
   L.push(x.lender.onTime === null
@@ -196,16 +196,16 @@ export function lenderChecklist(x: ExtraFacts, i: CapabilityInput, borrow: Metri
 
   const cov = (x.lender.covenants ?? "").trim();
   L.push(!cov
-    ? { label: "Covenant breaches", display: "Not said", pct: null, status: null, fix: fixL }
+    ? { label: "Broken loan conditions", display: "Not said", pct: null, status: null, fix: fixL }
     : /^(none|no\b|nil)/i.test(cov)
-      ? { label: "Covenant breaches", display: "None", pct: null, status: "good" }
-      : { label: "Covenant breaches", display: "Yes — see note", pct: null, status: "watch", detail: cov });
+      ? { label: "Broken loan conditions", display: "None", pct: null, status: "good" }
+      : { label: "Broken loan conditions", display: "Yes — see note", pct: null, status: "watch", detail: cov });
 
   L.push(x.lender.guarantee === null
     ? { label: "Guarantee", display: "Not said", pct: null, status: null, fix: fixL }
     : x.lender.guarantee
       ? { label: "Guarantee", display: x.lender.guaranteeBy ? `Offered by ${x.lender.guaranteeBy}` : "Offered", pct: null, status: "good" }
-      : { label: "Guarantee", display: "None offered", pct: null, status: "watch", detail: "Expect a smaller loan or a higher rate without one." });
+      : { label: "Guarantee", display: "None offered", pct: null, status: "watch", detail: "Without one, expect a smaller loan or a higher interest rate." });
 
   return L;
 }

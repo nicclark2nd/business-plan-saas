@@ -228,7 +228,7 @@ export function inAccounts(m: Metric): Metric {
     .replace(/the profit the plan forecasts/g, "the profit")
     .replace(/the profit the plan shows/g, "the profit")
     .replace(/The plan shows no growth/g, "The accounts show no growth")
-    .replace(/in the forecast they are being handed/g, "in the accounts")
+    .replace(/in the forecast they are given/g, "in the accounts")
     .replace(/\bThe plan\b/g, "The business").replace(/\bthe plan\b/g, "the business").replace(/\bThis plan\b/g, "This business");
   return {
     ...m, name: fix(m.name)!, note: fix(m.note)!, bench: fix(m.bench)!, sub: fix(m.sub), formula: fix(m.formula)!,

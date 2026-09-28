@@ -50,17 +50,17 @@ export function AssessmentModule({ planId, mode, data }: { planId: string; mode:
   return (
     <ModuleFrame
       step={STEP} total={GUIDED_STEPS.length} group={navGroup("assessment")} title="Planner's assessment"
-      subtitle="Where the business stands, from its accounts — before the plan is built" mode={mode}
-      areas={[{ key: "main", label: data.hasHistory ? `From the accounts, ${data.span}` : "No accounts" }]} area="main" onArea={() => {}}
+      subtitle="Where the business stands, from its past accounts — before the plan is built" mode={mode}
+      areas={[{ key: "main", label: data.hasHistory ? `From the accounts, ${data.span}` : "No past accounts" }]} area="main" onArea={() => {}}
       scope={{ label: data.hasHistory ? `Actual ${data.span}` : "No accounts" }}
       footer={<ModuleFooter planId={planId} moduleId="assessment" formId="assessment-form" />}
       help={<>
         <h3>What this step is for</h3>
-        <p>Before any projection is typed, the Planner reads the accounts and decides what the plan has to fix. This screen does that reading: how the business stands on growing, borrowing and selling, why profit and cash moved, and the problems that matter most — each with the direction the plan should take and the question to ask the client.</p>
+        <p>Before building the plan, the Planner reads the past accounts and decides what the plan needs to fix. This screen does that reading: how ready the business is to grow, borrow and sell, why profit and cash changed, and the biggest problems — each with what the plan should do and the question to ask the client.</p>
         <h3>Where it goes next</h3>
-        <p>The directions here are what the Sales, COGS, Overheads, Funding and Assumptions steps should be built to. At the end, Financial Capabilities checks whether the plan got there.</p>
+        <p>Use what is here to build the Sales, COGS, Overheads, Funding and Assumptions steps. At the end, Financial Capabilities checks whether the plan got there.</p>
         <h3>Agreeing the targets</h3>
-        <p>Each problem comes with a target proposed from the accounts. Agree it as it is, or type the figure you and the client settle on and agree that. The cash floor and the term of the loans already owed are also settings the plan runs on, so agreeing them here sets them on Assumptions and Funding — unless a different figure has already been typed there, which is left alone.</p>
+        <p>Each problem comes with a suggested target, based on the accounts. Agree it as it is, or type the figure you and the client settle on and agree that. Two targets — the cash floor and the time to pay back existing loans — are also settings the plan uses. Agreeing them here fills them in on Assumptions and Funding, unless a different figure has already been typed there.</p>
       </>}
     >
       <form id="assessment-form" onSubmit={onSubmit} className="hidden" />
@@ -72,11 +72,11 @@ export function AssessmentModule({ planId, mode, data }: { planId: string; mode:
 function NoAccounts({ planId }: { planId: string }) {
   return (
     <div className="px-5 py-6 text-[13.5px] leading-relaxed">
-      <p className="font-semibold">There are no accounts in Historic, so there is nothing to assess yet.</p>
+      <p className="font-semibold">There are no past accounts in Historic, so there is nothing to assess yet.</p>
       <p className="mt-1 text-muted-foreground">
-        For a new business the plan comes first. Build it, and <Link className={LINK} href={`/plans/${planId}/capabilities`}>Financial Capabilities</Link> will
-        assess it afterwards — including in which of the five years it could grow, borrow or sell. If the business
-        does have accounts, add them on <Link className={LINK} href={`/plans/${planId}/historic`}>Historic</Link> and this step reads them.
+        For a new business, build the plan first. <Link className={LINK} href={`/plans/${planId}/capabilities`}>Financial Capabilities</Link> will
+        check it afterwards — including which of the five years it could grow, borrow or sell. If the business
+        does have past accounts, add them on <Link className={LINK} href={`/plans/${planId}/historic`}>Historic</Link> and this step will read them.
       </p>
     </div>
   );
@@ -108,7 +108,7 @@ function Assessment({ planId, d }: { planId: string; d: Extract<AssessmentData, 
       {/* ---- why ---- */}
       {(d.profit || d.cash) && (
         <section className="grid gap-px border-b border-border bg-border lg:grid-cols-2">
-          {d.profit && <Bridge title={`Why operating profit moved, ${d.prevYear} → ${d.lastYear}`} steps={d.profit} num={num} />}
+          {d.profit && <Bridge title={`Why profit changed, ${d.prevYear} → ${d.lastYear}`} steps={d.profit} num={num} />}
           {d.cash && <Bridge title={`Where the cash went in ${d.lastYear}`} steps={d.cash} num={num} />}
         </section>
       )}
@@ -117,8 +117,8 @@ function Assessment({ planId, d }: { planId: string; d: Extract<AssessmentData, 
       <section className="border-b border-border px-5 py-4">
         <h2 className="text-[15px] font-semibold">What the plan has to fix</h2>
         <p className="mt-0.5 text-[12.5px] text-muted-foreground">
-          Most urgent first — anything that threatens the loans or the bank — then by the money at stake.
-          {d.issues.length > 0 && <> Each has a target proposed from the accounts: agree it, or change the figure first. <span className="font-semibold text-foreground">{agreedCount} of {d.issues.length} agreed.</span></>}
+          Most urgent first — anything that puts the loans or the bank balance at risk — then by how much money is involved.
+          {d.issues.length > 0 && <> Each one has a suggested target: agree it, or change the figure first. <span className="font-semibold text-foreground">{agreedCount} of {d.issues.length} agreed.</span></>}
         </p>
         {d.issues.length === 0
           ? <p className="mt-3 text-[13px]">Nothing in the accounts stands out as a problem. The plan can be built for growth.</p>
@@ -134,7 +134,7 @@ function Assessment({ planId, d }: { planId: string; d: Extract<AssessmentData, 
                   <dl className="mt-1.5 grid gap-x-4 gap-y-1 text-[13px] leading-relaxed sm:grid-cols-[150px_minmax(0,1fr)]">
                     <dt className="font-semibold text-muted-foreground">The accounts show</dt><dd>{i.finding}</dd>
                     <dt className="font-semibold text-muted-foreground">Likely cause</dt><dd>{i.cause}</dd>
-                    <dt className="font-semibold text-muted-foreground">Direction for the plan</dt>
+                    <dt className="font-semibold text-muted-foreground">What the plan should do</dt>
                     <dd>{i.direction} <Link className={LINK} href={`/plans/${planId}/${i.where.to}`}>{i.where.label} →</Link></dd>
                     <dt className="font-semibold text-muted-foreground">{d.adviser ? "Ask the client" : "Ask yourself"}</dt><dd className="italic">{i.ask}</dd>
                   </dl>
@@ -155,7 +155,7 @@ function Assessment({ planId, d }: { planId: string; d: Extract<AssessmentData, 
       <section className="px-5 py-4">
         <h2 className="text-[15px] font-semibold">{d.adviser ? "Still to collect from the client" : "Still to fill in"}</h2>
         <p className="mt-0.5 text-[12.5px] text-muted-foreground">
-          {open === 0 ? "Everything a lender or buyer would ask for is in." : `${open} of ${d.asks.length} still open — the agenda for the next meeting.`}
+          {open === 0 ? "Everything a lender or buyer would ask for is in." : `${open} of ${d.asks.length} still to get — a list for the next meeting.`}
         </p>
         <ul className="mt-2 divide-y divide-border rounded-md border border-border">
           {d.asks.map((a) => (
@@ -167,7 +167,7 @@ function Assessment({ planId, d }: { planId: string; d: Extract<AssessmentData, 
             </li>
           ))}
         </ul>
-        <Note>Every figure here comes from Historic, and nothing here changes it. Agreeing a target records it for the plan; the cash floor and the loan term are also set where the plan reads them.</Note>
+        <Note>Every figure here comes from Historic, and nothing here changes it. Agreeing a target saves it for the plan. The cash floor and loan term are also filled in where the plan uses them.</Note>
       </section>
     </>
   );

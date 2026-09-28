@@ -26,13 +26,13 @@ export type TargetMeta = {
 
 export const TARGET_META: Record<TargetKind, TargetMeta> = {
   grossMargin: { label: "Gross margin of", unit: "pct", min: 0, max: 100, whole: false },
-  overheadsCap: { label: "Overheads a year no more than", unit: "money", min: 0, max: 1e12, whole: true },
+  overheadsCap: { label: "Overheads for the year no more than", unit: "money", min: 0, max: 1e12, whole: true },
   debtorDays: { label: "Customers paying in", unit: "days", min: 0, max: 365, whole: true },
-  loanTermMonths: { label: "Loans already owed repaid over", unit: "months", min: 1, max: 360, whole: true,
+  loanTermMonths: { label: "Existing loans paid back over", unit: "months", min: 1, max: 360, whole: true,
     sets: { label: "Funding → Loans already owed", to: "funding" } },
   cashFloor: { label: "Cash never below", unit: "money", min: 0, max: 1e12, whole: true,
     sets: { label: "Assumptions → Cash & capital", to: "assumptions?area=cash" } },
-  breakEven: { label: "Operating profit of at least", unit: "money", min: -1e12, max: 1e12, whole: true },
+  breakEven: { label: "Profit of at least", unit: "money", min: -1e12, max: 1e12, whole: true },
 };
 
 export const TARGET_KINDS = Object.keys(TARGET_META) as TargetKind[];
@@ -132,7 +132,7 @@ export function checkTargets(targets: AgreedTargets | null, f: TargetFacts, mone
         if (p && p.revenue > 0) {
           const gm = ((p.revenue - p.cogs) / p.revenue) * 100, short = v - gm;
           c = { ...c, plan: `Plan has ${pctText(gm)} in ${y}`, met: short <= 0.05,
-            gap: short > 0.05 ? `${Math.round(short * 10) / 10} points short — about ${money((short / 100) * p.revenue)} of gross profit on ${y}'s sales` : null };
+            gap: short > 0.05 ? `${Math.round(short * 10) / 10} points short — about ${money((short / 100) * p.revenue)} less profit on ${y}'s sales` : null };
         }
         break;
       }
@@ -145,7 +145,7 @@ export function checkTargets(targets: AgreedTargets | null, f: TargetFacts, mone
         break;
       }
       case "breakEven": {
-        c = { ...none("Nothing in the plan yet"), target: `Operating profit of at least ${money(v)} in ${y}` };
+        c = { ...none("Nothing in the plan yet"), target: `Profit of at least ${money(v)} in ${y}` };
         if (p && (p.revenue > 0 || p.overheads > 0)) {
           const short = v - p.operatingProfit;
           const shown = p.operatingProfit < 0 ? `a loss of ${money(-p.operatingProfit)}` : money(p.operatingProfit);
@@ -154,21 +154,21 @@ export function checkTargets(targets: AgreedTargets | null, f: TargetFacts, mone
         break;
       }
       case "debtorDays": {
-        c = { ...none("No debtor days in the plan yet"), target: `Customers paying in ${v} days` };
+        c = { ...none("No payment days in the plan yet"), target: `Customers paying in ${v} days` };
         if (f.debtorDays !== null) {
           const slower = f.debtorDays - v;
-          const cash = p && p.revenue > 0 ? ` — about ${money((slower / 365) * p.revenue)} more sitting in unpaid invoices` : "";
+          const cash = p && p.revenue > 0 ? ` — about ${money((slower / 365) * p.revenue)} more cash stuck in unpaid invoices` : "";
           c = { ...c, plan: `Plan has ${Math.round(f.debtorDays)} days in ${y}`, met: slower <= 0.5,
             gap: slower > 0.5 ? `${Math.round(slower)} days slower${cash}` : null };
         }
         break;
       }
       case "loanTermMonths": {
-        c = { ...none("The plan carries the loans flat until their rate is in"), target: `Loans already owed repaid over ${v} months` };
+        c = { ...none("The plan cannot work out the loan payments until the interest rate is in"), target: `Existing loans paid back over ${v} months` };
         if (f.loanTermMonths !== null) {
           const shorter = v - f.loanTermMonths;
-          c = { ...c, plan: `Plan repays them over ${f.loanTermMonths} months`, met: shorter <= 0,
-            gap: shorter > 0 ? `${shorter} months shorter, so each year's repayments are higher` : null };
+          c = { ...c, plan: `Plan pays them back over ${f.loanTermMonths} months`, met: shorter <= 0,
+            gap: shorter > 0 ? `${shorter} months shorter, so the yearly payments are higher` : null };
         }
         break;
       }
@@ -178,7 +178,7 @@ export function checkTargets(targets: AgreedTargets | null, f: TargetFacts, mone
           const under = v - f.lowestCash.value;
           const low = f.lowestCash.value < 0 ? `overdrawn by ${money(-f.lowestCash.value)}` : money(f.lowestCash.value);
           c = { ...c, plan: `Lowest month ${low}, ${f.lowestCash.when}`, met: under <= 0.5,
-            gap: under > 0.5 ? `${money(under)} under the floor at its lowest` : null };
+            gap: under > 0.5 ? `${money(under)} below the cash floor at its lowest` : null };
         }
         break;
       }

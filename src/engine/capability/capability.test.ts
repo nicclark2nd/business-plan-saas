@@ -332,7 +332,7 @@ describe("borrowing, on the debt the plan already carries", () => {
     const b = borrowMetrics(full({ debtService: {} }));
     const dscr = b.find((x) => x.key === "dscr")!;
     expect(dscr.value).toBeNull();
-    expect(dscr.missing).toContain("no borrowing");
+    expect(dscr.missing).toContain("no loans");
     expect(dscr.fix?.to).toBe("funding");
   });
 
@@ -361,7 +361,7 @@ describe("borrowing, on the debt the plan already carries", () => {
     const without = borrowMetrics(full()).find((x) => x.key === "runway")!.value!;
     const withFacility = borrowMetrics(full({ undrawn: 240_000 })).find((x) => x.key === "runway")!.value!;
     expect(withFacility).toBeGreaterThan(without);
-    expect(borrowMetrics(full({ undrawn: 240_000 })).find((x) => x.key === "runway")!.sub).toContain("undrawn");
+    expect(borrowMetrics(full({ undrawn: 240_000 })).find((x) => x.key === "runway")!.sub).toContain("agreed but not yet used");
   });
 
   /*
@@ -432,7 +432,7 @@ describe("selling", () => {
       .find((x) => x.key === "priceMultiple")!;
     expect(m.value).toBeNull();
     expect(m.display).not.toBe("—");                     // the multiple is still shown
-    expect(m.missing).toContain("comparable");
+    expect(m.missing).toContain("similar businesses");
     expect(m.fix?.to).toBe("settings?area=exit");
   });
 
@@ -451,7 +451,7 @@ describe("selling", () => {
     const m = sellMetrics(priced({ askingPrice: 40_000_000 }));
     const mult = m.find((x) => x.key === "priceMultiple")!;
     expect(statusOf(mult.value, mult.bands)).toBe("bad");
-    expect(mult.note).toContain("Above the top of the similar-sales range");
+    expect(mult.note).toContain("Higher than similar businesses have sold for");
     const s = score(m, SELL_WEIGHTS);
     expect(s.capped).toContain("priceMultiple");
     expect(s.value!).toBeLessThan(50);
@@ -614,7 +614,7 @@ describe("a plan that loses money cannot be flattered by its own ratios", () => 
     expect(lev.value).toBeNull();
     expect(statusOf(lev.value, lev.bands)).toBeNull();
     /* And §6.115.1: the loss is said in words, never left to a minus sign in front of a dollar figure. */
-    expect(lev.missing).toContain("no earnings for the debt to be measured against");
+    expect(lev.missing).toContain("no profit to compare the debt with");
     expect(lev.missing).toContain("loses $80,000");
     expect(lev.missing).not.toContain("$-");
   });
@@ -635,7 +635,7 @@ describe("a plan that loses money cannot be flattered by its own ratios", () => 
     const dscr = b.find((x) => x.key === "dscr")!;
     expect(dscr.value).toBe(0);
     expect(statusOf(dscr.value, dscr.bands)).toBe("bad");
-    expect(dscr.note).toContain("consume");
+    expect(dscr.note).toContain("uses up");
   });
 
   it("says the interest is being paid out of a loss rather than 'barely covered'", () => {
@@ -665,7 +665,7 @@ describe("a plan that loses money cannot be flattered by its own ratios", () => 
     const m = sellMetrics(losing({ leadershipPay: 141_400 })).find((x) => x.key === "leadershipPay")!;
     expect(m.value).toBeNull();
     expect(m.sub).toBeUndefined();
-    expect(m.missing).toContain("not positive");
+    expect(m.missing).toContain("no profit to pay it from");
   });
 });
 
@@ -790,14 +790,14 @@ describe("the questions a buyer will ask", () => {
     const q = buyerQuestions(sellMetrics(full()), { money, addBacks: 80_000, transfer, knowsCustomers: true });
     expect(q.some((x) => x.includes("owner leaves"))).toBe(true);
     expect(q.some((x) => x.includes("$80,000"))).toBe(true);
-    expect(q.some((x) => x.includes("largest customers"))).toBe(false);
+    expect(q.some((x) => x.includes("biggest customers"))).toBe(false);
   });
 
   /* Until the plan records customers, the first thing a buyer asks is asked every time. */
   it("asks about customers until the plan can answer it", () => {
     const q = buyerQuestions(sellMetrics(full()), { money, addBacks: null, transfer: unscored, knowsCustomers: false });
-    expect(q.some((x) => x.includes("largest customers"))).toBe(true);
-    expect(q.some((x) => x.includes("not been assessed"))).toBe(true);
+    expect(q.some((x) => x.includes("biggest customers"))).toBe(true);
+    expect(q.some((x) => x.includes("not been checked"))).toBe(true);
   });
 
   it("stops at six — a list of fifteen is a list nobody prepares for", () => {
@@ -818,8 +818,8 @@ describe("the actions follow the reading, not just the measure", () => {
     const thinWithBacks = sellMetrics({ ...full({ pnl: { 1: pnl(2_000_000, { operatingProfit: -100_000 }), 2: pnl(2_200_000) } }), sale: { ...empty.sale, addBacks: 60_000 } });
     const loss = verdict("sell", thin, SELL_WEIGHTS, 30).actions.join(" ");
     const positive = verdict("sell", thinWithBacks, SELL_WEIGHTS, 30).actions.join(" ");
-    expect(loss).toContain("no earnings figure");
-    expect(positive).not.toContain("no earnings figure");
+    expect(loss).toContain("no profit to sell");
+    expect(positive).not.toContain("no profit to sell");
     expect(positive).toContain("thin for a sale");
   });
 });
@@ -891,9 +891,9 @@ describe("the panels that read the new fields", () => {
     const at = (k: string) => L.find((l) => l.label === k)!;
     expect(at("Years trading").status).toBe("good");
     expect(at("Forecast against last year").status).toBe("bad");      // 2.0M against 1.4M actual: +42.9%
-    expect(at("Customer concentration").display).toContain("Metricon");
-    expect(at("Customer concentration").status).toBe("bad");
-    expect(at("Covenant breaches").status).toBe("good");
+    expect(at("Biggest customer").display).toContain("Metricon");
+    expect(at("Biggest customer").status).toBe("bad");
+    expect(at("Broken loan conditions").status).toBe("good");
     expect(at("Guarantee").status).toBe("watch");
     expect(at("Security").status).toBe("good");
     expect(L.filter((l) => l.status === null)).toHaveLength(0);
@@ -929,8 +929,8 @@ describe("the panels that read the new fields", () => {
       customers: [{ name: "Metricon", share: 32, assignable: false, endsWithinYear: true }],
     });
     expect(q.some((x) => x.includes("Metricon — 32% of sales"))).toBe(true);
-    expect(q.some((x) => x.includes("change of ownership"))).toBe(true);
-    expect(q.some((x) => x.includes("largest customers, what share"))).toBe(false);
+    expect(q.some((x) => x.includes("if the business is sold"))).toBe(true);
+    expect(q.some((x) => x.includes("biggest customers, what share"))).toBe(false);
   });
 });
 

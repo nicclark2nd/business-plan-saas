@@ -21,9 +21,9 @@ describe("three lines for the person in the room (§6.160)", () => {
         firstYear: 2027, grow: [card("revenueGrowth", 9.3)], borrow: [], monthNames: [],
       },
     });
-    expect(s.happened).toBe("In 2026 sales grew 5.7% and profit fell into a 52,362 loss.");
-    expect(s.asks).toBe("The plan asks for 9.3% growth in 2027 and a bigger loss, with the bank below your floor for 6 of 12 months.");
-    expect(s.talk).toBe("Talk to the owner about how 2027 gets funded before talking about growth.");
+    expect(s.happened).toBe("In 2026 sales went up 5.7% and the business went from a profit to a loss of 52,362.");
+    expect(s.asks).toBe("The plan asks for 9.3% growth in 2027 and a bigger loss, with the bank below your cash floor for 6 of 12 months.");
+    expect(s.talk).toBe("Talk to the owner about how 2027 will be paid for before talking about growth.");
   });
 
   /* §6.172 — ZZ: no accounts, so the Grow tab measures 2027 → 2028 and the line has to say 2028. */
@@ -35,6 +35,6 @@ describe("three lines for the person in the room (§6.160)", () => {
         firstYear: 2027, grow: [card("revenueGrowth", 0)], borrow: [], monthNames: [],
       },
     });
-    expect(s.asks).toBe("The plan asks for 0% growth in 2028 and 556,800 of operating profit.");
+    expect(s.asks).toBe("The plan asks for 0% growth in 2028 and a profit of 556,800.");
   });
 });

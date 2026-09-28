@@ -122,18 +122,18 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       bands: ranged
         ? [{ to: high, s: "good" }, { to: high + 0.4, s: "watch" }, { to: Number.MAX_SAFE_INTEGER, s: "bad" }]
         : [{ to: Number.MAX_SAFE_INTEGER, s: "good" }],
-      sub: price && normalisedSale ? `${m(price)} against ${m(normalisedSale)} of Year ${sy} normalised earnings` : undefined,
-      note: multiple === null ? "The one number a buyer decides on."
-        : !ranged ? `The price is ${r2(multiple)}× normalised earnings. Whether that is high or low needs a comparable range to sit it against.`
-        : multiple > high ? `Above the top of the similar-sales range. At ${high}× the price would be ${m(normalisedSale! * high)}.`
-        : multiple < low ? "Below the range similar businesses have sold for — you may be leaving money on the table."
-        : "Inside the range similar businesses have sold for.",
-      bench: ranged ? `Similar sales ${low}× to ${high}×` : "Set the similar-sales range in Plan settings",
+      sub: price && normalisedSale ? `${m(price)} against ${m(normalisedSale)} of Year ${sy} earnings (after add-backs)` : undefined,
+      note: multiple === null ? "The one number a buyer looks at first."
+        : !ranged ? `The price is ${r2(multiple)}× earnings. To know if that is high or low, it needs what similar businesses sold for.`
+        : multiple > high ? `Higher than similar businesses have sold for. At ${high}× the price would be ${m(normalisedSale! * high)}.`
+        : multiple < low ? "Lower than similar businesses have sold for — the price may be too low."
+        : "In line with what similar businesses have sold for.",
+      bench: ranged ? `Similar businesses sold for ${low}× to ${high}× earnings` : "Add what similar businesses sold for in Plan settings",
       formula: `Asking price ÷ (Year ${sy} EBITDA + owner add-backs)${sy === 1 && sale.exitYear === null ? " — Year 1 until a sale year is chosen in Plan settings → Exit & sale" : ", the year the sale is aimed at"}`,
       reveals: "Whether the price can be justified against what similar businesses actually changed hands for.",
       confidence: "The arithmetic is exact; the comparable range is your judgement, and it is the part a buyer will argue with.",
-      missing: multiple === null ? "An asking price in Plan settings, and a forecast with earnings in it."
-        : !ranged ? "What comparable businesses sold for, in Plan settings." : undefined,
+      missing: multiple === null ? "An asking price in Plan settings, and a plan that makes a profit."
+        : !ranged ? "What similar businesses sold for, in Plan settings." : undefined,
       fix: multiple === null ? FIX_PRICE : !ranged ? FIX_RANGE : undefined,
     },
     {
@@ -148,10 +148,10 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
        * business that has nothing to sell. The worst fact goes first, always.
        */
       note: normalisedMargin === null ? "Needs a Year 1 forecast."
-        : normalisedMargin < 0 ? `The business makes a loss of ${m(Math.abs(normalised ?? 0))} before interest, tax and depreciation. Nobody buys a multiple of a loss${sale.addBacks ? ", and the add-backs already entered do not close it" : " — add-backs, if you have any, are the first thing to put in"}.`
-        : sale.addBacks ? `Includes ${m(sale.addBacks)} of add-backs — every one of those will be tested by a buyer's accountant.`
-        : "No add-backs entered, so this is the plan's own EBITDA. Most owner-run businesses have some.",
-      bench: "8% to 12% is ordinary for a small business; above that is a selling point",
+        : normalisedMargin < 0 ? `The business makes a loss of ${m(Math.abs(normalised ?? 0))} before interest, tax and depreciation. No one pays a multiple of a loss${sale.addBacks ? ", and the add-backs entered do not cover it" : " — if there are add-backs, enter those first"}.`
+        : sale.addBacks ? `Includes ${m(sale.addBacks)} of add-backs. A buyer's accountant will check every one.`
+        : "No add-backs entered yet. Most owner-run businesses have some — costs a new owner would not have.",
+      bench: "8% to 12% is normal for a small business. More than that helps the sale",
       formula: "(EBITDA + owner add-backs from Plan settings) ÷ revenue",
       reveals: "The operating profit a buyer might reasonably expect to inherit.",
       confidence: "Medium once add-backs are entered — they are a claim, not a measurement.",
@@ -164,9 +164,9 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       min: 0, max: 30, bands: [{ to: 8, s: "bad" }, { to: 12, s: "watch" }, { to: 30, s: "good" }],
       sub: price ? `Against ${m(price)}` : undefined,
       note: yieldOnPrice === null ? "What a buyer's money would earn at this price."
-        : yieldOnPrice * 100 < 10 ? "A buyer could do better elsewhere with less work. Expect the price to be pushed down."
-        : "A return a buyer would take seriously against the risk of running a business.",
-      bench: "Buyers of small businesses generally want 12% or better",
+        : yieldOnPrice * 100 < 10 ? "A buyer could earn more elsewhere for less work. Expect them to push the price down."
+        : "A return a buyer would take seriously for the risk of running a business.",
+      bench: "Buyers of small businesses usually want 12% or more",
       formula: "Free cash flow ÷ asking price",
       reveals: "The cash return the price implies, before financing and deal costs.",
       confidence: "Medium — it inherits the maintenance-capex assumption below.",
@@ -179,12 +179,12 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       min: 1, max: 5, bands: [{ to: 2.5, s: "bad" }, { to: 3.5, s: "watch" }, { to: 5, s: "good" }],
       sub: transfer === null
         ? `${scored.length} of ${TRANSFER_FACTORS.length} scored`
-        : `Average of ${TRANSFER_FACTORS.length} judgements`,
+        : `Average of ${TRANSFER_FACTORS.length} scores`,
       note: transfer === null
-        ? `Six judgements on Leadership Team → Risk & Succession, ${scored.length} of them made so far. The average waits for all six, because the two left out would be the two least comfortable to score.`
-        : transfer < 2.5 ? "Most of what makes this business work would walk out with the owner. That is the thing that kills sales, more often than price."
-        : transfer < 3.5 ? `Transferable with work. Each weak factor is something to fix before going to market, not during.${transferNote ? ` Your own note: “${transferNote}”.` : ""}`
-        : "The business would keep running under someone else, which is what a buyer is actually buying.",
+        ? `Six scores on Leadership Team → Risk & Succession, and ${scored.length} are done. This waits for all six, because the ones left out are usually the hardest to face.`
+        : transfer < 2.5 ? "Most of what makes this business work would leave with the owner. That stops more sales than price does."
+        : transfer < 3.5 ? `It could be handed over, with work. Fix each weak area before putting the business up for sale, not during.${transferNote ? ` Your own note: “${transferNote}”.` : ""}`
+        : "The business would keep running under a new owner. That is what a buyer is really paying for.",
       bench: "Below 3 and a buyer is buying a job, not a business",
       formula: `The average of the ${TRANSFER_FACTORS.length} judgements scored on Leadership Team → Risk & Succession, each 1 to 5`,
       reveals: "Whether there is a business here or an owner with customers.",
@@ -198,9 +198,9 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       display: i.recurringShare === null ? "—" : pct(i.recurringShare * 100),
       min: 0, max: 100, bands: [{ to: 30, s: "bad" }, { to: 55, s: "watch" }, { to: 100, s: "good" }],
       note: i.recurringShare === null ? "Needs products on the Sales step."
-        : i.recurringShare * 100 < 30 ? "Almost everything has to be won again next year, which a buyer prices down."
-        : "A useful share of next year's revenue is already spoken for.",
-      bench: "Above 55% and a buyer can see next year from here",
+        : i.recurringShare * 100 < 30 ? "Almost all sales have to be won again next year, so a buyer will pay less."
+        : "A good part of next year's sales is already locked in.",
+      bench: "Above 55% and a buyer can see next year's sales already coming",
       formula: "Year 1 revenue from products marked Ongoing client ÷ total Year 1 revenue",
       reveals: "How much of the revenue a buyer inherits rather than has to go and win.",
       confidence: "High — it reads how you marked each product on the Sales step.",
@@ -224,9 +224,9 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       display: i.largestProductShare === null ? "—" : pct(i.largestProductShare * 100),
       min: 0, max: 100, bands: [{ to: 35, s: "good" }, { to: 60, s: "watch" }, { to: 100, s: "bad" }],
       note: i.largestProductShare === null ? "Needs products on the Sales step."
-        : i.largestProductShare * 100 > 60 ? "Most of the revenue rests on one line. A buyer will ask what happens if it stops selling."
-        : "Revenue is spread across enough of the range that no single line carries the business.",
-      bench: "Above 60% from one line and a buyer is buying that line, not the business",
+        : i.largestProductShare * 100 > 60 ? "Most sales come from one product. A buyer will ask what happens if it stops selling."
+        : "Sales are spread across enough products that no single one carries the business.",
+      bench: "Above 60% from one product and a buyer is buying that product, not the business",
       formula: "Year 1 revenue from the largest product or service ÷ total Year 1 revenue",
       reveals: "How much of the earnings depend on one thing continuing to sell.",
       confidence: "High for products — but this is NOT customer concentration, which is what a buyer asks first. This app holds no customers; work that one out from your sales ledger.",
@@ -251,18 +251,18 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
        * wrong cause sends a client to fix something that is not broken — worse than saying nothing.
        */
       note: leadershipShare === null && i.leadershipPay !== null
-        ? "The earnings are negative, so there is no share to express this as. The wage bill is real; the profit it has to come out of is not there yet."
+        ? "There is no profit yet, so this cannot be worked out. The pay is real, but the profit to pay it from is not there yet."
         : leadershipShare === null ? "Needs people on the Leadership Team step and a Year 1 forecast."
-        : leadershipShare > 1 ? "The people running it are paid more than the business earns. A buyer would have to keep paying them out of earnings that are not there."
-        : leadershipShare * 100 > 80 ? "The wage bill for the people running it is most of what the business earns. A buyer has to keep paying that, and will price accordingly."
-        : "The earnings survive paying the people who run the business, which is what a buyer is checking.",
-      bench: "Under 40% of earnings leaves a buyer room; over 80% and there is little left",
+        : leadershipShare > 1 ? "The people running it are paid more than the business earns. A buyer would have to keep paying them from profit that is not there."
+        : leadershipShare * 100 > 80 ? "Paying the people who run it takes most of what the business earns. A buyer has to keep paying that, and will offer less."
+        : "There is profit left after paying the people who run the business. That is what a buyer checks.",
+      bench: "Under 40% of profit leaves a buyer room. Over 80% leaves little",
       formula: "Year 1 leadership salaries ÷ normalised EBITDA",
       reveals: "Whether the earnings survive paying people to run the business once the owner has gone.",
       confidence: "High — read from the Leadership Team step. A below-market owner salary will flatter it, which is what add-backs are for.",
       missing: leadershipShare === null
         ? (i.leadershipPay !== null
-            ? `${m(i.leadershipPay)} of leadership pay, against earnings that are not positive.`
+            ? `${m(i.leadershipPay)} of leadership pay, and no profit to pay it from.`
             : "People on the Leadership Team step.")
         : undefined,
       /* No pencil when the earnings are the problem: there is no box on any screen that fixes a loss. */
@@ -275,9 +275,9 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       min: 0, max: 1.2, bands: [{ to: 0.3, s: "good" }, { to: 0.6, s: "watch" }, { to: 1.2, s: "bad" }],
       sub: bs1 && y1?.revenue ? `${m(bs1.fixedAssets)} of assets on ${m(y1.revenue)}` : undefined,
       note: intensity === null ? "Needs a Year 1 forecast with a balance sheet."
-        : intensity > 0.6 ? "Capital-heavy. A buyer is funding plant as well as earnings, and will want to know what has to be replaced and when."
-        : "Light on assets, so most of what a buyer pays for is the earnings rather than the equipment.",
-      bench: "Under 30¢ is light; above 60¢ a buyer is buying a plant list",
+        : intensity > 0.6 ? "The business needs a lot of equipment. A buyer is paying for machines as well as profit, and will ask what needs replacing and when."
+        : "The business needs little equipment, so a buyer is mostly paying for the profit.",
+      bench: "Under 30¢ is light. Above 60¢ and a buyer is mostly buying equipment",
       formula: "Fixed assets at the end of Year 1 ÷ Year 1 revenue",
       reveals: "How much plant a buyer has to fund to keep the revenue coming.",
       confidence: "High — from the forecast balance sheet. It does not say how old the assets are.",
@@ -289,17 +289,17 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       display: conversion === null ? "—" : pct(conversion * 100),
       min: 0, max: 130, bands: [{ to: 70, s: "bad" }, { to: 85, s: "watch" }, { to: 130, s: "good" }],
       note: conversion === null ? "Needs a Year 1 forecast."
-        : conversion * 100 < 70 ? "Earnings are not arriving as cash, and a buyer's accountant will find that in the first week."
-        : conversion * 100 < 85 ? `About ${pct(conversion * 100)} of earnings arrive as cash — a buyer's accountant will ask where the rest sits.`
-        : "Reported earnings turn into cash, which is what makes them believable.",
-      bench: "85% or better",
+        : conversion * 100 < 70 ? "The profit is not turning into cash, and a buyer's accountant will spot that in the first week."
+        : conversion * 100 < 85 ? `About ${pct(conversion * 100)} of the profit reaches the bank. A buyer's accountant will ask where the rest is.`
+        : "The profit turns into cash, which makes it believable to a buyer.",
+      bench: "85% or more",
       formula: "Year 1 cash from operations ÷ EBITDA",
       reveals: "Whether the profit being sold is real.",
       confidence: "High.",
       ...(conversion === null && e1 !== null && e1 <= 0 ? { unscored: NO_EARNINGS } : {}),
       missing: conversion === null
         ? (e1 !== null && e1 <= 0
-            ? `The business loses ${m(Math.abs(e1))} before interest, tax and depreciation, so there are no earnings to turn into cash. This answers as soon as it makes money.`
+            ? `The business loses ${m(Math.abs(e1))} before interest, tax and depreciation, so there is no profit to turn into cash. This fills in once it makes money.`
             : "A Year 1 forecast.")
         : undefined,
     },
@@ -310,9 +310,9 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       min: 0, max: 20, bands: [{ to: 3, s: "bad" }, { to: 6, s: "watch" }, { to: 20, s: "good" }],
       sub: fcfMargin === null ? undefined : `${pct(fcfMargin * 100)} of revenue`,
       note: fcf === null ? "Needs a Year 1 forecast."
-        : fcf < 0 ? `The business consumes ${m(Math.abs(fcf))} a year once the assets are kept standing still. A buyer would be funding it, not drawing from it.`
-        : "Cash left after keeping the assets standing still — the money a buyer would actually see.",
-      bench: "5% to 7% of revenue is respectable for a small business",
+        : fcf < 0 ? `After keeping its equipment going, the business uses up ${m(Math.abs(fcf))} a year. A buyer would be putting money in, not taking it out.`
+        : "The cash left after keeping the equipment going — the money a buyer would actually get.",
+      bench: "5% to 7% of sales is good for a small business",
       formula: "Year 1 cash from operations − maintenance capital spending",
       reveals: "The cash a buyer could take out without running the business down.",
       confidence: "Medium — maintenance capex is taken as equal to depreciation, which is a convention, not a measurement of what the assets actually need.",
@@ -324,9 +324,9 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       display: roic === null ? "—" : pct(roic * 100),
       min: 0, max: 40, bands: [{ to: 8, s: "bad" }, { to: 14, s: "watch" }, { to: 40, s: "good" }],
       note: roic === null ? "Needs a Year 1 forecast with a balance sheet."
-        : roic * 100 < 8 ? "The business earns less on its capital than a buyer could get elsewhere without the work."
-        : "The business earns a strong return on the capital it ties up.",
-      bench: "Above what the money costs — call it 10% to 12%",
+        : roic * 100 < 8 ? "The business earns less on the money tied up in it than a buyer could get elsewhere, without the work."
+        : "The business earns a strong return on the money tied up in it.",
+      bench: "More than the money costs — about 10% to 12%",
       formula: "After-tax operating profit ÷ (equity + debt)",
       reveals: "Whether this is a good business, separately from whether it is a good price.",
       confidence: "Medium — it uses the forecast's own effective tax rate.",
@@ -338,9 +338,9 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       display: revGrowth === null ? "—" : pct(revGrowth * 100),
       min: -10, max: 30, bands: [{ to: 0, s: "bad" }, { to: 4, s: "watch" }, { to: 30, s: "good" }],
       note: revGrowth === null ? "Needs two forecast years."
-        : revGrowth <= 0 ? "A buyer pays less for a business that is not growing, and asks why."
-        : "Growth a buyer can see in the forecast they are being handed.",
-      bench: "A buyer discounts flat revenue and pays up for consistent growth",
+        : revGrowth <= 0 ? "A buyer pays less for a business that is not growing, and will ask why."
+        : "Growth a buyer can see in the forecast they are given.",
+      bench: "A buyer pays less for flat sales and more for steady growth",
       formula: "(Year 2 revenue − Year 1 revenue) ÷ Year 1 revenue",
       reveals: "Whether the earnings being sold are rising or drifting.",
       confidence: "High.",

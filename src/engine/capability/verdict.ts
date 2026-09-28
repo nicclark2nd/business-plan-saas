@@ -69,53 +69,53 @@ const ACTIONS: Record<string, Action> = {
    * as advice about a loan that did not exist. "Reduce it, lengthen the term" is not something you do to
    * debt you have already drawn.
    */
-  dscr: "The debt already in the plan is more than this cash flow covers. Refinance it longer, pay some down, or raise the earnings before adding to it.",
-  dscrStressed: "The cover holds today and not in a bad year. Ask for interest-only, or build a buffer that carries the repayments through a soft quarter.",
-  runway: "Build the cash buffer. An overdraft costs little unused and is the cheapest insurance here.",
-  leverage: "Total debt is heavy against earnings. Pay something down, or raise the earnings, before adding more.",
-  lvr: "Most of the security is already spoken for. There is little left to offer a lender for anything further.",
-  quickRatio: "Short-term bills depend on shifting stock. Collect faster, or hold less.",
-  currentRatio: "Short-term obligations are close to short-term assets. Watch it before taking on more.",
+  dscr: "The loans are bigger than the cash coming in can pay. Ask the bank for a longer term, pay some off, or lift profit before borrowing more.",
+  dscrStressed: "The loans can be paid in a normal year but not a bad one. Ask for interest-only payments, or build up cash to cover a slow few months.",
+  runway: "Build up cash in the bank. An overdraft costs little if unused and is the cheapest safety net.",
+  leverage: "Debt is high compared with profit. Pay some off, or lift profit, before borrowing more.",
+  lvr: "Most of what the business owns is already backing loans. There is little left to offer a lender.",
+  quickRatio: "Paying the bills depends on selling stock. Collect money faster, or hold less stock.",
+  currentRatio: "Bills due soon are close to what can be turned into cash soon. Watch this before taking on more.",
   /* True whether the operating profit is thin or absent — the old wording assumed there was one. */
-  interestCover: "Interest is heavy against what the business earns. Refinance it or pay some down before borrowing more.",
+  interestCover: "Interest takes a big bite out of profit. Get a better rate or pay some debt off before borrowing more.",
   /* Sell */
-  priceMultiple: "Reset the price to the top of your comparable range, or wait and sell stronger numbers.",
-  transferability: "Fix the weakest transferability factor before going to market. A buyer discounts for it far harder than you would.",
+  priceMultiple: "Bring the price down to what similar businesses sold for, or wait and sell once the numbers are stronger.",
+  transferability: "Fix the weakest area before putting the business up for sale. A buyer will knock more off the price for it than you would expect.",
   normalisedMargin: (m) => m.value !== null && m.value < 0
-    ? "There is no earnings figure to sell on. Get the business into profit and hold it there for a year — nothing else on this tab matters until then."
-    : "The margin is thin for a sale. Either improve it for a year, or expect the multiple to reflect it.",
-  fcfYield: "At this price a buyer's money earns too little. The price is the thing to move.",
-  recurringShare: "Convert repeat customers onto something contracted before you go to market — it is the cheapest value you can add.",
-  largestCustomer: "Work out your largest customer's share from your sales ledger. If it is above 20%, secure that contract on assignable terms before a buyer asks.",
-  freeCashFlow: "Thin free cash flow after keeping the assets going. A buyer will notice the capital this business needs.",
-  roic: "The business earns little on the capital it ties up, which caps what anyone will pay for it.",
+    ? "There is no profit to sell. Get the business making a profit and keep it there for a year — nothing else on this tab matters until then."
+    : "The profit margin is thin for a sale. Improve it for a year, or expect a lower price.",
+  fcfYield: "At this price a buyer's money earns too little. The price needs to come down.",
+  recurringShare: "Put repeat customers on contracts before selling — it is the cheapest way to add value.",
+  largestCustomer: "Find your biggest customer's share of sales. If it is over 20%, get a contract that passes to a new owner before a buyer asks.",
+  freeCashFlow: "Little cash is left after keeping the equipment going. A buyer will notice how much money the business needs.",
+  roic: "The business earns little on the money tied up in it, which limits what anyone will pay for it.",
 };
 
 const HEAD = {
   grow: {
-    none: "Not enough of the plan is filled in to judge the growth",
+    none: "Not enough of the plan is filled in to judge growth yet",
     bad: "The growth plan does not pay for itself",
     watch: "Worth doing, but cash will be tight",
     good: "The growth plan works",
   },
   borrow: {
-    none: "Not enough of the plan is filled in to judge the borrowing",
-    bad: "The debt is more than this business can carry",
-    watch: "Repays in the base case, with little cushion",
-    good: "The business carries its debt, with room to spare",
+    none: "Not enough of the plan is filled in to judge borrowing yet",
+    bad: "The loans are more than this business can pay",
+    watch: "The loans can be paid in a normal year, with little to spare",
+    good: "The business can pay its loans, with room to spare",
   },
   sell: {
-    none: "Not enough of the plan is filled in to judge a sale",
+    none: "Not enough of the plan is filled in to judge a sale yet",
     bad: "Not ready to sell at this price",
-    watch: "Saleable, with work to do first",
-    good: "This would stand up to a buyer",
+    watch: "Could be sold, with work to do first",
+    good: "A buyer would take this seriously",
   },
 } as const;
 
 const QUESTION = {
   grow: "Can the business make more profit as it grows, and pay for the cash, people and equipment that growth needs?",
-  borrow: "Can the business repay what it owes on time, including if trading gets worse — and would a lender add to it?",
-  sell: "Would the earnings and the customers survive a change of owner, and is the price justified?",
+  borrow: "Can the business pay its loans on time, even in a bad year — and would a bank lend it more?",
+  sell: "Would the profit and the customers stay with a new owner, and is the price fair?",
 } as const;
 
 export function verdict(
@@ -130,7 +130,7 @@ export function verdict(
       question, headline: HEAD[kind].none, actions: [],
       paragraphs: [{
         lead: "Nothing here is guessed.",
-        body: "Every figure on this page is read from your own forecast. Fill in your sales lines and costs and it answers itself — each card below already says what it is waiting for.",
+        body: "Every figure on this page comes from your own plan. Fill in your sales and costs and it will fill in — each box below says what it is waiting for.",
       }],
     };
   }
@@ -145,12 +145,12 @@ export function verdict(
    */
   const best = order.find((x) => x.s === "good");
   const paragraphs: Verdict["paragraphs"] = [];
-  if (best && band !== "bad") paragraphs.push({ lead: `${best.m.name} is holding up.`, body: best.m.note });
+  if (best && band !== "bad") paragraphs.push({ lead: `${best.m.name} is in good shape.`, body: best.m.note });
   for (const p of problems.slice(0, 3)) paragraphs.push({ lead: `${p.m.name}.`, body: p.m.note });
   if (!problems.length) {
     paragraphs.push({
       lead: "Nothing is flagged.",
-      body: "Every measure this page can compute is in its best band. That is worth saying plainly — and worth re-reading once the forecast changes.",
+      body: "Every measure on this page is in the green. Check again whenever the plan changes.",
     });
   }
 
@@ -195,9 +195,9 @@ export function buyerQuestions(
 
   const margin = at("normalisedMargin");
   if (margin && margin.value !== null && margin.value < 0) {
-    q.push("Why does the business lose money before interest, tax and depreciation — and what, specifically, changes that?");
+    q.push("Why does the business lose money before interest, tax and depreciation — and what exactly will change that?");
   } else if (s("normalisedMargin") === "bad") {
-    q.push("Why is the margin below what similar businesses earn, and is it a price problem or a cost problem?");
+    q.push("Why is the profit margin lower than similar businesses — is it the prices or the costs?");
   }
 
   const price = at("priceMultiple");
@@ -217,11 +217,11 @@ export function buyerQuestions(
     processes: "Where is it written down how the work is actually done?",
     staff: "Which of the people who matter are tied in, and on what terms?",
     contracts: "Which contracts can be assigned to a new owner, and which end at a change of control?",
-    systems: "Are the books and systems something a buyer's accountant can rely on without rebuilding them?",
+    systems: "Could a buyer's accountant rely on the books and systems as they are?",
   };
   for (const w of weak) if (PER_FACTOR[w.key]) q.push(PER_FACTOR[w.key]);
   if (facts.transfer.every((t) => t.score === null)) {
-    q.push("Would the business keep trading if the owner stopped turning up? It has not been assessed yet.");
+    q.push("Would the business keep running if the owner stopped turning up? This has not been checked yet.");
   }
 
   /*
@@ -234,7 +234,7 @@ export function buyerQuestions(
     q.push(`What happens to the earnings if ${top.name} — ${Math.round((top.share ?? 0) * 10) / 10}% of sales — stops buying?`);
   }
   if (cs.some((c) => c.assignable === false)) {
-    q.push("Which customer contracts end on a change of ownership, and can they be renegotiated before the sale?");
+    q.push("Which customer contracts end if the business is sold, and can they be changed before the sale?");
   }
   const ending = cs.find((c) => c.endsWithinYear);
   if (ending) q.push(`${ending.name}'s contract ends within the year. Has it been renewed, and on what terms?`);
@@ -244,7 +244,7 @@ export function buyerQuestions(
    * concentration is the first thing a buyer's adviser looks for, and the plan does not yet record customers.
    */
   if (!facts.knowsCustomers) {
-    q.push("Who are the largest customers, what share of revenue does each one hold, and when do their contracts end?");
+    q.push("Who are the biggest customers, what share of sales does each one make up, and when do their contracts end?");
   }
 
   const conv = at("cashConversion");
@@ -253,10 +253,10 @@ export function buyerQuestions(
   }
   const fcf = at("freeCashFlow");
   if (fcf && fcf.value !== null && fcf.value < 0) {
-    q.push("What does it cost each year just to keep the assets standing still — and who funds that after settlement?");
+    q.push("What does it cost each year just to keep the equipment going — and who pays for that after the sale?");
   }
   if (s("recurringShare") === "bad") {
-    q.push("How much of next year's revenue is already contracted, and on what terms?");
+    q.push("How much of next year's sales is already locked in by contracts, and on what terms?");
   }
   if (s("largestProduct") === "bad") {
     q.push("What happens to the earnings if the biggest product line stops selling?");
