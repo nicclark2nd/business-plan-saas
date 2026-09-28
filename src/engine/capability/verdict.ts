@@ -89,6 +89,9 @@ const ACTIONS: Record<string, Action> = {
   largestCustomer: "Find your biggest customer's share of sales. If it is over 20%, get a contract that passes to a new owner before a buyer asks.",
   freeCashFlow: "Little cash is left after keeping the equipment going. A buyer will notice how much money the business needs.",
   roic: "The business earns little on the money tied up in it, which limits what anyone will pay for it.",
+  largestProduct: "Grow sales of the other products, so the business does not depend on one.",
+  leadershipPay: "Profit has to grow, or the pay of the people running it has to come down, before a buyer will pay much.",
+  assetIntensity: "List what equipment will need replacing and when — a buyer will ask before making an offer.",
 };
 
 const HEAD = {
@@ -117,6 +120,16 @@ const QUESTION = {
   borrow: "Can the business pay its loans on time, even in a bad year — and would a bank lend it more?",
   sell: "Would the profit and the customers stay with a new owner, and is the price fair?",
 } as const;
+
+/**
+ * THE PLAIN ACTION FOR ONE CARD (§6.178) — for a card none of the money levers move (loan cover in a bad year
+ * that still loses money, revenue from ongoing clients). Every card not in the green says how to improve it.
+ */
+export function actionFor(m: Metric): string | null {
+  if (m.action) return m.action;
+  const a = ACTIONS[m.key];
+  return a === undefined ? null : typeof a === "function" ? a(m) : a;
+}
 
 export function verdict(
   kind: CapabilityKind,
@@ -262,7 +275,7 @@ export function buyerQuestions(
     q.push("What happens to the earnings if the biggest product line stops selling?");
   }
   const pay = at("leadershipPay");
-  if (s("leadershipPay") === "bad" || (pay && pay.value === null && pay.sub === undefined && pay.missing?.includes("not positive"))) {
+  if (s("leadershipPay") === "bad" || (pay && pay.value === null && pay.sub === undefined && pay.missing?.includes("no profit to pay it from"))) {
     q.push("What would it cost to replace the owner with a manager paid at market rate?");
   }
   if (s("assetIntensity") === "bad") {

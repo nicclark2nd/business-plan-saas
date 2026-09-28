@@ -17,7 +17,7 @@ import {
 import { LENDER_MIN_DSCR, TRANSFER_FACTORS, saleYear } from "@/engine/capability/judgements";
 import { BORROW_WEIGHTS, CAPACITY_TERM_YEARS, stressedCash } from "@/engine/capability/borrow";
 import { SELL_WEIGHTS } from "@/engine/capability/sell";
-import { buyerQuestions, verdict } from "@/engine/capability/verdict";
+import { actionFor, buyerQuestions, verdict } from "@/engine/capability/verdict";
 import { panels as buildPanels, type FacilityFacts, type Panels, type ProductFacts } from "@/engine/capability/series";
 import { ageingView, concentration, earningsBridge, executionLines, lenderChecklist, type ExtraFacts, type Line } from "@/engine/capability/extras";
 import { Meter } from "@/components/chart/core";
@@ -212,7 +212,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
       const levers = withMoves(sellLevers(V.posIn, profitL, slot), cur, last, false, money, V.sell, "sell");
       const table = leverTable(levers, cur, last, false, money, { metrics: V.sell, score: V.scores.sell.value }, "sell");
       const moves: Record<string, string> = {};
-      for (const m of V.sell) { const line = moveLine(m.key, levers, cur, last, false, money, V.sell, "sell"); if (line) moves[m.key] = line; }
+      for (const m of V.sell) { const line = moveLine(m.key, levers, cur, last, false, money, V.sell, "sell") ?? plainAction(m); if (line) moves[m.key] = line; }
       const year = onActual && last ? String(last.year) : cur.positionNames[slot] ?? "";
       /* What profit the asking price needs, and what the fixes get to — when the fixes do not justify it. */
       const need = profitForPrice(V.posIn);
@@ -244,7 +244,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
       const levers = withMoves(borrowLevers(V.posIn, growL, loans, refs, !onActual), cur, last, false, money, V.borrow, "borrow");
       const table = leverTable(levers, cur, last, false, money, { metrics: V.borrow, score: V.scores.borrow.value }, "borrow");
       const moves: Record<string, string> = {};
-      for (const m of V.borrow) { const line = moveLine(m.key, levers, cur, last, false, money, V.borrow, "borrow"); if (line) moves[m.key] = line; }
+      for (const m of V.borrow) { const line = moveLine(m.key, levers, cur, last, false, money, V.borrow, "borrow") ?? plainAction(m); if (line) moves[m.key] = line; }
       const afterM = levers.length ? viewWith(cur, last, levers, false, money, "borrow").metrics : [];
       const after = afterM.find((x) => x.key === "dscr")?.value ?? null;
       const stressed = afterM.find((x) => x.key === "dscrStressed");
@@ -257,7 +257,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
     const levers = withMoves(growLevers(V.growIn, refs), cur, last, ramp, money, V.grow);
     const table = leverTable(levers, cur, last, ramp, money, { metrics: V.grow, score: V.scores.grow.value });
     const moves: Record<string, string> = {};
-    for (const m of V.grow) { const line = moveLine(m.key, levers, cur, last, ramp, money, V.grow); if (line) moves[m.key] = line; }
+    for (const m of V.grow) { const line = moveLine(m.key, levers, cur, last, ramp, money, V.grow) ?? plainAction(m); if (line) moves[m.key] = line; }
     /* When every lever together still leaves a loss, say how far short — the levers are not the whole answer. */
     const after = levers.length ? growWith(cur, last, levers, ramp, money).input.pnl[2]?.operatingProfit ?? null : null;
     const short = after !== null && after < 0 ? after : null;
@@ -559,6 +559,19 @@ function AgreedTargets({ planId, checks }: { planId: string; checks: TargetCheck
       </ul>
     </section>
   );
+}
+
+/**
+ * EVERY CARD NOT IN THE GREEN SAYS HOW TO IMPROVE IT (§6.178). When none of the money levers moves a card, it
+ * gets the plain action for it instead — and the bad-year card says to check the bad year itself.
+ */
+function plainAction(m: Metric): string | null {
+  if (m.value === null || m.unscored) return null;
+  const s = statusOf(m.value, m.bands);
+  if (s === null || s === "good") return null;
+  const a = actionFor(m);
+  if (!a) return null;
+  return m.key === "dscrStressed" ? `${a} None of the fixes above get this past the bad year set up on Assumptions — check it is realistic.` : a;
 }
 
 /** The levers, most money first — what to do, what it is worth, which dials it moves (§6.173). */

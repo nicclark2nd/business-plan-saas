@@ -984,3 +984,9 @@ projection step and scored on the Plan view, after.)
   Story in plain words; "normalised EBITDA" renamed on the cards to "Asking price ÷ profit" and "Profit margin after
   add-backs". SEQ actual: profit after add-backs 32,638 → 193,023, price 1,000,000 → 670,000, sell 33 → 88; keeping
   1,000,000 needs 285,714 of profit a year. SEQ plan (sale year 2028): 76,876 → 110,024, price → 380,000.
+- **§6.178** Check of all three tabs (Nic: "can you check we have done the three tabs?"), both views, SEQ and ZZ, by
+  script: story, before/after table, fixes and a "How to improve it" on every card not in the green. Three cards had
+  none because no money lever moves them — Borrow's bad-year cover (the −40-point bad year), Sell's revenue from
+  ongoing clients, and ZZ's largest product share. Every such card now carries its plain action (`actionFor`), and
+  the bad-year card also says to check the bad year. Also fixed: the buyer question on leadership pay matched the
+  old wording of its card and had stopped appearing.
