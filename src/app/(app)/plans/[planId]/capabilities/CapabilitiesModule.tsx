@@ -11,20 +11,19 @@ import { navGroup } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { moneyFormatter } from "@/engine/plan/money";
 import {
-  SCORE_BANDS, CARD_LABEL, DIAL_LABEL, borrowingCapacity, score, statusOf,
+  SCORE_BANDS, CARD_LABEL, DIAL_LABEL, borrowingCapacity, statusOf,
   type CapabilityInput, type Metric, type Severity,
 } from "@/engine/capability/model";
 import { LENDER_MIN_DSCR, TRANSFER_FACTORS, saleYear } from "@/engine/capability/judgements";
-import { GROW_WEIGHTS, growMetrics } from "@/engine/capability/grow";
-import { BORROW_WEIGHTS, CAPACITY_TERM_YEARS, borrowMetrics, stressedCash } from "@/engine/capability/borrow";
-import { SELL_WEIGHTS, sellMetrics } from "@/engine/capability/sell";
+import { BORROW_WEIGHTS, CAPACITY_TERM_YEARS, stressedCash } from "@/engine/capability/borrow";
+import { SELL_WEIGHTS } from "@/engine/capability/sell";
 import { buyerQuestions, verdict } from "@/engine/capability/verdict";
-import { applyRanges } from "@/engine/capability/ranges";
-import { panels as buildPanels, withTrends, type FacilityFacts, type Panels, type ProductFacts } from "@/engine/capability/series";
+import { panels as buildPanels, type FacilityFacts, type Panels, type ProductFacts } from "@/engine/capability/series";
 import { ageingView, concentration, earningsBridge, executionLines, lenderChecklist, type ExtraFacts, type Line } from "@/engine/capability/extras";
 import { Meter } from "@/components/chart/core";
 import { borrowSummary, growSummary, sellSummary, type SummaryFacts } from "@/engine/capability/summary";
-import { capabilityViews, compareWith, inAccounts, type Comparison, nameYears, yearEndCash, type ActualYear, type HistoricRow, type YearNames } from "@/engine/capability/actual";
+import { buildView } from "@/engine/capability/views";
+import { capabilityViews, compareWith, type Comparison, type HistoricRow, type YearNames } from "@/engine/capability/actual";
 
 /**
  * Everything the server hands down. Only the money formatter is built here, because a function cannot cross
@@ -35,42 +34,6 @@ export type PlanFacts = Omit<CapabilityInput, "money">;
 type Tab = "grow" | "borrow" | "sell";
 type View = "actual" | "plan";
 
-/**
- * ONE VIEW'S CARDS, SCORES AND INPUTS (§6.158) — the same arithmetic for the accounts and for the plan; only
- * the input and the year names differ. Actual has no lowest month (annual accounts cannot show one), so the
- * year-end cash stands in for it, and its cards carry no five-year line.
- */
-function buildView(
-  v: { grow: PlanFacts; position: PlanFacts; growNames: YearNames; positionNames: YearNames },
-  money: (x: number) => string, last: ActualYear | null,
-) {
-  const growIn: CapabilityInput = { ...v.grow, money };
-  /* A buyer on the actual view is pricing the business as it stands: the latest year, not a planned sale year. */
-  const posIn: CapabilityInput = { ...v.position, money, ...(last ? { sale: { ...v.position.sale, exitYear: null } } : {}) };
-  let growAll = withTrends("grow", applyRanges(growMetrics(growIn), growIn.ranges, "grow"), growIn);
-  if (last) {
-    growAll = growAll.map((m) => (m.key === "lowestCash" ? yearEndCash(last, growIn.growth.cashBuffer, money) : { ...m, trend: undefined, trendAt: undefined }));
-  }
-  const said = (m: Metric) => (last ? inAccounts(m) : m);
-  /* The lowest month is always the plan's first year's months, whatever sits in slot 1 of the growth input. */
-  const all = growAll.map((m) => said(nameYears(m, m.key === "lowestCash" ? v.positionNames : v.growNames)));
-  const grow = all.filter((m) => !m.unscored);
-  const bare = (m: Metric) => (last ? { ...m, trend: undefined, trendAt: undefined } : m);
-  const borrow = withTrends("borrow", applyRanges(borrowMetrics(posIn), posIn.ranges, "borrow"), posIn).map((m) => said(nameYears(bare(m), v.positionNames)));
-  let sell = withTrends("sell", applyRanges(sellMetrics(posIn), posIn.ranges, "sell"), posIn).map((m) => said(nameYears(bare(m), v.positionNames)));
-  /*
-   * ONE GROWTH FIGURE ON THE PAGE (§6.163). Sell's growth card read 2027 → 2028 while Grow's read 2026 →
-   * 2027 — two answers to one question. Both now come off the growth input: the last two actual years on
-   * the accounts, and the last actual year into Year 1 on the plan.
-   */
-  const rev = applyRanges(sellMetrics({ ...growIn, sale: { ...growIn.sale, exitYear: null } }), growIn.ranges, "sell").find((m) => m.key === "revenueGrowth");
-  if (rev) sell = sell.map((m) => (m.key === "revenueGrowth" ? said(nameYears(bare(rev), v.growNames)) : m));
-  const growWeights = { ...GROW_WEIGHTS, yearEndCash: GROW_WEIGHTS.lowestCash ?? 1 };
-  return {
-    growIn, posIn, grow, borrow, sell, waiting: all.length - grow.length, growWeights,
-    scores: { grow: score(grow, growWeights), borrow: score(borrow, BORROW_WEIGHTS), sell: score(sell, SELL_WEIGHTS) },
-  };
-}
 
 /** The engine's three states, in the four the chart primitives speak. */
 const TONE: Record<Severity, ChartSeverity> = { good: "good", watch: "warn", bad: "bad" };
@@ -233,7 +196,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
       </div>
 
       <section className="border-b border-border bg-accent/40 px-5 py-3.5">
-        <span className="eyebrow">{adviser ? "For the consultant" : "In short"}</span>
+        <span className="eyebrow">{adviser ? "For the Planner" : "In short"}</span>
         <dl className="mt-1.5 grid gap-x-4 gap-y-1 text-[13.5px] leading-relaxed @container sm:grid-cols-[170px_minmax(0,1fr)]">
           <dt className="font-semibold text-muted-foreground">What happened</dt><dd>{summary.happened}</dd>
           <dt className="font-semibold text-muted-foreground">What the plan asks</dt><dd>{summary.asks}</dd>

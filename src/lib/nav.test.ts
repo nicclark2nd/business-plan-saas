@@ -70,10 +70,10 @@ describe("the left menu", () => {
    * This one states the intended journey independently. Adding or moving a step SHOULD fail it, and the
    * person moving the step should have to say so here, out loud, in order.
    */
-  it("is the seventeen steps, in this order", () => {
+  it("is the eighteen steps, in this order", () => {
     expect(GUIDED_STEPS.map((i) => i.id)).toEqual([
       "vision", "people", "marketing", "competitors", "swot", "operations",
-      "historic", "sales", "cogs", "overheads", "funding", "assets", "extraordinary",
+      "historic", "assessment", "sales", "cogs", "overheads", "funding", "assets", "extraordinary",
       "assumptions", "forecast", "goals", "reports",
     ]);
   });

@@ -146,6 +146,13 @@ export const getCompleteness = cache(async (planId: string, reconciled?: boolean
      */
     { id: "operations", label: "Operations", done: Math.min(operations, 1), total: 1 },
     { id: "historic", label: "Historic", done: settings?.has_history === false ? 1 : Math.min(historic, 1), total: 1 },
+    /**
+     * THE PLANNER'S ASSESSMENT (§6.164). Nothing to assess without accounts, so a business with none is done
+     * here the way it is done on Historic. With accounts it is done once the Planner has agreed the targets
+     * the plan will be built to (stage 3, §6.165) — until then it stays open, because reading the diagnosis
+     * is not the same as acting on it.
+     */
+    { id: "assessment", label: "Planner's assessment", done: settings?.has_history === false || historic === 0 ? 1 : 0, total: 1 },
     { id: "sales", label: "Sales", done: Math.min(products, 1), total: 1 },
     { id: "cogs", label: "COGS", done: Math.min(cogs + products, 1), total: 1 },
     { id: "overheads", label: "Overheads", done: Math.min(overheads, 1), total: 1 },

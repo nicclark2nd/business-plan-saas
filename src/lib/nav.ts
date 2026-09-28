@@ -62,10 +62,19 @@ export const NAV: NavGroup[] = [
    */
   { group: "Operations", items: [{ id: "operations", label: "Operations", step: 6 }] },
   { group: "Financials", items: [
-    { id: "historic", label: "Historic", step: 7 }, { id: "sales", label: "Sales", step: 8 }, { id: "cogs", label: "COGS", step: 9 },
-    { id: "overheads", label: "Overheads", step: 10 }, { id: "funding", label: "Funding", step: 11 },
-    { id: "assets", label: "Fixed Assets", step: 12 },
-    { id: "extraordinary", label: "One-off income & costs", step: 13 },
+    { id: "historic", label: "Historic", step: 7 },
+    /**
+     * THE PLANNER'S ASSESSMENT (§6.164). Nic: with a business that has accounts, the Planner (the app's
+     * name for the consultant) assesses whether it can grow, borrow and sell from those accounts FIRST, and
+     * only then builds the forward plan. So it sits between the accounts and the first projection step. A
+     * business with no accounts passes straight through it; its assessment happens at the end, on
+     * Financial Capabilities, against the plan.
+     */
+    { id: "assessment", label: "Planner's assessment", step: 8 },
+    { id: "sales", label: "Sales", step: 9 }, { id: "cogs", label: "COGS", step: 10 },
+    { id: "overheads", label: "Overheads", step: 11 }, { id: "funding", label: "Funding", step: 12 },
+    { id: "assets", label: "Fixed Assets", step: 13 },
+    { id: "extraordinary", label: "One-off income & costs", step: 14 },
     /**
      * A NUMBERED STEP (§6.94), which it was not until now.
      *
@@ -79,11 +88,11 @@ export const NAV: NavGroup[] = [
      * Numbering it costs nothing structurally: it was already the last item in Financials, so 14 here and
      * Review at 15 leaves the whole menu still running top to bottom (§6.80).
      */
-    { id: "assumptions", label: "Assumptions", step: 14 },
+    { id: "assumptions", label: "Assumptions", step: 15 },
   ] },
-  { group: "Review", items: [{ id: "forecast", label: "Review forecast", step: 15 }] },
-  { group: "Goals", items: [{ id: "goals", label: "Goals", step: 16, tag: "AI-drafted" }] },
-  { group: "Reports", items: [{ id: "reports", label: "Business plan", step: 17, tool: true }] },
+  { group: "Review", items: [{ id: "forecast", label: "Review forecast", step: 16 }] },
+  { group: "Goals", items: [{ id: "goals", label: "Goals", step: 17, tag: "AI-drafted" }] },
+  { group: "Reports", items: [{ id: "reports", label: "Business plan", step: 18, tool: true }] },
 
   // ---- what the plan produces, and what you do with it -------------------
   /**

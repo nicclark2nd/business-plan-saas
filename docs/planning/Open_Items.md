@@ -839,3 +839,30 @@ tied up per extra $1 (11¢ vs 91¢).
   common bank test, field by field, and each hint says which it is (SEQ: sales 10%, the bank test, because sales
   never fell; margin 3.6 points, its own 2026; customers 16 days later, its own 2026). "Downside" wording on
   Capabilities now reads "a bad year". Checked on ZZ ("Use these" saved the bank test; cleared back to unset).
+
+### 56. Financial Capabilities for the Planner — review and rebuild — **1 and 2 done (§6.163, §6.164); 3 and 5 next; 4 later**
+
+Nic's critical review brief, 28 Sep 2026: the Planner (the app's name for the consultant) must be able to read
+each tab, understand the business's position, see which areas to address and how to work with the client, and
+set the projections in the right direction. Then the workflow: with accounts, the Planner assesses grow / borrow
+/ sell from the accounts FIRST and builds the plan after; with none, the plan comes first and is assessed
+afterwards across the five years.
+Review findings: the page diagnosed but did not say why, how much, or what to change in the plan; actions had no
+numbers; nothing carried into the projections; too many equal-weight cards; plus six errors.
+Agreed order: (1) fix the six errors; (2) a guided "Planner's assessment" step after Historic; (3) agreed targets
+(the app proposes, the Planner agrees); (5) the capability timeline on the Plan view. (4, targets shown on each
+projection step and scored on the Plan view, after.)
+- **§6.163 (1)** Sell reads one year throughout (the sale year); one revenue-growth figure on the page; a negative
+  runway says overdrawn; the lender checklist no longer calls +9.3% "close"; leadership pay above earnings reads
+  "15.8× earnings"; "Reported EBITDA, Year 2" names its year.
+- **§6.164 (2)** Step 8 "Planner's assessment" (steps after it renumbered 9–18). From the accounts alone: the three
+  scores; why operating profit moved (sales, margin, overheads, depreciation — sums exactly); where the cash went
+  (lands on the actual balance); up to five issues, urgent first then by money, each with the finding, likely
+  cause, direction for the plan with a number and a link, and the question to ask the client; and the list of
+  what is still to collect from the client. No accounts: says so and points to Financial Capabilities at the end.
+  Capabilities' facts are now gathered once (`lib/capabilityFacts.ts`) and read by both pages; the view builder
+  moved to the engine (`engine/capability/views.ts`). Summary box heading is now "For the Planner".
+  SEQ reads: loans cannot be repaid (98,849 due in 2027, trading used 149,459) → spread 188,823 over five years,
+  about 50,233 a year against 117,487; overheads +128,270 (+18.5%) against sales +5.7%; debtors 30 → 46 days;
+  margin 42% → 38.4% (71,267); 21,315 in the bank, 0.3 months of overheads.
+  Completeness: the step counts as done with no accounts; with accounts it stays open until targets are agreed (3).
