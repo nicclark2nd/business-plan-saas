@@ -7,7 +7,7 @@
 # running them into one database collides. Each gets the migrations applied from scratch.
 set -euo pipefail
 : "${DATABASE_URL:?set DATABASE_URL to a Postgres superuser connection}"
-TESTS=(tenant_isolation client_access team)
+TESTS=(tenant_isolation client_access team billing)
 DB=""
 trap '[ -n "$DB" ] && psql "$DATABASE_URL" -q -c "drop database if exists $DB" >/dev/null' EXIT
 for t in "${TESTS[@]}"; do

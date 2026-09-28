@@ -1,6 +1,8 @@
 -- Team tests (§6.184, migration 0061). Every block raises on failure; a clean run prints "ALL TEAM TESTS PASSED".
 -- Actors:  F (admin of Coach Co)   A (advisor)   B (a second advisor)   N (new consultant, n@coach.example)
 --          X (stranger)   C (a client of plan P1)
+-- Not a billing test: lift the plan allowance (0062) so these fixtures can hold several plans per organisation.
+create or replace function public.billing_starter_plans() returns int language sql immutable as $$ select 1000 $$;
 grant usage on schema public to authenticated;
 grant all on all tables in schema public to authenticated;
 

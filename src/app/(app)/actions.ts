@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createPlan, readNewPlan } from "@/lib/createPlan";
 import { loadMyFirm } from "@/lib/myFirm";
+import { myBillingOrg, planLimitMessage } from "@/lib/billing";
 
 /**
  * Remember the view preference. Deliberately does NOT revalidate: Guided vs Advanced changes which items
@@ -38,8 +39,14 @@ export async function completeSetup(_: SetupState, formData: FormData): Promise<
   const read = readNewPlan(formData);
   if ("error" in read) return { error: read.error };
 
+  /*
+   * ONE ORGANISATION EACH (§6.182, §6.185): a consultant's clients go into their firm, and an owner's second
+   * business goes into their own organisation — so one subscription covers all of them, and "Set up another
+   * business" cannot become a way round the plan allowance.
+   */
   const existing = kind === "owner" ? null : await loadMyFirm();
-  let orgId = existing?.id ?? null;
+  const ownOrg = kind === "owner" ? await myBillingOrg() : null;
+  let orgId = existing?.id ?? (ownOrg?.kind === "owner" ? ownOrg.id : null);
   if (!orgId) {
     if (kind !== "owner" && !orgName) return { error: "Give your practice or firm a name." };
     const { data: org, error: orgErr } = await supabase
@@ -56,7 +63,7 @@ export async function completeSetup(_: SetupState, formData: FormData): Promise<
     ownerEmail: kind === "owner" ? user.email ?? null : null,
     pageSize: existing?.defaultPageSize ?? null,
   });
-  if ("error" in made) return { error: made.error };
+  if ("error" in made) return { error: made.error === "limit" ? planLimitMessage(kind === "owner" ? "owner" : "firm") : made.error };
   await supabase.from("profiles").update({ default_organisation_id: orgId }).eq("id", user.id);
   redirect(kind === "owner" ? `/plans/${made.id}/dashboard` : `/firm/clients?client=${made.id}`);
 }

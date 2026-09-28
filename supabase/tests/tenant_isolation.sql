@@ -1,6 +1,8 @@
 -- Tenant-isolation tests. Every block raises on failure; a clean run prints "ALL TENANT TESTS PASSED".
 -- Actors:  A_admin (admin of Coach Co)   A_adv (advisor of Coach Co)   A_member (member of Coach Co)
 --          O1 (owner of plan P1 in Coach Co)   S (solo owner, own org, plan P2)   X (stranger: no memberships)
+-- Not a billing test: lift the plan allowance (0062) so these fixtures can hold several plans per organisation.
+create or replace function public.billing_starter_plans() returns int language sql immutable as $$ select 1000 $$;
 grant usage on schema public to authenticated;
 grant all on all tables in schema public to authenticated;
 grant all on all sequences in schema public to authenticated;

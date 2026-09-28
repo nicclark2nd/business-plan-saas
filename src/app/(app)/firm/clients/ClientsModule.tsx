@@ -41,7 +41,9 @@ const person = (c: Contact) => [c.contact_first_name, c.contact_family_name].fil
  */
 export type Person = { id: string; name: string; role: string };
 
-export function ClientsModule({ team, isAdmin, meId, rows, others, selected, firm, me, origin }: {
+export function ClientsModule({ allowance, team, isAdmin, meId, rows, others, selected, firm, me, origin }: {
+  /** Active client plans in use against the subscription's allowance (§6.185); null when it cannot be read. */
+  allowance: { allowed: number; used: number } | null;
   team: Person[]; isAdmin: boolean; meId: string;
   rows: ClientRow[]; others: { id: string; businessName: string }[]; selected: string | null;
   firm: { country: string | null; currency: string; name: string };
@@ -67,7 +69,16 @@ export function ClientsModule({ team, isAdmin, meId, rows, others, selected, fir
           <h1 className="text-[22px] font-semibold">{rows.length === 1 ? "1 client business" : `${rows.length} client businesses`}</h1>
         </div>
         <div className="flex-1" />
-        <Button onClick={() => setAdding(true)}>+ Add new business</Button>
+        {allowance && (
+          <span className="text-[12.5px] text-muted-foreground">
+            <b className={allowance.used >= allowance.allowed ? "text-warn" : "text-foreground"}>{allowance.used} of {allowance.allowed}</b> plans in use ·{" "}
+            <Link href="/firm/billing" className="font-semibold text-primary hover:underline">{allowance.used >= allowance.allowed ? "Add plans" : "Billing"}</Link>
+          </span>
+        )}
+        <Button onClick={() => setAdding(true)} disabled={!!allowance && allowance.used >= allowance.allowed}
+          title={allowance && allowance.used >= allowance.allowed ? "All your plans are in use. Archive a finished client, or add plans in Billing." : undefined}>
+          + Add new business
+        </Button>
       </div>
 
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(280px,380px)_minmax(0,1fr)]">

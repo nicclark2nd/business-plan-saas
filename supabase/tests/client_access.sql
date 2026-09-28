@@ -2,6 +2,8 @@
 -- "ALL CLIENT ACCESS TESTS PASSED". Run after the migrations, like tenant_isolation.sql.
 -- Actors:  F (admin of Coach Co)   A (advisor of Coach Co)   C (the client, c@example.com)
 --          X (stranger, x@example.com)   S (owner planning their own business)
+-- Not a billing test: lift the plan allowance (0062) so these fixtures can hold several plans per organisation.
+create or replace function public.billing_starter_plans() returns int language sql immutable as $$ select 1000 $$;
 grant usage on schema public to authenticated;
 grant all on all tables in schema public to authenticated;
 grant usage on schema storage to authenticated;

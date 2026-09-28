@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { siteOrigin } from "@/lib/siteOrigin";
+import { allowanceFor } from "@/lib/billing";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { loadMyFirm } from "@/lib/myFirm";
@@ -63,6 +64,8 @@ export default async function MyClientsPage({ searchParams }: { searchParams: Pr
   const others = session.plans.filter((p) => p.organisation_id !== firm.id && !p.archived_at).map((p) => ({ id: p.id, businessName: p.business_name }));
 
   const people = team.map((t) => ({ id: t.user_id, name: t.full_name || t.email, role: t.role }));
-  return <ClientsModule team={people} isAdmin={firm.role === "admin"} meId={session.user.id} rows={rows} others={others} selected={client ?? null} firm={{ country: firm.country, currency: firm.currency, name: firm.name }}
+  /* How many active client plans the subscription allows (0062); null before the migration — nothing blocked. */
+  const allowance = await allowanceFor(firm.id);
+  return <ClientsModule allowance={allowance} team={people} isAdmin={firm.role === "admin"} meId={session.user.id} rows={rows} others={others} selected={client ?? null} firm={{ country: firm.country, currency: firm.currency, name: firm.name }}
     me={{ name: session.profile?.full_name || null }} origin={await siteOrigin()} />;
 }

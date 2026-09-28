@@ -8,6 +8,7 @@ import { failed } from "@/lib/actionFailed";
 import { loadMyFirm } from "@/lib/myFirm";
 import { createPlan, readNewPlan } from "@/lib/createPlan";
 import { cleanColour } from "@/engine/plan/brand";
+import { planLimitMessage } from "@/lib/billing";
 import { checkLogo, firmLogoObjectPath, FIRM_LOGO_BUCKET, PHOTO_BUCKET } from "@/engine/plan/logo";
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -196,7 +197,7 @@ export async function addClient(_: AddState, formData: FormData): Promise<AddSta
   const read = readNewPlan(formData);
   if ("error" in read) return { error: read.error };
   const made = await createPlan(firm.id, session.user.id, { ...read, ownerEmail: null, pageSize: firm.defaultPageSize });
-  if ("error" in made) return { error: made.error };
+  if ("error" in made) return { error: made.error === "limit" ? planLimitMessage("firm") : made.error };
   redirect(`/firm/clients?client=${made.id}`);
 }
 

@@ -2,7 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 /* `/invite` (§6.183): an invitation link is opened before its reader has an account. */
-const PUBLIC = ["/login", "/signup", "/auth", "/invite", "/join"];
+/* `/api/stripe` (§6.185): Stripe's notices arrive signed, with nobody signed in. */
+const PUBLIC = ["/login", "/signup", "/auth", "/invite", "/join", "/api/stripe"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });

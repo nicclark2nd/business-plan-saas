@@ -41,7 +41,12 @@ export async function createPlan(orgId: string, userId: string, p: NewPlan): Pro
   const { data: plan, error } = await supabase
     .from("plans").insert({ organisation_id: orgId, business_name: p.businessName, created_by: userId })
     .select("id").single();
-  if (error || !plan) { console.error("create the plan", error); return { error: "Couldn't create the plan. Try again." }; }
+  if (error || !plan) {
+    /* The database's allowance (0062): the one refusal worth putting in words, with where to go next. */
+    if (/plan limit reached/.test(error?.message ?? "")) return { error: "limit" };
+    console.error("create the plan", error);
+    return { error: "Couldn't create the plan. Try again." };
+  }
 
   await supabase.from("plan_settings").update({
     country: p.country, currency: p.currency, financial_year_end_month: p.fyEndMonth,

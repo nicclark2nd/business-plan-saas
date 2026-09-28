@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/plan";
 import { loadMyFirm } from "@/lib/myFirm";
@@ -32,7 +33,11 @@ export default async function SetupPage() {
           <Brand height={26} className="mb-8" />
           <div className="mb-6 flex items-end justify-between">
             <div><div className="eyebrow">Your plans</div><h1 className="text-2xl font-semibold">Welcome back{session.profile?.full_name ? `, ${session.profile.full_name.split(" ")[0]}` : ""}</h1></div>
-            <form action="/auth/signout" method="post"><Button variant="outline" size="sm" type="submit">Sign out</Button></form>
+            <div className="flex items-center gap-2">
+              {/* An owner's subscription (§6.185) — consultants never reach this page; theirs is in their own area. */}
+              <Button variant="outline" size="sm" render={<Link href="/billing" />}>Billing</Button>
+              <form action="/auth/signout" method="post"><Button variant="outline" size="sm" type="submit">Sign out</Button></form>
+            </div>
           </div>
           <div className="space-y-2">
             {live.map((p) => <PlanCard key={p.id} plan={p} orgName={orgName(p)} archived={false} />)}

@@ -1070,3 +1070,23 @@ projection step and scored on the Plan view, after.)
   `supabase/tests/team.sql` (8 blocks); `client_access.sql` updated for assignment; the stale "one annual goal
   per area" assertion in `tenant_isolation.sql` corrected (0046 removed that rule on purpose). `scripts/test-db.sh`
   now runs each test file on a fresh database. All three pass.
+- **§6.185** The consultant's own area, part 4 — Billing with Stripe. Nic's decisions: subscription plus extra
+  plans; the subscription counts ACTIVE plans at a time (archiving frees a place); owners pay too, on their own
+  price; prices and levels live in Stripe and the app reads them; Stripe's notices reach the database through a
+  ONE-JOB PASSWORD, not a master key. Stripe products carry metadata `bizplanhq` = firm | owner | extra_plan and
+  `plans` = N. Pages: **Billing** in the consultant's menu (`/firm/billing`) and `/billing` for owners (linked
+  from their plan list): plans in use, the subscription and its renewal, levels from Stripe with Subscribe, extra
+  plans with a quantity, and Manage billing (Stripe's portal). Routes: `/billing/checkout` (the browser names a
+  price; the server checks it is this app's and the right kind, puts the organisation's id in the checkout's
+  metadata), `/billing/portal`, and `/api/stripe/webhook` (checks Stripe's signature over the raw body, 5-minute
+  window; re-reads each subscription from Stripe so out-of-order notices record the current state; 500 on
+  failure so Stripe retries). Migration 0062: `billing_accounts` (read by the organisation's own people, written
+  only by functions), `billing_private` schema holding only a sha256 of `BILLING_DB_SECRET` and the list of
+  notices already seen (each counted once); `plan_allowance`; a trigger that REFUSES a new plan, or one taken back
+  out of the archive, past the allowance — existing plans are never touched. One plan to start with before
+  subscribing (`billing_starter_plans`, one place to change). Extra plans count while subscribed. `granted_plans`
+  for plans given by BizPlanHQ (SQL until Site Admin). An owner's second business now goes into their own
+  organisation, so "set up another business" is not a way round the allowance. No Stripe library: plain HTTPS
+  (`src/lib/stripe.ts`), signature check and object readers pure and tested (`src/engine/billing`). Database
+  tests: new `billing.sql` (8 blocks) — all four files pass. Env: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
+  BILLING_DB_SECRET (names in .env.example).

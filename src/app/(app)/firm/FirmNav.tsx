@@ -9,9 +9,10 @@ const ITEMS = [
   { href: "/firm/details", label: "My Firm", icon: "◧" },
   { href: "/firm/profile", label: "My Profile", icon: "◉" },
   { href: "/firm/team", label: "Team", icon: "◎" },
+  { href: "/firm/billing", label: "Billing", icon: "$" },
 ];
 
-/** The consultant's own menu (§6.182) — four items today; Billing and Site Admin join it as they are built. */
+/** The consultant's own menu (§6.182) — five items today; Site Admin joins it as they are built. */
 export function FirmNav() {
   const path = usePathname();
   return (

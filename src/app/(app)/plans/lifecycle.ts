@@ -26,7 +26,11 @@ export async function setArchived(planId: string, archived: boolean): Promise<Re
     .from("plans")
     .update({ archived_at: archived ? new Date().toISOString() : null })
     .eq("id", planId);
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    /* Taking a plan back out of the archive counts against the allowance (0062). */
+    if (/plan limit reached/.test(error.message)) return { ok: false, error: "Your plans are all in use. Archive another plan first, or add plans in Billing." };
+    return { ok: false, error: error.message };
+  }
   refresh();
   return { ok: true };
 }
