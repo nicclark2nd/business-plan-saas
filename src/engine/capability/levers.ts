@@ -1,6 +1,6 @@
 import type { BalanceSheetYear, CashFlowYear, PnlYear, WorkingCapitalDays } from "@/engine/forecast/model";
 import type { CapabilityInput, Metric } from "./model";
-import { over, r1, r2, statusOf } from "./model";
+import { annualRepayment, over, r1, r2, statusOf } from "./model";
 import { buildView } from "./views";
 import type { ActualYear, YearNames } from "./actual";
 
@@ -18,7 +18,9 @@ import type { ActualYear, YearNames } from "./actual";
 type PlanFacts = Omit<CapabilityInput, "money">;
 export type ViewInput = { grow: PlanFacts; position: PlanFacts; growNames: YearNames; positionNames: YearNames };
 
-export type LeverKey = "overheads" | "margin" | "debtors" | "stock";
+export type LeverKey = "overheads" | "margin" | "debtors" | "stock" | "loans" | "overdraft";
+/** Which tab the levers are for: it decides which year they change and which cards they are measured on. */
+export type LeverKind = "grow" | "borrow";
 export type Lever = {
   key: LeverKey;
   /** "Hold overheads to sales growth" */
@@ -32,18 +34,26 @@ export type Lever = {
   /** Dials whose reading this lever alone moves, by name. */
   moves: string[];
   /** The Planner's-assessment target this lever corresponds to. */
-  target: "overheadsCap" | "grossMargin" | "debtorDays" | null;
+  target: "overheadsCap" | "grossMargin" | "debtorDays" | "loanTermMonths" | null;
+  /** Loan payments saved in the judged year (the loan lever). */
+  saves?: number;
   /** For the payment levers: the days now and the days aimed at. */
   days?: { from: number; to: number };
   effect: Effect;
 };
 
 /** What a lever does to the judged year. */
-type Effect = { cogsCut: number; overheadsCut: number; arCut: number; invCut: number; debtorDays?: number; inventoryDays?: number };
-const NONE: Effect = { cogsCut: 0, overheadsCut: 0, arCut: 0, invCut: 0 };
+type Effect = {
+  cogsCut: number; overheadsCut: number; arCut: number; invCut: number; debtorDays?: number; inventoryDays?: number;
+  /** Loan payments saved in the year, and the debt that moves from "due within a year" to "due later". */
+  serviceCut: number; reclass: number;
+  /** An overdraft arranged but not used — counts towards the cash runway. */
+  undrawnAdd: number;
+};
+const NONE: Effect = { cogsCut: 0, overheadsCut: 0, arCut: 0, invCut: 0, serviceCut: 0, reclass: 0, undrawnAdd: 0 };
 
 /** Where the levers aim. On the accounts: the year before. On the plan: the agreed targets where there are any. */
-export type LeverRefs = { grossMargin?: number | null; overheadsCap?: number | null; debtorDays?: number | null };
+export type LeverRefs = { grossMargin?: number | null; overheadsCap?: number | null; debtorDays?: number | null; loanTermMonths?: number | null };
 
 const days = (bal: number, base: number) => (base > 0 ? (bal / base) * 365 : 0);
 
@@ -125,9 +135,11 @@ export function growLevers(i: CapabilityInput, refs: LeverRefs = {}): Omit<Lever
 function sum(levers: Pick<Lever, "effect">[]): Effect {
   const e = { ...NONE } as Effect;
   for (const l of levers) {
-    e.cogsCut += l.effect.cogsCut; e.overheadsCut += l.effect.overheadsCut; e.arCut += l.effect.arCut; e.invCut += l.effect.invCut;
-    if (l.effect.debtorDays !== undefined) e.debtorDays = l.effect.debtorDays;
-    if (l.effect.inventoryDays !== undefined) e.inventoryDays = l.effect.inventoryDays;
+    const x = l.effect;
+    e.cogsCut += x.cogsCut; e.overheadsCut += x.overheadsCut; e.arCut += x.arCut; e.invCut += x.invCut;
+    e.serviceCut += x.serviceCut; e.reclass += x.reclass; e.undrawnAdd += x.undrawnAdd;
+    if (x.debtorDays !== undefined) e.debtorDays = x.debtorDays;
+    if (x.inventoryDays !== undefined) e.inventoryDays = x.inventoryDays;
   }
   return e;
 }
@@ -141,54 +153,78 @@ function pnlWith(p: PnlYear, e: Effect): PnlYear {
     profitBeforeTax: p.profitBeforeTax + profit, netProfit: p.netProfit + profit,
   };
 }
+/* Profit and loan payments saved arrive as cash; debtors and stock turn into cash (current assets unchanged). */
 function bsWith(b: BalanceSheetYear, e: Effect): BalanceSheetYear {
-  const cash = e.cogsCut + e.overheadsCut + e.arCut + e.invCut;
-  return { ...b, accountsReceivable: b.accountsReceivable - e.arCut, inventory: b.inventory - e.invCut, cash: b.cash + cash };
+  const added = e.cogsCut + e.overheadsCut + e.serviceCut;
+  return {
+    ...b, accountsReceivable: b.accountsReceivable - e.arCut, inventory: b.inventory - e.invCut,
+    cash: b.cash + added + e.arCut + e.invCut, currentAssets: b.currentAssets + added,
+    debtCurrent: b.debtCurrent - e.reclass, debtNonCurrent: b.debtNonCurrent + e.reclass,
+    currentLiabilities: b.currentLiabilities - e.reclass,
+  };
 }
+/* Trading cash gains the profit and the working capital; loan payments saved are financing, not trading. */
 function cfWith(c: CashFlowYear, e: Effect): CashFlowYear {
-  const cash = e.cogsCut + e.overheadsCut + e.arCut + e.invCut;
-  return { ...c, netOperating: c.netOperating + cash, netMovement: c.netMovement + cash, closingCash: c.closingCash + cash };
+  const trading = e.cogsCut + e.overheadsCut + e.arCut + e.invCut;
+  return { ...c, netOperating: c.netOperating + trading, netMovement: c.netMovement + trading + e.serviceCut, closingCash: c.closingCash + trading + e.serviceCut };
 }
 function daysWith(d: WorkingCapitalDays | undefined, e: Effect): WorkingCapitalDays | undefined {
   if (!d) return d;
   return { ...d, ...(e.debtorDays !== undefined ? { debtorDays: e.debtorDays } : {}), ...(e.inventoryDays !== undefined ? { inventoryDays: e.inventoryDays } : {}) };
 }
+const withYear = <T,>(rec: Partial<Record<number, T>>, k: number, f: (x: T) => T) => (rec[k] === undefined ? rec : { ...rec, [k]: f(rec[k] as T) });
 
 /**
- * The view with the judged year re-run: slot 2 of the growth input, and on the accounts the latest actual year
- * too (the year-end cash card reads it). `ramp` spreads the gain across the twelve months when the monthly cash
- * belongs to the judged year (the plan view with accounts); otherwise the months are left alone.
+ * The view with the judged year re-run. Grow judges slot 2 of the growth input; Borrow judges slot 1 of the
+ * position input. On the accounts the latest actual year is changed too (the year-end cash card reads it).
+ * `ramp` spreads a Grow gain across the twelve months when the monthly cash belongs to the judged year.
  */
-export function withLevers(v: ViewInput, last: ActualYear | null, levers: Pick<Lever, "effect">[], ramp: boolean): { v: ViewInput; last: ActualYear | null } {
+export function withLevers(v: ViewInput, last: ActualYear | null, levers: Pick<Lever, "effect">[], ramp: boolean, kind: LeverKind = "grow"): { v: ViewInput; last: ActualYear | null } {
   if (!levers.length) return { v, last };
   const e = sum(levers);
+  const nextLast = last ? {
+    ...last, pnl: pnlWith(last.pnl, e), balanceSheet: bsWith(last.balanceSheet, e), cashFlow: cfWith(last.cashFlow, e),
+    days: daysWith(last.days, e)!, debtService: Math.max(0, last.debtService - e.serviceCut),
+  } : null;
+  if (kind === "borrow") {
+    const p = v.position;
+    const position: PlanFacts = {
+      ...p,
+      pnl: withYear(p.pnl, 1, (x) => pnlWith(x, e)), balanceSheet: withYear(p.balanceSheet, 1, (x) => bsWith(x, e)),
+      cashFlow: withYear(p.cashFlow, 1, (x) => cfWith(x, e)),
+      days: Object.fromEntries(Object.entries(p.days).map(([k, d]) => [k, k === "1" ? daysWith(d, e)! : d])) as PlanFacts["days"],
+      debtService: withYear(p.debtService, 1, (x) => Math.max(0, x - e.serviceCut)),
+      undrawn: p.undrawn + e.undrawnAdd,
+    };
+    return { v: { ...v, position }, last: nextLast };
+  }
   const g = v.grow;
   const cashGain = e.cogsCut + e.overheadsCut + e.arCut + e.invCut;
   const grow: PlanFacts = {
     ...g,
-    pnl: { ...g.pnl, ...(g.pnl[2] ? { 2: pnlWith(g.pnl[2], e) } : {}) },
-    balanceSheet: { ...g.balanceSheet, ...(g.balanceSheet[2] ? { 2: bsWith(g.balanceSheet[2], e) } : {}) },
-    cashFlow: { ...g.cashFlow, ...(g.cashFlow[2] ? { 2: cfWith(g.cashFlow[2], e) } : {}) },
+    pnl: withYear(g.pnl, 2, (x) => pnlWith(x, e)), balanceSheet: withYear(g.balanceSheet, 2, (x) => bsWith(x, e)),
+    cashFlow: withYear(g.cashFlow, 2, (x) => cfWith(x, e)),
     /* The cycle card reads slot 1 (set to the judged year's days by the views). */
     days: Object.fromEntries(Object.entries(g.days).map(([k, d]) => [k, k === "1" || k === "2" ? daysWith(d, e)! : d])) as PlanFacts["days"],
     monthlyCash: ramp ? g.monthlyCash.map((c, k) => c + (cashGain * (k + 1)) / 12) : g.monthlyCash,
   };
-  const nextLast = last ? { ...last, pnl: pnlWith(last.pnl, e), balanceSheet: bsWith(last.balanceSheet, e), cashFlow: cfWith(last.cashFlow, e), days: daysWith(last.days, e)! } : null;
   return { v: { ...v, grow }, last: nextLast };
 }
 
-/** The Grow cards and score with some levers pulled. */
-export function growWith(v: ViewInput, last: ActualYear | null, levers: Pick<Lever, "effect">[], ramp: boolean, money: (x: number) => string) {
-  const r = withLevers(v, last, levers, ramp);
+/** A tab's cards and score with some levers pulled. */
+export function viewWith(v: ViewInput, last: ActualYear | null, levers: Pick<Lever, "effect">[], ramp: boolean, money: (x: number) => string, kind: LeverKind = "grow") {
+  const r = withLevers(v, last, levers, ramp, kind);
   const V = buildView(r.v, money, r.last);
-  const all = [...V.grow];
-  return { metrics: all, score: V.scores.grow.value, input: V.growIn, last: r.last };
+  return { metrics: [...V[kind]], score: V.scores[kind].value, input: kind === "grow" ? V.growIn : V.posIn, last: r.last };
 }
+/** Kept for the Grow tab's callers. */
+export const growWith = (v: ViewInput, last: ActualYear | null, levers: Pick<Lever, "effect">[], ramp: boolean, money: (x: number) => string) =>
+  viewWith(v, last, levers, ramp, money, "grow");
 
-/** Each lever with the dials it moves on its own — the ones whose band improves, or failing that whose figure changes. */
-export function withMoves(levers: Omit<Lever, "moves">[], v: ViewInput, last: ActualYear | null, ramp: boolean, money: (x: number) => string, base: Metric[]): Lever[] {
+/** Each lever with the dials it moves on its own — the ones whose band improves first, then those whose figure changes. */
+export function withMoves(levers: Omit<Lever, "moves">[], v: ViewInput, last: ActualYear | null, ramp: boolean, money: (x: number) => string, base: Metric[], kind: LeverKind = "grow"): Lever[] {
   return levers.map((l) => {
-    const after = growWith(v, last, [l], ramp, money).metrics;
+    const after = viewWith(v, last, [l], ramp, money, kind).metrics;
     const better: string[] = [], changed: string[] = [];
     for (const b of base) {
       const a = after.find((x) => x.key === b.key);
@@ -201,47 +237,165 @@ export function withMoves(levers: Omit<Lever, "moves">[], v: ViewInput, last: Ac
 }
 const RANK = { bad: 0, watch: 1, good: 2 } as const;
 
+/** What a lever is worth, in the words the page uses beside it. */
+export const worth = (l: Pick<Lever, "profit" | "cash" | "saves" | "key" | "effect">, money: (x: number) => string) =>
+  l.saves ? `${money(l.saves)} a year less in loan payments`
+  : l.key === "overdraft" ? `${money(l.effect.undrawnAdd)} to fall back on`
+  : l.profit > 0 ? `+${money(l.profit)} a year` : `+${money(l.cash)} cash`;
+
 /**
  * WHAT WOULD MOVE THIS DIAL — one line under a card that is not in its best band: the levers that move it, and
  * where they would take it, re-measured the way the card measures.
  */
-export function moveLine(key: string, levers: Lever[], v: ViewInput, last: ActualYear | null, ramp: boolean, money: (x: number) => string, base: Metric[]): string | null {
+export function moveLine(key: string, levers: Lever[], v: ViewInput, last: ActualYear | null, ramp: boolean, money: (x: number) => string, base: Metric[], kind: LeverKind = "grow"): string | null {
   const b = base.find((x) => x.key === key);
-  if (!b || b.value === null) return null;
+  if (!b || b.value === null || b.unscored) return null;
   if (statusOf(b.value, b.bands) === "good") return null;
   const useful = levers.filter((l) => {
-    const a = growWith(v, last, [l], ramp, money).metrics.find((x) => x.key === key);
+    const a = viewWith(v, last, [l], ramp, money, kind).metrics.find((x) => x.key === key);
     /* By value, not display: a return that is still "Profit fell" with one lever may clear the bar with two. */
     return a && a.value !== null && Math.abs(a.value - (b.value as number)) > 1e-9;
   });
+  /* No single lever moves it (loan cover stays nil until trading turns positive) — then all of them together. */
+  if (!useful.length) {
+    const all = viewWith(v, last, levers, ramp, money, kind).metrics.find((x) => x.key === key);
+    if (all && all.value !== null && Math.abs(all.value - (b.value as number)) > 1e-9) useful.push(...levers.filter((l) => l.key !== "overdraft" || key === "runway"));
+  }
   if (!useful.length) return null;
-  const a = growWith(v, last, useful, ramp, money).metrics.find((x) => x.key === key);
+  const a = viewWith(v, last, useful, ramp, money, kind).metrics.find((x) => x.key === key);
   if (!a || a.value === null || a.display === b.display) return null;
-  const names = useful.map((l) => `${lower(l.label)}${l.profit > 0 ? ` (+${money(l.profit)} a year)` : l.cash > 0 ? ` (+${money(l.cash)} cash)` : ""}`);
+  const names = useful.map((l) => `${lower(l.label)} (${worth(l, money)})`);
   const s = statusOf(a.value, a.bands);
   return `${cap(join(names))}. That would take this to ${a.display}${s === "good" ? "." : s === "watch" ? " — better, but not yet in the safe zone." : " — still not enough on its own."}`;
 }
 
 /** The table under the headline: the judged year now, and with every lever pulled. */
 export type WithLeversRow = { label: string; now: string; after: string; better: boolean };
-export function leverTable(levers: Lever[], v: ViewInput, last: ActualYear | null, ramp: boolean, money: (x: number) => string, base: { metrics: Metric[]; score: number | null }): WithLeversRow[] {
+export function leverTable(levers: Lever[], v: ViewInput, last: ActualYear | null, ramp: boolean, money: (x: number) => string,
+  base: { metrics: Metric[]; score: number | null }, kind: LeverKind = "grow"): WithLeversRow[] {
   if (!levers.length) return [];
-  const after = growWith(v, last, levers, ramp, money);
+  const after = viewWith(v, last, levers, ramp, money, kind);
   const pick = (ms: Metric[], k: string) => ms.find((x) => x.key === k);
   const rows: WithLeversRow[] = [];
   const add = (label: string, k: string) => {
     const a = pick(after.metrics, k), b = pick(base.metrics, k);
     if (a && b && a.value !== null && b.value !== null) rows.push({ label, now: b.display, after: a.display, better: a.value !== b.value });
   };
-  add("Operating margin", "operatingMargin");
-  const g2 = v.grow.pnl[2], a2 = after.input.pnl[2];
-  if (g2 && a2) rows.push({ label: "Operating profit", now: money(g2.operatingProfit), after: money(a2.operatingProfit), better: a2.operatingProfit > g2.operatingProfit });
-  add(last ? "Cash at the year end" : "Lowest month", last ? "yearEndCash" : "lowestCash");
-  add("Cash conversion cycle", "cashCycle");
+  const moneyRow = (label: string, now: number | undefined, then: number | undefined, higherIsBetter = true) => {
+    if (now !== undefined && then !== undefined) rows.push({ label, now: money(now), after: money(then), better: higherIsBetter ? then > now : then < now });
+  };
+  if (kind === "grow") {
+    add("Operating margin", "operatingMargin");
+    moneyRow("Operating profit", v.grow.pnl[2]?.operatingProfit, after.input.pnl[2]?.operatingProfit);
+    add(last ? "Cash at the year end" : "Lowest month", last ? "yearEndCash" : "lowestCash");
+    add("Cash conversion cycle", "cashCycle");
+  } else {
+    moneyRow("Loan payments for the year", v.position.debtService[1], after.input.debtService[1], false);
+    moneyRow("Cash from trading", v.position.cashFlow[1]?.netOperating, after.input.cashFlow[1]?.netOperating);
+    add("Debt service cover", "dscr");
+    add("Debt service cover, bad year", "dscrStressed");
+    add("Interest cover", "interestCover");
+    add("Cash runway", "runway");
+  }
   const moved = rows.filter((r) => r.now !== r.after);
   /* The score row always shows — "still 49" is the answer when the levers are not enough. */
-  if (base.score !== null && after.score !== null) moved.push({ label: "Capability to grow", now: `${base.score}/100`, after: `${after.score}/100`, better: after.score > base.score });
+  const label = kind === "grow" ? "Capability to grow" : "Capability to borrow";
+  if (base.score !== null && after.score !== null) moved.push({ label, now: `${base.score}/100`, after: `${after.score}/100`, better: after.score > base.score });
   return moved;
+}
+
+/* ------------------------------------------------------------------ *
+ * Borrow's levers (§6.176)                                            *
+ * ------------------------------------------------------------------ */
+
+/** A loan as the lever needs it: what is owed, its rate, and the years left to pay it. */
+export type LoanFacts = { name: string; balance: number; ratePct: number; years: number };
+
+/**
+ * BORROW'S LEVERS: spread the loans over longer (the one lever only this tab has), the profit and payment
+ * levers Grow already found — each one is also more cash to pay loans from — and, on the plan, an overdraft
+ * to fall back on when the bank would otherwise run dry.
+ */
+export function borrowLevers(pos: CapabilityInput, grow: Omit<Lever, "moves">[], loans: LoanFacts[], refs: LeverRefs, allowOverdraft: boolean): Omit<Lever, "moves">[] {
+  const m = pos.money, out: Omit<Lever, "moves">[] = [];
+  const target = (refs.loanTermMonths ?? 60) / 12;
+
+  /* ---- the loans: a longer term ---- */
+  let saves = 0, reclass = 0, floor = 0;
+  const spread: string[] = [];
+  for (const l of loans) {
+    if (!(l.balance > 0) || !(l.years > 0) || l.years >= target) continue;
+    const now = annualRepayment(l.balance, l.ratePct, l.years), then = annualRepayment(l.balance, l.ratePct, target);
+    if (now === null || then === null || now - then < 1000) continue;
+    saves += now - then;
+    floor += then;
+    /* Principal due within a year falls in the same proportion. */
+    reclass += (l.balance / l.years) - (l.balance / target);
+    spread.push(l.name);
+  }
+  const service = pos.debtService[1] ?? 0;
+  /*
+   * Never below what the spread loans alone would cost: the old payment is an estimate from the balance, rate
+   * and years left, and can run above what the business actually paid (§6.176).
+   */
+  saves = r2(Math.max(0, Math.min(saves, service - floor)));
+  if (saves >= 1000) {
+    const owed = loans.filter((l) => spread.includes(l.name)).reduce((t, l) => t + l.balance, 0);
+    const yrs = Math.round(target * 10) / 10;
+    out.push({
+      key: "loans", target: "loanTermMonths", profit: 0, cash: saves, saves,
+      label: `Spread the ${m(owed)} owed over ${yrs} years`,
+      detail: `Loan payments drop from about ${m(service)} to ${m(service - saves)} a year. Ask the bank for a longer term.`,
+      effect: { ...NONE, serviceCut: saves, reclass: r2(Math.max(0, reclass)) },
+    });
+  }
+
+  /* ---- profit and payment levers: more cash to pay the loans from ---- */
+  for (const g of grow) out.push(g);
+
+  /* ---- an overdraft to fall back on (plan only — the accounts cannot have one they did not arrange) ---- */
+  /*
+   * Sized to the plan's own worst month, not to a rule of thumb: "two months of spending" came to 380,000 on
+   * SEQ, an overdraft no bank would write for a business losing money. Enough to carry the lowest month.
+   */
+  if (allowOverdraft && pos.monthlyCash.length) {
+    const low = Math.min(...pos.monthlyCash);
+    const need = Math.ceil(Math.max(0, -low - pos.undrawn) / 10_000) * 10_000;
+    if (low < 0 && need >= 10_000) {
+      out.push({
+        key: "overdraft", target: null, profit: 0, cash: 0,
+        label: `Arrange an overdraft of ${m(need)}`,
+        detail: `The bank goes as low as ${m(low)} during the year. An overdraft of ${m(need)} covers that, and costs little until it is used. Arrange it before it is needed.`,
+        effect: { ...NONE, undrawnAdd: need },
+      });
+    }
+  }
+  return out;
+}
+
+/** How Borrow's dials connect — short sentences, past tense on the accounts, present on the plan. */
+export function borrowStory(pos: CapabilityInput, names: YearNames, last: ActualYear | null): string | null {
+  const m = pos.money, cf = pos.cashFlow[1], bs = pos.balanceSheet[1];
+  if (!cf || !bs) return null;
+  const past = !!last, t = (was: string, is: string) => (past ? was : is);
+  const y = names[1] ?? "the year";
+  const service = pos.debtService[1] ?? 0;
+  const trading = cf.netOperating;
+  const out: string[] = [];
+  out.push(trading < 0
+    ? `In ${y} the business ${t("used up", "uses up")} ${m(-trading)} of cash from trading, after paying for jobs, wages and overheads.`
+    : `In ${y} trading ${t("brought", "brings")} in ${m(trading)} of cash, after paying for jobs, wages and overheads.`);
+  if (service > 0) {
+    const cover = trading > 0 ? trading / service : 0;
+    out.push(trading <= 0
+      ? `Loan payments ${t("were", "are")} ${m(service)}, so none of them ${t("were", "are")} covered by trading.`
+      : cover < 1 ? `Loan payments ${t("were", "are")} ${m(service)}, so trading ${t("covered", "covers")} only part of them.`
+      : `Loan payments ${t("were", "are")} ${m(service)}, and trading ${t("covered", "covers")} them ${r1(cover)} times (lenders want 1.25).`);
+  } else out.push(`There ${t("were", "are")} no loan payments to make.`);
+  const debt = bs.debtCurrent + bs.debtNonCurrent;
+  if (debt > 0) out.push(`The business ${t("owed", "owes")} ${m(debt)} at the end of the year, and ${m(bs.debtCurrent)} of it ${t("was", "is")} due within the next year.`);
+  out.push(bs.cash < 0 ? `The bank ${t("was", "is")} overdrawn by ${m(-bs.cash)} at the year end.` : `The year ${t("ended", "ends")} with ${m(bs.cash)} in the bank.`);
+  return out.join(" ");
 }
 
 /* ------------------------------------------------------------------ *

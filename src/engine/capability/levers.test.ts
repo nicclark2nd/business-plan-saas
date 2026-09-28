@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { capabilityViews, type HistoricRow } from "./actual";
 import { buildView } from "./views";
-import { growLevers, growStory, growWith, leverTable, moveLine, withMoves } from "./levers";
+import { borrowLevers, borrowStory, growLevers, growStory, growWith, leverTable, moveLine, viewWith, withMoves } from "./levers";
+import { annualRepayment } from "./model";
 import type { CapabilityInput } from "./model";
 
 /* SEQ's two actual years (as actual.test.ts). */
@@ -56,5 +57,48 @@ describe("what fixes it (§6.173)", () => {
     expect(s).toContain("Sales went up 107,000 (5.7%) in 2026. But gross margin dropped from 42% to 38.4% and overheads went up 128,000");
     expect(s).toContain("each extra dollar of sales cost more than it brought in");
     expect(s).toContain("The year ended with 21,315 in the bank.");
+  });
+});
+
+describe("what fixes it — Borrow (§6.176)", () => {
+  const views = capabilityViews(plan, rows, 2027);
+  const a = views.actual!;
+  const base = buildView(a, money, a.last);
+  const last = a.last;
+  const debt = last.balanceSheet.debtCurrent + last.balanceSheet.debtNonCurrent;
+  const loans = [{ name: "the loans", balance: debt, ratePct: 10, years: debt / last.balanceSheet.debtCurrent }];
+  const levers = withMoves(borrowLevers(base.posIn, growLevers(base.growIn), loans, {}, false), a, last, false, money, base.borrow, "borrow");
+
+  it("puts spreading the loans first, then the profit and payment levers, and no overdraft on the accounts", () => {
+    expect(levers[0].key).toBe("loans");
+    expect(levers[0].label).toBe(`Spread the ${money(debt)} owed over 5 years`);
+    expect(levers.map((l) => l.key)).toEqual(["loans", "overheads", "margin", "debtors"]);
+  });
+
+  it("never cuts payments below what the spread loans would cost", () => {
+    const service = base.posIn.debtService[1]!;
+    const five = annualRepayment(debt, 10, 5)!;
+    expect(service - levers[0].saves!).toBeCloseTo(five, 0);
+  });
+
+  it("re-scores the borrowing with every lever pulled, and says how to move loan cover", () => {
+    const after = viewWith(a, last, levers, false, money, "borrow");
+    expect(after.metrics.find((m) => m.key === "dscr")!.value!).toBeGreaterThan(1.25);
+    const line = moveLine("dscr", levers, a, last, false, money, base.borrow, "borrow")!;
+    expect(line).toMatch(/^Spread the [\d,]+ owed over 5 years \([\d,]+ a year less in loan payments\)/);
+    expect(line).toMatch(/That would take this to [\d.]+×/);
+  });
+
+  it("tells the story of the loans in plain words", () => {
+    const s = borrowStory(base.posIn, a.positionNames, last)!;
+    expect(s).toContain("In 2026 the business used up");
+    expect(s).toContain("so none of them were covered by trading");
+    expect(s).toContain("The year ended with 21,315 in the bank.");
+  });
+
+  it("sizes an overdraft to the worst month on the plan", () => {
+    const pos = { ...base.posIn, monthlyCash: [10_000, -25_019, 5_000] };
+    const od = borrowLevers(pos, [], [], {}, true).find((l) => l.key === "overdraft")!;
+    expect(od.label).toBe("Arrange an overdraft of 30,000");
   });
 });

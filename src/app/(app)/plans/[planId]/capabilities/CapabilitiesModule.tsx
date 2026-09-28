@@ -26,7 +26,7 @@ import { issuesFrom } from "@/engine/capability/assessment";
 import { buildView } from "@/engine/capability/views";
 import { capabilityTimeline, readiness, type MonthsByYear, type TimelineYear } from "@/engine/capability/timeline";
 import type { AgreedTargets, TargetCheck } from "@/engine/capability/targets";
-import { growLevers, growStory, growWith, leverTable, moveLine, withMoves, type Lever, type WithLeversRow } from "@/engine/capability/levers";
+import { borrowLevers, borrowStory, growLevers, growStory, growWith, leverTable, moveLine, viewWith, withMoves, worth, type Lever, type LoanFacts, type WithLeversRow } from "@/engine/capability/levers";
 import { actualYear, capabilityViews, compareWith, type Comparison, type HistoricRow, type YearNames } from "@/engine/capability/actual";
 
 /**
@@ -177,7 +177,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
    * On the accounts the levers aim at the year before; on the plan, at the agreed targets where there are any.
    */
   const fixes = useMemo(() => {
-    if (tab !== "grow") return null;
+    if (tab === "sell") return null;
     const cur = onActual && views.actual ? views.actual : views.plan;
     const last = onActual && views.actual ? views.actual.last : null;
     const ramp = !onActual && views.hasHistory;
@@ -193,7 +193,40 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
       grossMargin: agreedTargets.grossMargin?.value ?? (Number.isFinite(bestGm) ? Math.round(bestGm * 10) / 10 : null),
       overheadsCap: agreedTargets.overheadsCap?.value ?? null,
       debtorDays: agreedTargets.debtorDays?.value ?? (Number.isFinite(bestDd) ? bestDd : null),
+      loanTermMonths: agreedTargets.loanTermMonths?.value ?? null,
     };
+
+    if (tab === "borrow") {
+      /*
+       * BORROW (§6.176). The judged year is the position's first. The loans come from the accounts on the
+       * Actual view (what is owed, the rate the interest implies, the years left from what falls due within
+       * a year) and from Funding on the plan. The profit and payment levers are Grow's, pulled on the same
+       * year — they only line up when the growth input's second year IS that year, which needs accounts.
+       */
+      let loans: LoanFacts[] = [];
+      if (last) {
+        const debt = last.balanceSheet.debtCurrent + last.balanceSheet.debtNonCurrent;
+        const prevDebt = a0 ? a0.balanceSheet.debtCurrent + a0.balanceSheet.debtNonCurrent : debt;
+        const avg = (debt + prevDebt) / 2;
+        const rate = avg > 0 && last.pnl.interest > 0 ? (last.pnl.interest / avg) * 100 : 10;
+        if (debt > 0 && last.balanceSheet.debtCurrent > 0) loans = [{ name: "the loans", balance: debt, ratePct: rate, years: debt / last.balanceSheet.debtCurrent }];
+      } else {
+        loans = facilities.filter((f) => f.termMonths > 0 && f.drawn > 0).map((f) => ({ name: f.name, balance: f.drawn, ratePct: f.ratePct, years: f.termMonths / 12 }));
+      }
+      const growL = views.hasHistory ? growLevers(V.growIn, refs) : [];
+      const levers = withMoves(borrowLevers(V.posIn, growL, loans, refs, !onActual), cur, last, false, money, V.borrow, "borrow");
+      const table = leverTable(levers, cur, last, false, money, { metrics: V.borrow, score: V.scores.borrow.value }, "borrow");
+      const moves: Record<string, string> = {};
+      for (const m of V.borrow) { const line = moveLine(m.key, levers, cur, last, false, money, V.borrow, "borrow"); if (line) moves[m.key] = line; }
+      const afterM = levers.length ? viewWith(cur, last, levers, false, money, "borrow").metrics : [];
+      const after = afterM.find((x) => x.key === "dscr")?.value ?? null;
+      const stressed = afterM.find((x) => x.key === "dscrStressed");
+      const shortCover = after !== null && after < LENDER_MIN_DSCR ? after : null;
+      /* The bad year can still hold the score down after every fix — say so, and show what the bad year is. */
+      const shortStress = shortCover === null && stressed && stressed.value !== null && stressed.value < LENDER_MIN_DSCR ? (stressed.sub ?? "") : null;
+      return { levers, table, moves, short: null as number | null, shortCover, shortStress, story: borrowStory(V.posIn, cur.positionNames, last), year: cur.positionNames[1] ?? "" };
+    }
+
     const levers = withMoves(growLevers(V.growIn, refs), cur, last, ramp, money, V.grow);
     const table = leverTable(levers, cur, last, ramp, money, { metrics: V.grow, score: V.scores.grow.value });
     const moves: Record<string, string> = {};
@@ -201,8 +234,8 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
     /* When every lever together still leaves a loss, say how far short — the levers are not the whole answer. */
     const after = levers.length ? growWith(cur, last, levers, ramp, money).input.pnl[2]?.operatingProfit ?? null : null;
     const short = after !== null && after < 0 ? after : null;
-    return { levers, table, moves, short, story: growStory(V.growIn, cur.growNames, last, levers), year: cur.growNames[2] ?? "" };
-  }, [tab, onActual, views, V, money, agreedTargets, history, firstYear]);
+    return { levers, table, moves, short, shortCover: null as number | null, shortStress: null as string | null, story: growStory(V.growIn, cur.growNames, last, levers), year: cur.growNames[2] ?? "" };
+  }, [tab, onActual, views, V, money, agreedTargets, history, firstYear, facilities]);
 
   const otherOf = (m: Metric): Comparison | null => {
     /* Not on the Actual view: a line about the plan is a line about a projected year (§6.169). */
@@ -307,6 +340,17 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
               {fixes.short !== null && (
                 <p className="mt-2 text-[12.5px] font-semibold text-bad">
                   Even with all these fixes, {fixes.year} {onActual ? "would still have lost" : "still loses"} {money(-fixes.short)}. That gap has to be closed with higher prices, more sales at a good profit, or lower costs.
+                </p>
+              )}
+              {fixes.shortCover !== null && (
+                <p className="mt-2 text-[12.5px] font-semibold text-bad">
+                  Even with all these fixes, trading would cover the loan payments only {Math.round(fixes.shortCover * 100) / 100} times — lenders want {LENDER_MIN_DSCR}. The rest has to come from more profit, or smaller loans.
+                </p>
+              )}
+              {fixes.shortStress !== null && (
+                <p className="mt-2 text-[12.5px] font-semibold text-bad">
+                  Even with all these fixes, the loans could not be paid in the bad year set up on Assumptions ({fixes.shortStress.replace(/^Bad year: /, "")}). That keeps the score below 50 — check the bad year is realistic.
+                  {" "}<a href={`/plans/${planId}/assumptions?area=downside`} className="font-semibold text-primary hover:underline">Check the bad year →</a>
                 </p>
               )}
             </>
@@ -491,7 +535,7 @@ function Levers({ planId, levers, money, agreed }: { planId: string; levers: Lev
       {levers.map((l) => (
         <li key={l.key}>
           <span className="font-semibold">{l.label}</span>
-          <span className="ml-1.5 font-semibold text-good">{l.profit > 0 ? `+${money(l.profit)} a year` : `+${money(l.cash)} cash, once`}</span>
+          <span className="ml-1.5 font-semibold text-good">{l.profit > 0 || l.saves || l.key === "overdraft" ? worth(l, money) : `+${money(l.cash)} cash, once`}</span>
           <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">{l.detail}</p>
           {l.moves.length > 0 && <p className="text-[12px] text-muted-foreground">Improves: {l.moves.join(", ")}</p>}
           {l.target && (agreed[l.target]

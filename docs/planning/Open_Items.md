@@ -965,3 +965,15 @@ projection step and scored on the Plan view, after.)
   as names (debt service cover, EBITDA) with plain sentences around them; "debtors" → unpaid invoices / getting paid,
   "facility/drawn/undrawn" → loan/borrowed/not yet used, "covenant breaches" → broken loan conditions, "customer
   concentration" → biggest customer, "security" → what a lender could lend against, "base case" → normal year.
+- **§6.176** What fixes it — Capability to borrow. The same engine as Grow, judged on the position year: `borrowLevers`
+  adds the lever only Borrow has — spread the loans over 5 years (or the agreed term): on the accounts from what is
+  owed, the rate the interest implies and the years left from what falls due within a year; on the plan from each
+  Funding loan shorter than the target — never below what the spread loans would cost — plus Grow's profit and
+  payment levers (each is more cash to pay loans from) and, on the plan only, an overdraft sized to the worst month.
+  `withLevers` now changes either Grow's year or Borrow's (loan payments, debt due within a year, cash, undrawn);
+  a dial no single lever moves (loan cover stays nil until trading turns positive) is shown with all of them.
+  Story in plain words; table of loan payments, cash from trading, cover, interest cover, runway and score; a line
+  when even every fix leaves cover under 1.25×, or when the bad year still holds the score down (with the bad year
+  shown and a link to check it). SEQ actual: payments 103,638 → 50,233, cash from trading −149,459 → +100,727,
+  cover 0× → 2.01×; score stays 49 because the bad year (margin −40 points) still fails. SEQ plan 2027: cover 0 →
+  0.88× with every fix, overdraft 30,000 for the −25,019 month.
