@@ -167,7 +167,7 @@ export function issuesFrom(prev: ActualYear | null, last: ActualYear, money: (v:
         cause: "Costs were added ahead of the sales that pay for them — people, premises or systems.",
         direction: `Hold overheads at ${y}'s ${m(last.pnl.overheads)} and let them grow only with sales.`,
         where: { label: "Overheads", to: "overheads" },
-        ask: `Which of ${y}'s new costs were one-offs, and which are permanent? Did they buy capacity the sales plan will use?`,
+        ask: `Which of ${y}'s new costs were one-offs, and which are permanent? Did they buy capacity for more sales?`,
         target: { kind: "overheadsCap", value: Math.round(last.pnl.overheads) },
       } as Issue);
     }

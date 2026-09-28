@@ -25,7 +25,7 @@ export type SummaryFacts = {
 const val = (ms: Metric[], key: string) => ms.find((m) => m.key === key)?.value ?? null;
 const pct = (v: number) => `${r1(Math.abs(v))}%`;
 
-function talk(f: SummaryFacts, adviser: string, owner: string) {
+function talk(f: Pick<SummaryFacts, "adviser">, adviser: string, owner: string) {
   return f.adviser ? adviser : owner;
 }
 
@@ -143,4 +143,51 @@ export function sellSummary(f: SummaryFacts): Summary {
           "Score the change-of-owner factors, then work out how the business runs without you.")
         : talk(f, "Talk to the owner about timing — when the earnings best support the price.", "Think about timing — when the earnings best support the price.");
   return { happened, asks, talk: t };
+}
+
+/**
+ * THE ACCOUNTS VIEW SPEAKS ONLY OF THE ACCOUNTS (§6.169).
+ *
+ * Nic, 28 Sep 2026: "We are on the button 'Actual: 2025 → 2026' therefore no data or comments should be about
+ * the projected year." The three lines used to read both views at once, so the Actual view told him what the
+ * plan asks for 2027. Now: what happened (the same line as before — it is the accounts), what it means (the
+ * accounts' own verdict, and the measure holding the score down), and what to talk about first — the top
+ * problem the Planner's assessment found for this capability, so step 8 and this page say the same thing.
+ */
+export type ActualSummaryFacts = {
+  adviser: boolean;
+  /** The verdict headline on the accounts, as the page shows it. */
+  headline: string;
+  /** Names of the measures holding the score under 50 (the decisive cap). */
+  capped: string[];
+  /** The assessment's issues for this capability, most urgent first. */
+  issues: { title: string; ask: string }[];
+  /** Earnings on the latest accounts after add-backs — sell's fallback needs to know whether there are any. */
+  earnings: number | null;
+  /** How many change-of-owner factors are scored. */
+  scored: number;
+};
+
+export function actualSummary(tab: "grow" | "borrow" | "sell", base: Summary, f: ActualSummaryFacts): Summary {
+  const held = f.capped.length ? ` ${f.capped.join(" and ")} ${f.capped.length === 1 ? "holds" : "hold"} the score under 50.` : "";
+  const means = `${f.headline}.${held}`;
+  const top = f.issues[0];
+  let t: string;
+  if (top) {
+    t = `${top.title}. ${f.adviser ? "" : "Ask yourself: "}${top.ask}`;
+  } else if (tab === "grow") {
+    t = talk(f, "Nothing in the accounts holds growth back. Talk to the owner about what growing would take.",
+      "Nothing in the accounts holds growth back. Work out what growing would take.");
+  } else if (tab === "borrow") {
+    t = talk(f, "Nothing in the accounts would stop a lender. Talk to the owner about what they would borrow for, and against what.",
+      "Nothing in the accounts would stop a lender. Work out what you would borrow for, and against what.");
+  } else {
+    t = f.earnings === null || f.earnings <= 0
+      ? talk(f, "Talk to the owner about getting to a steady profit first — nothing sells on a loss.", "Get to a steady profit first — nothing sells on a loss.")
+      : f.scored < 6
+        ? talk(f, "Score the change-of-owner factors, then talk to the owner about how the business runs without them.",
+          "Score the change-of-owner factors, then work out how the business runs without you.")
+        : talk(f, "Talk to the owner about what a buyer would pay for these earnings.", "Think about what a buyer would pay for these earnings.");
+  }
+  return { happened: base.happened, asks: means, talk: t };
 }

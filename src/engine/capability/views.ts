@@ -31,7 +31,11 @@ export function buildView(
   const grow = all.filter((m) => !m.unscored);
   const bare = (m: Metric) => (last ? { ...m, trend: undefined, trendAt: undefined } : m);
   const borrow = withTrends("borrow", applyRanges(borrowMetrics(posIn), posIn.ranges, "borrow"), posIn).map((m) => said(nameYears(bare(m), v.positionNames)));
-  let sell = withTrends("sell", applyRanges(sellMetrics(posIn), posIn.ranges, "sell"), posIn).map((m) => said(nameYears(bare(m), v.positionNames)));
+  /* Cards the accounts cannot answer at all are left off the actual view rather than shown waiting on the plan (§6.169). */
+  const PLAN_ONLY = new Set(["recurringShare", "largestProduct", "leadershipPay"]);
+  let sell = withTrends("sell", applyRanges(sellMetrics(posIn), posIn.ranges, "sell"), posIn)
+    .filter((m) => !last || !PLAN_ONLY.has(m.key))
+    .map((m) => said(nameYears(bare(m), v.positionNames)));
   /*
    * ONE GROWTH FIGURE ON THE PAGE (§6.163). Sell's growth card read 2027 → 2028 while Grow's read 2026 →
    * 2027 — two answers to one question. Both now come off the growth input: the last two actual years on

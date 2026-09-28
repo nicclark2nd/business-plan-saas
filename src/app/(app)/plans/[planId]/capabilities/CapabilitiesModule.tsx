@@ -11,7 +11,7 @@ import { navGroup } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { moneyFormatter } from "@/engine/plan/money";
 import {
-  SCORE_BANDS, CARD_LABEL, DIAL_LABEL, borrowingCapacity, statusOf,
+  SCORE_BANDS, CARD_LABEL, DIAL_LABEL, borrowingCapacity, ebitda, statusOf,
   type CapabilityInput, type Metric, type Severity,
 } from "@/engine/capability/model";
 import { LENDER_MIN_DSCR, TRANSFER_FACTORS, saleYear } from "@/engine/capability/judgements";
@@ -21,11 +21,12 @@ import { buyerQuestions, verdict } from "@/engine/capability/verdict";
 import { panels as buildPanels, type FacilityFacts, type Panels, type ProductFacts } from "@/engine/capability/series";
 import { ageingView, concentration, earningsBridge, executionLines, lenderChecklist, type ExtraFacts, type Line } from "@/engine/capability/extras";
 import { Meter } from "@/components/chart/core";
-import { borrowSummary, growSummary, sellSummary, type SummaryFacts } from "@/engine/capability/summary";
+import { actualSummary, borrowSummary, growSummary, sellSummary, type SummaryFacts } from "@/engine/capability/summary";
+import { issuesFrom } from "@/engine/capability/assessment";
 import { buildView } from "@/engine/capability/views";
 import { capabilityTimeline, readiness, type MonthsByYear, type TimelineYear } from "@/engine/capability/timeline";
 import type { TargetCheck } from "@/engine/capability/targets";
-import { capabilityViews, compareWith, type Comparison, type HistoricRow, type YearNames } from "@/engine/capability/actual";
+import { actualYear, capabilityViews, compareWith, type Comparison, type HistoricRow, type YearNames } from "@/engine/capability/actual";
 
 /**
  * Everything the server hands down. Only the money formatter is built here, because a function cannot cross
@@ -140,8 +141,18 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
       actual: views.actual && actualV ? { growIn: actualV.growIn, posIn: actualV.posIn, year: views.actual.last.year, grow: actualV.grow, borrow: actualV.borrow } : null,
       plan: { input, firstYear, grow: planV.grow, borrow: planV.borrow, monthNames: months },
     };
-    return { grow: growSummary, borrow: borrowSummary, sell: sellSummary }[tab](f);
-  }, [adviser, money, views, actualV, planV, input, firstYear, months, tab]);
+    const base = { grow: growSummary, borrow: borrowSummary, sell: sellSummary }[tab](f);
+    if (!onActual || !views.actual || !actualV) return base;
+    /* The Actual view: the accounts only, nothing from a projected year (§6.169). */
+    const last = views.actual.last;
+    const issues = issuesFrom(actualYear(history, 2, firstYear), last, money).filter((i) => i.area === tab);
+    const e = ebitda(actualV.posIn.pnl[1]);
+    return actualSummary(tab, base, {
+      adviser, headline: v.headline, capped: s.capped.map((k) => metrics.find((m) => m.key === k)?.name ?? k),
+      issues, earnings: e === null ? null : e + (input.sale.addBacks ?? 0),
+      scored: input.transfer.filter((x) => x.score !== null && x.score !== undefined).length,
+    });
+  }, [adviser, money, views, actualV, planV, input, firstYear, months, tab, onActual, history, v.headline, s.capped, metrics]);
 
   /* The same card on the other view (§6.159): the track record on the plan, the plan on the accounts. */
   const otherV = actualV ? (onActual ? planV : actualV) : null;
@@ -158,7 +169,8 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
       ? (TWO_YEAR.has(key) ? `The plan, ${views.plan.span.replace(" onward", "")}` : `The plan, ${planYear}`)
       : (TWO_YEAR.has(key) ? `Track record, ${views.actual.span}` : `Actual, ${views.actual.last.year}`);
   const otherOf = (m: Metric): Comparison | null => {
-    if (!otherV) return null;
+    /* Not on the Actual view: a line about the plan is a line about a projected year (§6.169). */
+    if (!otherV || onActual) return null;
     return compareWith(m, otherV[tab].find((x) => x.key === m.key), otherLabel(m.key), !onActual);
   };
 
@@ -176,7 +188,9 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
       footer={<ModuleFooter planId={planId} moduleId="capabilities" formId="capabilities-form" />}
       help={<>
         <h3>Nothing is typed on this screen</h3>
-        <p>Every figure here is read from your plan — the same forecast run behind your Profit &amp; Loss, your dashboard and your report. If a number looks wrong, it is wrong on those screens too, and the fix is in the step that owns it.</p>
+        {onActual
+          ? <p>The Actual view reads your accounts in Historic and nothing else — no projected year, no figure from the plan. If a number looks wrong, the fix is on Historic.</p>
+          : <p>Every figure on the Plan view is read from your plan — the same forecast run behind your Profit &amp; Loss, your dashboard and your report. If a number looks wrong, it is wrong on those screens too, and the fix is in the step that owns it.</p>}
         <h3>A grey dial is a question, not a bad score</h3>
         <p>Some measures need a judgement the forecast cannot make: how low you will let cash go, what your money costs, what you would want for the business, whether it would run without you. Those live on the steps that own them, and a measure waiting on one shows greyed with a <b>pencil</b> that takes you straight to the box.</p>
         <h3>The score</h3>
@@ -216,7 +230,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
         <span className="eyebrow">{adviser ? "For the Planner" : "In short"}</span>
         <dl className="mt-1.5 grid gap-x-4 gap-y-1 text-[13.5px] leading-relaxed @container sm:grid-cols-[170px_minmax(0,1fr)]">
           <dt className="font-semibold text-muted-foreground">What happened</dt><dd>{summary.happened}</dd>
-          <dt className="font-semibold text-muted-foreground">What the plan asks</dt><dd>{summary.asks}</dd>
+          <dt className="font-semibold text-muted-foreground">{onActual ? "What it means" : "What the plan asks"}</dt><dd>{summary.asks}</dd>
           <dt className="font-semibold text-muted-foreground">{adviser ? "Talk about first" : "Start with"}</dt><dd className="font-semibold">{summary.talk}</dd>
         </dl>
       </section>
@@ -319,8 +333,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
       */}
       {onActual ? (
         <p className="border-t border-border px-5 py-3 text-[12.5px] text-muted-foreground">
-          These cards read your accounts only. The five-year charts — cash month by month, the cash cycle, where
-          the growth comes from — are on the <button type="button" className="font-semibold text-primary hover:underline" onClick={() => setView("plan")}>Plan view</button>.
+          Everything on this view is read from your accounts in Historic, {views.actual?.span}. Nothing here is projected.
         </p>
       ) : (
       <div className="@container border-t border-border">
@@ -654,8 +667,7 @@ function YearEndCash({ planId, history, firstYear, floor, money }: {
         <p className="mt-1 text-[12.5px] text-foreground/80">
           {cover !== null && <>About {Math.round(cover * 10) / 10} {Math.round(cover * 10) / 10 === 1 ? "month" : "months"} of overheads. </>}
           {bar > 0 && short > 0 && <>{money(short)} below your floor. </>}
-          Annual accounts only show the last day of the year, so the tightest month is not visible here — the
-          plan&apos;s month-by-month cash is on the Plan view.
+          Annual accounts only show the last day of the year, so the tightest month in between is not visible.
           {floor === null && <span className="ml-2 inline-block align-middle"><Pencil planId={planId} fix={{ label: "Set a cash floor", to: "assumptions?area=cash" }} /></span>}
         </p>
       </div>

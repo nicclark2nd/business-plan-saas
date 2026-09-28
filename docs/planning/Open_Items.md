@@ -900,3 +900,13 @@ projection step and scored on the Plan view, after.)
   year BEFORE the one judged: on the accounts it scored 2025's 67.7% against a 2026 that made a loss, and on
   the plan it read 2026 actual. It now reads the growth year like Operating margin; SEQ's actual grow score moves
   40 → 42 (the card waits for a profit instead of scoring the wrong year). Plan score unchanged at 49.
+- **§6.169** RULE (Nic, 28 Sep 2026): "We are on the button 'Actual: 2025 → 2026' therefore no data or comments
+  should be about the projected year." The Actual view now reads the accounts and nothing else:
+  the For-the-Planner box says What happened / What it means (the accounts' verdict and the measure holding the
+  score down) / Talk about first (the top problem the Planner's assessment found for that capability, so step 8
+  and this page agree); the plan comparison lines are gone from the cards (they stay on the Plan view as
+  "Actual, 2026"); the three Sell cards that only the plan can answer (ongoing-client revenue, largest product,
+  leadership pay — all the plan's Year 1) are left off; no undrawn Funding facility in the runway; security only
+  from assets already owned; help, footer and year-end-cash wording no longer point at the plan. Also: a runway
+  under half a month says "about N days", not "about a month". SEQ actual sell moves 37 → 33 (the three
+  plan-sourced cards no longer count).

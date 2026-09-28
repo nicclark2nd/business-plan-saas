@@ -108,6 +108,13 @@ function slot(base: Omit<CapabilityInput, "money">, years: (ActualYear | null)[]
     pnl: pick("pnl"), balanceSheet: pick("balanceSheet"), cashFlow: pick("cashFlow"), days: pick("days"),
     capex: pick("capex"), debtService: pick("debtService"),
     monthlyCash: [], monthlyProfit: [],
+    /*
+     * NOTHING FROM THE PLAN ON THE ACCOUNTS VIEW (§6.169). The product mix and leadership pay are the plan's
+     * Year 1; an undrawn facility is a Funding row the plan adds; security includes assets still to be bought.
+     * The accounts hold none of these, so the actual view reads them as absent — and only owned assets secure.
+     */
+    recurringShare: null, largestProductShare: null, leadershipPay: null, undrawn: 0,
+    collateral: base.ownedCollateral ?? null,
   } as Omit<CapabilityInput, "money">;
 }
 
@@ -217,6 +224,7 @@ export function inAccounts(m: Metric): Metric {
     .replace(/the growth plan/g, "the growth")
     .replace(/The plan forecasts no growth/g, "The accounts show no growth")
     .replace(/the profit the plan forecasts/g, "the profit")
+    .replace(/in the forecast they are being handed/g, "in the accounts")
     .replace(/\bThe plan\b/g, "The business").replace(/\bthe plan\b/g, "the business").replace(/\bThis plan\b/g, "This business");
   return {
     ...m, name: fix(m.name)!, note: fix(m.note)!, bench: fix(m.bench)!, sub: fix(m.sub), formula: fix(m.formula)!,

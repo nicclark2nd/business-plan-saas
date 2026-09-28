@@ -218,6 +218,7 @@ export async function loadCapabilityFacts(planId: string) {
        */
       growth: withLoanRate(readGrowth(settings), plan.sources.funding), stress: readStress(settings), sale: readSale(settings, addBacks.data ?? []),
       collateral: readCollateral((plan.sources.assets ?? []) as { security_value?: unknown }[]),
+      ownedCollateral: readCollateral(((plan.sources.assets ?? []) as { security_value?: unknown; already_owned?: unknown }[]).filter((a) => a.already_owned === true)),
       /*
        * THE PLANT ALREADY ON THE BOOKS, AND HOW MUCH OF IT IS LISTED (§6.135). Loan-to-value waits until
        * enough of it is — see `securityGap`.

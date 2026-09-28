@@ -254,6 +254,11 @@ export type CapabilityInput = {
    * Fixed Assets are worth. Absent in older fixtures and on a plan with no history.
    */
   security?: { openingPlant: number | null; listedOwned: number };
+  /**
+   * The security value of the assets ALREADY OWNED (§6.169) — what the accounts view lends against. `collateral`
+   * above includes assets the plan has yet to buy, which the accounts cannot.
+   */
+  ownedCollateral?: number | null;
   /** Ranges set for this plan on Plan settings → Capability ranges (§6.140). Absent: the general ranges. */
   ranges?: Record<string, [number, number]>;
   /**
