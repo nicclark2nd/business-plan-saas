@@ -243,3 +243,67 @@ export async function setClientDownload(planId: string, allow: boolean): Promise
   revalidatePath("/firm/clients");
   return { ok: true };
 }
+
+/* ---------------------------------------------------------------- the team (§6.184) ---- */
+
+const TEAM_ERRORS: [RegExp, string][] = [
+  [/last admin/, "The firm needs at least one admin. Make someone else an admin first."],
+  [/already in the team/, "That person is already in your team."],
+  [/bad email/, "That doesn't look like an email address."],
+  [/not the admin/, "Only your firm's admin can change the team."],
+  [/not in the firm/, "That person is not in your team."],
+];
+const teamError = (e: { message?: string } | null, doing: string) => {
+  const hit = TEAM_ERRORS.find(([re]) => re.test(e?.message ?? ""));
+  return hit ? { ok: false as const, error: hit[1] } : failed(e, doing);
+};
+
+/** A link for a new consultant — sent from the admin's own email, like a client's (no email leaves the app). */
+export async function inviteTeammate(email: string, role: "admin" | "advisor"): Promise<{ ok: true; token: string; expiresAt: string } | { ok: false; error: string }> {
+  const firm = await loadMyFirm();
+  if (!firm) return { ok: false, error: "You are not signed in to a firm." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("create_team_invitation", { p_org: firm.id, p_email: email, p_role: role });
+  const row = (data as { token: string; expires_at: string }[] | null)?.[0];
+  if (error || !row) return teamError(error, "create the invitation");
+  revalidatePath("/firm/team");
+  return { ok: true, token: row.token, expiresAt: row.expires_at };
+}
+
+export async function cancelTeamInvite(id: string): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("revoke_team_invitation", { p_id: id });
+  if (error) return teamError(error, "cancel the invitation");
+  revalidatePath("/firm/team");
+  return { ok: true };
+}
+
+export async function setTeamRole(userId: string, role: "admin" | "advisor"): Promise<Result> {
+  const firm = await loadMyFirm();
+  if (!firm) return { ok: false, error: "You are not signed in to a firm." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_team_role", { p_org: firm.id, p_user: userId, p_role: role });
+  if (error) return teamError(error, "change the role");
+  revalidatePath("/firm", "layout");
+  return { ok: true };
+}
+
+/** Out of the firm, and off every client it holds — a plan membership does not outlive the job (0061). */
+export async function removeTeammate(userId: string): Promise<Result> {
+  const firm = await loadMyFirm();
+  if (!firm) return { ok: false, error: "You are not signed in to a firm." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("remove_from_team", { p_org: firm.id, p_user: userId });
+  if (error) return teamError(error, "remove them from the team");
+  revalidatePath("/firm", "layout");
+  return { ok: true };
+}
+
+/** Who looks after a client: the admin puts a teammate on, or takes them off. */
+export async function assignPlanner(planId: string, userId: string, on: boolean): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("assign_planner", { p_plan: planId, p_user: userId, p_on: on });
+  if (error) return teamError(error, "change who looks after this client");
+  revalidatePath("/firm", "layout");
+  return { ok: true };
+}

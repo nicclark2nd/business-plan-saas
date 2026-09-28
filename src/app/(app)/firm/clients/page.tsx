@@ -1,18 +1,10 @@
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
+import { siteOrigin } from "@/lib/siteOrigin";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { loadMyFirm } from "@/lib/myFirm";
 import { firstProjectedYear } from "@/engine/plan/calendar";
 import { ClientsModule, type ClientRow } from "./ClientsModule";
-
-/** The address the invitation link starts with — this deployment's own, read from the request. */
-async function siteOrigin() {
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
-  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  return host ? `${proto}://${host}` : "";
-}
 
 const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
 
@@ -33,6 +25,11 @@ export default async function MyClientsPage({ searchParams }: { searchParams: Pr
   const { data: plans } = await supabase.from("plans").select("*").eq("organisation_id", firm.id).order("business_name");
   const ids = (plans ?? []).map((p) => p.id as string);
   /* Each client's access (0060), failing soft before the migration: everyone reads "Not invited". */
+  /* The team, and who looks after which client (0061) — both failing soft before the migration. */
+  const [team, assigned] = await Promise.all([
+    supabase.rpc("firm_team", { p_org: firm.id }).then((r) => ((r.data ?? []) as { user_id: string; full_name: string | null; email: string; role: string }[])),
+    supabase.rpc("firm_assignments", { p_org: firm.id }).then((r) => ((r.data ?? []) as { plan_id: string; user_id: string }[])),
+  ]);
   const access = ((await supabase.rpc("firm_client_access", { p_org: firm.id })).data ?? []) as
     { plan_id: string; state: string; email: string | null; token: string | null; expires_at: string | null; since: string | null }[];
   const [settings, outlets] = ids.length ? await Promise.all([
@@ -50,6 +47,7 @@ export default async function MyClientsPage({ searchParams }: { searchParams: Pr
       planYears: `${first}–${first + 4}`,
       address: str(premises?.address), email: str(s?.contact_email), website: str(s?.website), country: str(s?.country),
       canDownload: p.client_can_download !== false,
+      planners: assigned.filter((a) => a.plan_id === p.id).map((a) => a.user_id),
       access: (() => {
         const a = access.find((x) => x.plan_id === p.id);
         return { state: (a?.state ?? "none") as ClientRow["access"]["state"], email: a?.email ?? null, token: a?.token ?? null, expiresAt: a?.expires_at ?? null, since: a?.since ?? null };
@@ -64,6 +62,7 @@ export default async function MyClientsPage({ searchParams }: { searchParams: Pr
   /* Plans this person can open that are not the firm's — their own business, or a test plan. */
   const others = session.plans.filter((p) => p.organisation_id !== firm.id && !p.archived_at).map((p) => ({ id: p.id, businessName: p.business_name }));
 
-  return <ClientsModule rows={rows} others={others} selected={client ?? null} firm={{ country: firm.country, currency: firm.currency, name: firm.name }}
+  const people = team.map((t) => ({ id: t.user_id, name: t.full_name || t.email, role: t.role }));
+  return <ClientsModule team={people} isAdmin={firm.role === "admin"} meId={session.user.id} rows={rows} others={others} selected={client ?? null} firm={{ country: firm.country, currency: firm.currency, name: firm.name }}
     me={{ name: session.profile?.full_name || null }} origin={await siteOrigin()} />;
 }

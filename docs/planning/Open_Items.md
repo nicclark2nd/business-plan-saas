@@ -1054,3 +1054,19 @@ projection step and scored on the Plan view, after.)
   `tenant_isolation.sql` fails at "only one annual goal per area" on current migrations — pre-existing, from the
   goals-ladder change, not this work. Open: a brand-new client's "confirm your email" message still comes from
   Supabase until email is built.
+- **§6.184** The consultant's own area, part 3 — Team. The rule: an ADVISOR SEES THEIR OWN CLIENTS, an ADMIN
+  SEES ALL. `can_read_plan` / `can_write_plan` now give firm-wide reach to the firm's admins only; an advisor
+  reaches a client by being assigned to it (a `plan_members` advisor row — what 0001 already writes for whoever
+  creates a client). Migration 0061 backfills every existing advisor onto every plan of their firm, so nobody
+  loses a plan they could open before; the admin then takes them off. **Team** (`/firm/team`): everyone in the
+  firm, role, clients looked after, joined; the admin invites (a link sent from their own email, `/join/[token]`,
+  14 days, once, that address only), changes a role, cancels an invitation, and removes someone — which also
+  takes them off every client, so a plan membership does not outlive the job. The firm always keeps one admin.
+  **My Clients**: "Looked after by" on each client (admin ticks teammates; an advisor sees the names), the names
+  under each client in the list, and an admin filter "Looked after by …" / "Nobody looks after yet". The "Your
+  Planner" card now prefers the assigned Planner. ALSO CLOSED: 0005 let a plan's or firm's creator read its row
+  for ever (for INSERT … RETURNING); with a team that let a removed or unassigned consultant still see the row.
+  It now holds only inside the creating transaction (`created_at = now()`). Database tests: new
+  `supabase/tests/team.sql` (8 blocks); `client_access.sql` updated for assignment; the stale "one annual goal
+  per area" assertion in `tenant_isolation.sql` corrected (0046 removed that rule on purpose). `scripts/test-db.sh`
+  now runs each test file on a fresh database. All three pass.

@@ -116,7 +116,9 @@ select _assert(_allowed($q$insert into plan_goals (id,plan_id,area,title) values
 select _as('00000000-0000-0000-0000-000000000005');
 select _assert(not _allowed($q$insert into plan_goals (plan_id,parent_id,area,title,quarter) values ('20000000-0000-0000-0000-000000000005','30000000-0000-0000-0000-000000000001','sales','q goal',1)$q$), 'quarterly goal cannot point at a parent in another plan');
 select _as('a0000000-0000-0000-0000-00000000000b');
-select _assert(not _allowed($q$insert into plan_goals (plan_id,area,title) values ('20000000-0000-0000-0000-000000000001','sales','Second annual sales goal')$q$), 'only one annual goal per area');
+-- 0046 (goals on a ladder) dropped "one annual goal per area": a plan may hold several goals in one area at
+-- different horizons. The old assertion outlived the rule it tested.
+select _assert(_allowed($q$insert into plan_goals (plan_id,area,title) values ('20000000-0000-0000-0000-000000000001','sales','Second annual sales goal')$q$), 'a second top-level goal in the same area is allowed (0046)');
 select _assert(_allowed($q$insert into plan_goals (plan_id,parent_id,area,title,quarter) values ('20000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000001','sales','Q1 goal',1)$q$), 'quarterly goal under same-plan parent');
 reset role;
 

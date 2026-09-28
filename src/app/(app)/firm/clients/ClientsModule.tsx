@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Field, FieldGrid, FieldInput } from "@/components/module/FieldGrid";
 import { cn } from "@/lib/utils";
 import { SetupForm } from "../../setup/SetupForm";
-import { inviteClient, revokeClientAccess, saveClientContact, setClientDownload, type ContactPatch } from "../actions";
+import { assignPlanner, inviteClient, revokeClientAccess, saveClientContact, setClientDownload, type ContactPatch } from "../actions";
 
 type Contact = Required<{ [K in keyof ContactPatch]: string | null }>;
 export type ClientRow = {
@@ -17,6 +17,8 @@ export type ClientRow = {
   contact: Contact;
   /** May the client download their own business plan (§6.183). */
   canDownload: boolean;
+  /** Who in the firm looks after this client (§6.184). */
+  planners: string[];
   access: { state: "none" | "invited" | "expired" | "active" | "off"; email: string | null; token: string | null; expiresAt: string | null; since: string | null };
 };
 
@@ -37,7 +39,10 @@ const person = (c: Contact) => [c.contact_first_name, c.contact_family_name].fil
  * without what it needed only because it was built a decade ago (passwords on screen, counted credits).
  * Invite, access and the three scores arrive in part 2.
  */
-export function ClientsModule({ rows, others, selected, firm, me, origin }: {
+export type Person = { id: string; name: string; role: string };
+
+export function ClientsModule({ team, isAdmin, meId, rows, others, selected, firm, me, origin }: {
+  team: Person[]; isAdmin: boolean; meId: string;
   rows: ClientRow[]; others: { id: string; businessName: string }[]; selected: string | null;
   firm: { country: string | null; currency: string; name: string };
   me: { name: string | null };
@@ -47,7 +52,10 @@ export function ClientsModule({ rows, others, selected, firm, me, origin }: {
   const [pick, setPick] = useState(selected && rows.some((r) => r.id === selected) ? selected : rows.find((r) => !r.archived)?.id ?? rows[0]?.id ?? null);
   const [adding, setAdding] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
-  const shown = useMemo(() => rows.filter((r) => (showArchived || !r.archived) && (!q.trim() || `${r.businessName} ${person(r.contact)} ${r.contact.contact_email ?? ""}`.toLowerCase().includes(q.trim().toLowerCase()))), [rows, q, showArchived]);
+  /* An admin sees every client; "whose" narrows the list to one teammate's (§6.184). */
+  const [whose, setWhose] = useState<string>("all");
+  const nameOf = (id: string) => team.find((t) => t.id === id)?.name ?? "Someone who left";
+  const shown = useMemo(() => rows.filter((r) => (showArchived || !r.archived) && (whose === "all" || (whose === "none" ? !r.planners.length : r.planners.includes(whose))) && (!q.trim() || `${r.businessName} ${person(r.contact)} ${r.contact.contact_email ?? ""}`.toLowerCase().includes(q.trim().toLowerCase()))), [rows, q, showArchived, whose]);
   const archivedCount = rows.filter((r) => r.archived).length;
   const current = rows.find((r) => r.id === pick) ?? null;
 
@@ -67,6 +75,14 @@ export function ClientsModule({ rows, others, selected, firm, me, origin }: {
           <div className="border-b border-border p-3">
             <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by business or contact"
               className="h-8 w-full rounded-md border border-input bg-background px-2.5 text-[13px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50" />
+            {isAdmin && team.length > 1 && (
+              <select value={whose} onChange={(e) => setWhose(e.target.value)} aria-label="Whose clients"
+                className="mt-2 h-8 w-full rounded-md border border-input bg-background px-2 text-[13px]">
+                <option value="all">Every client in the firm</option>
+                {team.map((t) => <option key={t.id} value={t.id}>{t.id === meId ? "Looked after by me" : `Looked after by ${t.name}`}</option>)}
+                <option value="none">Nobody looks after yet</option>
+              </select>
+            )}
           </div>
           <ul className="min-h-0 flex-1 overflow-y-auto">
             {shown.map((r) => (
@@ -77,6 +93,7 @@ export function ClientsModule({ rows, others, selected, firm, me, origin }: {
                   <span className="min-w-0 flex-1">
                     <span className={cn("block truncate text-[13.5px] font-semibold", r.archived && "text-muted-foreground")}>{r.businessName}</span>
                     <span className="block truncate text-[12px] text-muted-foreground">{person(r.contact) || "No contact yet"} · Plan {r.planYears}</span>
+                    {team.length > 1 && <span className="block truncate text-[11.5px] text-muted-foreground">{r.planners.length ? r.planners.map(nameOf).join(", ") : "Nobody assigned"}</span>}
                   </span>
                   {r.archived
                     ? <span className="rounded border border-border px-1.5 text-[10.5px] text-muted-foreground">Archived</span>
@@ -100,7 +117,7 @@ export function ClientsModule({ rows, others, selected, firm, me, origin }: {
         </aside>
 
         <section className="min-h-0 overflow-y-auto">
-          {current ? <ClientPanel key={current.id} r={current} firm={firm.name} me={me.name} origin={origin} /> : (
+          {current ? <ClientPanel key={current.id} r={current} firm={firm.name} me={me.name} origin={origin} team={team} isAdmin={isAdmin} /> : (
             <p className="px-6 py-10 text-[13px] text-muted-foreground">Pick a business on the left, or add your first one.</p>
           )}
         </section>
@@ -119,7 +136,7 @@ export function ClientsModule({ rows, others, selected, firm, me, origin }: {
   );
 }
 
-function ClientPanel({ r, firm, me, origin }: { r: ClientRow; firm: string; me: string | null; origin: string }) {
+function ClientPanel({ r, firm, me, origin, team, isAdmin }: { r: ClientRow; firm: string; me: string | null; origin: string; team: Person[]; isAdmin: boolean }) {
   const router = useRouter();
   const [c, setC] = useState<Contact>(r.contact);
   const [error, setError] = useState<string>();
@@ -157,6 +174,8 @@ function ClientPanel({ r, firm, me, origin }: { r: ClientRow; firm: string; me: 
         <Button render={<Link href={`/plans/${r.id}/dashboard`} />}>Open plan →</Button>
       </div>
 
+      <LookedAfterBy r={r} team={team} isAdmin={isAdmin} />
+
       <h3 className="eyebrow mt-6">The business</h3>
       <p className="mt-1 text-[12px] text-muted-foreground">Read from the plan, so nobody types them twice. Change them inside the plan.</p>
       <dl className="mt-2 grid grid-cols-[130px_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-[13px]">
@@ -180,6 +199,46 @@ function ClientPanel({ r, firm, me, origin }: { r: ClientRow; firm: string; me: 
 
       <ClientAccess r={r} contact={c} firm={firm} me={me} origin={origin} />
     </div>
+  );
+}
+
+/**
+ * WHO LOOKS AFTER THIS CLIENT (§6.184). An advisor sees only the clients they look after; an admin sees all
+ * and decides. The first person listed is the one on the client's "Your Planner" card, unless someone else
+ * sent the invitation they accepted.
+ */
+function LookedAfterBy({ r, team, isAdmin }: { r: ClientRow; team: Person[]; isAdmin: boolean }) {
+  const router = useRouter();
+  const [on, setOn] = useState<string[]>(r.planners);
+  const [error, setError] = useState<string>();
+  const [busy, start] = useTransition();
+  if (team.length < 2 && !isAdmin) return null;
+  const flip = (id: string, v: boolean) => {
+    setError(undefined); setOn((x) => (v ? [...x, id] : x.filter((y) => y !== id)));
+    start(async () => {
+      const res = await assignPlanner(r.id, id, v);
+      if (!res.ok) { setError(res.error); setOn((x) => (v ? x.filter((y) => y !== id) : [...x, id])); return; }
+      router.refresh();
+    });
+  };
+  return (
+    <>
+      <h3 className="eyebrow mt-6">Looked after by</h3>
+      {isAdmin ? (
+        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1.5 text-[13px]">
+          {team.map((t) => (
+            <label key={t.id} className="flex items-center gap-1.5">
+              <input type="checkbox" checked={on.includes(t.id)} disabled={busy} onChange={(e) => flip(t.id, e.target.checked)} />
+              {t.name}{t.role === "admin" && <span className="text-[11.5px] text-muted-foreground">(admin)</span>}
+            </label>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-1 text-[13px]">{on.map((id) => team.find((t) => t.id === id)?.name).filter(Boolean).join(", ") || "Nobody yet"}</p>
+      )}
+      {isAdmin && <p className="mt-1 text-[11.5px] text-muted-foreground">An advisor sees this client only while they are ticked. Admins see every client either way.</p>}
+      {error && <p className="mt-1 text-[12.5px] font-semibold text-bad" role="alert">{error}</p>}
+    </>
   );
 }
 

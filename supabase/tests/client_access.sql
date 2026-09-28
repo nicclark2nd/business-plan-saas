@@ -48,7 +48,9 @@ select _assert(_raises($$select * from create_plan_invitation('20000000-0000-000
 select _as('50000000-0000-0000-0000-000000000005');
 select _assert(_raises($$select * from create_plan_invitation('20000000-0000-0000-0000-000000000005', 'c@example.com')$$), 'an owner plan (not a firm) took an invitation');
 
--- 2. An advisor invites; a bad email is refused.
+-- 2. An advisor invites; a bad email is refused. Since 0061 an advisor reaches a client only once assigned.
+select _as('f0000000-0000-0000-0000-00000000000f');
+select assign_planner('20000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-00000000000a', true);
 select _as('a0000000-0000-0000-0000-00000000000a');
 select _assert(_raises($$select * from create_plan_invitation('20000000-0000-0000-0000-000000000001', 'not-an-email')$$), 'a bad email was accepted');
 create temp table t1 as select * from create_plan_invitation('20000000-0000-0000-0000-000000000001', ' C@example.com ');
