@@ -17,3 +17,5 @@ for f in supabase/migrations/*.sql; do
 done
 echo "running tenant isolation tests"
 psql "$TEST_URL" -v ON_ERROR_STOP=1 -Atq -f supabase/tests/tenant_isolation.sql | tail -1
+echo "running client access tests"
+psql "$TEST_URL" -v ON_ERROR_STOP=1 -Atq -f supabase/tests/client_access.sql | tail -1

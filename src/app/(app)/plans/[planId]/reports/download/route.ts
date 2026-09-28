@@ -2,6 +2,7 @@ import { docxFileName, renderDocx, type DocxLogo } from "@/engine/report/docx";
 import { createClient } from "@/lib/supabase/server";
 import { LOGO_BUCKET, logoWordType } from "@/engine/plan/logo";
 import { gatherReport } from "../gather";
+import { mayDownload } from "@/lib/clientAccess";
 
 async function fetchLogo(planId: string, path: string | null): Promise<DocxLogo | null> {
   const type = logoWordType(path);
@@ -31,6 +32,10 @@ export const dynamic = "force-dynamic";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ planId: string }> }) {
   const { planId } = await params;
+  /* A firm's client downloads only when their Planner allows it (§6.183) — refused here, not just hidden. */
+  if (!(await mayDownload(planId))) {
+    return new Response(JSON.stringify({ error: "Ask your Planner for a copy." }), { status: 403, headers: { "Content-Type": "application/json" } });
+  }
   /* The paper comes from the plan, not from this route — the screen and the file are one gather (§6.90). */
   const { doc, missing, pageSize, logoPath } = await gatherReport(planId);
   /*

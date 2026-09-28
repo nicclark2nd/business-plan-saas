@@ -28,11 +28,13 @@ export async function signUp(_: AuthState, formData: FormData): Promise<AuthStat
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const fullName = String(formData.get("full_name") ?? "").trim();
+  /* An invited client (§6.183) comes back to their invitation, not to setup — through the email link too. */
+  const next = safeNext(formData.get("next") as string | null);
   if (password.length < 8) return { error: "Use a password of at least 8 characters." };
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { full_name: fullName }, emailRedirectTo: `${origin}/auth/callback` },
+    options: { data: { full_name: fullName }, emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}` },
   });
   /*
    * THE SAME ANSWER WHETHER THE ADDRESS IS NEW OR KNOWN (§6.119).
@@ -50,7 +52,7 @@ export async function signUp(_: AuthState, formData: FormData): Promise<AuthStat
     return sent;
   }
   if (!data.session) return sent;
-  redirect("/setup");
+  redirect(next);
 }
 
 export async function signOut() {

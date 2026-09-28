@@ -6,7 +6,10 @@ import { NAV, GUIDED_STEPS, type NavItem } from "@/lib/nav";
 import { useMode } from "@/components/ModeProvider";
 import { cn } from "@/lib/utils";
 
-export function Sidebar({ planId, doneSteps }: { planId: string; doneSteps: number[] }) {
+/** The "Your Planner" card (§6.183) — shown to a firm's client, never to the Planner themselves. */
+export type SidebarPlanner = { name: string; title: string | null; phone: string | null; email: string | null; photoUrl: string | null };
+
+export function Sidebar({ planId, doneSteps, planner = null }: { planId: string; doneSteps: number[]; planner?: SidebarPlanner | null }) {
   const { mode } = useMode();
   const path = usePathname();
   const area = useSearchParams().get("area");
@@ -66,6 +69,23 @@ export function Sidebar({ planId, doneSteps }: { planId: string; doneSteps: numb
       <div className="mt-4 border-t border-sidebar-border px-4 pt-3.5 text-[11px] text-sidebar-muted">
         {mode === "guided" ? <><b className="text-sidebar-foreground">Guided path</b> — {GUIDED_STEPS.length} steps, {doneSteps.length} done.</> : <><b className="text-sidebar-foreground">Advanced</b> — every module and assumption.</>}
       </div>
+      {planner && (
+        <div className="mx-3 mt-4 rounded-md border border-sidebar-border bg-sidebar-accent/60 p-3 text-[12px]">
+          <div className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-sidebar-muted">Your Planner</div>
+          <div className="mt-2 flex items-center gap-2.5">
+            {planner.photoUrl
+              /* eslint-disable-next-line @next/next/no-img-element -- a short-lived signed URL; next/image would cache it past its life */
+              ? <img src={planner.photoUrl} alt={planner.name} className="size-10 shrink-0 rounded-full object-cover" />
+              : <span className="grid size-10 shrink-0 place-items-center rounded-full bg-sidebar-primary text-[13px] font-bold text-sidebar-primary-foreground">{planner.name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase()}</span>}
+            <div className="min-w-0">
+              <div className="truncate font-semibold text-sidebar-foreground">{planner.name}</div>
+              {planner.title && <div className="truncate text-sidebar-muted">{planner.title}</div>}
+            </div>
+          </div>
+          {planner.phone && <a href={`tel:${planner.phone.replace(/[^\d+]/g, "")}`} className="mt-2 block truncate text-sidebar-foreground hover:underline">{planner.phone}</a>}
+          {planner.email && <a href={`mailto:${planner.email}`} className="block truncate text-sidebar-foreground hover:underline">{planner.email}</a>}
+        </div>
+      )}
     </nav>
   );
 }

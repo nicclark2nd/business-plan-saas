@@ -199,3 +199,47 @@ export async function addClient(_: AddState, formData: FormData): Promise<AddSta
   if ("error" in made) return { error: made.error };
   redirect(`/firm/clients?client=${made.id}`);
 }
+
+/* ---------------------------------------------------------------- client access (§6.183) ---- */
+
+/**
+ * CREATE THE INVITATION LINK. No email is sent by the app (Nic: the email comes from the consultant, and all
+ * email is built last) — the link comes back to the screen, to copy or to open in the consultant's own email.
+ * The link goes to the contact person's email already saved in My Clients, so there is one address to trust.
+ */
+export async function inviteClient(planId: string): Promise<{ ok: true; token: string; expiresAt: string } | { ok: false; error: string }> {
+  const firm = await loadMyFirm();
+  if (!firm) return { ok: false, error: "You are not signed in to a firm." };
+  const supabase = await createClient();
+  const { data: plan } = await supabase.from("plans").select("*").eq("id", planId).eq("organisation_id", firm.id).maybeSingle();
+  if (!plan) return { ok: false, error: "That business is not one of your firm's clients." };
+  const email = typeof plan.contact_email === "string" ? plan.contact_email.trim() : "";
+  if (!email) return { ok: false, error: "Add the contact person's email first — the invitation only works with that address." };
+  const { data, error } = await supabase.rpc("create_plan_invitation", { p_plan: planId, p_email: email });
+  const row = (data as { token: string; expires_at: string }[] | null)?.[0];
+  if (error || !row) return failed(error, "create the invitation");
+  revalidatePath("/firm/clients");
+  return { ok: true, token: row.token, expiresAt: row.expires_at };
+}
+
+/** Turn the client's access off: out of the plan now, and any open link closed. They can be invited again. */
+export async function revokeClientAccess(planId: string): Promise<Result> {
+  const firm = await loadMyFirm();
+  if (!firm) return { ok: false, error: "You are not signed in to a firm." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("revoke_client_access", { p_plan: planId });
+  if (error) return failed(error, "turn off the client's access");
+  revalidatePath("/firm/clients");
+  return { ok: true };
+}
+
+/** Whether the client may download their own business plan (the old "Your client can print their own reports"). */
+export async function setClientDownload(planId: string, allow: boolean): Promise<Result> {
+  const firm = await loadMyFirm();
+  if (!firm) return { ok: false, error: "You are not signed in to a firm." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_client_download", { p_plan: planId, p_allow: !!allow });
+  if (error) return failed(error, "change what the client may download");
+  revalidatePath("/firm/clients");
+  return { ok: true };
+}

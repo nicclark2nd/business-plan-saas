@@ -1036,3 +1036,21 @@ projection step and scored on the Plan view, after.)
   the photo. Migration 0059: firm details on `organisations`, title/phone/photo on `profiles`, the contact person
   on `plans`, private `profile-photos` bucket (read by anyone who shares a firm with the person). Next: part 2 —
   client access (invite, turn off, "Your Planner" card, may-download switch).
+- **§6.183** The consultant's own area, part 2 — client access. No email leaves the app (Nic: the email comes from
+  the consultant; all email is built last). In My Clients each business shows Not invited / Invited / Link expired
+  / Active / Access off. "Create invitation" makes a link for the contact person's email (14 days, one use, that
+  address only; "Make a new link" closes the old one), shown with Copy link and Open in my email — a message
+  already written, sent from the consultant's own mailbox. The link opens `/invite/[token]`: whose plan and which
+  firm, then create a login with that email or sign in; accepting puts the client in that plan only. "Turn access
+  off" takes every client out and closes any open link. "The client may download their own business plan" is
+  enforced on the Word download route, not just hidden. Inside the plan a client sees the "Your Planner" card
+  (name, title, phone, email, photo of the Planner who invited them); a Planner never sees it. Migration 0060: no
+  service key — each step is a SECURITY DEFINER function that checks one thing (the caller is the firm's Planner,
+  or is the invited email): `create_plan_invitation`, `invitation_preview`, `accept_plan_invitation`,
+  `revoke_client_access`, `set_client_download`, `firm_client_access`, `plan_planner`; the photo is readable by
+  the Planner's clients. New `supabase/tests/client_access.sql` (12 blocks: who may invite, resend closes the old
+  link, only the invited email accepts, a link works once, the client sees no firm, the card, the switch, the
+  photo, access off) — passes on a fresh database; the test stub gained `storage` and `anon`. NOTE: the older
+  `tenant_isolation.sql` fails at "only one annual goal per area" on current migrations — pre-existing, from the
+  goals-ladder change, not this work. Open: a brand-new client's "confirm your email" message still comes from
+  Supabase until email is built.

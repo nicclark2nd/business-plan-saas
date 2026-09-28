@@ -1,7 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC = ["/login", "/signup", "/auth"];
+/* `/invite` (§6.183): an invitation link is opened before its reader has an account. */
+const PUBLIC = ["/login", "/signup", "/auth", "/invite"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });

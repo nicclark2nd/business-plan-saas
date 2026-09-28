@@ -8,13 +8,25 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Field, FieldGrid, FieldInput } from "@/components/module/FieldGrid";
 import { cn } from "@/lib/utils";
 import { SetupForm } from "../../setup/SetupForm";
-import { saveClientContact, type ContactPatch } from "../actions";
+import { inviteClient, revokeClientAccess, saveClientContact, setClientDownload, type ContactPatch } from "../actions";
 
 type Contact = Required<{ [K in keyof ContactPatch]: string | null }>;
 export type ClientRow = {
   id: string; businessName: string; archived: boolean; createdAt: string; planYears: string;
   address: string | null; email: string | null; website: string | null; country: string | null;
   contact: Contact;
+  /** May the client download their own business plan (§6.183). */
+  canDownload: boolean;
+  access: { state: "none" | "invited" | "expired" | "active" | "off"; email: string | null; token: string | null; expiresAt: string | null; since: string | null };
+};
+
+/** The client's access in four words the list can show at a glance (§6.183). */
+const ACCESS: Record<ClientRow["access"]["state"], { label: string; tone: string }> = {
+  none: { label: "Not invited", tone: "border-border text-muted-foreground" },
+  invited: { label: "Invited", tone: "border-warn/50 text-warn" },
+  expired: { label: "Link expired", tone: "border-bad/40 text-bad" },
+  active: { label: "Active", tone: "border-good/50 text-good" },
+  off: { label: "Access off", tone: "border-border text-muted-foreground" },
 };
 
 const date = (iso: string) => new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
@@ -25,9 +37,11 @@ const person = (c: Contact) => [c.contact_first_name, c.contact_family_name].fil
  * without what it needed only because it was built a decade ago (passwords on screen, counted credits).
  * Invite, access and the three scores arrive in part 2.
  */
-export function ClientsModule({ rows, others, selected, firm }: {
+export function ClientsModule({ rows, others, selected, firm, me, origin }: {
   rows: ClientRow[]; others: { id: string; businessName: string }[]; selected: string | null;
-  firm: { country: string | null; currency: string };
+  firm: { country: string | null; currency: string; name: string };
+  me: { name: string | null };
+  origin: string;
 }) {
   const [q, setQ] = useState("");
   const [pick, setPick] = useState(selected && rows.some((r) => r.id === selected) ? selected : rows.find((r) => !r.archived)?.id ?? rows[0]?.id ?? null);
@@ -64,7 +78,9 @@ export function ClientsModule({ rows, others, selected, firm }: {
                     <span className={cn("block truncate text-[13.5px] font-semibold", r.archived && "text-muted-foreground")}>{r.businessName}</span>
                     <span className="block truncate text-[12px] text-muted-foreground">{person(r.contact) || "No contact yet"} · Plan {r.planYears}</span>
                   </span>
-                  {r.archived && <span className="rounded border border-border px-1.5 text-[10.5px] text-muted-foreground">Archived</span>}
+                  {r.archived
+                    ? <span className="rounded border border-border px-1.5 text-[10.5px] text-muted-foreground">Archived</span>
+                    : <span className={cn("shrink-0 rounded border px-1.5 text-[10.5px] font-semibold", ACCESS[r.access.state].tone)}>{ACCESS[r.access.state].label}</span>}
                 </button>
               </li>
             ))}
@@ -84,7 +100,7 @@ export function ClientsModule({ rows, others, selected, firm }: {
         </aside>
 
         <section className="min-h-0 overflow-y-auto">
-          {current ? <ClientPanel key={current.id} r={current} /> : (
+          {current ? <ClientPanel key={current.id} r={current} firm={firm.name} me={me.name} origin={origin} /> : (
             <p className="px-6 py-10 text-[13px] text-muted-foreground">Pick a business on the left, or add your first one.</p>
           )}
         </section>
@@ -103,7 +119,7 @@ export function ClientsModule({ rows, others, selected, firm }: {
   );
 }
 
-function ClientPanel({ r }: { r: ClientRow }) {
+function ClientPanel({ r, firm, me, origin }: { r: ClientRow; firm: string; me: string | null; origin: string }) {
   const router = useRouter();
   const [c, setC] = useState<Contact>(r.contact);
   const [error, setError] = useState<string>();
@@ -161,6 +177,105 @@ function ClientPanel({ r }: { r: ClientRow }) {
         </FieldGrid>
       </div>
       {(error || note) && <p className={error ? "mt-2 text-[12.5px] font-semibold text-bad" : "mt-2 text-[12px] text-muted-foreground"} role={error ? "alert" : undefined}>{error ?? note}</p>}
+
+      <ClientAccess r={r} contact={c} firm={firm} me={me} origin={origin} />
     </div>
+  );
+}
+
+/**
+ * CLIENT ACCESS (§6.183) — invite, see where it stands, turn it off, and whether they may download.
+ *
+ * NO EMAIL LEAVES THE APP. Nic: the email comes from the consultant. So the link is shown, copied, or opened in
+ * the consultant's own email program with the message already written — they press send, from their own
+ * address, and the client sees it come from the person they know.
+ */
+function ClientAccess({ r, contact, firm, me, origin }: { r: ClientRow; contact: Contact; firm: string; me: string | null; origin: string }) {
+  const router = useRouter();
+  const [token, setToken] = useState(r.access.token);
+  const [expires, setExpires] = useState(r.access.expiresAt);
+  const [error, setError] = useState<string>();
+  const [copied, setCopied] = useState(false);
+  const [confirmOff, setConfirmOff] = useState(false);
+  const [busy, start] = useTransition();
+  const [allow, setAllow] = useState(r.canDownload);
+
+  const link = token ? `${origin}/invite/${token}` : null;
+  const state = token && r.access.state !== "active" ? "invited" : r.access.state;
+  const first = contact.contact_first_name || "there";
+  const mail = link && contact.contact_email ? `mailto:${encodeURIComponent(contact.contact_email)}?subject=${encodeURIComponent(`Your login to ${r.businessName}'s business plan`)}&body=${encodeURIComponent(
+    `Hi ${first},\n\nI've set up ${r.businessName}'s business plan for us to work on together. Use this link to create your login — it works for 14 days, and only with this email address:\n\n${link}\n\nAny questions, just reply.\n\n${me ?? ""}\n${firm}`,
+  )}` : null;
+
+  const invite = () => { setError(undefined); start(async () => {
+    const res = await inviteClient(r.id);
+    if (!res.ok) { setError(res.error); return; }
+    setToken(res.token); setExpires(res.expiresAt); setCopied(false); router.refresh();
+  }); };
+  const off = () => { setError(undefined); setConfirmOff(false); start(async () => {
+    const res = await revokeClientAccess(r.id);
+    if (!res.ok) { setError(res.error); return; }
+    setToken(null); router.refresh();
+  }); };
+  const download = (v: boolean) => { setError(undefined); setAllow(v); start(async () => {
+    const res = await setClientDownload(r.id, v);
+    if (!res.ok) { setError(res.error); setAllow(!v); return; }
+    router.refresh();
+  }); };
+  const copy = async () => { if (!link) return; try { await navigator.clipboard.writeText(link); setCopied(true); } catch { setError("Couldn't copy — select the link and copy it by hand."); } };
+
+  const when = (iso: string | null) => (iso ? date(iso) : "");
+  return (
+    <>
+      <h3 className="eyebrow mt-7">Client access</h3>
+      <div className="mt-2 max-w-[720px] rounded-md border border-border p-4">
+        <div className="flex flex-wrap items-center gap-2 text-[13px]">
+          <span className={cn("rounded border px-1.5 text-[11px] font-semibold", ACCESS[state].tone)}>{ACCESS[state].label}</span>
+          <span className="text-muted-foreground">
+            {state === "none" && "The client has no login to this plan yet."}
+            {state === "invited" && <>Link for {r.access.email ?? contact.contact_email}, open until {when(expires)}.</>}
+            {state === "expired" && <>The last link ran out on {when(r.access.expiresAt)}. Send a new one.</>}
+            {state === "active" && <>{r.access.email ?? "The client"} has been in since {when(r.access.since)}.</>}
+            {state === "off" && "Their access is off. You can invite them again."}
+          </span>
+        </div>
+
+        {link && state === "invited" && (
+          <div className="mt-3 space-y-2">
+            <div className="flex gap-2">
+              <input readOnly value={link} onFocus={(e) => e.target.select()} className="h-8 min-w-0 flex-1 rounded-md border border-input bg-secondary/40 px-2.5 font-mono text-[12px]" />
+              <Button size="sm" variant="outline" onClick={copy}>{copied ? "Copied" : "Copy link"}</Button>
+              {mail && <Button size="sm" render={<a href={mail} />}>Open in my email</Button>}
+            </div>
+            <p className="text-[11.5px] text-muted-foreground">Send it from your own email. It works once, for 14 days, and only with {contact.contact_email}.</p>
+          </div>
+        )}
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {state !== "active" && (
+            <Button size="sm" onClick={invite} disabled={busy || !contact.contact_email}>
+              {state === "invited" ? "Make a new link" : state === "none" ? "Create invitation" : "Invite again"}
+            </Button>
+          )}
+          {!contact.contact_email && state !== "active" && <span className="text-[12px] text-muted-foreground">Add the contact person&apos;s email above first.</span>}
+          {(state === "active" || state === "invited") && !confirmOff && (
+            <Button size="sm" variant="outline" onClick={() => setConfirmOff(true)} disabled={busy}>Turn access off</Button>
+          )}
+          {confirmOff && (
+            <>
+              <span className="text-[12.5px]">{state === "active" ? "Take the client out of this plan now?" : "Cancel the link?"}</span>
+              <Button size="sm" variant="outline" onClick={off} disabled={busy}>Yes, turn it off</Button>
+              <Button size="sm" variant="outline" onClick={() => setConfirmOff(false)} disabled={busy}>Keep it</Button>
+            </>
+          )}
+        </div>
+
+        <label className="mt-4 flex items-center gap-2 border-t border-border pt-3 text-[13px]">
+          <input type="checkbox" checked={allow} disabled={busy} onChange={(e) => download(e.target.checked)} />
+          The client may download their own business plan
+        </label>
+        {error && <p className="mt-2 text-[12.5px] font-semibold text-bad" role="alert">{error}</p>}
+      </div>
+    </>
   );
 }

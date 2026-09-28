@@ -14,6 +14,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { Brand } from "@/components/Brand";
 import { GUIDED_STEPS } from "@/lib/nav";
 import { loadFirm } from "@/lib/firm";
+import { plannerCard } from "@/lib/clientAccess";
 
 export default async function PlanLayout({ children, params }: { children: React.ReactNode; params: Promise<{ planId: string }> }) {
   const { planId } = await params;
@@ -25,6 +26,8 @@ export default async function PlanLayout({ children, params }: { children: React
   const [completeness, firm] = await Promise.all([getPlanCompleteness(planId), loadFirm(planId)]);
   /* The way back to the consultant's own area (§6.182) — only for the firm's Planners, never for a client. */
   const backToFirm = !!firm?.isPlanner && firm.adviser;
+  /* A client of a firm sees who their Planner is (§6.183); a Planner does not see a card about themselves. */
+  const planner = firm?.isPlanner ? null : await plannerCard(planId);
   const supabase = await createClient();
   const { data: settings } = await supabase.from("plan_settings").select("currency, product_type, customer_type, country, gst_registered, gst_rate, gst_frequency, tax_region, tax_components, financial_year_end_month, first_projected_year").eq("plan_id", planId).maybeSingle();
   const firstYear = firstProjectedYear(settings?.first_projected_year, settings?.financial_year_end_month);
@@ -57,7 +60,7 @@ export default async function PlanLayout({ children, params }: { children: React
           <button type="submit" title="Sign out" className="grid size-7 place-items-center rounded-full bg-sidebar-accent text-[11px] font-bold text-sidebar-accent-foreground ring-1 ring-sidebar-border hover:bg-sidebar-primary">{initials}</button>
         </form>
       </header>
-      <Sidebar planId={planId} doneSteps={doneSteps} />
+      <Sidebar planId={planId} doneSteps={doneSteps} planner={planner} />
       {/*
         WHERE THE APP'S READING WIDTH IS DECIDED (§6.118).
         
