@@ -3,19 +3,12 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { KIND, PAID, allowanceOf, type AccountRow } from "./accounts";
 
-export type AccountRow = {
-  organisation_id: string; name: string; kind: string; created_at: string; on_hold_at: string | null; on_hold_reason: string | null;
-  admin_email: string | null; people: number; active_plans: number; archived_plans: number; clients_with_login: number;
-  billing_status: string; level_name: string | null; plans_included: number; extra_plans: number; granted_plans: number;
-  current_period_end: string | null; ai_calls_30d: number; last_activity: string | null;
-};
+export type { AccountRow };
 
 const date = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }) : "—");
-const PAID = new Set(["active", "trialing", "past_due"]);
-export const allowanceOf = (r: Pick<AccountRow, "billing_status" | "plans_included" | "extra_plans" | "granted_plans">) =>
-  Math.max(1, PAID.has(r.billing_status) ? r.plans_included + r.extra_plans : 0) + r.granted_plans;
-export const KIND: Record<string, string> = { owner: "Owner", coach: "Coach", consultant: "Consultant", accounting_firm: "Accounting firm" };
+
 
 /** THE ACCOUNTS (§6.186). Filter and search here; everything else is on the account's own page. */
 export function AccountsTable({ rows }: { rows: AccountRow[] }) {

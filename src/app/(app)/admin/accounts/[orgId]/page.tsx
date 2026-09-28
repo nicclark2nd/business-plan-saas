@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AccountActions } from "./AccountActions";
-import { KIND, allowanceOf, type AccountRow } from "../../AccountsTable";
+import { KIND, allowanceOf, type AccountRow } from "../../accounts";
 
 export const dynamic = "force-dynamic";
 
