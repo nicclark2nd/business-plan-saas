@@ -314,6 +314,7 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
       min: 0, max: 6, bands: [{ to: 1.5, s: "bad" }, { to: 3, s: "watch" }, { to: 6, s: "good" }],
       sub: i.undrawn ? `Includes ${m(i.undrawn)} of committed undrawn facility` : undefined,
       note: runway === null ? "Needs a forecast balance sheet and cash flow."
+        : runway < 0 ? "The bank is overdrawn at the end of the year, so there is no runway at all — any shortfall has to be borrowed."
         : runway < 1.5 ? "About a month of cover. One slow payer or one bad month and the business is on the phone to the bank."
         : runway < 3 ? "Enough to absorb a slow month, not a slow quarter."
         : "Enough cover to absorb a poor run without borrowing.",

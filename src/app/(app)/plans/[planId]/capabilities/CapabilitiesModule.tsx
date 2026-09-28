@@ -58,11 +58,13 @@ function buildView(
   const bare = (m: Metric) => (last ? { ...m, trend: undefined, trendAt: undefined } : m);
   const borrow = withTrends("borrow", applyRanges(borrowMetrics(posIn), posIn.ranges, "borrow"), posIn).map((m) => said(nameYears(bare(m), v.positionNames)));
   let sell = withTrends("sell", applyRanges(sellMetrics(posIn), posIn.ranges, "sell"), posIn).map((m) => said(nameYears(bare(m), v.positionNames)));
-  if (last) {
-    /* Sell's growth card needs two years; the position input holds one. Read it off the two actual years. */
-    const rev = applyRanges(sellMetrics(growIn), growIn.ranges, "sell").find((m) => m.key === "revenueGrowth");
-    if (rev) sell = sell.map((m) => (m.key === "revenueGrowth" ? said(nameYears(bare(rev), v.growNames)) : m));
-  }
+  /*
+   * ONE GROWTH FIGURE ON THE PAGE (§6.163). Sell's growth card read 2027 → 2028 while Grow's read 2026 →
+   * 2027 — two answers to one question. Both now come off the growth input: the last two actual years on
+   * the accounts, and the last actual year into Year 1 on the plan.
+   */
+  const rev = applyRanges(sellMetrics({ ...growIn, sale: { ...growIn.sale, exitYear: null } }), growIn.ranges, "sell").find((m) => m.key === "revenueGrowth");
+  if (rev) sell = sell.map((m) => (m.key === "revenueGrowth" ? said(nameYears(bare(rev), v.growNames)) : m));
   const growWeights = { ...GROW_WEIGHTS, yearEndCash: GROW_WEIGHTS.lowestCash ?? 1 };
   return {
     growIn, posIn, grow, borrow, sell, waiting: all.length - grow.length, growWeights,
@@ -1072,13 +1074,13 @@ function SellPanels({ P, metrics, input, money, planId, extras }: {
       <Panel title="From reported to normalised earnings"
         sub="What the accounts show, each add-back a buyer's accountant will test, and what a price is struck on.">
         {!bridge
-          ? <Empty planId={planId}>Needs a Year {saleYear(input.sale)} forecast.</Empty>
+          ? <Empty planId={planId}>Needs a {Y.year(saleYear(input.sale))} forecast.</Empty>
           : (w) => (
             <>
               <BarRows width={w} format={money} labelShare={0.45}
                 rows={[
                   /* §6.115.1: a loss is said in words, never left to a minus sign in front of the figure. */
-                  { label: `Reported EBITDA, Year ${saleYear(input.sale)}`, value: bridge.reported, tone: bridge.reported < 0 ? "bad" : "accent",
+                  { label: `Reported EBITDA, ${Y.year(saleYear(input.sale))}`, value: bridge.reported, tone: bridge.reported < 0 ? "bad" : "accent",
                     display: bridge.reported < 0 ? `${money(Math.abs(bridge.reported))} loss` : undefined },
                   ...bridge.adds.map((a) => ({ label: `+ ${a.label}`, value: a.amount, tone: "good" as const })),
                   { label: "Normalised earnings", value: bridge.normalised, tone: bridge.normalised < 0 ? "bad" : "accent",

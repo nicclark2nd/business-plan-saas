@@ -30,9 +30,16 @@ import { TRANSFER_FACTORS, saleYear } from "./judgements";
 const pct = (v: number) => `${r1(v)}%`;
 
 export function sellMetrics(i: CapabilityInput): Metric[] {
-  const y1 = i.pnl[1], y2 = i.pnl[2];
-  const bs1 = i.balanceSheet[1];
-  const cf1 = i.cashFlow[1];
+  /*
+   * ONE YEAR FOR THE WHOLE TAB (§6.163). The price was judged on the sale year while the margin, the cash
+   * return and the leadership share were judged on Year 1 — so SEQ's Plan view priced 2028 earnings beside a
+   * 2027 margin. A buyer looks at one set of numbers: the year the sale is aimed at (Year 1 until one is
+   * chosen). Every card below reads that year; only revenue growth still compares two.
+   */
+  const saleAt = saleYear(i.sale);
+  const y1 = i.pnl[saleAt], y2 = i.pnl[saleAt + 1] ?? (saleAt > 1 ? undefined : i.pnl[2]);
+  const bs1 = i.balanceSheet[saleAt];
+  const cf1 = i.cashFlow[saleAt];
   const m = i.money;
   const sale = i.sale;
   const FIX_PRICE = { label: "Set the asking price", to: "settings?area=exit" };
@@ -91,6 +98,8 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
 
   const leadershipShare = i.leadershipPay !== null && normalised && normalised > 0
     ? over(i.leadershipPay, normalised) : null;
+  /* 1,580% is not a reading anyone can use; "15.8× the earnings" is (§6.163). */
+  const shareShown = (v: number) => (v > 1 ? `${r1(v)}× earnings` : pct(v * 100));
   const intensity = bs1 && y1?.revenue ? over(bs1.fixedAssets, y1.revenue) : null;
 
   /* Both or neither: a range with one end is not a range, and the price dial needs a top to judge against. */
@@ -226,7 +235,7 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
     {
       key: "leadershipPay", name: "Leadership pay against earnings", unit: "pct",
       value: leadershipShare === null ? null : r1(leadershipShare * 100),
-      display: leadershipShare === null ? "—" : pct(leadershipShare * 100),
+      display: leadershipShare === null ? "—" : shareShown(leadershipShare),
       min: 0, max: 150, bands: [{ to: 40, s: "good" }, { to: 80, s: "watch" }, { to: 150, s: "bad" }],
       /* No "141,400 against −76,054": a share of a negative number is not a comparison, so the sub goes. */
       sub: i.leadershipPay !== null && normalised !== null && normalised > 0
@@ -242,6 +251,7 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       note: leadershipShare === null && i.leadershipPay !== null
         ? "The earnings are negative, so there is no share to express this as. The wage bill is real; the profit it has to come out of is not there yet."
         : leadershipShare === null ? "Needs people on the Leadership Team step and a Year 1 forecast."
+        : leadershipShare > 1 ? "The people running it are paid more than the business earns. A buyer would have to keep paying them out of earnings that are not there."
         : leadershipShare * 100 > 80 ? "The wage bill for the people running it is most of what the business earns. A buyer has to keep paying that, and will price accordingly."
         : "The earnings survive paying the people who run the business, which is what a buyer is checking.",
       bench: "Under 40% of earnings leaves a buyer room; over 80% and there is little left",

@@ -163,8 +163,11 @@ export function lenderChecklist(x: ExtraFacts, i: CapabilityInput, borrow: Metri
     const g = y1.revenue / x.lastRevenue - 1;
     L.push({
       label: "Forecast against last year", display: `${g >= 0 ? "+" : "−"}${r1(Math.abs(g) * 100)}%`, pct: null,
-      status: g > 0.3 ? "bad" : g > 0.15 ? "watch" : "good",
-      detail: g > 0.15 ? "Year 1 is well above what the business actually did last year. A lender will ask what changes." : "Year 1 sits close to what the business actually did last year.",
+      status: g > 0.3 ? "bad" : g > 0.05 || g < -0.05 ? "watch" : "good",
+      detail: g > 0.15 ? "The plan's first year is well above what the business actually did last year. A lender will ask what changes."
+        : g > 0.05 ? "The plan's first year is above what the business actually did last year. Reasonable, but a lender will want the reason."
+        : g < -0.05 ? "The plan's first year is below what the business actually did last year. A lender will ask why."
+        : "The plan's first year sits close to what the business actually did last year.",
     });
   } else {
     L.push({ label: "Forecast against last year", display: "No history", pct: null, status: "watch",
