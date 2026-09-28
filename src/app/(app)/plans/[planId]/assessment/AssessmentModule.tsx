@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { ModuleFrame, ModuleFooter } from "@/components/module/ModuleFrame";
 import { Note } from "@/components/module/DataGrid";
 import { GUIDED_STEPS, navGroup } from "@/lib/nav";
@@ -9,7 +9,9 @@ import { cn } from "@/lib/utils";
 import { useMoney } from "@/components/MoneyProvider";
 import type { BridgeStep, Issue } from "@/engine/capability/assessment";
 import type { Severity } from "@/engine/capability/model";
+import type { AgreedTargets } from "@/engine/capability/targets";
 import { continueFromAssessment } from "./actions";
+import { TargetControl } from "./TargetControl";
 
 type Score = { kind: "grow" | "borrow" | "sell"; value: number | null; band: Severity | null; label: string; headline: string };
 type Ask = { label: string; why: string; done: boolean; to: string };
@@ -18,6 +20,9 @@ export type AssessmentData =
   | {
       hasHistory: true; adviser: boolean; span: string; lastYear: number; prevYear: number | null;
       scores: Score[]; profit: BridgeStep[] | null; cash: BridgeStep[] | null; issues: Issue[]; asks: Ask[];
+      firstYear: number; agreed: AgreedTargets;
+      /** The two targets that are also plan settings, as the plan holds them now. */
+      settings: { cashFloor: number | null; loanTermMonths: number | null };
     };
 
 const STEP = GUIDED_STEPS.find((s) => s.id === "assessment")?.step ?? 8;
@@ -37,7 +42,8 @@ export function AssessmentModule({ planId, mode, data }: { planId: string; mode:
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const intent = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value === "later" ? "later" : "next";
-    start(async () => { await continueFromAssessment(planId, intent); });
+    const nothingToFix = data.hasHistory && data.issues.length === 0;
+    start(async () => { await continueFromAssessment(planId, intent, nothingToFix); });
   };
   return (
     <ModuleFrame
@@ -51,6 +57,8 @@ export function AssessmentModule({ planId, mode, data }: { planId: string; mode:
         <p>Before any projection is typed, the Planner reads the accounts and decides what the plan has to fix. This screen does that reading: how the business stands on growing, borrowing and selling, why profit and cash moved, and the problems that matter most — each with the direction the plan should take and the question to ask the client.</p>
         <h3>Where it goes next</h3>
         <p>The directions here are what the Sales, COGS, Overheads, Funding and Assumptions steps should be built to. At the end, Financial Capabilities checks whether the plan got there.</p>
+        <h3>Agreeing the targets</h3>
+        <p>Each problem comes with a target proposed from the accounts. Agree it as it is, or type the figure you and the client settle on and agree that. The cash floor and the term of the loans already owed are also settings the plan runs on, so agreeing them here sets them on Assumptions and Funding — unless a different figure has already been typed there, which is left alone.</p>
       </>}
     >
       <form id="assessment-form" onSubmit={onSubmit} className="hidden" />
@@ -75,6 +83,10 @@ function NoAccounts({ planId }: { planId: string }) {
 function Assessment({ planId, d }: { planId: string; d: Extract<AssessmentData, { hasHistory: true }> }) {
   const num = useMoney();
   const open = d.asks.filter((a) => !a.done).length;
+  const [agreed, setAgreed] = useState<AgreedTargets>(d.agreed);
+  const [settings, setSettings] = useState(d.settings);
+  const agreedCount = d.issues.filter((i) => agreed[i.target.kind]).length;
+  const settingOf = (i: Issue) => (i.target.kind === "cashFloor" ? settings.cashFloor : i.target.kind === "loanTermMonths" ? settings.loanTermMonths : undefined);
   return (
     <>
       {/* ---- where it stands ---- */}
@@ -102,7 +114,10 @@ function Assessment({ planId, d }: { planId: string; d: Extract<AssessmentData, 
       {/* ---- what to fix, and the direction for the plan ---- */}
       <section className="border-b border-border px-5 py-4">
         <h2 className="text-[15px] font-semibold">What the plan has to fix</h2>
-        <p className="mt-0.5 text-[12.5px] text-muted-foreground">Most urgent first — anything that threatens the loans or the bank — then by the money at stake.</p>
+        <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+          Most urgent first — anything that threatens the loans or the bank — then by the money at stake.
+          {d.issues.length > 0 && <> Each has a target proposed from the accounts: agree it, or change the figure first. <span className="font-semibold text-foreground">{agreedCount} of {d.issues.length} agreed.</span></>}
+        </p>
         {d.issues.length === 0
           ? <p className="mt-3 text-[13px]">Nothing in the accounts stands out as a problem. The plan can be built for growth.</p>
           : (
@@ -121,6 +136,12 @@ function Assessment({ planId, d }: { planId: string; d: Extract<AssessmentData, 
                     <dd>{i.direction} <Link className={LINK} href={`/plans/${planId}/${i.where.to}`}>{i.where.label} →</Link></dd>
                     <dt className="font-semibold text-muted-foreground">{d.adviser ? "Ask the client" : "Ask yourself"}</dt><dd className="italic">{i.ask}</dd>
                   </dl>
+                  <TargetControl planId={planId} proposed={i.target} agreed={agreed[i.target.kind]} setting={settingOf(i)} firstYear={d.firstYear}
+                    onSaved={(t, value) => {
+                      setAgreed(t);
+                      if (i.target.kind === "cashFloor") setSettings((s) => ({ ...s, cashFloor: value }));
+                      if (i.target.kind === "loanTermMonths") setSettings((s) => ({ ...s, loanTermMonths: value }));
+                    }} />
                 </li>
               ))}
             </ol>
@@ -143,7 +164,7 @@ function Assessment({ planId, d }: { planId: string; d: Extract<AssessmentData, 
             </li>
           ))}
         </ul>
-        <Note>Every figure here comes from Historic. Nothing on this screen changes the accounts or the plan.</Note>
+        <Note>Every figure here comes from Historic, and nothing here changes it. Agreeing a target records it for the plan; the cash floor and the loan term are also set where the plan reads them.</Note>
       </section>
     </>
   );

@@ -14,6 +14,7 @@ import { FORECAST_YEARS } from "@/engine/forecast/model";
 import { planMonths } from "@/engine/plan/calendar";
 import type { PlanFacts } from "@/app/(app)/plans/[planId]/capabilities/CapabilitiesModule";
 import type { HistoricRow } from "@/engine/capability/actual";
+import type { MonthsByYear } from "@/engine/capability/timeline";
 
 /**
  * EVERYTHING FINANCIAL CAPABILITIES READS, GATHERED ONCE (§6.164).
@@ -93,6 +94,8 @@ export async function loadCapabilityFacts(planId: string) {
   let firstYear = new Date().getFullYear() + 1;
   /* Bank debt already on the last balance sheet, which Funding does not itemise (§6.32.4). */
   let openingDebt = 0;
+  /* Every plan year month by month, for the year-by-year readiness line (§6.166). */
+  let monthsByYear: MonthsByYear = {};
 
   /*
    * THE FACTS CROSS THE WIRE; THE FORMATTER DOES NOT.
@@ -127,6 +130,10 @@ export async function loadCapabilityFacts(planId: string) {
     openingDebt = plan.opening.bankLoansModelled ? 0 : (plan.opening.bankLoansCurrent ?? 0) + (plan.opening.bankLoansNonCurrent ?? 0);
     const run = runForecast(plan);
     const f = run.checked ?? run.forecast;
+    monthsByYear = Object.fromEntries(Object.entries(run.monthlyByYear ?? {}).map(([y, mc]) => [Number(y), {
+      cash: mc?.months?.map((m) => m.closingCash) ?? [],
+      profit: run.shapesByYear?.[Number(y)] ? monthlyProfit(run.shapesByYear[Number(y)]) : [],
+    }]));
 
     /*
      * DEBT SERVICE COMES OFF THE CASH FLOW, not out of the funding rows a second time.
@@ -228,7 +235,7 @@ export async function loadCapabilityFacts(planId: string) {
   const kind = Array.isArray(org) ? org[0]?.kind : org?.kind;
   return {
     mode: (session?.profile?.mode ?? "guided") as "guided" | "advanced",
-    currency, facts: input, products: productFacts, facilities, months, openingDebt, extras, history, firstYear,
+    currency, facts: input, products: productFacts, facilities, months, openingDebt, extras, history, firstYear, monthsByYear,
     adviser: !!kind && kind !== "owner",
     settings: meta.data,
   };

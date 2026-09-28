@@ -7,6 +7,8 @@ import { DIAL_LABEL, SCORE_BANDS, statusOf } from "@/engine/capability/model";
 import { verdict } from "@/engine/capability/verdict";
 import { BORROW_WEIGHTS } from "@/engine/capability/borrow";
 import { SELL_WEIGHTS } from "@/engine/capability/sell";
+import { readTargets } from "@/engine/capability/targets";
+import { createClient } from "@/lib/supabase/server";
 import { AssessmentModule, type AssessmentData } from "./AssessmentModule";
 
 /**
@@ -24,7 +26,11 @@ const PAST: Record<string, string> = {
 
 export default async function AssessmentPage({ params }: { params: Promise<{ planId: string }> }) {
   const { planId } = await params;
-  const f = await loadCapabilityFacts(planId);
+  const supabase = await createClient();
+  const [f, stored] = await Promise.all([
+    loadCapabilityFacts(planId),
+    supabase.from("plan_settings").select("agreed_targets, cash_floor, existing_debt").eq("plan_id", planId).maybeSingle().then((r) => r.data),
+  ]);
   const money = moneyFormatter(f.currency);
   const views = capabilityViews(f.facts, f.history, f.firstYear);
 
@@ -63,6 +69,12 @@ export default async function AssessmentPage({ params }: { params: Promise<{ pla
       cash: prev ? cashBridge(prev, last) : null,
       issues: issuesFrom(prev, last, money).slice(0, 5),
       asks,
+      firstYear: f.firstYear,
+      agreed: readTargets(stored?.agreed_targets) ?? {},
+      settings: {
+        cashFloor: stored?.cash_floor === null || stored?.cash_floor === undefined ? null : Number(stored.cash_floor),
+        loanTermMonths: (stored?.existing_debt as { term_months?: number | null } | null)?.term_months ?? null,
+      },
     };
   }
 

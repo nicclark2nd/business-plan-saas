@@ -67,7 +67,7 @@ export function cashBridge(prev: ActualYear, last: ActualYear): BridgeStep[] {
   ];
 }
 
-/** A target the plan should be built to — proposed here, agreed by the Planner (stage 3). */
+/** A target the plan should be built to — proposed here, agreed by the Planner (§6.165, `targets.ts`). */
 export type Target =
   | { kind: "grossMargin"; value: number }
   | { kind: "overheadsCap"; value: number }
@@ -117,7 +117,7 @@ export function issuesFrom(prev: ActualYear | null, last: ActualYear, money: (v:
       title: "The loans cannot be repaid from trading",
       finding: `${m(dueNext)} of loans fall due in ${y + 1}, with about ${m(interest)} of interest — and trading ${netOp < 0 ? `used ${m(-netOp)} of cash` : `produced only ${m(netOp)}`} in ${y}.`,
       cause: "The repayment schedule is shorter than the business's cash can carry.",
-      direction: `Spread the ${m(debt)} owed over five years: about ${m(five)} a year in repayments and interest, against about ${m(dueNext + interest)} on the current schedule. Set the term under Loans already owed.`,
+      direction: `Spread the ${m(debt)} owed over five years: about ${m(five)} a year in repayments and interest, against about ${m(dueNext + interest)} on the current schedule.`,
       where: { label: "Funding", to: "funding" },
       ask: "Will the bank extend the term, or allow interest-only for a year? What security does it already hold?",
       target: { kind: "loanTermMonths", value: 60 },
@@ -135,7 +135,7 @@ export function issuesFrom(prev: ActualYear | null, last: ActualYear, money: (v:
       direction: `Build the plan to hold a cash floor of at least one month of overheads, about ${m(monthlyOh)}, and fund any gap before it opens.`,
       where: { label: "Assumptions → Cash & capital", to: "assumptions?area=cash" },
       ask: "Is there an overdraft, and how close to the limit did the account get during the year?",
-      target: { kind: "cashFloor", value: r2(monthlyOh) },
+      target: { kind: "cashFloor", value: Math.round(monthlyOh) },
     } as Issue);
   }
 
@@ -168,7 +168,7 @@ export function issuesFrom(prev: ActualYear | null, last: ActualYear, money: (v:
         direction: `Hold overheads at ${y}'s ${m(last.pnl.overheads)} and let them grow only with sales.`,
         where: { label: "Overheads", to: "overheads" },
         ask: `Which of ${y}'s new costs were one-offs, and which are permanent? Did they buy capacity the sales plan will use?`,
-        target: { kind: "overheadsCap", value: r2(last.pnl.overheads) },
+        target: { kind: "overheadsCap", value: Math.round(last.pnl.overheads) },
       } as Issue);
     }
 

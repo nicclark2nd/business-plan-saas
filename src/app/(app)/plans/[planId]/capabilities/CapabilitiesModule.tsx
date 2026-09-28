@@ -23,6 +23,7 @@ import { ageingView, concentration, earningsBridge, executionLines, lenderCheckl
 import { Meter } from "@/components/chart/core";
 import { borrowSummary, growSummary, sellSummary, type SummaryFacts } from "@/engine/capability/summary";
 import { buildView } from "@/engine/capability/views";
+import { capabilityTimeline, readiness, type MonthsByYear, type TimelineYear } from "@/engine/capability/timeline";
 import { capabilityViews, compareWith, type Comparison, type HistoricRow, type YearNames } from "@/engine/capability/actual";
 
 /**
@@ -63,7 +64,7 @@ const TONE: Record<Severity, ChartSeverity> = { good: "good", watch: "warn", bad
  * box on the step that owns the figure — Assumptions for the cash floor and the downside, Plan settings for
  * the price, Leadership Team for owner dependence, Fixed Assets for security, Funding for the borrowing.
  */
-export function CapabilitiesModule({ planId, mode, currency, facts, products, facilities, months, openingDebt, extras, history = [], firstYear, adviser = false }: {
+export function CapabilitiesModule({ planId, mode, currency, facts, products, facilities, months, openingDebt, extras, history = [], firstYear, adviser = false, monthsByYear = {} }: {
   planId: string; mode: "guided" | "advanced"; currency: string; facts: PlanFacts;
   /** Historic, every period, for the actual view (§6.158). Empty for a business with no accounts. */
   history?: HistoricRow[];
@@ -71,6 +72,8 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
   firstYear: number;
   /** A coach, consultant or firm: the summary box is written to them, about the owner (§6.160). */
   adviser?: boolean;
+  /** Every plan year month by month, for when-it-is-ready (§6.166). */
+  monthsByYear?: MonthsByYear;
   /** For the panels only (§6.129.2) — each product's five years, and the borrowing the plan carries. */
   products: ProductFacts[]; facilities: FacilityFacts[];
   /** The plan's own twelve months (§6.21), for the month-by-month cash panel. */
@@ -97,6 +100,8 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
   const actualV = useMemo(() => (views.actual ? buildView(views.actual, money, views.actual.last) : null), [views, money]);
   const planV = useMemo(() => buildView(views.plan, money, null), [views, money]);
   const V = view === "actual" && actualV ? actualV : planV;
+  /* Each plan year scored on its own: the year each capability arrives (§6.166). */
+  const line = useMemo(() => capabilityTimeline(facts, views, monthsByYear, firstYear, money), [facts, views, monthsByYear, firstYear, money]);
   const onActual = view === "actual" && !!actualV;
 
   const { grow, borrow, sell } = V;
@@ -203,6 +208,8 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
           <dt className="font-semibold text-muted-foreground">{adviser ? "Talk about first" : "Start with"}</dt><dd className="font-semibold">{summary.talk}</dd>
         </dl>
       </section>
+
+      {!onActual && line.length > 1 && <WhenReady line={line} tab={tab} onTab={setTab} />}
 
       {/* ---------- the verdict: identical on all three tabs ---------- */}
       {/*
@@ -312,6 +319,57 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
       </div>
       )}
     </ModuleFrame>
+  );
+}
+
+/**
+ * WHEN THE BUSINESS IS READY (§6.166) — the three capabilities scored year by year, and the year each one
+ * arrives. The question a Planner is asked most ("when could we borrow?"), answered in one line each.
+ */
+function WhenReady({ line, tab, onTab }: { line: TimelineYear[]; tab: Tab; onTab: (t: Tab) => void }) {
+  const rows: { k: Tab; name: string }[] = [{ k: "grow", name: "Grow" }, { k: "borrow", name: "Borrow" }, { k: "sell", name: "Sell" }];
+  const say = (k: Tab) => {
+    const r = readiness(line, k), ready = DIAL_LABEL[k].good, start = line[0].year;
+    if (r.from !== null && r.from === start) return <span className="text-good">{ready} from the start</span>;
+    if (r.from !== null) return <><span className="text-good">{ready} from {r.from}</span>{r.first !== null && r.first < r.from ? <span className="text-muted-foreground"> — briefly in {r.first} too</span> : null}</>;
+    if (r.first !== null) return <span className="text-warn">Ready in {r.first}, but slips back in {r.slips.join(" and ")}</span>;
+    return <span className="text-bad">Not ready in any year of the plan</span>;
+  };
+  const tone = (v: number | null) => {
+    const b = v === null ? null : statusOf(v, SCORE_BANDS);
+    return b === "good" ? "bg-good-soft text-good" : b === "watch" ? "bg-warn-soft text-warn" : b === "bad" ? "bg-bad-soft text-bad" : "bg-secondary text-muted-foreground";
+  };
+  return (
+    <section className="@container border-b border-border px-5 py-3.5">
+      <div className="flex flex-wrap items-baseline gap-x-3">
+        <span className="eyebrow">When the business is ready</span>
+        <span className="text-[12px] text-muted-foreground">Each year scored on its own. Ready means over 70. Sell is read as if the business were sold that year.</span>
+      </div>
+      <div className="mt-2 overflow-x-auto">
+        <table className="w-full min-w-[560px] border-separate border-spacing-y-1 text-[13px]">
+          <thead>
+            <tr className="text-[11.5px] font-semibold text-muted-foreground">
+              <th className="w-20 text-left font-semibold" />
+              {line.map((y) => <th key={y.k} className="w-16 text-center font-semibold tabular-nums">{y.year}</th>)}
+              <th className="pl-4 text-left font-semibold" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.k} onClick={() => onTab(r.k)} className={cn("cursor-pointer", r.k === tab ? "font-semibold" : "hover:bg-secondary/40")}>
+                <td className={cn("py-0.5 pr-2", r.k === tab && "text-primary")}>{r.name}</td>
+                {line.map((y) => (
+                  <td key={y.k} className="px-1 text-center">
+                    <span className={cn("inline-block min-w-10 rounded px-1.5 py-0.5 text-[12px] font-semibold tabular-nums", tone(y.scores[r.k]))}>{y.scores[r.k] ?? "—"}</span>
+                  </td>
+                ))}
+                <td className="pl-4 text-[12.5px] font-semibold">{say(r.k)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

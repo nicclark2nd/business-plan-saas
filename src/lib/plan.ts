@@ -50,6 +50,9 @@ export const getCompleteness = cache(async (planId: string, reconciled?: boolean
    * own plan: Review forecast fell to 0/1 the moment the select was wrong, because `assumptionsSet` reads
    * the same row.
    */
+  /* Its own query: a column one migration newer than the rest must not be able to empty the settings row. */
+  const agreedQ = supabase.from("plan_settings").select("agreed_targets").eq("plan_id", planId).maybeSingle()
+    .then((r) => (r.error ? null : r.data?.agreed_targets ?? null));
   const planRow = supabase.from("plans").select("business_name").eq("id", planId).maybeSingle().then((r) => r.data ?? null);
   const [framework] = await Promise.all([supabase.from("plan_framework").select("vision,mission,purpose,brand_promise,ai_direction,field_of_play").eq("plan_id", planId).maybeSingle()]);
   const fw = framework.data ? Object.values(framework.data).filter(Boolean).length : 0;
@@ -109,6 +112,7 @@ export const getCompleteness = cache(async (planId: string, reconciled?: boolean
       supabase.from("plan_operations").select("capacity_now, capacity_constraint").eq("plan_id", planId).maybeSingle().then((r) => r.data),
     ]).then(([a, b, c, cap]) => a + b + c + (String(cap?.capacity_now ?? "").trim() ? 1 : 0)),
   ]);
+  const agreedTargets = await agreedQ;
   const said = {
     funding: settings?.no_funding === true,
     assets: settings?.no_fixed_assets === true,
@@ -149,10 +153,10 @@ export const getCompleteness = cache(async (planId: string, reconciled?: boolean
     /**
      * THE PLANNER'S ASSESSMENT (§6.164). Nothing to assess without accounts, so a business with none is done
      * here the way it is done on Historic. With accounts it is done once the Planner has agreed the targets
-     * the plan will be built to (stage 3, §6.165) — until then it stays open, because reading the diagnosis
-     * is not the same as acting on it.
+     * the plan will be built to (§6.165) — until then it stays open, because reading the diagnosis is not the
+     * same as acting on it. `{}` is the Planner continuing past accounts that showed nothing to fix.
      */
-    { id: "assessment", label: "Planner's assessment", done: settings?.has_history === false || historic === 0 ? 1 : 0, total: 1 },
+    { id: "assessment", label: "Planner's assessment", done: settings?.has_history === false || historic === 0 || agreedTargets !== null ? 1 : 0, total: 1 },
     { id: "sales", label: "Sales", done: Math.min(products, 1), total: 1 },
     { id: "cogs", label: "COGS", done: Math.min(cogs + products, 1), total: 1 },
     { id: "overheads", label: "Overheads", done: Math.min(overheads, 1), total: 1 },

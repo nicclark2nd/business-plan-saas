@@ -840,7 +840,7 @@ tied up per extra $1 (11¢ vs 91¢).
   never fell; margin 3.6 points, its own 2026; customers 16 days later, its own 2026). "Downside" wording on
   Capabilities now reads "a bad year". Checked on ZZ ("Use these" saved the bank test; cleared back to unset).
 
-### 56. Financial Capabilities for the Planner — review and rebuild — **1 and 2 done (§6.163, §6.164); 3 and 5 next; 4 later**
+### 56. Financial Capabilities for the Planner — review and rebuild — **1, 2, 3 and 5 done (§6.163–§6.166); 4 later**
 
 Nic's critical review brief, 28 Sep 2026: the Planner (the app's name for the consultant) must be able to read
 each tab, understand the business's position, see which areas to address and how to work with the client, and
@@ -866,3 +866,19 @@ projection step and scored on the Plan view, after.)
   about 50,233 a year against 117,487; overheads +128,270 (+18.5%) against sales +5.7%; debtors 30 → 46 days;
   margin 42% → 38.4% (71,267); 21,315 in the bank, 0.3 months of overheads.
   Completeness: the step counts as done with no accounts; with accounts it stays open until targets are agreed (3).
+- **§6.165 (3)** Each issue on the assessment carries a target proposed from the accounts (loan term 60 months,
+  overheads no more than last year's, debtor days back to the year before, gross margin back to the year before,
+  a cash floor of one month's overheads, operating profit of at least nil). The Planner agrees it, or types their
+  own figure and agrees that; "Take back" removes it. Stored on `plan_settings.agreed_targets` (migration 0056),
+  one key per kind: `{ value, proposed, agreed_at }`. The cash floor and the loan term ARE plan settings, so
+  agreeing writes them through (`cash_floor`, `existing_debt.term_months`) — never asked twice — but only into an
+  empty setting or one still holding what was last agreed; a figure typed on Assumptions or Funding since is left
+  alone and the screen says so. The step is done once anything is agreed, or when the Planner continues past
+  accounts that showed nothing to fix (stored as `{}`). `agreed_targets` is read in its own query in `plan.ts`, so
+  a database without 0056 does not blank the rest of the completeness read.
+- **§6.166 (5)** "When the business is ready" on the Financial Capabilities Plan view: grow, borrow and sell scored
+  for each plan year on its own (that year moved to slot 1, through the same `buildView`), with the year each one
+  arrives — "Ready to borrow from 2029", "briefly in 2028 too", "slips back in 2030", or "not ready in any year".
+  The first column equals the page's own grow and borrow scores; sell is read as if sold that year. Works the same
+  for a plan with no accounts. Every plan year's months now come from the forecast (`monthsByYear`), so each
+  year's lowest-cash test uses that year's months. SEQ: grow and borrow ready from 2029, sell from 2030.
