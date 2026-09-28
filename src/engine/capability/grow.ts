@@ -43,7 +43,13 @@ export function growMetrics(i: CapabilityInput): Metric[] {
     ? workingCapitalSplit(owc1, owc2, y1.revenue, y2.revenue) : null;
   const wcPerDollar = split?.perDollar ?? null;
   /* Material when the terms moved more than a rounding amount — a thousand, or 5% of the rise. */
-  const termsShift = split && Math.abs(split.fromTerms) >= Math.max(1000, Math.abs(split.fromGrowth + split.fromTerms) * 0.05) ? split.fromTerms : 0;
+  /*
+   * WHAT SLOWER (OR FASTER) PAYMENT DID, IN ONE FIGURE FOR THE WHOLE APP (§6.173). The debtors this year less
+   * what last year's collection speed would have left on this year's sales — the same arithmetic as the
+   * debtor lever and the Planner's assessment, so the page and step 8 print one number, not three.
+   */
+  const debtorShift = bs1 && bs2 && y1 && y2 && y1.revenue > 0 ? r2(bs2.accountsReceivable - (bs1.accountsReceivable / y1.revenue) * y2.revenue) : 0;
+  const termsShift = Math.abs(debtorShift) >= 1000 ? debtorShift : 0;
 
   /*
    * THE GROWTH YEAR, LIKE OPERATING MARGIN (§6.168). This read slot 1 — which on the accounts view is the
@@ -322,8 +328,8 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       note: (wcPerDollar === null ? "Needs two forecast years with a balance sheet."
         : wcPerDollar > 0.25 ? "Growth is cash-hungry: a large slice of every new sale sits in stock and debtors before it reaches the bank."
         : "Each extra dollar of sales ties up a manageable amount of cash.")
-        + (termsShift > 0 ? ` A further ${m(termsShift)} was tied up by the terms moving${moved ? ` — ${moved}` : ""}. That is a collections problem, not a growth one.`
-          : termsShift < 0 ? ` Better terms released ${m(-termsShift)}${moved ? ` — ${moved}` : ""}.` : ""),
+        + (termsShift > 0 ? ` Slower payment tied up a further ${m(termsShift)}${moved ? ` — ${moved}` : ""}. That is a collections problem, not a growth one.`
+          : termsShift < 0 ? ` Faster payment released ${m(-termsShift)}${moved ? ` — ${moved}` : ""}.` : ""),
       bench: "Under 15¢ is comfortable for a business carrying stock",
       formula: "Year 1 (receivables + stock − payables) ÷ Year 1 revenue: what each extra dollar of sales ties up at the terms already in place. Any change in the terms is shown separately.",
       reveals: "How much cash the growth itself will swallow before it pays anything back.",

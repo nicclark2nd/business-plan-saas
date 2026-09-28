@@ -25,7 +25,8 @@ import { actualSummary, borrowSummary, growSummary, sellSummary, type SummaryFac
 import { issuesFrom } from "@/engine/capability/assessment";
 import { buildView } from "@/engine/capability/views";
 import { capabilityTimeline, readiness, type MonthsByYear, type TimelineYear } from "@/engine/capability/timeline";
-import type { TargetCheck } from "@/engine/capability/targets";
+import type { AgreedTargets, TargetCheck } from "@/engine/capability/targets";
+import { growLevers, growStory, growWith, leverTable, moveLine, withMoves, type Lever, type WithLeversRow } from "@/engine/capability/levers";
 import { actualYear, capabilityViews, compareWith, type Comparison, type HistoricRow, type YearNames } from "@/engine/capability/actual";
 
 /**
@@ -66,7 +67,7 @@ const TONE: Record<Severity, ChartSeverity> = { good: "good", watch: "warn", bad
  * box on the step that owns the figure — Assumptions for the cash floor and the downside, Plan settings for
  * the price, Leadership Team for owner dependence, Fixed Assets for security, Funding for the borrowing.
  */
-export function CapabilitiesModule({ planId, mode, currency, facts, products, facilities, months, openingDebt, extras, history = [], firstYear, adviser = false, monthsByYear = {}, targetChecks = [] }: {
+export function CapabilitiesModule({ planId, mode, currency, facts, products, facilities, months, openingDebt, extras, history = [], firstYear, adviser = false, monthsByYear = {}, targetChecks = [], agreedTargets = {} }: {
   planId: string; mode: "guided" | "advanced"; currency: string; facts: PlanFacts;
   /** Historic, every period, for the actual view (§6.158). Empty for a business with no accounts. */
   history?: HistoricRow[];
@@ -78,6 +79,8 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
   monthsByYear?: MonthsByYear;
   /** The targets agreed on the Planner's assessment, read against the plan (§6.167). */
   targetChecks?: TargetCheck[];
+  /** The agreed targets themselves — what the Plan view's levers aim at (§6.173). */
+  agreedTargets?: AgreedTargets;
   /** For the panels only (§6.129.2) — each product's five years, and the borrowing the plan carries. */
   products: ProductFacts[]; facilities: FacilityFacts[];
   /** The plan's own twelve months (§6.21), for the month-by-month cash panel. */
@@ -168,6 +171,39 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
     : onActual
       ? (TWO_YEAR.has(key) ? `The plan, ${views.plan.span.replace(" onward", "")}` : `The plan, ${planYear}`)
       : (TWO_YEAR.has(key) ? `Track record, ${views.actual.span}` : `Actual, ${views.actual.last.year}`);
+  /*
+   * WHAT FIXES IT (§6.173) — Grow only, for now. The levers the dials point to, each with its money, the year
+   * re-scored with them pulled, the story of how the dials connect, and under each card what would move it.
+   * On the accounts the levers aim at the year before; on the plan, at the agreed targets where there are any.
+   */
+  const fixes = useMemo(() => {
+    if (tab !== "grow") return null;
+    const cur = onActual && views.actual ? views.actual : views.plan;
+    const last = onActual && views.actual ? views.actual.last : null;
+    const ramp = !onActual && views.hasHistory;
+    /*
+     * On the plan, aim where the Planner's assessment aims: the agreed target, or else the better of the two
+     * actual years — 2026 was the bad year, so measuring the plan's margin against it would ask for nothing.
+     */
+    const a1 = views.actual?.last ?? null, a0 = actualYear(history, 2, firstYear);
+    const gmOf = (y: typeof a1) => (y && y.pnl.revenue > 0 ? ((y.pnl.revenue - y.pnl.cogs) / y.pnl.revenue) * 100 : null);
+    const bestGm = Math.max(gmOf(a1) ?? -Infinity, gmOf(a0) ?? -Infinity);
+    const bestDd = Math.min(a1?.days.debtorDays ?? Infinity, a0?.days.debtorDays ?? Infinity);
+    const refs = onActual ? {} : {
+      grossMargin: agreedTargets.grossMargin?.value ?? (Number.isFinite(bestGm) ? Math.round(bestGm * 10) / 10 : null),
+      overheadsCap: agreedTargets.overheadsCap?.value ?? null,
+      debtorDays: agreedTargets.debtorDays?.value ?? (Number.isFinite(bestDd) ? bestDd : null),
+    };
+    const levers = withMoves(growLevers(V.growIn, refs), cur, last, ramp, money, V.grow);
+    const table = leverTable(levers, cur, last, ramp, money, { metrics: V.grow, score: V.scores.grow.value });
+    const moves: Record<string, string> = {};
+    for (const m of V.grow) { const line = moveLine(m.key, levers, cur, last, ramp, money, V.grow); if (line) moves[m.key] = line; }
+    /* When every lever together still leaves a loss, say how far short — the levers are not the whole answer. */
+    const after = levers.length ? growWith(cur, last, levers, ramp, money).input.pnl[2]?.operatingProfit ?? null : null;
+    const short = after !== null && after < 0 ? after : null;
+    return { levers, table, moves, short, story: growStory(V.growIn, cur.growNames, last, levers), year: cur.growNames[2] ?? "" };
+  }, [tab, onActual, views, V, money, agreedTargets, history, firstYear]);
+
   const otherOf = (m: Metric): Comparison | null => {
     /* Not on the Actual view: a line about the plan is a line about a projected year (§6.169). */
     if (!otherV || onActual) return null;
@@ -264,18 +300,32 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
         <div className="border-b border-border px-5 py-5 @[1100px]:border-b-0">
           <p className="text-[13px] text-muted-foreground">{v.question}</p>
           <h2 className="mt-1 text-[22px] font-semibold leading-tight">{v.headline}</h2>
-          <div className="mt-3 space-y-2">
-            {v.paragraphs.map((p, i) => (
-              <p key={i} className="text-[13.5px] leading-relaxed">
-                <b className="font-semibold">{p.lead}</b> {p.body}
-              </p>
-            ))}
-          </div>
+          {fixes?.story ? (
+            <>
+              <p className="mt-3 text-[13.5px] leading-relaxed">{fixes.story}</p>
+              {fixes.table.length > 0 && <LeverTable rows={fixes.table} title={onActual ? `Had ${fixes.year} run with the levers pulled` : `If the plan pulls the levers in ${fixes.year}`} />}
+              {fixes.short !== null && (
+                <p className="mt-2 text-[12.5px] font-semibold text-bad">
+                  Even with every lever, {fixes.year} {onActual ? "would still have lost" : "still loses"} {money(-fixes.short)}. That much more has to come from prices, volume at a good margin, or costs.
+                </p>
+              )}
+            </>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {v.paragraphs.map((p, i) => (
+                <p key={i} className="text-[13.5px] leading-relaxed">
+                  <b className="font-semibold">{p.lead}</b> {p.body}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
 
         <aside className="px-5 py-5 @[720px]:col-span-2 @[1100px]:col-span-1 @[1100px]:border-l @[1100px]:border-border">
           <span className="eyebrow">What to do next, in order</span>
-          {v.actions.length ? (
+          {fixes && fixes.levers.length > 0 ? (
+            <Levers planId={planId} levers={fixes.levers} money={money} agreed={agreedTargets} />
+          ) : v.actions.length ? (
             <ol className="mt-2 list-decimal space-y-2 pl-4 text-[13px] marker:font-semibold marker:text-primary">
               {v.actions.map((a, i) => <li key={i}>{a}</li>)}
             </ol>
@@ -319,7 +369,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
       {/* ---------- the measures ---------- */}
       <div className="@container">
         <div className="grid gap-px bg-border @[640px]:grid-cols-2 @[1000px]:grid-cols-3">
-          {metrics.map((m) => <Card key={m.key} m={m} planId={planId} labels={CARD_LABEL[tab]} other={otherOf(m)} />)}
+          {metrics.map((m) => <Card key={m.key} m={m} planId={planId} labels={CARD_LABEL[tab]} other={otherOf(m)} move={fixes?.moves[m.key]} />)}
         </div>
       </div>
 
@@ -434,6 +484,43 @@ function AgreedTargets({ planId, checks }: { planId: string; checks: TargetCheck
   );
 }
 
+/** The levers, most money first — what to do, what it is worth, which dials it moves (§6.173). */
+function Levers({ planId, levers, money, agreed }: { planId: string; levers: Lever[]; money: (v: number) => string; agreed: AgreedTargets }) {
+  return (
+    <ol className="mt-2 list-decimal space-y-3 pl-4 text-[13px] marker:font-semibold marker:text-primary">
+      {levers.map((l) => (
+        <li key={l.key}>
+          <span className="font-semibold">{l.label}</span>
+          <span className="ml-1.5 font-semibold text-good">{l.profit > 0 ? `+${money(l.profit)} a year` : `frees ${money(l.cash)}`}</span>
+          <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">{l.detail}</p>
+          {l.moves.length > 0 && <p className="text-[12px] text-muted-foreground">Moves: {l.moves.join(", ")}</p>}
+          {l.target && (agreed[l.target]
+            ? <p className="text-[12px] font-semibold text-good">✓ Agreed as a target</p>
+            : <Link href={`/plans/${planId}/assessment`} className="text-[12px] font-semibold text-primary hover:underline">Agree as a target →</Link>)}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** Now against with the levers pulled — the judged year re-scored, not estimated. */
+function LeverTable({ rows, title }: { rows: WithLeversRow[]; title: string }) {
+  return (
+    <div className="mt-4 overflow-hidden rounded-md border border-border">
+      <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)] bg-secondary/60 px-3 py-1.5 text-[11.5px] font-semibold text-muted-foreground">
+        <span>{title}</span><span className="text-right">Now</span><span className="text-right">With the levers</span>
+      </div>
+      {rows.map((r) => (
+        <div key={r.label} className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)] border-t border-border px-3 py-1.5 text-[13px]">
+          <span>{r.label}</span>
+          <span className="text-right tabular-nums">{r.now}</span>
+          <span className={cn("text-right font-semibold tabular-nums", r.better && "text-good")}>{r.after}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Dial({ value }: { value: number | null }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   return (
@@ -503,7 +590,7 @@ function Gauge({ m, s }: { m: Metric; s: Severity | null }) {
   );
 }
 
-function Card({ m, planId, labels, other }: { m: Metric; planId: string; labels: Record<Severity, string>; other?: Comparison | null }) {
+function Card({ m, planId, labels, other, move }: { m: Metric; planId: string; labels: Record<Severity, string>; other?: Comparison | null; move?: string }) {
   /* An unscored measure has no band to colour it and says what it is instead (§6.170). */
   const s = m.unscored ? null : statusOf(m.value, m.bands);
   return (
@@ -531,6 +618,8 @@ function Card({ m, planId, labels, other }: { m: Metric; planId: string; labels:
       </div>
 
       <p className="mt-2.5 text-[12.5px] leading-relaxed">{m.missing ?? m.note}</p>
+      {/* What would move it, from the levers the other dials point to (§6.173). */}
+      {move && <p className="mt-1.5 rounded bg-accent/50 px-2.5 py-1.5 text-[12px] leading-relaxed"><b className="font-semibold">What would move it:</b> {move}</p>}
       {other && (
         <p className={cn("mt-2 rounded px-2.5 py-1.5 text-[12px]", other.ahead ? "bg-warn-soft text-foreground" : "bg-secondary/60 text-muted-foreground")}>
           <b className="font-semibold">{other.label}:</b> {other.display}

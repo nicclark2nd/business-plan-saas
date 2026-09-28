@@ -248,6 +248,8 @@ export async function loadCapabilityFacts(planId: string) {
     currency, facts: input, products: productFacts, facilities, months, openingDebt, extras, history, firstYear, monthsByYear,
     /* Every agreed target read against the plan (§6.167); empty with nothing agreed or nothing to forecast. */
     targetChecks: targetFactsRead ? checkTargets(await agreedQ, targetFactsRead, moneyFormatter(currency)) : [],
+    /* The agreed targets themselves, for the levers on the Plan view (§6.173). */
+    agreedTargets: (await agreedQ) ?? {},
     adviser: !!kind && kind !== "owner",
     settings: meta.data,
   };

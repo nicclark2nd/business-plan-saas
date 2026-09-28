@@ -175,7 +175,8 @@ export function issuesFrom(prev: ActualYear | null, last: ActualYear, money: (v:
     /* ---- customers paying ---- */
     const dPrev = prev.days.debtorDays, dLast = last.days.debtorDays;
     if (dLast - dPrev >= 5 || (dLast > 45 && dLast > dPrev)) {
-      const tied = ((dLast - Math.min(dPrev, dLast)) / 365) * rev;
+      /* Last year's collection speed on this year's sales — the same figure as the debtor lever (§6.173). */
+      const tied = Math.max(0, last.balanceSheet.accountsReceivable - (prev.pnl.revenue > 0 ? (prev.balanceSheet.accountsReceivable / prev.pnl.revenue) * rev : 0));
       out.push({
         key: "debtors", area: "borrow", urgent: false, size: tied,
         title: "Customers are paying slower",

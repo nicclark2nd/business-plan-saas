@@ -935,3 +935,18 @@ projection step and scored on the Plan view, after.)
   profit" — Year 2's profit too); the month count names 2027 when it is not the growth year. Also: cash conversion
   of 70–85% is amber, but its sentence called it fine while the action said "chase the gap" — it now says how much
   arrives and where the rest sits (Grow and Sell).
+- **§6.173** What fixes it — Capability to grow. Nic, 29 Sep 2026: the text under each dial states facts but must also
+  say what the Planner can do, and each dial must take the others into account; the big space beside the score
+  could be more substantial. AI button or other? Decided: the levers are worked out by the engine now (exact, the
+  same every time, free); an AI "Planner's briefing" button comes later, written from these same figures.
+  `engine/capability/levers.ts`: `growLevers` finds the levers the dials point to — overheads that outran sales,
+  margin that slipped, customers paying slower, stock held longer — each with its profit and cash; `withLevers`
+  re-runs the judged year with them pulled and `buildView` re-scores it, so "what it would take" is measured
+  exactly as the score is. On the page: the paragraph under the headline now tells how the dials connect
+  (`growStory`); a table shows the year now and with every lever pulled (margin, profit, cash, cycle, score); "What
+  to do next" lists the levers with their money, the dials each moves, and "Agree as a target"; every card not in
+  its best band says what would move it and how far ("would take it to 5.4%"); and when every lever still leaves a
+  loss, it says how much more has to come from prices, volume or costs. On the accounts the levers aim at the year
+  before; on the plan at the agreed targets, or else the better of the two actual years (as step 8 proposes).
+  SEQ actual: overheads +89,118, margin to 42% +71,267, debtors to 30 days frees 89,802 → margin −2.6% → 5.4%, grow
+  47 → 97. The slower-payment figure is now one number app-wide (lever, tile, step 8: 89,802).
