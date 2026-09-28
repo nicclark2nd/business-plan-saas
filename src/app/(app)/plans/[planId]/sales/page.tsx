@@ -1,3 +1,5 @@
+import { loadTargetChecks } from "@/lib/targetChecks";
+import { TargetsProvider } from "@/components/module/TargetStrip";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { SalesModule } from "./SalesModule";
@@ -36,9 +38,12 @@ export default async function SalesPage({ params, searchParams }: { params: Prom
     monthly_new_clients: p.monthly_new_clients ?? null,
     clients_from_product_id: p.clients_from_product_id ?? null,
   })) as Product[];
+  const targets = await loadTargetChecks(planId, "sales");
   return (
-    <SalesModule planId={planId} initial={rows} mode={mode} initialArea={area === "annual" || area === "monthly" ? area : "products"} hasHistory={settings.data?.has_history ?? null}
-      historicRevenue={historic.data ? Number(historic.data.revenue) : null} historicEnd={historic.data?.period_end ?? null}
-      fyEndMonth={settings.data?.financial_year_end_month ?? 6} firstProjectedYear={settings.data?.first_projected_year ?? null} statement={settings.data?.products_services_statement ?? ""} currency={settings.data?.currency ?? "AUD"} drafting={drafting} />
+    <TargetsProvider checks={targets}>
+      <SalesModule planId={planId} initial={rows} mode={mode} initialArea={area === "annual" || area === "monthly" ? area : "products"} hasHistory={settings.data?.has_history ?? null}
+        historicRevenue={historic.data ? Number(historic.data.revenue) : null} historicEnd={historic.data?.period_end ?? null}
+        fyEndMonth={settings.data?.financial_year_end_month ?? 6} firstProjectedYear={settings.data?.first_projected_year ?? null} statement={settings.data?.products_services_statement ?? ""} currency={settings.data?.currency ?? "AUD"} drafting={drafting} />
+    </TargetsProvider>
   );
 }

@@ -1,3 +1,5 @@
+import { loadTargetChecks } from "@/lib/targetChecks";
+import { TargetsProvider } from "@/components/module/TargetStrip";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { startYearFromDate, planYearStart, totalSalariesByYear } from "@/engine/people/salary";
@@ -38,10 +40,13 @@ export default async function OverheadsPage({ params }: { params: Promise<{ plan
     yearly_change: o.yearly_change ?? null, monthly_distribution: o.monthly_distribution ?? null,
   })) as OverheadRow[];
 
+  const targets = await loadTargetChecks(planId, "overheads");
   return (
-    <OverheadsModule planId={planId} initial={rows} mode={mode}
-      salaries={salaries} marketing={marketing} peopleCount={(people.data ?? []).filter((p) => p.role !== "contractor").length}
-      marketingLines={(spend.data ?? []).length} onCostPct={Number(settings.data?.on_cost_pct ?? 0)}
-      fyEndMonth={settings.data?.financial_year_end_month ?? 6} />
+    <TargetsProvider checks={targets}>
+      <OverheadsModule planId={planId} initial={rows} mode={mode}
+        salaries={salaries} marketing={marketing} peopleCount={(people.data ?? []).filter((p) => p.role !== "contractor").length}
+        marketingLines={(spend.data ?? []).length} onCostPct={Number(settings.data?.on_cost_pct ?? 0)}
+        fyEndMonth={settings.data?.financial_year_end_month ?? 6} />
+    </TargetsProvider>
   );
 }

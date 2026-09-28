@@ -1,3 +1,5 @@
+import { loadTargetChecks } from "@/lib/targetChecks";
+import { TargetsProvider } from "@/components/module/TargetStrip";
 import { loadPlan } from "@/lib/planLoad";
 import { FORECAST_YEARS } from "@/engine/forecast/model";
 import { runForecast } from "@/engine/forecast/run";
@@ -40,26 +42,29 @@ export default async function AssumptionsPage({ params, searchParams }: {
   const monthlyCash = run.monthly?.months?.map((m) => m.closingCash) ?? [];
   const low = monthlyCash.length ? Math.min(...monthlyCash) : null;
 
+  const targets = await loadTargetChecks(planId, "assumptions");
   return (
-    <AssumptionsModule
-      planId={planId} mode={mode}
-      initialArea={area === "cash" || area === "downside" ? area : "days"}
-      revenue={FORECAST_YEARS.map((y) => checked.pnl[y].revenue)}
-      cogs={FORECAST_YEARS.map((y) => checked.pnl[y].cogs)}
-      workingCapital={workingCapital} cashTiming={cashTiming}
-      impliedFromHistory={impliedFromHistory}
-      assumptionsSet={assumptionsSet}
-      growth={readGrowth(settings)}
-      stress={readStress(settings)}
-      /* The plan's own dearest borrowing, offered as a starting point and never stored in the client's place. */
-      impliedCost={impliedCostOfCapital(plan.sources.funding)}
-      /* The lowest month the forecast actually reaches, so a floor is typed against a figure, not into the dark. */
-      lowestMonth={low}
-      /* Which month that is, by name, so the warning says "June" rather than "month 12" (§6.155). */
-      lowestMonthName={low === null ? null : planMonths(fyEndMonth)[monthlyCash.indexOf(low)] ?? null}
-      /* One month of Year 1 overheads: the usual rule of thumb for a floor, offered, never stored unasked. */
-      worst={periods && periods.length > 1 ? worst : null}
-      suggestedFloor={checked.pnl[1].overheads > 0 ? Math.round(checked.pnl[1].overheads / 12) : null}
-    />
+    <TargetsProvider checks={targets}>
+      <AssumptionsModule
+        planId={planId} mode={mode}
+        initialArea={area === "cash" || area === "downside" ? area : "days"}
+        revenue={FORECAST_YEARS.map((y) => checked.pnl[y].revenue)}
+        cogs={FORECAST_YEARS.map((y) => checked.pnl[y].cogs)}
+        workingCapital={workingCapital} cashTiming={cashTiming}
+        impliedFromHistory={impliedFromHistory}
+        assumptionsSet={assumptionsSet}
+        growth={readGrowth(settings)}
+        stress={readStress(settings)}
+        /* The plan's own dearest borrowing, offered as a starting point and never stored in the client's place. */
+        impliedCost={impliedCostOfCapital(plan.sources.funding)}
+        /* The lowest month the forecast actually reaches, so a floor is typed against a figure, not into the dark. */
+        lowestMonth={low}
+        /* Which month that is, by name, so the warning says "June" rather than "month 12" (§6.155). */
+        lowestMonthName={low === null ? null : planMonths(fyEndMonth)[monthlyCash.indexOf(low)] ?? null}
+        /* One month of Year 1 overheads: the usual rule of thumb for a floor, offered, never stored unasked. */
+        worst={periods && periods.length > 1 ? worst : null}
+        suggestedFloor={checked.pnl[1].overheads > 0 ? Math.round(checked.pnl[1].overheads / 12) : null}
+      />
+    </TargetsProvider>
   );
 }

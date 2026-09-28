@@ -24,6 +24,7 @@ import { Meter } from "@/components/chart/core";
 import { borrowSummary, growSummary, sellSummary, type SummaryFacts } from "@/engine/capability/summary";
 import { buildView } from "@/engine/capability/views";
 import { capabilityTimeline, readiness, type MonthsByYear, type TimelineYear } from "@/engine/capability/timeline";
+import type { TargetCheck } from "@/engine/capability/targets";
 import { capabilityViews, compareWith, type Comparison, type HistoricRow, type YearNames } from "@/engine/capability/actual";
 
 /**
@@ -64,7 +65,7 @@ const TONE: Record<Severity, ChartSeverity> = { good: "good", watch: "warn", bad
  * box on the step that owns the figure — Assumptions for the cash floor and the downside, Plan settings for
  * the price, Leadership Team for owner dependence, Fixed Assets for security, Funding for the borrowing.
  */
-export function CapabilitiesModule({ planId, mode, currency, facts, products, facilities, months, openingDebt, extras, history = [], firstYear, adviser = false, monthsByYear = {} }: {
+export function CapabilitiesModule({ planId, mode, currency, facts, products, facilities, months, openingDebt, extras, history = [], firstYear, adviser = false, monthsByYear = {}, targetChecks = [] }: {
   planId: string; mode: "guided" | "advanced"; currency: string; facts: PlanFacts;
   /** Historic, every period, for the actual view (§6.158). Empty for a business with no accounts. */
   history?: HistoricRow[];
@@ -74,6 +75,8 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
   adviser?: boolean;
   /** Every plan year month by month, for when-it-is-ready (§6.166). */
   monthsByYear?: MonthsByYear;
+  /** The targets agreed on the Planner's assessment, read against the plan (§6.167). */
+  targetChecks?: TargetCheck[];
   /** For the panels only (§6.129.2) — each product's five years, and the borrowing the plan carries. */
   products: ProductFacts[]; facilities: FacilityFacts[];
   /** The plan's own twelve months (§6.21), for the month-by-month cash panel. */
@@ -210,6 +213,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
       </section>
 
       {!onActual && line.length > 1 && <WhenReady line={line} tab={tab} onTab={setTab} />}
+      {!onActual && targetChecks.length > 0 && <AgreedTargets planId={planId} checks={targetChecks} />}
 
       {/* ---------- the verdict: identical on all three tabs ---------- */}
       {/*
@@ -369,6 +373,41 @@ function WhenReady({ line, tab, onTab }: { line: TimelineYear[]; tab: Tab; onTab
           </tbody>
         </table>
       </div>
+    </section>
+  );
+}
+
+/**
+ * THE PLAN AGAINST WHAT WAS AGREED (§6.167). The assessment set the direction; this is whether the plan
+ * took it. Counted, not blended into the dials: a missed target is a conversation, not a band.
+ */
+function AgreedTargets({ planId, checks }: { planId: string; checks: TargetCheck[] }) {
+  const met = checks.filter((c) => c.met === true).length;
+  const LINK = "font-semibold text-primary underline-offset-2 hover:underline";
+  return (
+    <section className="border-b border-border px-5 py-3.5">
+      <div className="flex flex-wrap items-baseline gap-x-3">
+        <span className="eyebrow">The plan against the agreed targets</span>
+        <span className={cn("text-[12.5px] font-semibold", met === checks.length ? "text-good" : "text-bad")}>{met} of {checks.length} met</span>
+        <Link href={`/plans/${planId}/assessment`} className={cn(LINK, "text-[12px]")}>Planner&apos;s assessment →</Link>
+      </div>
+      <ul className="mt-2 divide-y divide-border rounded-md border border-border">
+        {checks.map((c) => (
+          <li key={c.kind} className="grid gap-x-3 gap-y-0.5 px-3 py-2 text-[13px] sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_auto]">
+            <span className="flex items-baseline gap-2 font-semibold">
+              <span className={cn("size-2 shrink-0 translate-y-[-1px] rounded-full", c.met === true ? "bg-good" : c.met === false ? "bg-bad" : "bg-muted-foreground/40")} />
+              {c.target}
+            </span>
+            <span>
+              <span className={cn(c.met === true && "text-good", c.met === false && "text-bad", c.met === null && "text-muted-foreground")}>{c.plan}</span>
+              {c.gap && <span className="text-[12.5px] text-muted-foreground"> — {c.gap}</span>}
+            </span>
+            <span className="text-[12.5px]">
+              {c.met === true ? <span className="font-semibold text-good">✓ Met</span> : <Link className={LINK} href={`/plans/${planId}/${c.fix.to}`}>{c.fix.label} →</Link>}
+            </span>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

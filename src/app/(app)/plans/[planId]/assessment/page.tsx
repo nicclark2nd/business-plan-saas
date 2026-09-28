@@ -71,6 +71,7 @@ export default async function AssessmentPage({ params }: { params: Promise<{ pla
       asks,
       firstYear: f.firstYear,
       agreed: readTargets(stored?.agreed_targets) ?? {},
+      checks: f.targetChecks,
       settings: {
         cashFloor: stored?.cash_floor === null || stored?.cash_floor === undefined ? null : Number(stored.cash_floor),
         loanTermMonths: (stored?.existing_debt as { term_months?: number | null } | null)?.term_months ?? null,

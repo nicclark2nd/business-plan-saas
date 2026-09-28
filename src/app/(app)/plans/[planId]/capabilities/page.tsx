@@ -11,6 +11,6 @@ export default async function CapabilitiesPage({ params }: { params: Promise<{ p
   return (
     <CapabilitiesModule planId={planId} mode={f.mode} currency={f.currency} facts={f.facts} products={f.products}
       facilities={f.facilities} months={f.months} openingDebt={f.openingDebt} extras={f.extras}
-      history={f.history} firstYear={f.firstYear} adviser={f.adviser} monthsByYear={f.monthsByYear} />
+      history={f.history} firstYear={f.firstYear} adviser={f.adviser} monthsByYear={f.monthsByYear} targetChecks={f.targetChecks} />
   );
 }

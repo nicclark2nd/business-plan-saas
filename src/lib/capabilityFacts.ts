@@ -15,6 +15,9 @@ import { planMonths } from "@/engine/plan/calendar";
 import type { PlanFacts } from "@/app/(app)/plans/[planId]/capabilities/CapabilitiesModule";
 import type { HistoricRow } from "@/engine/capability/actual";
 import type { MonthsByYear } from "@/engine/capability/timeline";
+import { checkTargets, readTargets, type TargetFacts } from "@/engine/capability/targets";
+import { targetFacts } from "@/lib/targetChecks";
+import { moneyFormatter } from "@/engine/plan/money";
 
 /**
  * EVERYTHING FINANCIAL CAPABILITIES READS, GATHERED ONCE (§6.164).
@@ -96,6 +99,11 @@ export async function loadCapabilityFacts(planId: string) {
   let openingDebt = 0;
   /* Every plan year month by month, for the year-by-year readiness line (§6.166). */
   let monthsByYear: MonthsByYear = {};
+  /* The figures the agreed targets are read against (§6.167), from this same run. */
+  let targetFactsRead: TargetFacts | null = null;
+  /* Its own query: the column is newer than the rest of the settings read. */
+  const agreedQ = supabase.from("plan_settings").select("agreed_targets").eq("plan_id", planId).maybeSingle()
+    .then((r) => (r.error ? null : readTargets(r.data?.agreed_targets)));
 
   /*
    * THE FACTS CROSS THE WIRE; THE FORMATTER DOES NOT.
@@ -130,6 +138,7 @@ export async function loadCapabilityFacts(planId: string) {
     openingDebt = plan.opening.bankLoansModelled ? 0 : (plan.opening.bankLoansCurrent ?? 0) + (plan.opening.bankLoansNonCurrent ?? 0);
     const run = runForecast(plan);
     const f = run.checked ?? run.forecast;
+    targetFactsRead = targetFacts({ plan, fyEndMonth, firstYear: fy }, run);
     monthsByYear = Object.fromEntries(Object.entries(run.monthlyByYear ?? {}).map(([y, mc]) => [Number(y), {
       cash: mc?.months?.map((m) => m.closingCash) ?? [],
       profit: run.shapesByYear?.[Number(y)] ? monthlyProfit(run.shapesByYear[Number(y)]) : [],
@@ -236,6 +245,8 @@ export async function loadCapabilityFacts(planId: string) {
   return {
     mode: (session?.profile?.mode ?? "guided") as "guided" | "advanced",
     currency, facts: input, products: productFacts, facilities, months, openingDebt, extras, history, firstYear, monthsByYear,
+    /* Every agreed target read against the plan (§6.167); empty with nothing agreed or nothing to forecast. */
+    targetChecks: targetFactsRead ? checkTargets(await agreedQ, targetFactsRead, moneyFormatter(currency)) : [],
     adviser: !!kind && kind !== "owner",
     settings: meta.data,
   };

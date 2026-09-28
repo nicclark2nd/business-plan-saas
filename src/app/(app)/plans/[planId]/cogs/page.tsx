@@ -1,3 +1,5 @@
+import { loadTargetChecks } from "@/lib/targetChecks";
+import { TargetsProvider } from "@/components/module/TargetStrip";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { CogsModule } from "./CogsModule";
@@ -27,10 +29,13 @@ export default async function CogsPage({ params, searchParams }: { params: Promi
   })) as CostedProduct[];
   const fixedRows = (fixed.data ?? []).map((f) => ({ ...f, annual_cost: Number(f.annual_cost) })) as FixedCogs[];
   const h = historic.data;
+  const targets = await loadTargetChecks(planId, "cogs");
   return (
-    <CogsModule planId={planId} products={rows} fixed={fixedRows} mode={mode}
-      initialArea={area === "fixed" || area === "monthly" ? area : "products"}
-      fyEndMonth={settings.data?.financial_year_end_month ?? 6}
-      historicRevenue={h ? Number(h.revenue) : null} historicCogs={h ? Number(h.cogs) : null} historicEnd={h?.period_end ?? null} />
+    <TargetsProvider checks={targets}>
+      <CogsModule planId={planId} products={rows} fixed={fixedRows} mode={mode}
+        initialArea={area === "fixed" || area === "monthly" ? area : "products"}
+        fyEndMonth={settings.data?.financial_year_end_month ?? 6}
+        historicRevenue={h ? Number(h.revenue) : null} historicCogs={h ? Number(h.cogs) : null} historicEnd={h?.period_end ?? null} />
+    </TargetsProvider>
   );
 }

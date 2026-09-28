@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { useMoney } from "@/components/MoneyProvider";
 import type { BridgeStep, Issue } from "@/engine/capability/assessment";
 import type { Severity } from "@/engine/capability/model";
-import type { AgreedTargets } from "@/engine/capability/targets";
+import type { AgreedTargets, TargetCheck } from "@/engine/capability/targets";
 import { continueFromAssessment } from "./actions";
 import { TargetControl } from "./TargetControl";
 
@@ -21,6 +21,8 @@ export type AssessmentData =
       hasHistory: true; adviser: boolean; span: string; lastYear: number; prevYear: number | null;
       scores: Score[]; profit: BridgeStep[] | null; cash: BridgeStep[] | null; issues: Issue[]; asks: Ask[];
       firstYear: number; agreed: AgreedTargets;
+      /** Each agreed target read against the plan as it stands (§6.167) — empty until there is a plan. */
+      checks: TargetCheck[];
       /** The two targets that are also plan settings, as the plan holds them now. */
       settings: { cashFloor: number | null; loanTermMonths: number | null };
     };
@@ -137,6 +139,7 @@ function Assessment({ planId, d }: { planId: string; d: Extract<AssessmentData, 
                     <dt className="font-semibold text-muted-foreground">{d.adviser ? "Ask the client" : "Ask yourself"}</dt><dd className="italic">{i.ask}</dd>
                   </dl>
                   <TargetControl planId={planId} proposed={i.target} agreed={agreed[i.target.kind]} setting={settingOf(i)} firstYear={d.firstYear}
+                    check={d.checks.find((c) => c.kind === i.target.kind && c.met !== null)}
                     onSaved={(t, value) => {
                       setAgreed(t);
                       if (i.target.kind === "cashFloor") setSettings((s) => ({ ...s, cashFloor: value }));

@@ -70,3 +70,120 @@ export function readTargets(raw: unknown): AgreedTargets | null {
 export function mayWriteThrough(setting: number | null, lastAgreed: number | null): boolean {
   return setting === null || (lastAgreed !== null && setting === lastAgreed);
 }
+
+/* ------------------------------------------------------------------ *
+ * The plan against its targets (§6.167)                              *
+ * ------------------------------------------------------------------ */
+
+/** The steps each target is shown on, and the one the Plan view links to for it. */
+export const TARGET_STEPS: Record<TargetKind, { shownOn: string[]; fix: { label: string; to: string } }> = {
+  grossMargin: { shownOn: ["sales", "cogs"], fix: { label: "COGS", to: "cogs" } },
+  overheadsCap: { shownOn: ["overheads"], fix: { label: "Overheads", to: "overheads" } },
+  breakEven: { shownOn: ["overheads", "sales"], fix: { label: "Overheads", to: "overheads" } },
+  debtorDays: { shownOn: ["assumptions"], fix: { label: "Assumptions → Days & timing", to: "assumptions?area=days" } },
+  loanTermMonths: { shownOn: ["funding"], fix: { label: "Funding → Loans already owed", to: "funding" } },
+  cashFloor: { shownOn: ["assumptions", "funding"], fix: { label: "Funding", to: "funding" } },
+};
+
+/** What the plan holds, reduced to the figures the six targets are read against. */
+export type TargetFacts = {
+  firstYear: number;
+  /** Year 1 of the forecast; null while the plan is too empty to run. */
+  y1: { revenue: number; cogs: number; overheads: number; operatingProfit: number } | null;
+  /** The debtor days the forecast runs on in Year 1. */
+  debtorDays: number | null;
+  /** The term the forecast repays the loans already owed over; null while it carries them flat. */
+  loanTermMonths: number | null;
+  /** The lowest month-end cash across all five years, and when. */
+  lowestCash: { value: number; when: string } | null;
+};
+
+export type TargetCheck = {
+  kind: TargetKind;
+  /** "Gross margin 42%" */
+  target: string;
+  /** "Plan has 39.1% in 2027" — or why there is no figure yet. */
+  plan: string;
+  /** true met, false short, null nothing in the plan to read yet. */
+  met: boolean | null;
+  /** How far off, in the target's terms and in money where it has one: "2.9 points short — about 63,300 of gross profit". */
+  gap: string | null;
+  fix: { label: string; to: string };
+};
+
+const pctText = (v: number) => `${Math.round(v * 10) / 10}%`;
+
+/**
+ * EACH AGREED TARGET READ AGAINST THE PLAN. The same arithmetic on every step and on the Plan view, so the
+ * COGS screen and Financial Capabilities can never disagree about whether the margin target is met.
+ */
+export function checkTargets(targets: AgreedTargets | null, f: TargetFacts, money: (v: number) => string, only?: string): TargetCheck[] {
+  if (!targets) return [];
+  const y = f.firstYear, p = f.y1, out: TargetCheck[] = [];
+  for (const kind of TARGET_KINDS) {
+    const t = targets[kind];
+    if (!t || (only && !TARGET_STEPS[kind].shownOn.includes(only))) continue;
+    const fix = TARGET_STEPS[kind].fix, v = t.value;
+    const none = (plan: string): TargetCheck => ({ kind, target: "", plan, met: null, gap: null, fix });
+    let c: TargetCheck;
+    switch (kind) {
+      case "grossMargin": {
+        c = { ...none("No sales in the plan yet"), target: `Gross margin ${pctText(v)}` };
+        if (p && p.revenue > 0) {
+          const gm = ((p.revenue - p.cogs) / p.revenue) * 100, short = v - gm;
+          c = { ...c, plan: `Plan has ${pctText(gm)} in ${y}`, met: short <= 0.05,
+            gap: short > 0.05 ? `${Math.round(short * 10) / 10} points short — about ${money((short / 100) * p.revenue)} of gross profit on ${y}'s sales` : null };
+        }
+        break;
+      }
+      case "overheadsCap": {
+        c = { ...none("No overheads in the plan yet"), target: `Overheads no more than ${money(v)} in ${y}` };
+        if (p && p.overheads > 0) {
+          const over = p.overheads - v;
+          c = { ...c, plan: `Plan has ${money(p.overheads)}`, met: over <= 0.5, gap: over > 0.5 ? `${money(over)} over` : null };
+        }
+        break;
+      }
+      case "breakEven": {
+        c = { ...none("Nothing in the plan yet"), target: `Operating profit of at least ${money(v)} in ${y}` };
+        if (p && (p.revenue > 0 || p.overheads > 0)) {
+          const short = v - p.operatingProfit;
+          const shown = p.operatingProfit < 0 ? `a loss of ${money(-p.operatingProfit)}` : money(p.operatingProfit);
+          c = { ...c, plan: `Plan has ${shown}`, met: short <= 0.5, gap: short > 0.5 ? `${money(short)} short` : null };
+        }
+        break;
+      }
+      case "debtorDays": {
+        c = { ...none("No debtor days in the plan yet"), target: `Customers paying in ${v} days` };
+        if (f.debtorDays !== null) {
+          const slower = f.debtorDays - v;
+          const cash = p && p.revenue > 0 ? ` — about ${money((slower / 365) * p.revenue)} more sitting in unpaid invoices` : "";
+          c = { ...c, plan: `Plan has ${Math.round(f.debtorDays)} days in ${y}`, met: slower <= 0.5,
+            gap: slower > 0.5 ? `${Math.round(slower)} days slower${cash}` : null };
+        }
+        break;
+      }
+      case "loanTermMonths": {
+        c = { ...none("The plan carries the loans flat until their rate is in"), target: `Loans already owed repaid over ${v} months` };
+        if (f.loanTermMonths !== null) {
+          const shorter = v - f.loanTermMonths;
+          c = { ...c, plan: `Plan repays them over ${f.loanTermMonths} months`, met: shorter <= 0,
+            gap: shorter > 0 ? `${shorter} months shorter, so each year's repayments are higher` : null };
+        }
+        break;
+      }
+      case "cashFloor": {
+        c = { ...none("No monthly cash in the plan yet"), target: `Cash never below ${money(v)}` };
+        if (f.lowestCash) {
+          const under = v - f.lowestCash.value;
+          const low = f.lowestCash.value < 0 ? `overdrawn by ${money(-f.lowestCash.value)}` : money(f.lowestCash.value);
+          c = { ...c, plan: `Lowest month ${low}, ${f.lowestCash.when}`, met: under <= 0.5,
+            gap: under > 0.5 ? `${money(under)} under the floor at its lowest` : null };
+        }
+        break;
+      }
+    }
+    out.push(c);
+  }
+  return out;
+}

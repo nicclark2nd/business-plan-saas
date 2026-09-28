@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { backHref, nextHref } from "@/lib/nav";
 import { useSaveErrors, errorSummary, type SaveErrors } from "./saveErrors";
 import { SaveErrorBanner } from "./SaveErrorBanner";
+import { TargetStrip } from "./TargetStrip";
 
 /**
  * The one layout for a data module (SaaS §6.11, mockup docs/mockup/record-pattern.html):
@@ -136,6 +137,7 @@ export function ModuleFrame({
           */}
           <div className="min-w-0 overflow-auto">
             <SaveErrorBanner errors={errors.list} />
+            <TargetStrip />
             {children}
           </div>
           {help && helpOpen && <aside className="overflow-auto border-l border-border bg-secondary px-[18px] py-4 [&_h3]:eyebrow [&_h3]:mb-2 [&_p]:mb-2 [&_p]:text-[12.5px]">{help}</aside>}

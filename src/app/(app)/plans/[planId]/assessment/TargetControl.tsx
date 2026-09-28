@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useMoney } from "@/components/MoneyProvider";
 import { cn } from "@/lib/utils";
 import type { Target } from "@/engine/capability/assessment";
-import { TARGET_META, clampTarget, mayWriteThrough, type AgreedTarget, type AgreedTargets } from "@/engine/capability/targets";
+import { TARGET_META, clampTarget, mayWriteThrough, type AgreedTarget, type AgreedTargets, type TargetCheck } from "@/engine/capability/targets";
 import { saveTarget } from "./actions";
 
 const LINK = "font-semibold text-primary underline-offset-2 hover:underline";
@@ -18,13 +18,15 @@ const DATE = new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short" }
  * button. Once agreed it says so, and when the target is also a plan setting it says where that setting is
  * and whether it matches.
  */
-export function TargetControl({ planId, proposed: raw, agreed, setting, firstYear, onSaved }: {
+export function TargetControl({ planId, proposed: raw, agreed, setting, firstYear, check, onSaved }: {
   planId: string;
   proposed: Target;
   agreed: AgreedTarget | undefined;
   /** The plan setting this target is, for the two that are one; undefined for the rest. */
   setting: number | null | undefined;
   firstYear: number;
+  /** The agreed target read against the plan as it stands (§6.167), once there is a plan to read. */
+  check?: TargetCheck;
   onSaved: (targets: AgreedTargets, setting: number | null) => void;
 }) {
   const num = useMoney();
@@ -86,6 +88,11 @@ export function TargetControl({ planId, proposed: raw, agreed, setting, firstYea
         <p className="mt-1 text-[12px] text-muted-foreground">
           The accounts suggested {show(proposed.value)}{unit === "%" ? "%" : unit ? ` ${unit}` : ""}.{" "}
           <button type="button" className={LINK} disabled={pending} onClick={() => (agreed ? save(proposed.value) : setText(null))}>Use that</button>
+        </p>
+      )}
+      {agreed && !changed && check && (
+        <p className={cn("mt-1 text-[12px] font-semibold", check.met ? "text-good" : "text-bad")}>
+          {check.plan}{check.gap ? <span className="font-normal text-muted-foreground"> — {check.gap}</span> : null}{check.met ? " ✓" : ""}
         </p>
       )}
       {meta.sets && setting !== undefined && <SetsNote planId={planId} meta={meta} agreed={agreed} setting={setting} show={show} unit={unit} />}

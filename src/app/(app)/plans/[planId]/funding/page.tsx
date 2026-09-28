@@ -1,3 +1,5 @@
+import { loadTargetChecks } from "@/lib/targetChecks";
+import { TargetsProvider } from "@/components/module/TargetStrip";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { startYearFromDate, planYearStart, totalSalariesByYear } from "@/engine/people/salary";
@@ -107,23 +109,26 @@ export default async function FundingPage({ params, searchParams }: {
   /* The same reading the forecast makes (`loadPlan`), so this screen and the statements carry one loan. */
   const existing = existingDebtFromHistory(loans.data ?? [], changed.data?.existing_debt);
 
+  const targets = await loadTargetChecks(planId, "funding");
   return (
-    <FundingModule
-      existing={existing ? { rows: loans.data ?? [], stored: changed.data?.existing_debt ?? null } : null}
-      planId={planId} initial={rows} mode={mode}
-      openingCash={openingCashFor(historic.data, Number(settings.data?.opening_cash ?? 0))}
-      openingFromHistory={!!historic.data}
-      fyEndMonth={settings.data?.financial_year_end_month ?? 6}
-      bought={bought} cap={cap} saidNone={settings.data?.no_funding === true}
-      cash={{ revenueMonths, cogsMonths, overheadsMonths: ohMonths, capexMonths: capex }}
-      year1={{ revenue: revenueYear1, cogs: cogsYear1, overheads: ohYear1, depreciation: assetsMonths(withDisposals(assetRows, sold)).reduce((a, b) => a + b, 0) }}
-      initialArea={area === "monthly" || area === "lender" ? area : "sources"}
-      lender={{
-        repayments_on_time: settings.data?.repayments_on_time ?? null,
-        covenant_history: settings.data?.covenant_history ?? null,
-        guarantee_offered: settings.data?.guarantee_offered ?? null,
-        guarantee_by: settings.data?.guarantee_by ?? null,
-      }}
-    />
+    <TargetsProvider checks={targets}>
+      <FundingModule
+        existing={existing ? { rows: loans.data ?? [], stored: changed.data?.existing_debt ?? null } : null}
+        planId={planId} initial={rows} mode={mode}
+        openingCash={openingCashFor(historic.data, Number(settings.data?.opening_cash ?? 0))}
+        openingFromHistory={!!historic.data}
+        fyEndMonth={settings.data?.financial_year_end_month ?? 6}
+        bought={bought} cap={cap} saidNone={settings.data?.no_funding === true}
+        cash={{ revenueMonths, cogsMonths, overheadsMonths: ohMonths, capexMonths: capex }}
+        year1={{ revenue: revenueYear1, cogs: cogsYear1, overheads: ohYear1, depreciation: assetsMonths(withDisposals(assetRows, sold)).reduce((a, b) => a + b, 0) }}
+        initialArea={area === "monthly" || area === "lender" ? area : "sources"}
+        lender={{
+          repayments_on_time: settings.data?.repayments_on_time ?? null,
+          covenant_history: settings.data?.covenant_history ?? null,
+          guarantee_offered: settings.data?.guarantee_offered ?? null,
+          guarantee_by: settings.data?.guarantee_by ?? null,
+        }}
+      />
+    </TargetsProvider>
   );
 }

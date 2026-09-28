@@ -840,7 +840,7 @@ tied up per extra $1 (11¢ vs 91¢).
   never fell; margin 3.6 points, its own 2026; customers 16 days later, its own 2026). "Downside" wording on
   Capabilities now reads "a bad year". Checked on ZZ ("Use these" saved the bank test; cleared back to unset).
 
-### 56. Financial Capabilities for the Planner — review and rebuild — **1, 2, 3 and 5 done (§6.163–§6.166); 4 later**
+### 56. Financial Capabilities for the Planner — review and rebuild — **done (§6.163–§6.167)**
 
 Nic's critical review brief, 28 Sep 2026: the Planner (the app's name for the consultant) must be able to read
 each tab, understand the business's position, see which areas to address and how to work with the client, and
@@ -883,3 +883,13 @@ projection step and scored on the Plan view, after.)
   The first column equals the page's own grow and borrow scores; sell is read as if sold that year. Works the same
   for a plan with no accounts. Every plan year's months now come from the forecast (`monthsByYear`), so each
   year's lowest-cash test uses that year's months. SEQ: grow and borrow ready from 2029, sell from 2030.
+- **§6.167 (4)** Each agreed target is read against the plan (`checkTargets`, one function for every screen) and
+  shown on the step that delivers it, as a strip above the step's content: "Target: Gross margin 42% · Plan has
+  39.4% in 2027 — 2.6 points short — about 56,021 of gross profit on 2027's sales". Gross margin on Sales and COGS;
+  overheads and operating profit on Overheads; debtor days and the cash floor on Assumptions; the loan term and
+  the cash floor on Funding. Year 1 for the P&L and days targets; the cash floor against the lowest month-end
+  across all five years. The Plan view of Financial Capabilities lists them all — "0 of 4 met" — each with the
+  step that fixes it, and the assessment shows the plan's figure under each agreed target. Counted, not blended
+  into the 0–100 dials. Pages wrap their module in `TargetsProvider`; `ModuleFrame` draws `TargetStrip`; the
+  forecast only runs for it when a target shown on that step is agreed. Tested on SEQ with four targets agreed,
+  then all taken back.
