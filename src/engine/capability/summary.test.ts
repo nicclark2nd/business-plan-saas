@@ -25,4 +25,16 @@ describe("three lines for the person in the room (§6.160)", () => {
     expect(s.asks).toBe("The plan asks for 9.3% growth in 2027 and a bigger loss, with the bank below your floor for 6 of 12 months.");
     expect(s.talk).toBe("Talk to the owner about how 2027 gets funded before talking about growth.");
   });
+
+  /* §6.172 — ZZ: no accounts, so the Grow tab measures 2027 → 2028 and the line has to say 2028. */
+  it("names the growth year a plan with no accounts is measured on", () => {
+    const s = growSummary({
+      adviser: false, money, actual: null,
+      plan: {
+        input: { ...base, growth: { cashBuffer: null, costOfCapital: 12 }, pnl: { 1: pnl(500_000), 2: pnl(556_800) }, monthlyCash: [10_000] } as unknown as CapabilityInput,
+        firstYear: 2027, grow: [card("revenueGrowth", 0)], borrow: [], monthNames: [],
+      },
+    });
+    expect(s.asks).toBe("The plan asks for 0% growth in 2028 and 556,800 of operating profit.");
+  });
 });

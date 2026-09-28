@@ -930,3 +930,8 @@ projection step and scored on the Plan view, after.)
   sentence said "a normal cycle"; now amber. Return on growth spending counts only growth's own working capital
   as invested; a return below −100% reads "Profit fell". A comparison line is never "better than the business
   has done" on the same figure. SEQ actual grow 42 → 47.
+- **§6.172** ZZ (no accounts): the summary box said "0% growth in 2027" while the Grow tab measured 2027 → 2028.
+  With no accounts the growth year is Year 2, so the line now names it ("0% growth in 2028 and 556,800 of operating
+  profit" — Year 2's profit too); the month count names 2027 when it is not the growth year. Also: cash conversion
+  of 70–85% is amber, but its sentence called it fine while the action said "chase the gap" — it now says how much
+  arrives and where the rest sits (Grow and Sell).

@@ -46,7 +46,14 @@ export function growSummary(f: SummaryFacts): Summary {
   }
 
   const pGrowth = val(p.grow, "revenueGrowth");
-  const planOp = p.input.pnl[1]?.operatingProfit ?? null;
+  /*
+   * THE GROWTH YEAR (§6.172). With accounts, growth is measured from the last actual year into Year 1, so the
+   * plan's growth year is Year 1. With none there is no year before Year 1, so the Grow tab measures Year 1 into
+   * Year 2 — and this line has to name Year 2, not Year 1 (ZZ read "0% growth in 2027" beside a tab reading 2028).
+   */
+  const gs = a ? 1 : 2;
+  const gy = y1 + gs - 1;
+  const planOp = p.input.pnl[gs]?.operatingProfit ?? null;
   const floor = p.input.growth.cashBuffer;
   const bar = floor !== null && floor > 0 ? floor : 0;
   const below = p.input.monthlyCash.filter((c) => c < bar).length;
@@ -54,10 +61,11 @@ export function growSummary(f: SummaryFacts): Summary {
   const result = planOp === null ? ""
     : planOp < 0 ? (lastOp !== null && planOp < lastOp ? " and a bigger loss" : lastOp !== null && lastOp < 0 ? " and a smaller loss" : " and a loss")
     : ` and ${m(planOp)} of operating profit`;
-  const cash = below > 0 ? `, with the bank below ${bar > 0 ? "your floor" : "zero"} for ${below} of ${p.input.monthlyCash.length} months` : "";
+  /* The monthly cash is always Year 1's; name its year whenever it is not the growth year. */
+  const cash = below > 0 ? `, with the bank below ${bar > 0 ? "your floor" : "zero"} for ${below} of ${p.input.monthlyCash.length} months${gy !== y1 ? ` of ${y1}` : ""}` : "";
   const asks = pGrowth === null
-    ? `The plan has no growth to measure in ${y1} yet.`
-    : `The plan asks for ${pGrowth >= 0 ? "" : "a fall of "}${pct(pGrowth)} ${pGrowth >= 0 ? "growth" : "in sales"} in ${y1}${result}${cash}.`;
+    ? `The plan has no growth to measure in ${gy} yet.`
+    : `The plan asks for ${pGrowth >= 0 ? "" : "a fall of "}${pct(pGrowth)} ${pGrowth >= 0 ? "growth" : "in sales"} in ${gy}${result}${cash}.`;
 
   let t: string;
   if (below > 0) {

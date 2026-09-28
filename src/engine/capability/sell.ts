@@ -290,6 +290,7 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       min: 0, max: 130, bands: [{ to: 70, s: "bad" }, { to: 85, s: "watch" }, { to: 130, s: "good" }],
       note: conversion === null ? "Needs a Year 1 forecast."
         : conversion * 100 < 70 ? "Earnings are not arriving as cash, and a buyer's accountant will find that in the first week."
+        : conversion * 100 < 85 ? `About ${pct(conversion * 100)} of earnings arrive as cash — a buyer's accountant will ask where the rest sits.`
         : "Reported earnings turn into cash, which is what makes them believable.",
       bench: "85% or better",
       formula: "Year 1 cash from operations ÷ EBITDA",

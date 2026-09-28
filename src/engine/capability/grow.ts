@@ -339,6 +339,8 @@ export function growMetrics(i: CapabilityInput): Metric[] {
         ? "There are no earnings to convert — the business makes a loss before interest, tax and depreciation, so no share of it can arrive as cash."
         : conversion === null ? "Needs a Year 2 forecast with an operating profit."
         : conversion * 100 < 70 ? "Profit is not turning into cash — most of it is sitting in stock and unpaid invoices."
+        /* 70–85% is amber: the sentence must not call it fine while the action says chase it (§6.172). */
+        : conversion * 100 < 85 ? `About ${pct(conversion * 100)} of the profit arrives as cash. The rest is sitting in unpaid invoices or stock.`
         : "Most of the profit the plan forecasts actually arrives as cash.",
       bench: "85% or better means earnings are real cash",
       formula: "Year 2 cash from operations ÷ Year 2 EBITDA",
