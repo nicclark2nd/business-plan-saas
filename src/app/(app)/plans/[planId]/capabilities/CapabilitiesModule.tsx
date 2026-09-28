@@ -11,25 +11,22 @@ import { navGroup } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { moneyFormatter } from "@/engine/plan/money";
 import {
-  SCORE_BANDS, CARD_LABEL, DIAL_LABEL, INFO_MISSING, borrowingCapacity, ebitda, statusOf,
+  SCORE_BANDS, CARD_LABEL, DIAL_LABEL, INFO_MISSING, borrowingCapacity, statusOf,
   type CapabilityInput, type Metric, type Severity,
 } from "@/engine/capability/model";
 import { LENDER_MIN_DSCR, TRANSFER_FACTORS, saleYear } from "@/engine/capability/judgements";
-import { BORROW_WEIGHTS, CAPACITY_TERM_YEARS, stressedCash } from "@/engine/capability/borrow";
-import { SELL_WEIGHTS } from "@/engine/capability/sell";
-import { actionFor, buyerQuestions, verdict } from "@/engine/capability/verdict";
+import { CAPACITY_TERM_YEARS, stressedCash } from "@/engine/capability/borrow";
+import { buyerQuestions } from "@/engine/capability/verdict";
 import { panels as buildPanels, type FacilityFacts, type Panels, type ProductFacts } from "@/engine/capability/series";
 import { ageingView, concentration, earningsBridge, executionLines, lenderChecklist, type ExtraFacts, type Line } from "@/engine/capability/extras";
 import { Meter } from "@/components/chart/core";
-import { actualSummary, borrowSummary, growSummary, sellSummary, type SummaryFacts } from "@/engine/capability/summary";
-import { issuesFrom } from "@/engine/capability/assessment";
-import { buildView } from "@/engine/capability/views";
 import { capabilityTimeline, readiness, type MonthsByYear, type TimelineYear } from "@/engine/capability/timeline";
 import type { AgreedTargets, TargetCheck } from "@/engine/capability/targets";
-import { borrowLevers, borrowStory, growLevers, growStory, growWith, leverTable, moveLine, profitForPrice, sellLevers, sellStory, viewWith, withMoves, worth, type Lever, type LoanFacts, type WithLeversRow } from "@/engine/capability/levers";
-
-type PriceNote = { price: number; needed: number; high: number; after: number };
-import { actualYear, capabilityViews, compareWith, type Comparison, type HistoricRow, type YearNames } from "@/engine/capability/actual";
+import { type Lever, type WithLeversRow } from "@/engine/capability/levers";
+import { Briefing } from "./Briefing";
+import type { SavedBriefing } from "./actions";
+import { leverValue, readTab, readViews } from "@/engine/capability/read";
+import { compareWith, type Comparison, type HistoricRow, type YearNames } from "@/engine/capability/actual";
 
 /**
  * Everything the server hands down. Only the money formatter is built here, because a function cannot cross
@@ -69,7 +66,7 @@ const TONE: Record<Severity, ChartSeverity> = { good: "good", watch: "warn", bad
  * box on the step that owns the figure — Assumptions for the cash floor and the downside, Plan settings for
  * the price, Leadership Team for owner dependence, Fixed Assets for security, Funding for the borrowing.
  */
-export function CapabilitiesModule({ planId, mode, currency, facts, products, facilities, months, openingDebt, extras, history = [], firstYear, adviser = false, monthsByYear = {}, targetChecks = [], agreedTargets = {} }: {
+export function CapabilitiesModule({ planId, mode, currency, facts, products, facilities, months, openingDebt, extras, history = [], firstYear, adviser = false, monthsByYear = {}, targetChecks = [], agreedTargets = {}, aiOn = false, briefings = {} }: {
   planId: string; mode: "guided" | "advanced"; currency: string; facts: PlanFacts;
   /** Historic, every period, for the actual view (§6.158). Empty for a business with no accounts. */
   history?: HistoricRow[];
@@ -83,6 +80,9 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
   targetChecks?: TargetCheck[];
   /** The agreed targets themselves — what the Plan view's levers aim at (§6.173). */
   agreedTargets?: AgreedTargets;
+  /** AI switched on for this plan, and the Planner's saved briefings keyed "tab:view" (§6.179). */
+  aiOn?: boolean;
+  briefings?: Record<string, SavedBriefing>;
   /** For the panels only (§6.129.2) — each product's five years, and the borrowing the plan carries. */
   products: ProductFacts[]; facilities: FacilityFacts[];
   /** The plan's own twelve months (§6.21), for the month-by-month cash panel. */
@@ -93,6 +93,8 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
   extras: ExtraFacts;
 }) {
   const [tab, setTab] = useState<Tab>("grow");
+  /* Saved briefings live here, not in each box, so switching tab and back shows what was just saved. */
+  const [notes, setNotes] = useState<Record<string, SavedBriefing>>(briefings);
   const money = useMemo(() => moneyFormatter(currency), [currency]);
 
   /* The plan's own input, unchanged — the pictures and panels that chart the plan's five years read this. */
@@ -104,60 +106,24 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
    * second view, and its growth is measured from the last actual year into the first plan year. A business
    * with no accounts has only the plan.
    */
-  const views = useMemo(() => capabilityViews(facts, history, firstYear), [facts, history, firstYear]);
+  const RV = useMemo(() => readViews({ facts, history, firstYear, money }), [facts, history, firstYear, money]);
+  const { views, actualV, planV } = RV;
   const [view, setView] = useState<View>(views.hasHistory ? "actual" : "plan");
-  const actualV = useMemo(() => (views.actual ? buildView(views.actual, money, views.actual.last) : null), [views, money]);
-  const planV = useMemo(() => buildView(views.plan, money, null), [views, money]);
   const V = view === "actual" && actualV ? actualV : planV;
   /* Each plan year scored on its own: the year each capability arrives (§6.166). */
   const line = useMemo(() => capabilityTimeline(facts, views, monthsByYear, firstYear, money), [facts, views, monthsByYear, firstYear, money]);
   const onActual = view === "actual" && !!actualV;
 
-  const { grow, borrow, sell } = V;
+  const { borrow, sell } = V;
   const waiting = tab === "grow" ? V.waiting : 0;
   /* The plan's own five years, charted under their names (§6.157). */
   const P = useMemo(() => buildPanels(input, products, [1, 2, 3, 4, 5].map((y) => String(firstYear + y - 1))), [input, products, firstYear]);
   const growScore = V.scores.grow, borrowScore = V.scores.borrow, sellScore = V.scores.sell;
 
-  const WEIGHTS = { grow: V.growWeights, borrow: BORROW_WEIGHTS, sell: SELL_WEIGHTS }[tab];
-  const metrics = { grow, borrow, sell }[tab];
-  const s = V.scores[tab];
-  const raw = verdict(tab, metrics, WEIGHTS, s.value);
-  /* The headline speaks about what happened on the actual view, and about what is planned on the plan view. */
-  const PAST: Record<string, string> = {
-    "The growth plan does not pay for itself": "Growth so far has not paid for itself",
-    "Worth doing, but cash will be tight": "Growing, but cash is tight",
-    "The growth plan works": "Growth so far has worked",
-  };
-  const past = (t: string) => t.replace(/\bin the plan\b/g, "in the business").replace(/\bthe plan\b/g, "the business");
-  const v = onActual
-    ? { ...raw, headline: PAST[raw.headline] ?? raw.headline, actions: raw.actions.map(past), paragraphs: raw.paragraphs.map((p) => ({ ...p, body: past(p.body) })) }
-    : raw;
-  const band = s.value === null ? null : statusOf(s.value, SCORE_BANDS);
-  const span = onActual ? views.actual!.span : views.plan.span;
-
-  /*
-   * THREE LINES FOR THE PERSON IN THE ROOM (§6.160): what happened, what the plan asks, what to talk about
-   * first. Both views at once, whichever is showing — it is the gap between them that the conversation is about.
-   */
-  const summary = useMemo(() => {
-    const f: SummaryFacts = {
-      adviser, money,
-      actual: views.actual && actualV ? { growIn: actualV.growIn, posIn: actualV.posIn, year: views.actual.last.year, grow: actualV.grow, borrow: actualV.borrow } : null,
-      plan: { input, firstYear, grow: planV.grow, borrow: planV.borrow, monthNames: months },
-    };
-    const base = { grow: growSummary, borrow: borrowSummary, sell: sellSummary }[tab](f);
-    if (!onActual || !views.actual || !actualV) return base;
-    /* The Actual view: the accounts only, nothing from a projected year (§6.169). */
-    const last = views.actual.last;
-    const issues = issuesFrom(actualYear(history, 2, firstYear), last, money).filter((i) => i.area === tab);
-    const e = ebitda(actualV.posIn.pnl[1]);
-    return actualSummary(tab, base, {
-      adviser, headline: v.headline, capped: s.capped.map((k) => metrics.find((m) => m.key === k)?.name ?? k),
-      issues, earnings: e === null ? null : e + (input.sale.addBacks ?? 0),
-      scored: input.transfer.filter((x) => x.score !== null && x.score !== undefined).length,
-    });
-  }, [adviser, money, views, actualV, planV, input, firstYear, months, tab, onActual, history, v.headline, s.capped, metrics]);
+  /* The verdict, the "In short" box and the fixes, read by the same function the briefing and report use (§6.179). */
+  const R = useMemo(() => readTab({ facts, history, firstYear, money, adviser, months, agreedTargets, facilities }, RV, tab, view === "actual"),
+    [facts, history, firstYear, money, adviser, months, agreedTargets, facilities, RV, tab, view]);
+  const { metrics, s, v, band, span, summary } = R;
 
   /* The same card on the other view (§6.159): the track record on the plan, the plan on the accounts. */
   const otherV = actualV ? (onActual ? planV : actualV) : null;
@@ -173,96 +139,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
     : onActual
       ? (TWO_YEAR.has(key) ? `The plan, ${views.plan.span.replace(" onward", "")}` : `The plan, ${planYear}`)
       : (TWO_YEAR.has(key) ? `Track record, ${views.actual.span}` : `Actual, ${views.actual.last.year}`);
-  /*
-   * WHAT FIXES IT (§6.173) — Grow only, for now. The levers the dials point to, each with its money, the year
-   * re-scored with them pulled, the story of how the dials connect, and under each card what would move it.
-   * On the accounts the levers aim at the year before; on the plan, at the agreed targets where there are any.
-   */
-  const fixes = useMemo(() => {
-    const cur = onActual && views.actual ? views.actual : views.plan;
-    const last = onActual && views.actual ? views.actual.last : null;
-    const ramp = !onActual && views.hasHistory;
-    /*
-     * On the plan, aim where the Planner's assessment aims: the agreed target, or else the better of the two
-     * actual years — 2026 was the bad year, so measuring the plan's margin against it would ask for nothing.
-     */
-    const a1 = views.actual?.last ?? null, a0 = actualYear(history, 2, firstYear);
-    const gmOf = (y: typeof a1) => (y && y.pnl.revenue > 0 ? ((y.pnl.revenue - y.pnl.cogs) / y.pnl.revenue) * 100 : null);
-    const bestGm = Math.max(gmOf(a1) ?? -Infinity, gmOf(a0) ?? -Infinity);
-    const bestDd = Math.min(a1?.days.debtorDays ?? Infinity, a0?.days.debtorDays ?? Infinity);
-    const refs = onActual ? {} : {
-      grossMargin: agreedTargets.grossMargin?.value ?? (Number.isFinite(bestGm) ? Math.round(bestGm * 10) / 10 : null),
-      overheadsCap: agreedTargets.overheadsCap?.value ?? null,
-      debtorDays: agreedTargets.debtorDays?.value ?? (Number.isFinite(bestDd) ? bestDd : null),
-      loanTermMonths: agreedTargets.loanTermMonths?.value ?? null,
-    };
-
-    if (tab === "sell") {
-      /*
-       * SELL (§6.177). A buyer prices one year — the sale year (the latest actual year on the accounts). The
-       * profit and payment levers are worked out on that year against the year before it, then the price.
-       */
-      const slot = onActual ? 1 : saleYear(V.posIn.sale);
-      let profitL: ReturnType<typeof growLevers> = [];
-      if (slot === 1) profitL = views.hasHistory ? growLevers(V.growIn, refs) : [];
-      else {
-        const P = V.posIn;
-        profitL = growLevers({ ...P, pnl: { 1: P.pnl[slot - 1], 2: P.pnl[slot] }, balanceSheet: { 1: P.balanceSheet[slot - 1], 2: P.balanceSheet[slot] } } as typeof P, refs);
-      }
-      const levers = withMoves(sellLevers(V.posIn, profitL, slot), cur, last, false, money, V.sell, "sell");
-      const table = leverTable(levers, cur, last, false, money, { metrics: V.sell, score: V.scores.sell.value }, "sell");
-      const moves: Record<string, string> = {};
-      for (const m of V.sell) { const line = moveLine(m.key, levers, cur, last, false, money, V.sell, "sell") ?? plainAction(m); if (line) moves[m.key] = line; }
-      const year = onActual && last ? String(last.year) : cur.positionNames[slot] ?? "";
-      /* What profit the asking price needs, and what the fixes get to — when the fixes do not justify it. */
-      const need = profitForPrice(V.posIn);
-      const afterP = viewWith(cur, last, levers.filter((l) => l.key !== "price"), false, money, "sell").input.pnl[slot];
-      const afterE = afterP ? afterP.operatingProfit + afterP.depreciation + (V.posIn.sale.addBacks ?? 0) : null;
-      const priceNote = need && afterE !== null && afterE < need.needed ? { ...need, after: afterE } : null;
-      return { levers, table, moves, short: null as number | null, shortCover: null as number | null, shortStress: null as string | null, priceNote,
-        story: sellStory(V.posIn, slot, year, onActual), year };
-    }
-
-    if (tab === "borrow") {
-      /*
-       * BORROW (§6.176). The judged year is the position's first. The loans come from the accounts on the
-       * Actual view (what is owed, the rate the interest implies, the years left from what falls due within
-       * a year) and from Funding on the plan. The profit and payment levers are Grow's, pulled on the same
-       * year — they only line up when the growth input's second year IS that year, which needs accounts.
-       */
-      let loans: LoanFacts[] = [];
-      if (last) {
-        const debt = last.balanceSheet.debtCurrent + last.balanceSheet.debtNonCurrent;
-        const prevDebt = a0 ? a0.balanceSheet.debtCurrent + a0.balanceSheet.debtNonCurrent : debt;
-        const avg = (debt + prevDebt) / 2;
-        const rate = avg > 0 && last.pnl.interest > 0 ? (last.pnl.interest / avg) * 100 : 10;
-        if (debt > 0 && last.balanceSheet.debtCurrent > 0) loans = [{ name: "the loans", balance: debt, ratePct: rate, years: debt / last.balanceSheet.debtCurrent }];
-      } else {
-        loans = facilities.filter((f) => f.termMonths > 0 && f.drawn > 0).map((f) => ({ name: f.name, balance: f.drawn, ratePct: f.ratePct, years: f.termMonths / 12 }));
-      }
-      const growL = views.hasHistory ? growLevers(V.growIn, refs) : [];
-      const levers = withMoves(borrowLevers(V.posIn, growL, loans, refs, !onActual), cur, last, false, money, V.borrow, "borrow");
-      const table = leverTable(levers, cur, last, false, money, { metrics: V.borrow, score: V.scores.borrow.value }, "borrow");
-      const moves: Record<string, string> = {};
-      for (const m of V.borrow) { const line = moveLine(m.key, levers, cur, last, false, money, V.borrow, "borrow") ?? plainAction(m); if (line) moves[m.key] = line; }
-      const afterM = levers.length ? viewWith(cur, last, levers, false, money, "borrow").metrics : [];
-      const after = afterM.find((x) => x.key === "dscr")?.value ?? null;
-      const stressed = afterM.find((x) => x.key === "dscrStressed");
-      const shortCover = after !== null && after < LENDER_MIN_DSCR ? after : null;
-      /* The bad year can still hold the score down after every fix — say so, and show what the bad year is. */
-      const shortStress = shortCover === null && stressed && stressed.value !== null && stressed.value < LENDER_MIN_DSCR ? (stressed.sub ?? "") : null;
-      return { levers, table, moves, short: null as number | null, shortCover, shortStress, priceNote: null as PriceNote | null, story: borrowStory(V.posIn, cur.positionNames, last), year: cur.positionNames[1] ?? "" };
-    }
-
-    const levers = withMoves(growLevers(V.growIn, refs), cur, last, ramp, money, V.grow);
-    const table = leverTable(levers, cur, last, ramp, money, { metrics: V.grow, score: V.scores.grow.value });
-    const moves: Record<string, string> = {};
-    for (const m of V.grow) { const line = moveLine(m.key, levers, cur, last, ramp, money, V.grow) ?? plainAction(m); if (line) moves[m.key] = line; }
-    /* When every lever together still leaves a loss, say how far short — the levers are not the whole answer. */
-    const after = levers.length ? growWith(cur, last, levers, ramp, money).input.pnl[2]?.operatingProfit ?? null : null;
-    const short = after !== null && after < 0 ? after : null;
-    return { levers, table, moves, short, shortCover: null as number | null, shortStress: null as string | null, priceNote: null as PriceNote | null, story: growStory(V.growIn, cur.growNames, last, levers), year: cur.growNames[2] ?? "" };
-  }, [tab, onActual, views, V, money, agreedTargets, history, firstYear, facilities]);
+  const fixes = R.fixes;
 
   const otherOf = (m: Metric): Comparison | null => {
     /* Not on the Actual view: a line about the plan is a line about a projected year (§6.169). */
@@ -429,6 +306,13 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
       </section>
       </div>
 
+      {/* The Planner's briefing (§6.179): one note per tab and view, keyed so each starts from its own saved copy. */}
+      {s.value !== null || fixes.story ? (
+        <Briefing key={`${tab}:${R.onActual ? "actual" : "plan"}`} planId={planId} tab={tab} view={R.onActual ? "actual" : "plan"} R={R}
+          money={money} adviser={adviser} aiOn={aiOn} initial={notes[`${tab}:${R.onActual ? "actual" : "plan"}`] ?? null}
+          onSaved={(b) => setNotes((n) => { const k = `${tab}:${R.onActual ? "actual" : "plan"}`; const x = { ...n }; if (b) x[k] = b; else delete x[k]; return x; })} />
+      ) : null}
+
       {/*
         ---------- one picture, and every tab has exactly one ----------
 
@@ -565,15 +449,6 @@ function AgreedTargets({ planId, checks }: { planId: string; checks: TargetCheck
  * EVERY CARD NOT IN THE GREEN SAYS HOW TO IMPROVE IT (§6.178). When none of the money levers moves a card, it
  * gets the plain action for it instead — and the bad-year card says to check the bad year itself.
  */
-function plainAction(m: Metric): string | null {
-  if (m.value === null || m.unscored) return null;
-  const s = statusOf(m.value, m.bands);
-  if (s === null || s === "good") return null;
-  const a = actionFor(m);
-  if (!a) return null;
-  return m.key === "dscrStressed" ? `${a} None of the fixes above get this past the bad year set up on Assumptions — check it is realistic.` : a;
-}
-
 /** The levers, most money first — what to do, what it is worth, which dials it moves (§6.173). */
 function Levers({ planId, levers, money, agreed }: { planId: string; levers: Lever[]; money: (v: number) => string; agreed: AgreedTargets }) {
   return (
@@ -581,7 +456,7 @@ function Levers({ planId, levers, money, agreed }: { planId: string; levers: Lev
       {levers.map((l) => (
         <li key={l.key}>
           <span className="font-semibold">{l.label}</span>
-          <span className="ml-1.5 font-semibold text-good">{l.profit > 0 || l.saves || l.price || l.key === "overdraft" ? worth(l, money) : `+${money(l.cash)} cash, once`}</span>
+          <span className="ml-1.5 font-semibold text-good">{leverValue(l, money)}</span>
           <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">{l.detail}</p>
           {l.moves.length > 0 && <p className="text-[12px] text-muted-foreground">Improves: {l.moves.join(", ")}</p>}
           {l.target && (agreed[l.target]

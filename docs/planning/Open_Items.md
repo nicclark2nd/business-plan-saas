@@ -990,3 +990,12 @@ projection step and scored on the Plan view, after.)
   ongoing clients, and ZZ's largest product share. Every such card now carries its plain action (`actionFor`), and
   the bad-year card also says to check the bad year. Also fixed: the buyer question on leadership pay matched the
   old wording of its card and had stopped appearing.
+- **§6.179** The Planner's briefing (Nic: an AI "Planner's briefing" button, then a branded report). One note per
+  tab (Grow, Borrow, Sell) per view (Actual, Plan): written with AI or typed, edited, and saved; the saved note is
+  what the branded report will print. The tab's verdict, "In short" box, story, fixes and table moved out of the
+  page into `engine/capability/read.ts` (`readTab`), so the page, the briefing and the report read one assembly.
+  The model is handed a fact sheet of exactly what the tab shows (`briefingSheet`) — on the Actual view nothing from
+  the plan — with grade-9 rules; `unknownFigures` flags any figure in the note that is not on the tab. Same gates
+  as drafting (signed in, AI on for the plan, daily ceiling), zero-retention, 1,000 tokens. Saved in
+  `plan_briefings` (migration 0057) with the score and verdict at the time, so the page says when the figures have
+  moved on since. Next: the branded Word report (firm logo, name and colour — its own migration).

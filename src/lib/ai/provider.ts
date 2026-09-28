@@ -25,7 +25,7 @@ export type DraftStream = AsyncIterable<string>;
 
 export interface DraftProvider {
   /** Yields the passage in pieces as it arrives. Streaming is not a flourish — see §6.105.4. */
-  stream(messages: Message[], signal?: AbortSignal): DraftStream;
+  stream(messages: Message[], signal?: AbortSignal, opts?: { maxTokens?: number }): DraftStream;
 }
 
 export class AiUnavailable extends Error {
@@ -53,7 +53,7 @@ function apiKey(): string {
 export const draftModel = () => process.env.OPENROUTER_MODEL || DEFAULT_MODEL;
 
 /** The body, split out so a test can read what is actually sent without a network call. */
-export function requestBody(messages: Message[], model = draftModel()) {
+export function requestBody(messages: Message[], model = draftModel(), maxTokens = 700) {
   return {
     model,
     messages,
@@ -61,7 +61,8 @@ export function requestBody(messages: Message[], model = draftModel()) {
     /* Retention refused at the routing layer, on this request, every time. */
     provider: { zdr: true },
     temperature: 0.4,
-    max_tokens: 700,
+    /* A field is a passage; a briefing (§6.179) is a page, and asks for more. */
+    max_tokens: maxTokens,
   };
 }
 
@@ -80,7 +81,7 @@ export function pieceFromLine(line: string): string | null {
 }
 
 export const openRouter: DraftProvider = {
-  async *stream(messages, signal) {
+  async *stream(messages, signal, opts) {
     const key = apiKey();
     let res: Response;
     try {
@@ -94,7 +95,7 @@ export const openRouter: DraftProvider = {
           "HTTP-Referer": "https://bizplanhq.com",
           "X-Title": "BizPlanHQ",
         },
-        body: JSON.stringify(requestBody(messages)),
+        body: JSON.stringify(requestBody(messages, draftModel(), opts?.maxTokens)),
       });
     } catch {
       throw new AiUnavailable("Could not reach the AI service. Try again in a moment.", "network");
