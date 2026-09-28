@@ -950,3 +950,10 @@ projection step and scored on the Plan view, after.)
   before; on the plan at the agreed targets, or else the better of the two actual years (as step 8 proposes).
   SEQ actual: overheads +89,118, margin to 42% +71,267, debtors to 30 days frees 89,802 → margin −2.6% → 5.4%, grow
   47 → 97. The slower-payment figure is now one number app-wide (lever, tile, step 8: 89,802).
+- **§6.174** RULE (Nic, 29 Sep 2026): "Most of the time the English needs to be about grade 9 standard, not PhD
+  standard." Capability to grow rewritten in plain words: short sentences, everyday verbs, jargon named or replaced.
+  Fixes now read as actions ("Bring overheads down to 730,717", "Lift gross margin back to 42%", "Get customers to
+  pay in 30 days"); each tile says "How to improve it: … That would take this to 5.4%"; the story is short
+  sentences, past tense on the accounts and present on the plan; "floor" is always "cash floor" (the name on
+  Assumptions); "overheads" in cash cover reads "running costs"; the verdict headlines, next-step actions and the
+  score notes are plain. Borrow and Sell get the same pass when their levers are built.

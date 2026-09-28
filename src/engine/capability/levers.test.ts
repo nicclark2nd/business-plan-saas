@@ -32,8 +32,8 @@ describe("what fixes it (§6.173)", () => {
 
   it("finds the three levers the accounts point to, most money first", () => {
     expect(levers.map((l) => l.key)).toEqual(["overheads", "margin", "debtors"]);
-    expect(levers[1].label).toBe("Gross margin back to 42%");
-    expect(levers[2].label).toBe("Customers paying in 30 days");
+    expect(levers[1].label).toBe("Lift gross margin back to 42%");
+    expect(levers[2].label).toBe("Get customers to pay in 30 days");
     expect(levers[2].profit).toBe(0);
     expect(levers[0].moves).toContain("Operating margin");
   });
@@ -47,14 +47,14 @@ describe("what fixes it (§6.173)", () => {
 
   it("says what would move a dial, and how far", () => {
     const line = moveLine("operatingMargin", levers, a, a.last, false, money, base.grow)!;
-    expect(line).toMatch(/^Hold overheads to sales growth \(\+[\d,]+\) and gross margin back to 42% \(\+[\d,]+\) would take it to /);
+    expect(line).toMatch(/^Bring overheads down to [\d,]+ \(\+[\d,]+ a year\) and lift gross margin back to 42% \(\+[\d,]+ a year\)\. That would take this to /);
     expect(moveLine("revenueGrowth", levers, a, a.last, false, money, base.grow)).toBeNull();   // already good
   });
 
   it("tells how the dials connect", () => {
     const s = growStory(base.growIn, a.growNames, a.last, levers)!;
-    expect(s).toContain("Sales grew 107,000 (5.7%) into 2026, but margin fell from 42% to 38.4% and overheads rose 128,000");
-    expect(s).toContain("each extra dollar of sales cost more than it earned");
-    expect(s).toContain("leaving 21,315 in the bank");
+    expect(s).toContain("Sales went up 107,000 (5.7%) in 2026. But gross margin dropped from 42% to 38.4% and overheads went up 128,000");
+    expect(s).toContain("each extra dollar of sales cost more than it brought in");
+    expect(s).toContain("The year ended with 21,315 in the bank.");
   });
 });

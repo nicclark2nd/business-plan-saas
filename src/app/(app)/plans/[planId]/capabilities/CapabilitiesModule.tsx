@@ -123,9 +123,9 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
   const raw = verdict(tab, metrics, WEIGHTS, s.value);
   /* The headline speaks about what happened on the actual view, and about what is planned on the plan view. */
   const PAST: Record<string, string> = {
-    "The growth plan does not fund itself": "Growth so far has not paid for itself",
-    "Worth doing, but it will be tight on cash": "Growing, but tight on cash",
-    "The growth stands up": "The growth so far stands up",
+    "The growth plan does not pay for itself": "Growth so far has not paid for itself",
+    "Worth doing, but cash will be tight": "Growing, but cash is tight",
+    "The growth plan works": "Growth so far has worked",
   };
   const past = (t: string) => t.replace(/\bin the plan\b/g, "in the business").replace(/\bthe plan\b/g, "the business");
   const v = onActual
@@ -292,8 +292,8 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
           {band && <div className="mt-2"><Pill s={band} label={DIAL_LABEL[tab][band]} /></div>}
           <p className="mt-2 max-w-[26ch] text-[11.5px] text-muted-foreground">
             {s.value === null ? "Nothing to score yet"
-              : s.covered === s.total ? `From ${s.total} measures` : `From the ${s.covered} of ${s.total} measures ${onActual ? "the accounts" : "this plan"} can answer`}
-            {s.value !== null && waiting > 0 && ` — ${waiting} more ${waiting === 1 ? "applies" : "apply"} once the business makes a profit`}
+              : s.covered === s.total ? `Based on ${s.total} measures.` : `Based on ${s.covered} of ${s.total} measures — the others need more information.`}
+            {s.value !== null && waiting > 0 && ` ${waiting} more ${waiting === 1 ? "counts" : "count"} once the business makes a profit.`}
           </p>
         </div>
 
@@ -303,10 +303,10 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
           {fixes?.story ? (
             <>
               <p className="mt-3 text-[13.5px] leading-relaxed">{fixes.story}</p>
-              {fixes.table.length > 0 && <LeverTable rows={fixes.table} title={onActual ? `Had ${fixes.year} run with the levers pulled` : `If the plan pulls the levers in ${fixes.year}`} />}
+              {fixes.table.length > 0 && <LeverTable rows={fixes.table} title={onActual ? `${fixes.year} with these fixes` : `${fixes.year} if the plan makes these fixes`} />}
               {fixes.short !== null && (
                 <p className="mt-2 text-[12.5px] font-semibold text-bad">
-                  Even with every lever, {fixes.year} {onActual ? "would still have lost" : "still loses"} {money(-fixes.short)}. That much more has to come from prices, volume at a good margin, or costs.
+                  Even with all these fixes, {fixes.year} {onActual ? "would still have lost" : "still loses"} {money(-fixes.short)}. That gap has to be closed with higher prices, more sales at a good profit, or lower costs.
                 </p>
               )}
             </>
@@ -343,9 +343,9 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
           */}
           {s.capped.length > 0 && (
             <p className="mt-3 rounded border border-border bg-secondary/50 px-3 py-2 text-[12px] text-muted-foreground">
-              Held under 50 by <b className="font-semibold text-foreground">
+              <b className="font-semibold text-foreground">
                 {s.capped.map((k) => metrics.find((m) => m.key === k)?.name ?? k).join(" and ")}
-              </b>. A measure this decisive cannot be averaged out by the ones that are going well.
+              </b> {s.capped.length === 1 ? "keeps" : "keep"} this score below 50. A problem this big can&apos;t be made up for by the things that are going well.
             </p>
           )}
         </aside>
@@ -491,9 +491,9 @@ function Levers({ planId, levers, money, agreed }: { planId: string; levers: Lev
       {levers.map((l) => (
         <li key={l.key}>
           <span className="font-semibold">{l.label}</span>
-          <span className="ml-1.5 font-semibold text-good">{l.profit > 0 ? `+${money(l.profit)} a year` : `frees ${money(l.cash)}`}</span>
+          <span className="ml-1.5 font-semibold text-good">{l.profit > 0 ? `+${money(l.profit)} a year` : `+${money(l.cash)} cash, once`}</span>
           <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">{l.detail}</p>
-          {l.moves.length > 0 && <p className="text-[12px] text-muted-foreground">Moves: {l.moves.join(", ")}</p>}
+          {l.moves.length > 0 && <p className="text-[12px] text-muted-foreground">Improves: {l.moves.join(", ")}</p>}
           {l.target && (agreed[l.target]
             ? <p className="text-[12px] font-semibold text-good">✓ Agreed as a target</p>
             : <Link href={`/plans/${planId}/assessment`} className="text-[12px] font-semibold text-primary hover:underline">Agree as a target →</Link>)}
@@ -508,7 +508,7 @@ function LeverTable({ rows, title }: { rows: WithLeversRow[]; title: string }) {
   return (
     <div className="mt-4 overflow-hidden rounded-md border border-border">
       <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)] bg-secondary/60 px-3 py-1.5 text-[11.5px] font-semibold text-muted-foreground">
-        <span>{title}</span><span className="text-right">Now</span><span className="text-right">With the levers</span>
+        <span>{title}</span><span className="text-right">Now</span><span className="text-right">With the fixes</span>
       </div>
       {rows.map((r) => (
         <div key={r.label} className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)] border-t border-border px-3 py-1.5 text-[13px]">
@@ -619,7 +619,7 @@ function Card({ m, planId, labels, other, move }: { m: Metric; planId: string; l
 
       <p className="mt-2.5 text-[12.5px] leading-relaxed">{m.missing ?? m.note}</p>
       {/* What would move it, from the levers the other dials point to (§6.173). */}
-      {move && <p className="mt-1.5 rounded bg-accent/50 px-2.5 py-1.5 text-[12px] leading-relaxed"><b className="font-semibold">What would move it:</b> {move}</p>}
+      {move && <p className="mt-1.5 rounded bg-accent/50 px-2.5 py-1.5 text-[12px] leading-relaxed"><b className="font-semibold">How to improve it:</b> {move}</p>}
       {other && (
         <p className={cn("mt-2 rounded px-2.5 py-1.5 text-[12px]", other.ahead ? "bg-warn-soft text-foreground" : "bg-secondary/60 text-muted-foreground")}>
           <b className="font-semibold">{other.label}:</b> {other.display}
@@ -687,7 +687,7 @@ function WorstMonth({ planId, input, money, months }: {
   const short = low === null ? 0 : bar - low;
 
   return (
-    <Picture title={`The worst month of ${Y.label(1)}`} aside={hasFloor ? `Dashed line: your floor of ${money(bar)}` : "Against zero — no floor set"}>
+    <Picture title={`The worst month of ${Y.label(1)}`} aside={hasFloor ? `Dashed line: your cash floor of ${money(bar)}` : "Measured against zero — no cash floor set"}>
       {low === null ? (
         <Note>No monthly cash forecast yet. Fill in your sales and costs and this draws itself.</Note>
       ) : (
@@ -695,16 +695,16 @@ function WorstMonth({ planId, input, money, months }: {
           <div className={cn("mt-2 rounded-md border px-4 py-3", short > 0 ? "border-bad/40 bg-bad-soft" : "border-good/40 bg-good-soft")}>
             <div className={cn("text-[26px] font-semibold leading-tight tabular-nums", short > 0 ? "text-bad" : "text-good")}>
               {short > 0
-                ? (hasFloor ? <>{money(short)} short <span className="text-[16px] font-medium">of your floor in {name(lowAt)}</span></>
+                ? (hasFloor ? <>{money(short)} <span className="text-[16px] font-medium">below your cash floor in {name(lowAt)}</span></>
                   : <>{money(-low)} overdrawn <span className="text-[16px] font-medium">in {name(lowAt)}</span></>)
-                : <>{money(low - bar)} clear <span className="text-[16px] font-medium">{hasFloor ? "of your floor" : "of zero"} at the tightest point</span></>}
+                : <>{money(low - bar)} <span className="text-[16px] font-medium">{hasFloor ? "above your cash floor" : "above zero"} in the tightest month</span></>}
             </div>
             <p className="mt-1 text-[12.5px] text-foreground/80">
               {short > 0
-                ? <>The bank goes to {money(low)}. {under.length} of {cash.length} months {under.length === 1 ? "is" : "are"} below {hasFloor ? "the floor" : "zero"}, starting {name(under[0])}.
-                    {" "}That is the cash — or overdraft — the plan has to find.{" "}
+                ? <>The bank goes to {money(low)}. {under.length} of {cash.length} months {under.length === 1 ? "is" : "are"} below {hasFloor ? "the cash floor" : "zero"}, starting in {name(under[0])}.
+                    {" "}The plan has to find that cash, or arrange an overdraft.{" "}
                     <a href={`/plans/${planId}/assumptions?area=cash`} className="font-semibold text-primary hover:underline">Where to fix it</a></>
-                : <>The tightest month is {name(lowAt)}, at {money(low)}. Every month of {Y.year(1)} stays above {hasFloor ? "the floor" : "zero"}.</>}
+                : <>The tightest month is {name(lowAt)}, at {money(low)}. Every month of {Y.year(1)} stays above {hasFloor ? "the cash floor" : "zero"}.</>}
             </p>
           </div>
           <div ref={ref} className="mt-3" style={{ minHeight: 220 }}>
@@ -718,8 +718,8 @@ function WorstMonth({ planId, input, money, months }: {
           {/* Without a floor the only line is zero, and the picture says so rather than drawing one nobody set. */}
           {!hasFloor && (
             <p className="mt-2 text-[12px] text-muted-foreground">
-              No cash floor set, so months are only judged against zero — a weaker test than any business
-              actually runs to.
+              No cash floor has been set, so each month is only checked against zero. Most businesses need
+              more of a cushion than that.
               <span className="ml-2 inline-block align-middle"><Pencil planId={planId} fix={{ label: "Set a cash floor", to: "assumptions?area=cash" }} /></span>
             </p>
           )}
@@ -750,15 +750,15 @@ function YearEndCash({ planId, history, firstYear, floor, money }: {
   const lastYear = firstYear - Number(last.period_number);
   const short = bar - cash;
   return (
-    <Picture title={`How ${lastYear} ended`} aside={bar > 0 ? `Dashed line: your floor of ${money(bar)}` : "Year-end bank balance, from Historic"}>
+    <Picture title={`How ${lastYear} ended`} aside={bar > 0 ? `Dashed line: your cash floor of ${money(bar)}` : "Bank balance at the year end, from Historic"}>
       <div className={cn("mt-2 rounded-md border px-4 py-3", short > 0 ? "border-bad/40 bg-bad-soft" : "border-good/40 bg-good-soft")}>
         <div className={cn("text-[26px] font-semibold leading-tight tabular-nums", short > 0 ? "text-bad" : "text-good")}>
           {money(cash)} <span className="text-[16px] font-medium">in the bank at the end of {lastYear}</span>
         </div>
         <p className="mt-1 text-[12.5px] text-foreground/80">
-          {cover !== null && <>About {Math.round(cover * 10) / 10} {Math.round(cover * 10) / 10 === 1 ? "month" : "months"} of overheads. </>}
-          {bar > 0 && short > 0 && <>{money(short)} below your floor. </>}
-          Annual accounts only show the last day of the year, so the tightest month in between is not visible.
+          {cover !== null && <>About {Math.round(cover * 10) / 10} {Math.round(cover * 10) / 10 === 1 ? "month" : "months"} of running costs. </>}
+          {bar > 0 && short > 0 && <>{money(short)} below your cash floor. </>}
+          The accounts only show the last day of the year, so the tightest month is not shown.
           {floor === null && <span className="ml-2 inline-block align-middle"><Pencil planId={planId} fix={{ label: "Set a cash floor", to: "assumptions?area=cash" }} /></span>}
         </p>
       </div>

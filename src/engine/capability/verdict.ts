@@ -54,15 +54,15 @@ function ranked(metrics: Metric[], weights: Record<string, number>): { m: Metric
 type Action = string | ((m: Metric) => string);
 const ACTIONS: Record<string, Action> = {
   /* Grow */
-  operatingMargin: "Fix the loss before growing into it — this is the one thing on the page that has to change first.",
-  lowestCash: "Fix the low month before anything else — bring invoicing forward, stage the spending, or arrange an overdraft to cover it.",
-  cashConversion: "Chase the gap between profit and cash: it is sitting in unpaid invoices or in stock.",
-  cashCycle: "Shorten the cycle — invoice on delivery, tighten terms, or hold less stock. Every day taken out is cash back.",
-  workingCapitalPerDollar: "Every new sale is tying up cash. Ask for deposits or shorter terms on new work before you chase more of it.",
-  returnOnPlan: "The spending does not earn enough. Stage it, or cut the part of it that is not tied to new revenue.",
-  incrementalMargin: "Put a floor under the margin on new work, or the growth makes the business bigger and no better off.",
-  operatingLeverage: "Overheads are growing with sales. Find the costs that should not have to rise before you add more volume.",
-  revenueGrowth: "There is no growth in the forecast to fund. Revisit the sales lines before using this page.",
+  operatingMargin: "Fix the loss before trying to grow. This has to change first.",
+  lowestCash: "Fix the month the bank runs low first: send invoices sooner, spread out the spending, or arrange an overdraft.",
+  cashConversion: "Chase the unpaid invoices and cut back stock — that is where the missing cash is.",
+  cashCycle: "Get paid faster: invoice when the job is done, give shorter payment terms, or hold less stock. Every day saved is cash back.",
+  workingCapitalPerDollar: "Every new sale is tying up cash. Ask for deposits or shorter payment terms on new work before chasing more of it.",
+  returnOnPlan: "The money spent on growing does not earn enough back. Spend it in stages, or cut what is not bringing in new sales.",
+  incrementalMargin: "Set a minimum profit on new work. Otherwise the business gets bigger but not better off.",
+  operatingLeverage: "Costs are rising with sales. Find the costs that should not have to rise before selling more.",
+  revenueGrowth: "The plan shows no growth. Check the sales figures before relying on this page.",
   /*
    * Borrow. REWRITTEN FOR THE DEBT THE PLAN CARRIES (§6.129) — every one of these used to instruct the
    * client about a loan they had typed into the dashboard, and on a plan with real borrowing in it that read
@@ -94,9 +94,9 @@ const ACTIONS: Record<string, Action> = {
 const HEAD = {
   grow: {
     none: "Not enough of the plan is filled in to judge the growth",
-    bad: "The growth plan does not fund itself",
-    watch: "Worth doing, but it will be tight on cash",
-    good: "The growth stands up",
+    bad: "The growth plan does not pay for itself",
+    watch: "Worth doing, but cash will be tight",
+    good: "The growth plan works",
   },
   borrow: {
     none: "Not enough of the plan is filled in to judge the borrowing",
@@ -113,7 +113,7 @@ const HEAD = {
 } as const;
 
 const QUESTION = {
-  grow: "Can the business increase profit while funding the cash, people and assets that growth needs?",
+  grow: "Can the business make more profit as it grows, and pay for the cash, people and equipment that growth needs?",
   borrow: "Can the business repay what it owes on time, including if trading gets worse — and would a lender add to it?",
   sell: "Would the earnings and the customers survive a change of owner, and is the price justified?",
 } as const;

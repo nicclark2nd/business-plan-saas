@@ -200,12 +200,12 @@ export function yearEndCash(last: ActualYear, floor: number | null, money: (v: n
     bands: judged
       ? [{ to: 0, s: "bad" }, { to: floor!, s: "watch" }, { to: Number.MAX_SAFE_INTEGER, s: "good" }]
       : [{ to: 0, s: "bad" }, { to: monthly, s: "watch" }, { to: Number.MAX_SAFE_INTEGER, s: "good" }],
-    sub: months === null ? undefined : `About ${r1(months)} ${r1(months) === 1 ? "month" : "months"} of overheads`,
-    note: cash < 0 ? `${last.year} ended overdrawn. The accounts only show the last day of the year, so the months in between may have been worse.`
-      : judged && cash < floor! ? `${last.year} ended below your floor of ${money(floor!)}. The accounts only show the last day of the year — the months in between may have been lower still.`
-      : months !== null && months < 1 ? `${last.year} ended with less than a month of overheads in the bank. The accounts only show the last day of the year, so the tight months are not visible here.`
-      : `${last.year} ended with a cushion. The accounts only show the last day of the year, so this says nothing about the tightest month.`,
-    bench: judged ? `Judged against your floor of ${money(floor!)}` : "Under a month of overheads is thin for a trading business",
+    sub: months === null ? undefined : `About ${r1(months)} ${r1(months) === 1 ? "month" : "months"} of running costs`,
+    note: cash < 0 ? `${last.year} ended overdrawn. The accounts only show the last day of the year, so some months may have been worse.`
+      : judged && cash < floor! ? `${last.year} ended below your cash floor of ${money(floor!)}. The accounts only show the last day of the year, so some months may have been even lower.`
+      : months !== null && months < 1 ? `${last.year} ended with less than one month of running costs in the bank. The accounts only show the last day of the year, so the tightest months are not shown here.`
+      : `${last.year} ended with some cash to spare. The accounts only show the last day of the year, so this says nothing about the tightest month.`,
+    bench: judged ? `Measured against your cash floor of ${money(floor!)}` : "Less than one month of running costs is too little for a trading business",
     formula: `Cash at the end of ${last.year} ÷ a month of ${last.year} overheads`,
     reveals: "Whether the business came out of the year with any room — the nearest thing annual accounts show to the lowest month.",
     confidence: "High for the day it was taken; silent about every other day of the year.",
@@ -226,6 +226,8 @@ export function inAccounts(m: Metric): Metric {
     .replace(/the growth plan/g, "the growth")
     .replace(/The plan forecasts no growth/g, "The accounts show no growth")
     .replace(/the profit the plan forecasts/g, "the profit")
+    .replace(/the profit the plan shows/g, "the profit")
+    .replace(/The plan shows no growth/g, "The accounts show no growth")
     .replace(/in the forecast they are being handed/g, "in the accounts")
     .replace(/\bThe plan\b/g, "The business").replace(/\bthe plan\b/g, "the business").replace(/\bThis plan\b/g, "This business");
   return {

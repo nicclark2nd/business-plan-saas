@@ -62,10 +62,10 @@ export function growLevers(i: CapabilityInput, refs: LeverRefs = {}): Omit<Lever
       const ohG = y1.overheads > 0 ? (y2.overheads - y1.overheads) / y1.overheads : 0;
       out.push({
         key: "overheads", target: "overheadsCap",
-        label: refs.overheadsCap != null ? `Overheads no more than ${m(cap)}` : "Hold overheads to sales growth",
+        label: `Bring overheads down to ${m(cap)}`,
         detail: refs.overheadsCap != null
-          ? `The agreed cap. Overheads stand at ${m(y2.overheads)}.`
-          : `Overheads rose ${r1(ohG * 100)}% against sales ${r1(g * 100)}%. Keeping them in step is worth ${m(excess)} a year.`,
+          ? `The target you agreed. Overheads are ${m(y2.overheads)} now.`
+          : `Overheads went up ${r1(ohG * 100)}% while sales went up ${r1(g * 100)}%. Keeping overheads in line with sales keeps ${m(excess)} a year in the business.`,
         profit: excess, cash: excess, effect: { ...NONE, overheadsCut: excess },
       });
     }
@@ -78,8 +78,8 @@ export function growLevers(i: CapabilityInput, refs: LeverRefs = {}): Omit<Lever
     const gain = r2((gap / 100) * y2.revenue);
     out.push({
       key: "margin", target: "grossMargin",
-      label: `Gross margin back to ${r1(ref)}%`,
-      detail: `From ${r1(gm(y2))}%, through prices and how jobs are quoted: ${m(gain)} a year on the same sales.`,
+      label: `Lift gross margin back to ${r1(ref)}%`,
+      detail: `It is ${r1(gm(y2))}% now. Raising prices or quoting jobs better adds ${m(gain)} a year on the same sales.`,
       profit: gain, cash: gain, effect: { ...NONE, cogsCut: gain },
     });
   }
@@ -92,8 +92,8 @@ export function growLevers(i: CapabilityInput, refs: LeverRefs = {}): Omit<Lever
     if (release >= 1000) {
       out.push({
         key: "debtors", target: "debtorDays",
-        label: `Customers paying in ${Math.round(dd1)} days`,
-        detail: `From ${Math.round(dd2)} days. Frees ${m(release)} of cash, once — it is not profit.`,
+        label: `Get customers to pay in ${Math.round(dd1)} days`,
+        detail: `They take ${Math.round(dd2)} days now. Getting paid sooner puts ${m(release)} back in the bank, once. This is cash, not extra profit.`,
         profit: 0, cash: release, days: { from: Math.round(dd2), to: Math.round(dd1) }, effect: { ...NONE, arCut: release, debtorDays: Math.round(dd1) },
       });
     }
@@ -107,8 +107,8 @@ export function growLevers(i: CapabilityInput, refs: LeverRefs = {}): Omit<Lever
     if (release >= 1000) {
       out.push({
         key: "stock", target: null,
-        label: `Stock back to ${Math.round(sd1)} days`,
-        detail: `From ${Math.round(sd2)} days. Frees ${m(release)} of cash, once.`,
+        label: `Hold less stock — ${Math.round(sd1)} days' worth`,
+        detail: `It is ${Math.round(sd2)} days' worth now. Holding less puts ${m(release)} back in the bank, once.`,
         profit: 0, cash: release, effect: { ...NONE, invCut: release, inventoryDays: Math.round(sd1) },
       });
     }
@@ -217,9 +217,9 @@ export function moveLine(key: string, levers: Lever[], v: ViewInput, last: Actua
   if (!useful.length) return null;
   const a = growWith(v, last, useful, ramp, money).metrics.find((x) => x.key === key);
   if (!a || a.value === null || a.display === b.display) return null;
-  const names = useful.map((l) => `${lower(l.label)}${l.profit > 0 ? ` (+${money(l.profit)})` : l.cash > 0 ? ` (frees ${money(l.cash)})` : ""}`);
+  const names = useful.map((l) => `${lower(l.label)}${l.profit > 0 ? ` (+${money(l.profit)} a year)` : l.cash > 0 ? ` (+${money(l.cash)} cash)` : ""}`);
   const s = statusOf(a.value, a.bands);
-  return `${cap(join(names))} would take it to ${a.display}${s === "good" ? "" : s === "watch" ? " — better, not yet comfortable" : " — still not enough on its own"}.`;
+  return `${cap(join(names))}. That would take this to ${a.display}${s === "good" ? "." : s === "watch" ? " — better, but not yet in the safe zone." : " — still not enough on its own."}`;
 }
 
 /** The table under the headline: the judged year now, and with every lever pulled. */
@@ -251,6 +251,9 @@ export function leverTable(levers: Lever[], v: ViewInput, last: ActualYear | nul
 export function growStory(i: CapabilityInput, names: YearNames, last: ActualYear | null, levers: Lever[]): string | null {
   const m = i.money, y1 = i.pnl[1], y2 = i.pnl[2];
   if (!y1 || !y2 || y1.revenue <= 0) return null;
+  /* Plain English (§6.174): short sentences, the past for the accounts, the present for the plan. */
+  const past = !!last;
+  const t = (was: string, is: string) => (past ? was : is);
   const n2 = names[2] ?? "the year";
   const dRev = y2.revenue - y1.revenue, g = dRev / y1.revenue;
   const gm = (p: PnlYear) => (p.revenue ? ((p.revenue - p.cogs) / p.revenue) * 100 : 0);
@@ -258,34 +261,31 @@ export function growStory(i: CapabilityInput, names: YearNames, last: ActualYear
   const ohG = y1.overheads > 0 ? (y2.overheads - y1.overheads) / y1.overheads : 0;
   const dOh = y2.overheads - y1.overheads;
 
-  const against: string[] = [], forIt: string[] = [];
-  if (dGm <= -0.5) against.push(`margin fell from ${r1(gm(y1))}% to ${r1(gm(y2))}%`);
-  else if (dGm >= 0.5) forIt.push(`margin rose from ${r1(gm(y1))}% to ${r1(gm(y2))}%`);
-  if (dOh > 0 && ohG - Math.max(0, g) > 0.02) against.push(`overheads rose ${m(dOh)} (${r1(ohG * 100)}%)`);
-  else if (dOh <= y1.overheads * Math.max(0, g) + 1) forIt.push("overheads kept in step");
-
   const flat = Math.abs(g) < 0.005;
-  const sales = flat ? `Sales are flat at ${m(y2.revenue)} in ${n2}` : `Sales ${dRev >= 0 ? "grew" : "fell"} ${m(Math.abs(dRev))} (${r1(Math.abs(g) * 100)}%) into ${n2}`;
-  let s = against.length ? `${sales}, but ${join(against)}.` : forIt.length ? `${sales}, and ${join(forIt)}.` : `${sales}.`;
+  const out: string[] = [];
+  out.push(flat ? `Sales ${t("stayed", "stay")} flat at ${m(y2.revenue)} in ${n2}.`
+    : `Sales ${dRev >= 0 ? t("went up", "go up") : t("went down", "go down")} ${m(Math.abs(dRev))} (${r1(Math.abs(g) * 100)}%) in ${n2}.`);
+
+  const against: string[] = [];
+  if (dGm <= -0.5) against.push(`gross margin ${t("dropped", "drops")} from ${r1(gm(y1))}% to ${r1(gm(y2))}%`);
+  if (dOh > 0 && ohG - Math.max(0, g) > 0.02) against.push(`overheads ${t("went up", "go up")} ${m(dOh)} (${r1(ohG * 100)}%)`);
+  if (against.length) out.push(`But ${join(against)}.`);
+  else if (dGm >= 0.5) out.push(`Gross margin ${t("improved", "improves")} from ${r1(gm(y1))}% to ${r1(gm(y2))}%.`);
 
   const inc = dRev > 0 ? over((y2.revenue - y2.cogs) - (y1.revenue - y1.cogs), dRev) : null;
   const op1 = y1.operatingProfit, op2 = y2.operatingProfit, dOp = op2 - op1;
-  const profit = op2 < 0 && op1 >= 0 ? `operating profit fell ${m(-dOp)} into a ${m(-op2)} loss`
-    : op2 < 0 ? (op2 < op1 ? `the loss grew to ${m(-op2)}` : `the loss narrowed to ${m(-op2)}`)
-    : Math.abs(dOp) < Math.max(1, Math.abs(op1) * 0.005) ? `operating profit holds at ${m(op2)}`
-    : dOp < 0 ? `operating profit fell ${m(-dOp)} to ${m(op2)}` : `operating profit rose ${m(dOp)} to ${m(op2)}`;
-  s += inc !== null && inc < 0
-    ? ` So each extra dollar of sales cost more than it earned (incremental margin ${r1(inc * 100)}%), and ${profit}.`
-    : ` ${cap(profit)}.`;
+  const profit = op2 < 0 && op1 >= 0 ? `the business ${t("went", "goes")} from a profit to a ${m(-op2)} loss`
+    : op2 < 0 ? (op2 < op1 ? `the loss ${t("grew", "grows")} to ${m(-op2)}` : `the loss ${t("shrank", "shrinks")} to ${m(-op2)}`)
+    : Math.abs(dOp) < Math.max(1, Math.abs(op1) * 0.005) ? `profit ${t("stayed", "stays")} at ${m(op2)}`
+    : dOp < 0 ? `profit ${t("fell", "falls")} by ${m(-dOp)} to ${m(op2)}` : `profit ${t("rose", "rises")} by ${m(dOp)} to ${m(op2)}`;
+  out.push(inc !== null && inc < 0
+    ? `Because of this, each extra dollar of sales ${t("cost", "costs")} more than it ${t("brought", "brings")} in, and ${profit}.`
+    : `${cap(profit)}.`);
 
   const terms = levers.find((l) => l.key === "debtors");
-  const end = last ? ` leaving ${m(last.balanceSheet.cash)} in the bank` : "";
-  /* The accounts are told in the past tense; the plan in the present. */
-  if (terms && terms.days) s += last
-    ? ` Customers took ${terms.days.from} days to pay rather than ${terms.days.to}, which tied up another ${m(terms.cash)} of cash,${end}.`
-    : ` With customers taking ${terms.days.from} days to pay rather than ${terms.days.to}, another ${m(terms.cash)} of cash is tied up in unpaid invoices.`;
-  else if (end) s += ` The year ended with ${m(last!.balanceSheet.cash)} in the bank.`;
-  return s;
+  if (terms && terms.days) out.push(`Customers also ${t("took", "take")} ${terms.days.from} days to pay instead of ${terms.days.to}, which ${t("kept", "keeps")} ${m(terms.cash)} of cash out of the bank.`);
+  if (last) out.push(`The year ended with ${m(last.balanceSheet.cash)} in the bank.`);
+  return out.join(" ");
 }
 
 const join = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);

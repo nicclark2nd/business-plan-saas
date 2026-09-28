@@ -137,8 +137,8 @@ export function growMetrics(i: CapabilityInput): Metric[] {
   const closing = !!y1 && !!y2 && y1.operatingProfit < 0 && y2.operatingProfit > y1.operatingProfit;
   const cents = (v: number) => `${Math.round(Math.abs(v) * 100)}¢`;
   const profitFrom = firstProfit === null
-    ? "At that pace it is still losing money in Year 5, so growth alone does not get it there — costs have to move too."
-    : `It makes an operating profit from Year ${firstProfit}.`;
+    ? "At that pace it is still losing money in Year 5. Growth alone will not fix it — costs have to come down too."
+    : `It starts making a profit in Year ${firstProfit}.`;
 
   /*
    * LEVERAGE ON A LOSS IS NOT MEASURED, BUT IT IS NOT SILENT EITHER (§6.152). What a consultant needs from
@@ -161,10 +161,10 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       display: `${pd >= 0 ? "" : "−"}${cents(pd)}`,
       sub: pd >= 0 ? "of each extra $1 of sales comes off the loss" : "added to the loss by each extra $1 of sales",
       note: pd >= 0
-        ? `There is no profit to lever yet, but growth is working on the loss: each extra dollar of sales in Year 2 takes about ${cents(pd)} off it. `
+        ? `There is no profit yet, but growth is shrinking the loss: each extra dollar of sales in Year 2 takes about ${cents(pd)} off it. `
           + (later !== null ? `${profitFrom} From Year ${k} to Year ${k! + 1}, about ${cents(later)} of each extra dollar of sales ${later >= 0 ? "stays as profit" : "is lost again"}.` : profitFrom)
-        : `Each extra dollar of sales in Year 2 adds about ${cents(pd)} to the loss — costs are rising faster than the sales that pay for them.`,
-      bench: "Unscored in a loss year — the direction of the loss is the reading",
+        : `Each extra dollar of sales in Year 2 adds about ${cents(pd)} to the loss. Costs are rising faster than the sales that pay for them.`,
+      bench: "Not scored while there is a loss — what matters is whether the loss is growing or shrinking",
     };
   }
   /* The same for cash conversion: no earnings in Year 1, so the first year that has them. */
@@ -177,9 +177,9 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       display: conv === null ? "—" : pct(conv * 100),
       sub: conv === null ? undefined : `Year ${k}, the first year with earnings`,
       note: conv === null
-        ? "Year 2 has no earnings to turn into cash, and no later year does either."
-        : `Year 2 has no earnings to turn into cash. From Year ${k}, when it does, about ${pct(conv * 100)} of them arrive in the bank${conv * 100 < 70 ? " — the rest sits in stock and unpaid invoices" : ""}.`,
-      bench: "Unscored in a loss year — 85% or better means earnings are real cash",
+        ? "Year 2 makes no profit to turn into cash, and neither does any later year."
+        : `Year 2 makes no profit to turn into cash. From Year ${k}, about ${pct(conv * 100)} of the profit reaches the bank${conv * 100 < 70 ? " — the rest sits in stock and unpaid invoices" : ""}.`,
+      bench: "Not scored while there is a loss. 85% or more means the profit is real cash",
     };
   }
 
@@ -192,19 +192,19 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       sub: y2 ? `${m(y2.operatingProfit)} on ${m(y2.revenue)} in Year 2` : undefined,
       note: opMargin === null ? "Needs a Year 2 forecast."
         : opMargin < 0 && closing
-          ? `The plan still loses money in Year 2, but growth is closing the loss: ${m(-y1!.operatingProfit)} lost in Year 1, ${m(-y2!.operatingProfit)} in Year 2${perDollar !== null ? ` — about ${cents(perDollar)} of every extra dollar of sales comes off it` : ""}. ${profitFrom}`
-        : opMargin < 0 ? "The plan loses money in Year 2. Growing it makes the loss bigger, not smaller — this is the thing to fix before anything else on this page."
-        : opMargin * 100 < 5 ? "There is a profit, but a thin one. Growth will not have much to work with."
-        : "The business makes money before it grows, which is what makes growing it worth doing.",
-      bench: "Anything above zero beats growing a loss; 5% gives growth something to work with",
+          ? `The plan still loses money in Year 2, but the loss is shrinking: ${m(-y1!.operatingProfit)} lost in Year 1, ${m(-y2!.operatingProfit)} in Year 2${perDollar !== null ? ` — about ${cents(perDollar)} of every extra dollar of sales comes off it` : ""}. ${profitFrom}`
+        : opMargin < 0 ? "The plan loses money in Year 2. Selling more at a loss only makes the loss bigger. Fix this first."
+        : opMargin * 100 < 5 ? "There is a profit, but only a small one. Growth will not have much to work with."
+        : "The business makes a profit before it grows. That is what makes growing worth it.",
+      bench: "Above zero means there is a profit to grow. 5% or more gives growth something to work with",
       formula: "Year 2 operating profit ÷ Year 2 revenue",
       reveals: "Whether there is a profit to grow in the first place.",
       confidence: "High — the plan's own forecast.",
       missing: opMargin === null ? "A Year 2 forecast with sales and costs in it." : undefined,
       action: opMargin !== null && opMargin < 0 && closing
         ? (firstProfit !== null
-            ? `Keep the growth — it is what closes the loss, and the plan is in profit from Year ${firstProfit}. The work is funding the months until then.`
-            : "Growth is narrowing the loss but not ending it. Find the overheads that do not need to rise with sales, then grow into the margin that frees.")
+            ? `Keep growing — growth is what closes the loss, and the plan makes a profit from Year ${firstProfit}. The job is paying the bills until then.`
+            : "Growth is shrinking the loss but not ending it. Find the costs that do not need to rise with sales, and cut those first.")
         : undefined,
     },
     {
@@ -214,9 +214,9 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       min: -10, max: 30, bands: [{ to: 0, s: "bad" }, { to: 5, s: "watch" }, { to: 30, s: "good" }],
       sub: y1 && y2 ? `${m(y1.revenue)} → ${m(y2.revenue)}` : undefined,
       note: revGrowth === null ? "No forecast to measure growth against yet."
-        : revGrowth <= 0 ? "The plan forecasts no growth in Year 2, so nothing below is growth — it is maintenance."
-        : `Year 2 revenue is ${pct(revGrowth * 100)} above Year 1 in this plan's own forecast.`,
-      bench: "Below the rate of price inflation is not real growth",
+        : revGrowth <= 0 ? "The plan shows no growth in Year 2. The business is standing still."
+        : `Year 2 sales are ${pct(revGrowth * 100)} higher than Year 1 in this plan's own forecast.`,
+      bench: "Growth below the rate prices are rising is not real growth",
       formula: "(Year 2 revenue − Year 1 revenue) ÷ Year 1 revenue",
       reveals: "Whether the plan actually grows, and by how much.",
       confidence: "High — it is the plan's own forecast, not an estimate.",
@@ -228,11 +228,11 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       value: incMargin === null ? null : r1(incMargin * 100),
       display: incMargin === null ? "—" : pct(incMargin * 100),
       min: 0, max: 60, bands: [{ to: 15, s: "bad" }, { to: 25, s: "watch" }, { to: 60, s: "good" }],
-      sub: y1?.grossMargin !== null && y1?.grossMargin !== undefined ? `Against a ${r1(y1.grossMargin)}% average today` : undefined,
+      sub: y1?.grossMargin !== null && y1?.grossMargin !== undefined ? `Today's average is ${r1(y1.grossMargin)}%` : undefined,
       note: incMargin === null ? "Needs two forecast years with different revenue."
         : y1?.grossMargin != null && incMargin * 100 < y1.grossMargin
-          ? "New sales earn a thinner margin than the ones already on the books, so growth dilutes the average."
-          : "New sales carry at least the margin the business already earns.",
+          ? "New sales make less profit per dollar than existing sales, so each new sale pulls the average down."
+          : "New sales make at least as much profit per dollar as existing sales.",
       bench: "Should be at or above today's gross margin",
       formula: "Change in gross profit ÷ change in revenue, Year 1 to Year 2",
       reveals: "Whether the growth being planned is worth having after direct costs.",
@@ -245,9 +245,9 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       display: opLev === null ? "—" : `${r2(opLev)}×`,
       min: 0, max: 3, bands: [{ to: 0.75, s: "bad" }, { to: 1.1, s: "watch" }, { to: 3, s: "good" }],
       note: opLev === null ? "Needs an operating profit in Year 1 to compare against."
-        : opLev < 0 ? "Sales grew and operating profit fell — costs rose faster than the sales that were meant to pay for them."
-        : opLev < 1 ? "Overheads are rising about as fast as sales, so growth is not yet making the business more profitable."
-        : "Profit is growing faster than sales — the business is getting more efficient as it grows.",
+        : opLev < 0 ? "Sales went up but profit went down. Costs rose faster than the sales that were meant to pay for them."
+        : opLev < 1 ? "Costs are rising about as fast as sales, so growing is not yet making the business more profitable."
+        : "Profit is growing faster than sales. The business gets more efficient as it grows.",
       bench: "Above 1.0× means profit grows faster than sales",
       formula: "% change in operating profit ÷ % change in revenue, Year 1 to Year 2",
       reveals: "Whether growth improves profit or simply needs costs to rise with it.",
@@ -275,13 +275,13 @@ export function growMetrics(i: CapabilityInput): Metric[] {
         : [{ to: coc, s: "bad" }, { to: coc * 1.3, s: "watch" }, { to: Number.MAX_SAFE_INTEGER, s: "good" }],
       sub: invested ? ((extraProfit ?? 0) >= 0 ? `${m(extraProfit ?? 0)} more profit on ${m(invested)} invested` : `${m(-(extraProfit ?? 0))} less profit, after ${m(invested)} invested`) : undefined,
       note: returnOnPlan === null ? "Needs Year 2 capital spending recorded on the Fixed Assets step."
-        : coc === null ? `The plan returns ${pct(returnOnPlan * 100)} on what the growth costs. Whether that is enough depends on what your money costs, which nobody has said yet.`
-        : returnOnPlan * 100 < coc ? `The extra profit does not clear the ${coc}% the money costs. The plan spends more than the growth returns.`
-        : fromLoans ? `The extra profit clears ${coc}%, the rate on the dearest loan already in the plan.`
-        : "The extra profit clears the cost of capital you set.",
-      bench: coc === null ? "It has to beat what the money costs — set that on Assumptions"
-        : fromLoans ? `Has to beat ${coc}%, your dearest loan on Funding. Equity costs more — set your own figure on Assumptions if you have one`
-        : `Has to beat the ${coc}% you said the money costs`,
+        : coc === null ? `The plan earns ${pct(returnOnPlan * 100)} on what growing costs. Whether that is enough depends on what your money costs, which has not been set yet.`
+        : returnOnPlan * 100 < coc ? `The extra profit is less than the ${coc}% the money costs. The plan spends more on growing than growing brings back.`
+        : fromLoans ? `The extra profit beats ${coc}%, the rate on the most expensive loan in the plan.`
+        : "The extra profit beats what you said your money costs.",
+      bench: coc === null ? "It needs to beat what the money costs — set that on Assumptions"
+        : fromLoans ? `Needs to beat ${coc}%, the rate on your most expensive loan (from Funding). You can set your own figure on Assumptions`
+        : `Needs to beat the ${coc}% you said the money costs`,
       formula: "Extra operating profit in Year 2 ÷ (Year 2 capex + the extra working capital growth ties up)",
       reveals: "Whether the money the growth plan needs earns an adequate return.",
       confidence: "Medium — it assumes Year 2's capex is what buys Year 2's extra profit, which is rarely exactly true.",
@@ -306,14 +306,14 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       min: 0, max: 150, bands: rising
         ? [{ to: 70, s: "watch" }, { to: 150, s: "bad" }]
         : [{ to: 45, s: "good" }, { to: 70, s: "watch" }, { to: 150, s: "bad" }],
-      sub: d1 ? `${d1.inventoryDays} stock + ${d1.debtorDays} debtor − ${d1.creditorDays} creditor` : undefined,
+      sub: d1 ? `${d1.inventoryDays} days of stock + ${d1.debtorDays} days to get paid − ${d1.creditorDays} days to pay suppliers` : undefined,
       note: (ccc === null ? "Set your working-capital assumptions and this answers itself."
-        : ccc > 70 ? "Cash is tied up for more than two months between paying suppliers and being paid."
-        : rising ? `Up ${cccRise} days from Year 1${moved ? `, because ${moved}` : ""}. The level is still workable, but it is moving the wrong way.`
-        : ccc > 45 ? "A normal cycle for a business that carries stock and offers terms."
-        : "Cash comes back quickly, which is what makes growth affordable.")
+        : ccc > 70 ? "Cash is tied up for more than two months between paying suppliers and getting paid."
+        : rising ? `Up ${cccRise} days from Year 1${moved ? `, because ${moved}` : ""}. The number is still OK, but it is heading the wrong way.`
+        : ccc > 45 ? "Normal for a business that holds stock and gives customers time to pay."
+        : "Cash comes back quickly, which makes growing easier to afford.")
         + (ccc !== null && cccRise !== null && !rising && Math.abs(cccRise) >= 3 ? ` ${cccRise > 0 ? "Up" : "Down"} ${Math.abs(cccRise)} days from Year 1.` : ""),
-      bench: "Under 45 days is comfortable; over 70 makes growth expensive",
+      bench: "Under 45 days is comfortable. Over 70 days makes growth expensive",
       formula: "Stock days + debtor days − creditor days, from your Assumptions step",
       reveals: "How long every dollar of growth is out of the bank before it comes back.",
       confidence: "High — these are the same days the cash flow forecast runs on.",
@@ -326,10 +326,10 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       min: 0, max: 0.5, bands: [{ to: 0.15, s: "good" }, { to: 0.25, s: "watch" }, { to: 0.5, s: "bad" }],
       sub: wcPerDollar === null ? undefined : `Every ${m(1_000_000)} of new sales ties up ${m(wcPerDollar * 1_000_000)}`,
       note: (wcPerDollar === null ? "Needs two forecast years with a balance sheet."
-        : wcPerDollar > 0.25 ? "Growth is cash-hungry: a large slice of every new sale sits in stock and debtors before it reaches the bank."
+        : wcPerDollar > 0.25 ? "Growth eats cash: a big part of every new sale sits in stock and unpaid invoices before it reaches the bank."
         : "Each extra dollar of sales ties up a manageable amount of cash.")
-        + (termsShift > 0 ? ` Slower payment tied up a further ${m(termsShift)}${moved ? ` — ${moved}` : ""}. That is a collections problem, not a growth one.`
-          : termsShift < 0 ? ` Faster payment released ${m(-termsShift)}${moved ? ` — ${moved}` : ""}.` : ""),
+        + (termsShift > 0 ? ` Slower payment kept a further ${m(termsShift)} out of the bank${moved ? ` — ${moved}` : ""}. That is a problem with collecting money, not with growth.`
+          : termsShift < 0 ? ` Faster payment brought ${m(-termsShift)} back into the bank${moved ? ` — ${moved}` : ""}.` : ""),
       bench: "Under 15¢ is comfortable for a business carrying stock",
       formula: "Year 1 (receivables + stock − payables) ÷ Year 1 revenue: what each extra dollar of sales ties up at the terms already in place. Any change in the terms is shown separately.",
       reveals: "How much cash the growth itself will swallow before it pays anything back.",
@@ -342,13 +342,13 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       display: conversion === null ? "—" : pct(conversion * 100),
       min: 0, max: 130, bands: [{ to: 70, s: "bad" }, { to: 85, s: "watch" }, { to: 130, s: "good" }],
       note: conversion === null && e1 !== null && e1 <= 0
-        ? "There are no earnings to convert — the business makes a loss before interest, tax and depreciation, so no share of it can arrive as cash."
+        ? "There is no profit to turn into cash — the business makes a loss before interest, tax and depreciation."
         : conversion === null ? "Needs a Year 2 forecast with an operating profit."
-        : conversion * 100 < 70 ? "Profit is not turning into cash — most of it is sitting in stock and unpaid invoices."
+        : conversion * 100 < 70 ? "Profit is not turning into cash. Most of it is stuck in stock and unpaid invoices."
         /* 70–85% is amber: the sentence must not call it fine while the action says chase it (§6.172). */
-        : conversion * 100 < 85 ? `About ${pct(conversion * 100)} of the profit arrives as cash. The rest is sitting in unpaid invoices or stock.`
-        : "Most of the profit the plan forecasts actually arrives as cash.",
-      bench: "85% or better means earnings are real cash",
+        : conversion * 100 < 85 ? `About ${pct(conversion * 100)} of the profit reaches the bank. The rest is stuck in unpaid invoices or stock.`
+        : "Most of the profit the plan shows actually reaches the bank.",
+      bench: "85% or more means the profit is real cash",
       formula: "Year 2 cash from operations ÷ Year 2 EBITDA",
       reveals: "Whether forecast profit becomes money in the bank.",
       confidence: "High.",
@@ -373,10 +373,10 @@ export function growMetrics(i: CapabilityInput): Metric[] {
         : [{ to: 0, s: "bad" }, { to: Number.MAX_SAFE_INTEGER, s: "good" }],
       sub: lowMonth ? `Month ${lowMonth} of Year 1` : undefined,
       note: lowCash === null ? "Needs a monthly cash forecast."
-        : lowCash < 0 ? "The plan runs out of money before the year ends. Nothing else on this page matters until that is fixed."
-        : buffer !== null && buffer > 0 && lowCash < buffer ? `Cash stays positive but dips below the ${m(buffer)} floor you set.`
-        : buffer === null ? "Cash stays above water every month of Year 1 — though nobody has said how far above water it needs to stay."
-        : "Cash stays above water every month of Year 1.",
+        : lowCash < 0 ? "The plan runs out of money before the year ends. Fix this before anything else on this page."
+        : buffer !== null && buffer > 0 && lowCash < buffer ? `The bank stays above zero but drops below your cash floor of ${m(buffer)}.`
+        : buffer === null ? "The bank stays above zero every month of Year 1 — but no cash floor has been set yet."
+        : "The bank stays above zero every month of Year 1.",
       bench: buffer !== null && buffer > 0
         ? `Your floor is ${m(buffer)} — it is the month, not the year, that runs a business out of money`
         : "No floor set, so this is only judged against zero",

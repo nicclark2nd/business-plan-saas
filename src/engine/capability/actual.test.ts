@@ -49,7 +49,7 @@ describe("the actual view, read from the accounts (§6.158)", () => {
     const g = growMetrics({ ...v.actual!.grow, money }).map((m) => inAccounts(nameYears(m, v.actual!.growNames)));
     const rev = g.find((m) => m.key === "revenueGrowth")!;
     expect(rev.value).toBe(5.7);
-    expect(rev.note).toBe("2026 revenue is 5.7% above 2025 in the accounts.");
+    expect(rev.note).toBe("2026 sales are 5.7% higher than 2025 in the accounts.");
     const margin = g.find((m) => m.key === "operatingMargin")!;
     expect(margin.note).toContain("The business loses money in 2026");
   });
@@ -68,8 +68,8 @@ describe("the actual view, read from the accounts (§6.158)", () => {
   it("shows the year-end cash against a month of overheads, and says what it cannot see", () => {
     const c = yearEndCash(actualYear(rows, 1, 2027)!, 78_048, money);
     expect(c.value).toBe(21_315);
-    expect(c.sub).toBe("About 0.3 months of overheads");
-    expect(c.note).toContain("below your floor");
+    expect(c.sub).toBe("About 0.3 months of running costs");
+    expect(c.note).toContain("below your cash floor");
     expect(c.note).toContain("only show the last day of the year");
   });
 });
@@ -119,7 +119,7 @@ describe("what the growth tied up, and what the terms did (§6.171)", () => {
   it("charges growth only with what the extra sales tie up at last year's terms", () => {
     /* 2025: (155,342 + 4,000 − 18,000) ÷ 1,890,000 = 7.5¢ — not the 92¢ the whole rise divided by the extra sales gave. */
     expect(wc.value).toBeCloseTo(0.07, 2);
-    expect(wc.note).toContain("collections problem, not a growth one");
+    expect(wc.note).toContain("a problem with collecting money, not with growth");
     expect(wc.note).toContain("customers took 46 days to pay instead of 30");
   });
 

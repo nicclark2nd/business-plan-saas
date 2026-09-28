@@ -626,7 +626,7 @@ describe("a plan that loses money cannot be flattered by its own ratios", () => 
     expect(lev.missing).toBeUndefined();               // and not a gap to fill
     expect(lev.unscored).toBe("No earnings to measure");
     expect(lev.display).toBe("10¢");                   // 20,000 off the loss on 200,000 more sales
-    expect(lev.note).toContain("no profit to lever yet");
+    expect(lev.note).toContain("no profit yet, but growth is shrinking the loss");
   });
 
   /* A cover of −10.38× is read as a small number by anyone scanning a column of multiples. */
@@ -969,9 +969,9 @@ describe("the growth tab reads a loss the way it is moving (§6.152)", () => {
     const m = seq().find((x) => x.key === "operatingMargin")!;
     expect(statusOf(m.value, m.bands)).toBe("bad");     // the band is not softened
     expect(m.note).not.toContain("makes the loss bigger");
-    expect(m.note).toContain("growth is closing the loss");
-    expect(m.note).toContain("from Year 3");
-    expect(m.action).toContain("Keep the growth");
+    expect(m.note).toContain("the loss is shrinking");
+    expect(m.note).toContain("profit in Year 3");
+    expect(m.action).toContain("Keep growing");
   });
   it("gives the leverage from the first profitable year", () => {
     const lev = seq().find((x) => x.key === "operatingLeverage")!;

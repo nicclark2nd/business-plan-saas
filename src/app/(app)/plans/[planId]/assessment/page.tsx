@@ -19,9 +19,9 @@ import { AssessmentModule, type AssessmentData } from "./AssessmentModule";
  * sentences, so the screen is a reading, not a calculator.
  */
 const PAST: Record<string, string> = {
-  "The growth plan does not fund itself": "Growth so far has not paid for itself",
-  "Worth doing, but it will be tight on cash": "Growing, but tight on cash",
-  "The growth stands up": "The growth so far stands up",
+  "The growth plan does not pay for itself": "Growth so far has not paid for itself",
+  "Worth doing, but cash will be tight": "Growing, but cash is tight",
+  "The growth plan works": "Growth so far has worked",
 };
 
 export default async function AssessmentPage({ params }: { params: Promise<{ planId: string }> }) {

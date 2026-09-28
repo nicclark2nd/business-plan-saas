@@ -177,7 +177,7 @@ export type ActualSummaryFacts = {
 };
 
 export function actualSummary(tab: "grow" | "borrow" | "sell", base: Summary, f: ActualSummaryFacts): Summary {
-  const held = f.capped.length ? ` ${f.capped.join(" and ")} ${f.capped.length === 1 ? "holds" : "hold"} the score under 50.` : "";
+  const held = f.capped.length ? ` ${f.capped.join(" and ")} ${f.capped.length === 1 ? "keeps" : "keep"} the score below 50.` : "";
   const means = `${f.headline}.${held}`;
   const top = f.issues[0];
   let t: string;
