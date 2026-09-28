@@ -11,7 +11,7 @@ import { navGroup } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { moneyFormatter } from "@/engine/plan/money";
 import {
-  SCORE_BANDS, CARD_LABEL, DIAL_LABEL, borrowingCapacity, ebitda, statusOf,
+  SCORE_BANDS, CARD_LABEL, DIAL_LABEL, INFO_MISSING, borrowingCapacity, ebitda, statusOf,
   type CapabilityInput, type Metric, type Severity,
 } from "@/engine/capability/model";
 import { LENDER_MIN_DSCR, TRANSFER_FACTORS, saleYear } from "@/engine/capability/judgements";
@@ -491,7 +491,8 @@ function Pencil({ planId, fix }: { planId: string; fix: { label: string; to: str
 function Gauge({ m, s }: { m: Metric; s: Severity | null }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   /* The last band runs to MAX_SAFE_INTEGER on some metrics; the arc is drawn to the card's own scale. */
-  const zones = m.bands.map((b) => ({ to: Math.min(b.to, m.max), severity: TONE[b.s] }));
+  /* An unscored measure is context: one plain arc, no red-to-green judgement (§6.170). */
+  const zones = m.unscored ? [{ to: m.max, severity: "accent" as ChartSeverity }] : m.bands.map((b) => ({ to: Math.min(b.to, m.max), severity: TONE[b.s] }));
   return (
     <div ref={ref} className="w-[112px] shrink-0">
       {width > 0 && (
@@ -503,12 +504,13 @@ function Gauge({ m, s }: { m: Metric; s: Severity | null }) {
 }
 
 function Card({ m, planId, labels, other }: { m: Metric; planId: string; labels: Record<Severity, string>; other?: Comparison | null }) {
-  const s = statusOf(m.value, m.bands);
+  /* An unscored measure has no band to colour it and says what it is instead (§6.170). */
+  const s = m.unscored ? null : statusOf(m.value, m.bands);
   return (
     <article className="bg-card px-5 py-4">
       <div className="flex items-start justify-between gap-3">
         <h3 className="text-[13px] font-semibold leading-snug">{m.name}</h3>
-        {s ? <Pill s={s} label={labels[s]} /> : <span className="eyebrow shrink-0 text-muted-foreground">{m.unscored ?? "Not yet"}</span>}
+        {s ? <Pill s={s} label={labels[s]} /> : <span className="eyebrow shrink-0 text-muted-foreground">{m.unscored ?? INFO_MISSING}</span>}
       </div>
 
       <div className="mt-1 flex items-center gap-3">

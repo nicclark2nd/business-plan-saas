@@ -1,5 +1,5 @@
 import type { CapabilityInput, Metric } from "./model";
-import { ebitda, over, r1, r2 } from "./model";
+import { NO_EARNINGS, ebitda, over, r1, r2 } from "./model";
 import { TRANSFER_FACTORS, saleYear } from "./judgements";
 
 /**
@@ -115,6 +115,7 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
        * with no comparable range has nothing to be too high against, so the value waits — and because the
        * weight is 3, guessing a range here would cap a perfectly sound plan at 49 on a number the app made up.
        */
+      ...(price && normalisedSale !== null && normalisedSale <= 0 ? { unscored: NO_EARNINGS } : {}),
       value: multiple === null || !ranged ? null : r2(multiple),
       display: multiple === null ? "—" : `${r2(multiple)}×`,
       min: 0, max: Math.max(8, high * 1.6),
@@ -234,6 +235,7 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
     },
     {
       key: "leadershipPay", name: "Leadership pay against earnings", unit: "pct",
+      ...(leadershipShare === null && i.leadershipPay !== null && normalised !== null && normalised <= 0 ? { unscored: NO_EARNINGS } : {}),
       value: leadershipShare === null ? null : r1(leadershipShare * 100),
       display: leadershipShare === null ? "—" : shareShown(leadershipShare),
       min: 0, max: 150, bands: [{ to: 40, s: "good" }, { to: 80, s: "watch" }, { to: 150, s: "bad" }],
@@ -293,8 +295,11 @@ export function sellMetrics(i: CapabilityInput): Metric[] {
       formula: "Year 1 cash from operations ÷ EBITDA",
       reveals: "Whether the profit being sold is real.",
       confidence: "High.",
+      ...(conversion === null && e1 !== null && e1 <= 0 ? { unscored: NO_EARNINGS } : {}),
       missing: conversion === null
-        ? (e1 !== null && e1 <= 0 ? "Positive earnings. A loss has no share that turns into cash." : "A Year 1 forecast.")
+        ? (e1 !== null && e1 <= 0
+            ? `The business loses ${m(Math.abs(e1))} before interest, tax and depreciation, so there are no earnings to turn into cash. This answers as soon as it makes money.`
+            : "A Year 1 forecast.")
         : undefined,
     },
     {

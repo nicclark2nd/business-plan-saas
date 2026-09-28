@@ -128,6 +128,8 @@ export function score(metrics: Metric[], weights: Record<string, number> = {}):
   let sum = 0, weight = 0, covered = 0;
   const capped: string[] = [];
   for (const m of metrics) {
+    /* A measure marked unscored is context — shown, never counted (§6.170). */
+    if (m.unscored) continue;
     const s = statusOf(m.value, m.bands);
     if (s === null) continue;
     const w = weights[m.key] ?? 1;
@@ -136,7 +138,8 @@ export function score(metrics: Metric[], weights: Record<string, number> = {}):
     covered += 1;
     if (s === "bad" && w >= DECISIVE) capped.push(m.key);
   }
-  if (!weight) return { value: null, covered, total: metrics.length, capped };
+  const total = metrics.filter((m) => !m.unscored).length;
+  if (!weight) return { value: null, covered, total, capped };
 
   /**
    * A DECISIVE FAILURE CANNOT BE AVERAGED AWAY (§6.128.1).
@@ -156,7 +159,7 @@ export function score(metrics: Metric[], weights: Record<string, number> = {}):
   const raw = Math.round(sum / weight);
   return {
     value: capped.length ? Math.min(raw, CAP_WHEN_DECISIVE_FAILS) : raw,
-    covered, total: metrics.length, capped,
+    covered, total, capped,
   };
 }
 
@@ -164,6 +167,14 @@ export function score(metrics: Metric[], weights: Record<string, number> = {}):
 const DECISIVE = 3;
 /** The top of the at-risk band. A capped score sits at its ceiling, not at zero — it is still a reading. */
 const CAP_WHEN_DECISIVE_FAILS = 49;
+
+/**
+ * WHAT A BLANK TILE SAYS (§6.170). Two reasons a measure has no figure, and they are not the same sentence:
+ * the business makes a loss, so there is nothing to measure (adding information will not change that), or
+ * something the Planner can add is missing — the tile's pencil says what and where.
+ */
+export const NO_EARNINGS = "No earnings to measure";
+export const INFO_MISSING = "Information missing";
 
 export const SCORE_BANDS: Band[] = [{ to: 50, s: "bad" }, { to: 70, s: "watch" }, { to: 100, s: "good" }];
 

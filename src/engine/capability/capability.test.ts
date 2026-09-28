@@ -624,7 +624,7 @@ describe("a plan that loses money cannot be flattered by its own ratios", () => 
     const lev = growMetrics(losing()).find((x) => x.key === "operatingLeverage")!;
     expect(lev.value).toBeNull();                      // still unscored
     expect(lev.missing).toBeUndefined();               // and not a gap to fill
-    expect(lev.unscored).toBe("Loss year");
+    expect(lev.unscored).toBe("No earnings to measure");
     expect(lev.display).toBe("10¢");                   // 20,000 off the loss on 200,000 more sales
     expect(lev.note).toContain("no profit to lever yet");
   });
@@ -727,7 +727,7 @@ describe("the five-year line on each card", () => {
     }));
     const c = g.find((x) => x.key === "cashConversion")!;
     expect(c.value).toBeNull();
-    expect(c.unscored).toBe("Loss year");
+    expect(c.unscored).toBe("No earnings to measure");
     expect(c.note).toContain("From Year 3");            // the first later year with earnings, read instead
   });
 

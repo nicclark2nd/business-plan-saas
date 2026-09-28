@@ -1,5 +1,5 @@
 import type { CapabilityInput, Metric } from "./model";
-import { ebitda, over, r1, r2 } from "./model";
+import { NO_EARNINGS, ebitda, over, r1, r2 } from "./model";
 
 /**
  * CAPABILITY TO GROW (§6.128).
@@ -133,7 +133,7 @@ export function growMetrics(i: CapabilityInput): Metric[] {
     const later = a && b && a.operatingProfit > 0 && b.revenue > a.revenue
       ? over(b.operatingProfit - a.operatingProfit, b.revenue - a.revenue) : null;
     return {
-      unscored: "Loss year",
+      unscored: NO_EARNINGS,
       display: `${pd >= 0 ? "" : "−"}${cents(pd)}`,
       sub: pd >= 0 ? "of each extra $1 of sales comes off the loss" : "added to the loss by each extra $1 of sales",
       note: pd >= 0
@@ -149,7 +149,7 @@ export function growMetrics(i: CapabilityInput): Metric[] {
     const ek = k ? ebitda(i.pnl[k]) : null;
     const conv = k && ek ? over(i.cashFlow[k]!.netOperating, ek) : null;
     return {
-      unscored: "Loss year",
+      unscored: NO_EARNINGS,
       display: conv === null ? "—" : pct(conv * 100),
       sub: conv === null ? undefined : `Year ${k}, the first year with earnings`,
       note: conv === null

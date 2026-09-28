@@ -1,5 +1,5 @@
 import type { CapabilityInput, Metric } from "./model";
-import { annualRepayment, borrowingCapacity, ebitda, over, r1, r2 } from "./model";
+import { NO_EARNINGS, annualRepayment, borrowingCapacity, ebitda, over, r1, r2 } from "./model";
 import { LENDER_MIN_DSCR, securityGap } from "./judgements";
 
 /**
@@ -217,6 +217,12 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
        * is context for the cover tests above, so every value reads the same.
        */
       bands: [{ to: Number.MAX_SAFE_INTEGER, s: "good" }],
+      /*
+       * CONTEXT, NOT A SCORE (§6.170). With one band every value read "Lender-ready" — beside a 0 that says
+       * there is no room at all — and added a full 100 to the borrow score whatever the figure. It is the
+       * headroom the cover tests leave, so it is named for what it is and left out of the score.
+       */
+      ...(capacityStress !== null ? { unscored: capacityStress <= 0 ? "No room to borrow" : "Room to borrow" } : {}),
       /* §6.115.1: "0 if the base case holds" beside a grey dial is a figure nobody can read. Say it. */
       sub: capacityBase === null ? undefined
         : capacityBase <= 0 ? "Even the base case supports nothing further"
@@ -254,6 +260,7 @@ export function borrowMetrics(i: CapabilityInput): Metric[] {
        * live here or the client never reads it (§6.87). A heading with nothing under it is the same fault as
        * a blank with no reason beside it.
        */
+      ...(leverage === null && e1 !== null && e1 <= 0 ? { unscored: NO_EARNINGS } : {}),
       missing: leverage === null
         ? (e1 !== null && e1 <= 0
             ? `The business loses ${m(Math.abs(e1))} before interest, tax and depreciation, so there are no earnings for the debt to be measured against. This answers as soon as it makes money.`

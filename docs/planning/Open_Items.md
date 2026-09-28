@@ -910,3 +910,11 @@ projection step and scored on the Plan view, after.)
   from assets already owned; help, footer and year-end-cash wording no longer point at the plan. Also: a runway
   under half a month says "about N days", not "about a month". SEQ actual sell moves 37 → 33 (the three
   plan-sourced cards no longer count).
+- **§6.170** Nic: why is Borrow still saying "Not yet"? It was the one label left from before §6.153/§6.161, and it
+  covered two different things. A blank tile now says INFORMATION MISSING when the Planner can add what it needs
+  (the pencil says what and where), and NO EARNINGS TO MEASURE when the business makes a loss (Net debt ÷ EBITDA,
+  cash conversion, price multiple, leadership pay) — Nic chose both words. Also: "What this cash flow would still
+  support" had a single band, so it read green "Lender-ready" beside 0 and added a full 100 to the borrow score
+  whatever the figure. It is context: now "No room to borrow" / "Room to borrow", a plain arc, and left out of the
+  score (`score()` skips any unscored measure, and the "from N measures" count excludes them). SEQ actual borrow
+  37 → 31.
