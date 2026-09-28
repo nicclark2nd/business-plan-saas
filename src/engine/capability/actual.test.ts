@@ -109,3 +109,22 @@ describe("a bad year, from the accounts first (§6.162)", () => {
     expect(worstYear([], 2027, bank)).toMatchObject({ salesPct: 10, marginPts: 1.5, debtorDaysAdded: 10 });
   });
 });
+
+describe("what the growth tied up, and what the terms did (§6.171)", () => {
+  const v = capabilityViews(plan, rows, 2027);
+  const g = growMetrics({ ...v.actual!.grow, money });
+  const wc = g.find((m) => m.key === "workingCapitalPerDollar")!;
+  const cycle = g.find((m) => m.key === "cashCycle")!;
+
+  it("charges growth only with what the extra sales tie up at last year's terms", () => {
+    /* 2025: (155,342 + 4,000 − 18,000) ÷ 1,890,000 = 7.5¢ — not the 92¢ the whole rise divided by the extra sales gave. */
+    expect(wc.value).toBeCloseTo(0.07, 2);
+    expect(wc.note).toContain("collections problem, not a growth one");
+    expect(wc.note).toContain("customers took 46 days to pay instead of 30");
+  });
+
+  it("says the cycle got longer, and a ten-day rise is never green", () => {
+    expect(cycle.note).toMatch(/^Up \d+ days from Year 1, because customers took 46 days to pay instead of 30/);
+    expect(cycle.bands[0]).toEqual({ to: 70, s: "watch" });
+  });
+});

@@ -1,6 +1,6 @@
 import { FORECAST_YEARS } from "@/engine/forecast/model";
 import type { CapabilityInput, Metric } from "./model";
-import { ebitda, over, r1, r2 } from "./model";
+import { ebitda, over, r1, r2, workingCapitalSplit } from "./model";
 import { cashForDebtService, stressedCash } from "./borrow";
 import { LENDER_MIN_DSCR, TRANSFER_FACTORS, securityGap } from "./judgements";
 import type { CapabilityKind } from "./verdict";
@@ -55,7 +55,7 @@ export const series = {
     const owc = (b = i.balanceSheet[y]) => b ? b.accountsReceivable + b.inventory - b.accountsPayable : null;
     const o1 = owc(i.balanceSheet[y]), o2 = owc(i.balanceSheet[y + 1]);
     const a = rev(i, y), b = rev(i, y + 1);
-    return o1 !== null && o2 !== null && a !== null && b !== null && a !== b ? over(o2 - o1, b - a) : null;
+    return o1 !== null && o2 !== null && a !== null && b !== null && a !== b ? workingCapitalSplit(o1, o2, a, b).perDollar : null;
   }),
   /* No debt is no cover to measure; no cash from trading is a cover of nil, never a negative one (§6.129.1). */
   dscr: (i: CapabilityInput) => Y.map((y) => {

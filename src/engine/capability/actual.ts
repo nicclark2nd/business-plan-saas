@@ -141,7 +141,7 @@ export function capabilityViews(plan: Omit<CapabilityInput, "money">, rows: Hist
     return { hasHistory: false, actual: null, plan: { grow: plan, position: plan, growNames: planNames, positionNames: planNames, span: `${firstYear} → ${firstYear + 1} onward` } };
   }
   /* The cycle card reads slot 1; on the actual view it should read the latest year, not the one before. */
-  const actualGrow = { ...slot(plan, [before, last]), days: { 1: last.days, 2: last.days } } as Omit<CapabilityInput, "money">;
+  const actualGrow = { ...slot(plan, [before, last]), days: { 1: last.days, 2: last.days }, priorDays: before?.days ?? null } as Omit<CapabilityInput, "money">;
   const actual = {
     grow: actualGrow, position: slot(plan, [last]),
     growNames: { 1: String(last.year - 1), 2: String(last.year) }, positionNames: { 1: String(last.year) },
@@ -156,6 +156,8 @@ export function capabilityViews(plan: Omit<CapabilityInput, "money">, rows: Hist
     cashFlow: shift(plan.cashFlow, last.cashFlow),
     /* The cycle card reads slot 1, and on the plan view it should read the plan's own days, not last year's. */
     days: shift(plan.days, plan.days[1]),
+    /* The cycle card reads Year 1's days; the year before it is the last actual one (§6.171). */
+    priorDays: last.days,
     capex: shift(plan.capex, last.capex), debtService: shift(plan.debtService, last.debtService),
   } as Omit<CapabilityInput, "money">;
   const growNames: YearNames = { 1: `${last.year} actual`, 2: String(firstYear), 3: String(firstYear + 1), 4: String(firstYear + 2), 5: String(firstYear + 3) };
@@ -248,7 +250,9 @@ export function compareWith(m: Metric, other: Metric | undefined, label: string,
   const s = statusOf(m.value, m.bands), o = statusOf(other.value, other.bands);
   const plan = onPlan ? { v: m.value, s } : { v: other.value, s: o };
   const done = onPlan ? { v: other.value, s: o } : { v: m.value, s };
-  const betterBand = plan.s !== null && done.s !== null && RANK[plan.s] > RANK[done.s];
+  /* The same figure is never "better" — a band can differ on the same value when one year's reading also
+     weighs how it moved (§6.171: 42 days rising is amber, 42 days held is green). */
+  const betterBand = plan.s !== null && done.s !== null && RANK[plan.s] > RANK[done.s] && Math.round(plan.v) !== Math.round(done.v);
   const fasterGrowth = m.key === "revenueGrowth" && done.v > 0 && plan.v > done.v * 1.5;
   return { label, display: other.display, ahead: betterBand || fasterGrowth };
 }

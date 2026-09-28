@@ -1,5 +1,5 @@
 import type { CapabilityInput, Metric } from "./model";
-import { NO_EARNINGS, ebitda, over, r1, r2 } from "./model";
+import { NO_EARNINGS, ebitda, over, r1, r2, workingCapitalSplit } from "./model";
 
 /**
  * CAPABILITY TO GROW (§6.128).
@@ -39,8 +39,11 @@ export function growMetrics(i: CapabilityInput): Metric[] {
   /** Operating working capital: what trading ties up, ignoring cash and debt. */
   const owc = (b?: typeof bs1) => b ? b.accountsReceivable + b.inventory - b.accountsPayable : null;
   const owc1 = owc(bs1), owc2 = owc(bs2);
-  const wcPerDollar = owc1 !== null && owc2 !== null && y1 && y2 && y2.revenue !== y1.revenue
-    ? over(owc2 - owc1, y2.revenue - y1.revenue) : null;
+  const split = owc1 !== null && owc2 !== null && y1 && y2 && y2.revenue !== y1.revenue
+    ? workingCapitalSplit(owc1, owc2, y1.revenue, y2.revenue) : null;
+  const wcPerDollar = split?.perDollar ?? null;
+  /* Material when the terms moved more than a rounding amount — a thousand, or 5% of the rise. */
+  const termsShift = split && Math.abs(split.fromTerms) >= Math.max(1000, Math.abs(split.fromGrowth + split.fromTerms) * 0.05) ? split.fromTerms : 0;
 
   /*
    * THE GROWTH YEAR, LIKE OPERATING MARGIN (§6.168). This read slot 1 — which on the accounts view is the
@@ -56,10 +59,25 @@ export function growMetrics(i: CapabilityInput): Metric[] {
   const conversion = cf2 && e1 !== null && e1 > 0 ? over(cf2.netOperating, e1) : null;
 
   const ccc = d1 ? d1.inventoryDays + d1.debtorDays - d1.creditorDays : null;
+  /* How the cycle moved from the year before (§6.171): a green level can hide a cycle that is getting worse. */
+  const pd = i.priorDays ?? null;
+  const cccPrior = pd ? pd.inventoryDays + pd.debtorDays - pd.creditorDays : null;
+  const cccRise = ccc !== null && cccPrior !== null ? Math.round(ccc - cccPrior) : null;
+  const rising = cccRise !== null && cccRise >= 10;
+  const moved = (() => {
+    if (!d1 || !pd) return "";
+    const parts: string[] = [];
+    const dd = Math.round(d1.debtorDays - pd.debtorDays), sd = Math.round(d1.inventoryDays - pd.inventoryDays), cd = Math.round(d1.creditorDays - pd.creditorDays);
+    if (Math.abs(dd) >= 3) parts.push(`customers took ${Math.round(d1.debtorDays)} days to pay instead of ${Math.round(pd.debtorDays)}`);
+    if (Math.abs(sd) >= 3) parts.push(`stock was held ${Math.round(d1.inventoryDays)} days instead of ${Math.round(pd.inventoryDays)}`);
+    if (Math.abs(cd) >= 3) parts.push(`suppliers were paid in ${Math.round(d1.creditorDays)} days instead of ${Math.round(pd.creditorDays)}`);
+    return parts.join(", and ");
+  })();
 
   /* The growth investment: next year's capex plus the extra working capital it drags behind it. */
+  /* Only the working capital the growth itself tied up is money invested in growth (§6.171) — slower payers are not. */
   const invested = (i.capex[2] ?? null) !== null && owc1 !== null && owc2 !== null
-    ? (i.capex[2] as number) + Math.max(0, owc2 - owc1) : null;
+    ? (i.capex[2] as number) + Math.max(0, split ? split.fromGrowth : owc2 - owc1) : null;
   const extraProfit = y1 && y2 ? (y2.operatingProfit - y1.operatingProfit) : null;
   const returnOnPlan = invested && invested > 0 ? over(extraProfit, invested) : null;
   /* Computable and judgeable are different things: `judged` is the return only once a bar exists for it. */
@@ -240,7 +258,11 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       key: "returnOnPlan", name: "Return on the growth plan", unit: "pct",
       /* The bar is what the money costs, which the client sets — not a number this app picked for them. */
       value: judged === null ? null : r1(judged * 100),
-      display: judged === null ? "—" : pct(judged * 100),
+      /*
+       * A return below −100% is a profit that fell by more than was spent, and printing "−1917.3%" reads as a
+       * typo (§6.171 — SEQ, once only growth's own working capital counts as invested). Say what happened.
+       */
+      display: judged === null ? "—" : judged < -1 ? "Profit fell" : pct(judged * 100),
       min: 0, max: Math.max(40, (coc ?? 20) * 2),
       bands: coc === null
         ? [{ to: Number.MAX_SAFE_INTEGER, s: "good" }]
@@ -271,12 +293,20 @@ export function growMetrics(i: CapabilityInput): Metric[] {
     {
       key: "cashCycle", name: "Cash conversion cycle", unit: "days",
       value: ccc, display: ccc === null ? "—" : `${Math.round(ccc)} days`,
-      min: 0, max: 150, bands: [{ to: 45, s: "good" }, { to: 70, s: "bad" }, { to: 150, s: "bad" }],
+      /*
+       * 45–70 was drawn red while the sentence called it "a normal cycle" (§6.171) — it is amber. And a cycle
+       * that lengthened by ten days or more in a year is at best "Needs attention", whatever its level.
+       */
+      min: 0, max: 150, bands: rising
+        ? [{ to: 70, s: "watch" }, { to: 150, s: "bad" }]
+        : [{ to: 45, s: "good" }, { to: 70, s: "watch" }, { to: 150, s: "bad" }],
       sub: d1 ? `${d1.inventoryDays} stock + ${d1.debtorDays} debtor − ${d1.creditorDays} creditor` : undefined,
-      note: ccc === null ? "Set your working-capital assumptions and this answers itself."
+      note: (ccc === null ? "Set your working-capital assumptions and this answers itself."
         : ccc > 70 ? "Cash is tied up for more than two months between paying suppliers and being paid."
+        : rising ? `Up ${cccRise} days from Year 1${moved ? `, because ${moved}` : ""}. The level is still workable, but it is moving the wrong way.`
         : ccc > 45 ? "A normal cycle for a business that carries stock and offers terms."
-        : "Cash comes back quickly, which is what makes growth affordable.",
+        : "Cash comes back quickly, which is what makes growth affordable.")
+        + (ccc !== null && cccRise !== null && !rising && Math.abs(cccRise) >= 3 ? ` ${cccRise > 0 ? "Up" : "Down"} ${Math.abs(cccRise)} days from Year 1.` : ""),
       bench: "Under 45 days is comfortable; over 70 makes growth expensive",
       formula: "Stock days + debtor days − creditor days, from your Assumptions step",
       reveals: "How long every dollar of growth is out of the bank before it comes back.",
@@ -289,11 +319,13 @@ export function growMetrics(i: CapabilityInput): Metric[] {
       display: wcPerDollar === null ? "—" : `${Math.round(wcPerDollar * 100)}¢`,
       min: 0, max: 0.5, bands: [{ to: 0.15, s: "good" }, { to: 0.25, s: "watch" }, { to: 0.5, s: "bad" }],
       sub: wcPerDollar === null ? undefined : `Every ${m(1_000_000)} of new sales ties up ${m(wcPerDollar * 1_000_000)}`,
-      note: wcPerDollar === null ? "Needs two forecast years with a balance sheet."
+      note: (wcPerDollar === null ? "Needs two forecast years with a balance sheet."
         : wcPerDollar > 0.25 ? "Growth is cash-hungry: a large slice of every new sale sits in stock and debtors before it reaches the bank."
-        : "Each extra dollar of sales ties up a manageable amount of cash.",
+        : "Each extra dollar of sales ties up a manageable amount of cash.")
+        + (termsShift > 0 ? ` A further ${m(termsShift)} was tied up by the terms moving${moved ? ` — ${moved}` : ""}. That is a collections problem, not a growth one.`
+          : termsShift < 0 ? ` Better terms released ${m(-termsShift)}${moved ? ` — ${moved}` : ""}.` : ""),
       bench: "Under 15¢ is comfortable for a business carrying stock",
-      formula: "Increase in (receivables + stock − payables) ÷ increase in revenue, Year 1 to Year 2",
+      formula: "Year 1 (receivables + stock − payables) ÷ Year 1 revenue: what each extra dollar of sales ties up at the terms already in place. Any change in the terms is shown separately.",
       reveals: "How much cash the growth itself will swallow before it pays anything back.",
       confidence: "High.",
       missing: wcPerDollar === null ? "A forecast balance sheet for Year 1 and Year 2." : undefined,

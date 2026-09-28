@@ -918,3 +918,15 @@ projection step and scored on the Plan view, after.)
   whatever the figure. It is context: now "No room to borrow" / "Room to borrow", a plain arc, and left out of the
   score (`score()` skips any unscored measure, and the "from N measures" count excludes them). SEQ actual borrow
   37 → 31.
+- **§6.171** Nic: on the Actual Grow tab the cash cycle read 42 days, green, "Supports growth", while cash tied up per
+  extra $1 read 91¢, red — in conflict? Both were arithmetic, but the second blamed growth for the whole rise in
+  working capital: ~97,000 on ~107,000 of extra sales. At 2025's terms those sales tie up ~8,000; ~89,000 was
+  existing customers paying 46 days instead of 30. Now (`workingCapitalSplit`): the card charges growth only with
+  what the extra sales tie up at the earlier year's terms (SEQ 8¢, green) and names the rest — "A further 89,034
+  was tied up by the terms moving — customers took 46 days to pay instead of 30. That is a collections problem,
+  not a growth one." The cash cycle compares with the year before (`priorDays`: 2025 on the accounts, 2026 actual
+  on the plan, the previous plan year in the timeline) — "Up 17 days from 2025, because customers took 46 days to
+  pay instead of 30" — and a rise of 10+ days is at best Needs attention. Its 45–70-day band was red while its own
+  sentence said "a normal cycle"; now amber. Return on growth spending counts only growth's own working capital
+  as invested; a return below −100% reads "Profit fell". A comparison line is never "better than the business
+  has done" on the same figure. SEQ actual grow 42 → 47.

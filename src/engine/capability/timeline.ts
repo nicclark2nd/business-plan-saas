@@ -57,6 +57,7 @@ function yearInputs(plan: PlanFacts, views: Views, months: MonthsByYear, k: numb
     pnl: from(plan.pnl, k - 1), balanceSheet: from(plan.balanceSheet, k - 1), cashFlow: from(plan.cashFlow, k - 1),
     /* The cycle card reads slot 1, and should read year k's own days (as the Plan view does for Year 1). */
     days: { ...from(plan.days, k - 1), 1: plan.days[k] } as PlanFacts["days"],
+    priorDays: plan.days[k - 1] ?? null,
     capex: from(plan.capex, k - 1), debtService: from(plan.debtService, k - 1),
     monthlyCash: m.cash, monthlyProfit: m.profit,
   };

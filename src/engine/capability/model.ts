@@ -220,6 +220,12 @@ export type CapabilityInput = {
   balanceSheet: Partial<Record<number, BalanceSheetYear>>;
   /** The working-capital schedule the forecast itself runs on — never a second reading of it. */
   days: Record<number, WorkingCapitalDays>;
+  /**
+   * The working-capital days of the year BEFORE the one the cash-cycle card reads (§6.171), so the card can
+   * say how the cycle moved. Set by the views: 2025 on the accounts, 2026 actual on the plan. Absent when
+   * there is no earlier year.
+   */
+  priorDays?: WorkingCapitalDays | null;
   /** Year 1, twelve closing cash balances and twelve profits, as the dashboard charts them. */
   monthlyCash: number[];
   monthlyProfit: number[];
@@ -284,6 +290,26 @@ export type CapabilityInput = {
  * ------------------------------------------------------------------ */
 
 export const r2 = (v: number) => Math.round(v * 100) / 100;
+
+/**
+ * WHAT THE GROWTH TIED UP, AND WHAT THE TERMS DID (§6.171).
+ *
+ * Nic, on SEQ: the cash cycle read 42 days and green while "cash tied up per extra $1 of sales" read 91¢ and
+ * red. Both were right about different things, and the second blamed growth for all of it. Working capital
+ * rose ~97,000 on ~107,000 of extra sales — but at 2025's terms those sales tie up ~8,000; the other ~89,000
+ * is existing customers paying 46 days instead of 30. So the rise is split: the extra sales at the earlier
+ * year's working capital per dollar (what growth itself ties up), and the rest — terms moving.
+ *
+ * When sales did not grow there is no growth share to isolate, and the old ratio stands.
+ */
+export function workingCapitalSplit(owc1: number, owc2: number, rev1: number, rev2: number):
+  { perDollar: number | null; fromGrowth: number; fromTerms: number } {
+  const rise = owc2 - owc1, added = rev2 - rev1;
+  if (added <= 0 || rev1 <= 0) return { perDollar: added !== 0 ? over(rise, added) : null, fromGrowth: rise, fromTerms: 0 };
+  const intensity = owc1 / rev1;
+  const fromGrowth = added * intensity;
+  return { perDollar: intensity, fromGrowth, fromTerms: rise - fromGrowth };
+}
 export const r1 = (v: number) => Math.round(v * 10) / 10;
 
 /** Division that refuses rather than returning Infinity — every caller wants "unanswerable", not ∞. */
