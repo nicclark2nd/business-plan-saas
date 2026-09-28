@@ -24,7 +24,6 @@ import { PAGE_SIZE_LABEL, defaultPageSizeFor } from "@/engine/report/pageSize";
 import { DangerArea, type PlanInventory } from "./DangerArea";
 import { LicenceSection } from "./LicenceSection";
 import { LogoSection } from "./LogoSection";
-import { FirmSection, type FirmView } from "./FirmSection";
 import { countryDefault } from "@/engine/plan/countryDefaults";
 import { legalStructuresFor, CUSTOMER_TYPES, PRODUCT_TYPES, COUNTRIES, CURRENCIES, MONTHS, profileMissing, type Settings, type Profile, type Financial, type Licence, type AddBack } from "./model";
 import { CellInput, RemoveButton, FootRow } from "@/components/module/DataGrid";
@@ -54,7 +53,7 @@ function ReadOnly({ value, bad }: { value: string; bad?: boolean }) {
   return <div className={cn("num flex h-8 items-center justify-end rounded-md border border-dashed border-input bg-secondary/50 px-3 text-[13px]", bad && "text-bad")}>{value}</div>;
 }
 
-export function SettingsModule({ planId, initial, mode, initialArea, licences, logoUrl, archivedAt, inventory, addBacks, opening, drafting = {}, firm = null }: {
+export function SettingsModule({ planId, initial, mode, initialArea, licences, logoUrl, archivedAt, inventory, addBacks, opening, drafting = {}}: {
   planId: string; initial: Settings; mode: "guided" | "advanced"; initialArea: AreaKey;
   /** The opening tax and profit position read from Historic (§6.148) — what the forecast uses, shown. */
   opening: { taxLosses: TaxLosses; accumulated: AccumulatedProfit };
@@ -63,8 +62,6 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
   licences: Licence[];
   /** A signed URL for the plan's logo, minted on the server for this request (§6.94). */
   logoUrl: string | null;
-  /** The firm's letterhead (§6.180), for a plan written by a coach, consultant or accounting firm. */
-  firm?: FirmView | null;
   /** When the plan was put away, or null (§6.58). */
   archivedAt: string | null;
   /** What the plan holds, so deleting it can say so rather than asking "are you sure?". */
@@ -752,7 +749,6 @@ export function SettingsModule({ planId, initial, mode, initialArea, licences, l
         <>
           <Toolbar><Meta className="ml-0">Your logo goes on the business plan&apos;s cover and the header of every page after it.</Meta></Toolbar>
           <LogoSection planId={planId} path={s.logo_path} url={logoUrl} onPending={onLogoPending} />
-          {firm && <FirmSection planId={planId} firm={firm} onPending={onLogoPending} />}
         </>
       )}
     </ModuleFrame>

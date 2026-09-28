@@ -3,6 +3,7 @@ import { AiUnavailable, openRouter } from "@/lib/ai/provider";
 import { readForBriefing, TABS, VIEWS } from "@/lib/briefing";
 import type { Tab, View } from "@/engine/capability/read";
 import { guardDraft } from "../guard";
+import { loadFirm } from "@/lib/firm";
 
 /**
  * THE PLANNER'S BRIEFING, STREAMED (§6.179).
@@ -28,6 +29,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ planId:
   const tab = TABS.find((t) => t === body.tab) as Tab | undefined;
   const view = VIEWS.find((v) => v === body.view) as View | undefined;
   if (!tab || !view) return bad("That tab cannot be briefed.");
+
+  /* The briefing is the Planner's (§6.181) — checked before the meter, so a refusal costs nothing. */
+  if (!(await loadFirm(planId))?.isPlanner) return bad("The briefing is written by the Planner.", 403);
 
   const gate = await guardDraft(planId, "capability_briefing");
   if (!gate.ok) return gate.response;

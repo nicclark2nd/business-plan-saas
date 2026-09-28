@@ -66,7 +66,7 @@ const TONE: Record<Severity, ChartSeverity> = { good: "good", watch: "warn", bad
  * box on the step that owns the figure — Assumptions for the cash floor and the downside, Plan settings for
  * the price, Leadership Team for owner dependence, Fixed Assets for security, Funding for the borrowing.
  */
-export function CapabilitiesModule({ planId, mode, currency, facts, products, facilities, months, openingDebt, extras, history = [], firstYear, adviser = false, monthsByYear = {}, targetChecks = [], agreedTargets = {}, aiOn = false, briefings = {} }: {
+export function CapabilitiesModule({ planId, mode, currency, facts, products, facilities, months, openingDebt, extras, history = [], firstYear, adviser = false, monthsByYear = {}, targetChecks = [], agreedTargets = {}, aiOn = false, briefings = {}, planner = false }: {
   planId: string; mode: "guided" | "advanced"; currency: string; facts: PlanFacts;
   /** Historic, every period, for the actual view (§6.158). Empty for a business with no accounts. */
   history?: HistoricRow[];
@@ -83,6 +83,8 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
   /** AI switched on for this plan, and the Planner's saved briefings keyed "tab:view" (§6.179). */
   aiOn?: boolean;
   briefings?: Record<string, SavedBriefing>;
+  /** The person looking is one of the firm's Planners (§6.181) — the only person who sees the briefing and the report. */
+  planner?: boolean;
   /** For the panels only (§6.129.2) — each product's five years, and the borrowing the plan carries. */
   products: ProductFacts[]; facilities: FacilityFacts[];
   /** The plan's own twelve months (§6.21), for the month-by-month cash panel. */
@@ -198,7 +200,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
           <span className="text-[12.5px]"><b>Plan: {views.plan.span}</b> <span className="text-muted-foreground">— from your projections. There are no accounts in Historic yet, so there is no actual view.</span></span>
         )}
         {/* The Planner's report (§6.180): everything on these tabs, with the saved briefings, as a Word file. */}
-        <ReportLink planId={planId} adviser={adviser} notes={notes} RV={RV} />
+        {planner && <ReportLink planId={planId} adviser={adviser} notes={notes} RV={RV} />}
       </div>
 
       <section className="border-b border-border bg-accent/40 px-5 py-3.5">
@@ -309,7 +311,7 @@ export function CapabilitiesModule({ planId, mode, currency, facts, products, fa
       </div>
 
       {/* The Planner's briefing (§6.179): one note per tab and view, keyed so each starts from its own saved copy. */}
-      {s.value !== null || fixes.story ? (
+      {planner && (s.value !== null || fixes.story) ? (
         <Briefing key={`${tab}:${R.onActual ? "actual" : "plan"}`} planId={planId} tab={tab} view={R.onActual ? "actual" : "plan"} R={R}
           money={money} adviser={adviser} aiOn={aiOn} initial={notes[`${tab}:${R.onActual ? "actual" : "plan"}`] ?? null}
           onSaved={(b) => setNotes((n) => { const k = `${tab}:${R.onActual ? "actual" : "plan"}`; const x = { ...n }; if (b) x[k] = b; else delete x[k]; return x; })} />

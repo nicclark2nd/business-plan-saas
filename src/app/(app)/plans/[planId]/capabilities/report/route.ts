@@ -41,10 +41,14 @@ async function fetchLogo(bucket: string, path: string | null): Promise<DocxLogo 
 
 export async function GET(_req: Request, { params }: { params: Promise<{ planId: string }> }) {
   const { planId } = await params;
+  /* The Planner's report is the Planner's (§6.181): a client with their own login cannot download it. */
+  const firm = await loadFirm(planId);
+  if (!firm?.isPlanner) {
+    return new Response(JSON.stringify({ error: "This report is for the Planner." }), { status: 403, headers: { "Content-Type": "application/json" } });
+  }
   const supabase = await createClient();
-  const [f, firm, plan, settings, notes] = await Promise.all([
+  const [f, plan, settings, notes] = await Promise.all([
     loadCapabilityFacts(planId),
-    loadFirm(planId),
     supabase.from("plans").select("business_name").eq("id", planId).maybeSingle().then((r) => r.data),
     supabase.from("plan_settings").select("page_size, country, logo_path").eq("plan_id", planId).maybeSingle().then((r) => r.data),
     supabase.from("plan_briefings").select("tab, view, body").eq("plan_id", planId).then((r) => (r.error ? [] : r.data ?? [])),

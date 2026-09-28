@@ -20,6 +20,12 @@ export type Firm = {
   colour: string | null;
   /** Only a firm admin may change the letterhead (0001's "org update" policy, and 0058's bucket). */
   isAdmin: boolean;
+  /**
+   * THE PERSON LOOKING IS ONE OF THE FIRM'S PLANNERS (§6.181) — an admin or advisor of the firm the plan
+   * belongs to. A client given their own login is a member of the PLAN, not of the firm, and is not a Planner:
+   * the Planner's briefing, the Planner's report and anything about the firm are never shown to them.
+   */
+  isPlanner: boolean;
 };
 
 export async function loadFirm(planId: string): Promise<Firm | null> {
@@ -43,5 +49,6 @@ export async function loadFirm(planId: string): Promise<Firm | null> {
     orgId, name: org.name, adviser: org.kind !== "owner",
     logoPath: org.logo_path ?? null, colour: cleanColour(org.brand_colour),
     isAdmin: me?.role === "admin",
+    isPlanner: me?.role === "admin" || me?.role === "advisor",
   };
 }

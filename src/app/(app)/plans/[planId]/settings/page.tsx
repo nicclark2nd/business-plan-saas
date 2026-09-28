@@ -7,8 +7,7 @@ import { DRAFTABLE } from "@/engine/ai/fields";
 import { getSession } from "@/lib/plan";
 import { SettingsModule } from "./SettingsModule";
 import type { Settings, Licence, AddBack } from "./model";
-import { FIRM_LOGO_BUCKET, LOGO_BUCKET, LOGO_URL_TTL_SECONDS } from "@/engine/plan/logo";
-import { loadFirm } from "@/lib/firm";
+import { LOGO_BUCKET, LOGO_URL_TTL_SECONDS } from "@/engine/plan/logo";
 import { accumulatedProfit, taxLossesFromHistory } from "@/engine/historic/opening";
 
 /** A nullable numeric column, kept nullable: null means nobody has said, and that is not nought (§6.89). */
@@ -105,12 +104,6 @@ export default async function SettingsPage({ params, searchParams }: { params: P
   const logoUrl = logoPath
     ? (await supabase.storage.from(LOGO_BUCKET).createSignedUrl(logoPath, LOGO_URL_TTL_SECONDS)).data?.signedUrl ?? null
     : null;
-  /* The firm's letterhead (§6.180) — only for a firm that writes plans for clients, and only readable by its members. */
-  const f = await loadFirm(planId);
-  const firm = f && f.adviser ? {
-    name: f.name, colour: f.colour, logoPath: f.logoPath, isAdmin: f.isAdmin,
-    logoUrl: f.logoPath ? (await supabase.storage.from(FIRM_LOGO_BUCKET).createSignedUrl(f.logoPath, LOGO_URL_TTL_SECONDS)).data?.signedUrl ?? null : null,
-  } : null;
   const mode = (session?.profile?.mode ?? "guided") as "guided" | "advanced";
   const initialArea = area === "financial" || area === "printing" || area === "exit" || area === "ranges" || area === "ai" || area === "branding" || area === "lifecycle" ? area : "profile";
   /* The same two functions the forecast calls (planLoad), so this tab shows exactly what the forecast uses. */
@@ -125,7 +118,7 @@ export default async function SettingsPage({ params, searchParams }: { params: P
     accumulated: accumulatedProfit(latest ? fact(latest) : null),
   };
   return <SettingsModule planId={planId} initial={initial} mode={mode} initialArea={initialArea} drafting={drafting} opening={opening}
-    licences={(licences.data ?? []) as Licence[]} logoUrl={logoUrl} firm={firm}
+    licences={(licences.data ?? []) as Licence[]} logoUrl={logoUrl}
     archivedAt={plan.data?.archived_at ?? null} inventory={inventory}
     addBacks={(addBacks.data ?? []).map((a) => ({ ...a, amount: Number(a.amount) })) as AddBack[]} />;
 }

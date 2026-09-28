@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/plan";
 import { failed } from "@/lib/actionFailed";
 import { readForBriefing, TABS, VIEWS } from "@/lib/briefing";
+import { loadFirm } from "@/lib/firm";
 import type { Tab, View } from "@/engine/capability/read";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
@@ -21,6 +22,8 @@ export async function saveBriefing(planId: string, tab: Tab, view: View, body: s
   if (!TABS.includes(tab) || !VIEWS.includes(view)) return { ok: false, error: "That tab cannot be briefed." };
   const text = String(body ?? "").replace(/\r\n/g, "\n").trim();
   if (text.length > MAX) return { ok: false, error: `A briefing can be up to ${MAX.toLocaleString()} characters. This one is ${text.length.toLocaleString()}.` };
+
+  if (!(await loadFirm(planId))?.isPlanner) return { ok: false, error: "The briefing is written by the Planner." };
 
   const supabase = await createClient();
   if (!text) {

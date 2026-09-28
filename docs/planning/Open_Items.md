@@ -1010,3 +1010,14 @@ projection step and scored on the Plan view, after.)
   settings → Branding, by a firm admin (migration 0058: `organisations.logo_path`, `brand_colour`, private bucket
   `firm-logos`). A light colour prints a shade darker so headings stay readable (`readable`, 3:1 on white). A
   business planning for itself gets its own logo and the app's navy.
+- **§6.181** The consultant's firm never appears in a client's plan. Nic: "The Nic Clark coaching should never go
+  in the clients plan. This is a fatal mistake… There should be a separated area for me as the consultant."
+  The firm letterhead section is removed from Plan settings → Branding (the client's own logo stays). The
+  Planner's briefing and the Planner's report are now shown, saved, drafted and downloaded only by a Planner —
+  an admin or advisor of the firm the plan belongs to (`loadFirm().isPlanner`), checked on the server in the
+  page, the save action, the AI route and the report route. A client given their own login (a plan member, not
+  a firm member) sees neither. `FirmSection.tsx` and `firmActions.ts` are unreferenced and parked for the firm
+  area, where they will be reworked to act on the firm rather than on a plan. Migration 0058's columns and
+  bucket are right as they are: the letterhead belongs to the organisation. NEXT: the firm area — the
+  consultant's brand, team, details and client list, with clients opened from it (rule recorded in the
+  project's product-rules).
