@@ -18,6 +18,10 @@ export type Firm = {
   adviser: boolean;
   logoPath: string | null;
   colour: string | null;
+  /** For the "Prepared by" line (§6.182). */
+  phone: string | null;
+  website: string | null;
+  preparedBy: string | null;
   /** Only a firm admin may change the letterhead (0001's "org update" policy, and 0058's bucket). */
   isAdmin: boolean;
   /**
@@ -37,9 +41,9 @@ export async function loadFirm(planId: string): Promise<Firm | null> {
   const orgId = plan?.organisation_id as string | undefined;
   if (!orgId || !session) return null;
 
-  let org = (await supabase.from("organisations").select("id, name, kind, logo_path, brand_colour").eq("id", orgId).maybeSingle()).data as
-    { name: string; kind: string; logo_path?: string | null; brand_colour?: string | null } | null;
-  if (!org) org = (await supabase.from("organisations").select("id, name, kind").eq("id", orgId).maybeSingle()).data;
+  /* `*`: columns added by later migrations read as null in the gap before they are applied. */
+  const org = (await supabase.from("organisations").select("*").eq("id", orgId).maybeSingle()).data as
+    { name: string; kind: string; logo_path?: string | null; brand_colour?: string | null; phone?: string | null; website?: string | null; prepared_by?: string | null } | null;
   if (!org) return null;
 
   const { data: me } = await supabase.from("organisation_members").select("role")
@@ -48,6 +52,7 @@ export async function loadFirm(planId: string): Promise<Firm | null> {
   return {
     orgId, name: org.name, adviser: org.kind !== "owner",
     logoPath: org.logo_path ?? null, colour: cleanColour(org.brand_colour),
+    phone: org.phone ?? null, website: org.website ?? null, preparedBy: org.prepared_by ?? null,
     isAdmin: me?.role === "admin",
     isPlanner: me?.role === "admin" || me?.role === "advisor",
   };

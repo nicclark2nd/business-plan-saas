@@ -4,7 +4,8 @@ import { resolvePageSize } from "@/engine/report/pageSize";
 import { readTab, readViews } from "@/engine/capability/read";
 import { capabilityTimeline } from "@/engine/capability/timeline";
 import { moneyFormatter } from "@/engine/plan/money";
-import { wordColour } from "@/engine/plan/brand";
+import { preparedByLine, wordColour } from "@/engine/plan/brand";
+import { getSession } from "@/lib/plan";
 import { FIRM_LOGO_BUCKET, LOGO_BUCKET, logoWordType } from "@/engine/plan/logo";
 import { loadCapabilityFacts } from "@/lib/capabilityFacts";
 import { loadFirm } from "@/lib/firm";
@@ -73,6 +74,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ planId:
   const business = typeof plan?.business_name === "string" && plan.business_name.trim() ? plan.business_name.trim() : "This business";
   const doc = capabilityReport({
     business, firm: lettered?.name ?? null, adviser: f.adviser,
+    preparedBy: lettered ? preparedByLine(lettered, (await getSession())?.user.email ?? null) : null,
     date: now.toLocaleDateString("en-AU", { month: "long", year: "numeric" }),
     preparedOn: now.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" }),
     money, tabs,

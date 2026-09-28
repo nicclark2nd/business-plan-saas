@@ -13,6 +13,7 @@ import { firstProjectedYear } from "@/engine/plan/calendar";
 import { Sidebar } from "@/components/Sidebar";
 import { Brand } from "@/components/Brand";
 import { GUIDED_STEPS } from "@/lib/nav";
+import { loadFirm } from "@/lib/firm";
 
 export default async function PlanLayout({ children, params }: { children: React.ReactNode; params: Promise<{ planId: string }> }) {
   const { planId } = await params;
@@ -21,7 +22,9 @@ export default async function PlanLayout({ children, params }: { children: React
   const plan = session.plans.find((p) => p.id === planId);
   if (!plan) notFound();
   const mode = (session.profile?.mode ?? "guided") as "guided" | "advanced";
-  const completeness = await getPlanCompleteness(planId);
+  const [completeness, firm] = await Promise.all([getPlanCompleteness(planId), loadFirm(planId)]);
+  /* The way back to the consultant's own area (§6.182) — only for the firm's Planners, never for a client. */
+  const backToFirm = !!firm?.isPlanner && firm.adviser;
   const supabase = await createClient();
   const { data: settings } = await supabase.from("plan_settings").select("currency, product_type, customer_type, country, gst_registered, gst_rate, gst_frequency, tax_region, tax_components, financial_year_end_month, first_projected_year").eq("plan_id", planId).maybeSingle();
   const firstYear = firstProjectedYear(settings?.first_projected_year, settings?.financial_year_end_month);
@@ -43,6 +46,7 @@ export default async function PlanLayout({ children, params }: { children: React
         <Link href="/setup" className="flex w-[224px] items-center">
           <Brand variant="reversed" height={22} />
         </Link>
+        {backToFirm && <Link href="/firm/clients" className="rounded border border-sidebar-border px-2 py-0.5 text-[12px] font-semibold text-sidebar-foreground hover:bg-sidebar-accent">← My Clients</Link>}
         <div className="text-[13px] text-sidebar-muted">Plan: <b className="font-semibold text-sidebar-foreground">{plan.business_name}</b> · Plan {firstYear}–{firstYear + 4}</div>
         <div className="flex-1" />
         <div className="mr-2 flex items-center gap-3 text-xs text-sidebar-muted"><span className="flex items-center gap-1.5"><i className={`block size-1.5 rounded-full ${plan.status === "draft" ? "bg-warn" : "bg-good"}`} />{STATUS[plan.status] ?? plan.status}</span>

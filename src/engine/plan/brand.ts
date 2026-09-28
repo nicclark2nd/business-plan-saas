@@ -42,3 +42,13 @@ export function readable(hex: string): string {
 
 /** Six hex digits, no '#', as Word wants it. */
 export const wordColour = (hex: string | null | undefined) => readable(cleanColour(hex) ?? DEFAULT_BRAND).slice(1);
+
+/**
+ * THE "PREPARED BY" LINE, built from the details when the firm has not written its own: the firm's name,
+ * then its phone, then the consultant's email — the old system's "Coached by: … | … | …", without the
+ * consultant having to type what the firm already holds.
+ */
+export function preparedByLine(firm: { name: string; phone: string | null; website: string | null; preparedBy: string | null }, email?: string | null): string {
+  if (firm.preparedBy) return firm.preparedBy;
+  return [`Prepared by ${firm.name}`, firm.phone, email ?? firm.website].filter(Boolean).join(" · ");
+}

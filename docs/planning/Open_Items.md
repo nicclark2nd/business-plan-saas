@@ -1021,3 +1021,18 @@ projection step and scored on the Plan view, after.)
   bucket are right as they are: the letterhead belongs to the organisation. NEXT: the firm area — the
   consultant's brand, team, details and client list, with clients opened from it (rule recorded in the
   project's product-rules).
+- **§6.182** The consultant's own area, part 1 (design: project doc "consultant-area"). A consultant — an admin
+  or advisor of a firm that is not a business planning for itself — now lands on **My Clients** (`/firm/clients`),
+  not on a list of plans. Three screens under their own menu and header: **My Clients** (search; the business
+  picked, with its address, email, website and country READ FROM ITS PLAN rather than asked again, and the contact
+  person — the one thing the plan does not hold — typed here; Open plan; Add new business, into the firm);
+  **My Firm** (name, business number, address, phone, website, country, colour, default paper, the "Prepared by"
+  line built from those details unless the firm writes its own, logo — admin-only to change); **My Profile**
+  (name, title, direct phone, photo; sign-in email shown, never edited here). ONE FIRM PER CONSULTANT: setup used
+  to create a new organisation for every business, so a coach with twenty clients had twenty firms; a consultant
+  who has a firm now adds the business to it (`createPlan`, shared by setup and My Clients). Inside a client's
+  plan, the firm's Planners get "← My Clients" in the header; a client never does. The Planner's report cover now
+  carries the firm's "Prepared by" line. One image box (`ImageUpload`) serves the plan's logo, the firm's logo and
+  the photo. Migration 0059: firm details on `organisations`, title/phone/photo on `profiles`, the contact person
+  on `plans`, private `profile-photos` bucket (read by anyone who shares a firm with the person). Next: part 2 —
+  client access (invite, turn off, "Your Planner" card, may-download switch).

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/plan";
+import { loadMyFirm } from "@/lib/myFirm";
 import { SetupForm } from "./SetupForm";
 import { PlanCard } from "./PlanCard";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,8 @@ function orgName(p: { organisations?: { name: string } | { name: string }[] | nu
 export default async function SetupPage() {
   const session = await getSession();
   if (!session) redirect("/login");
+  /* A consultant's home is their own area, not a list of plans (§6.182). */
+  if (await loadMyFirm()) redirect("/firm/clients");
 
   if (session.plans.length > 0) {
     // A plan that has been put away is still a plan (§6.58) — it is just not in front of you.

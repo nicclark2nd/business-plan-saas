@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { completeSetup } from "../actions";
+import { addClient } from "../firm/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,11 +21,15 @@ const KINDS = [
 import { COUNTRIES, CURRENCIES } from "@/app/(app)/plans/[planId]/settings/model";
 import { countryDefault, followCountry } from "@/engine/plan/countryDefaults";
 
-export function SetupForm() {
-  const [state, action, pending] = useActionState(completeSetup, undefined);
-  const [kind, setKind] = useState("owner");
-  const [country, setCountry] = useState("Australia");
-  const [currency, setCurrency] = useState("AUD");
+/**
+ * `forFirm` (§6.182): My Clients → Add new business. The same form without "which best describes you" and the
+ * firm's name — the consultant's firm already exists — and starting from the firm's own country and currency.
+ */
+export function SetupForm({ forFirm }: { forFirm?: { country: string | null; currency: string } } = {}) {
+  const [state, action, pending] = useActionState(forFirm ? addClient : completeSetup, undefined);
+  const [kind, setKind] = useState(forFirm ? "coach" : "owner");
+  const [country, setCountry] = useState(forFirm?.country ?? "Australia");
+  const [currency, setCurrency] = useState(forFirm?.currency ?? "AUD");
   // The plan's financial year, asked once, here (§6.33.2). Everything downstream reads these two and the
   // client never has to find them in Settings to make Year 1 mean what they think it means.
   const [fyEnd, setFyEnd] = useState("6");
@@ -39,7 +44,7 @@ export function SetupForm() {
       <input type="hidden" name="financial_year_end_month" value={fyEnd} />
       <input type="hidden" name="first_projected_year" value={String(firstYear)} />
 
-      <fieldset>
+      {!forFirm && <fieldset>
         <legend className="mb-2 text-[13px] font-semibold">Which best describes you?</legend>
         <div className="grid grid-cols-2 gap-2" role="radiogroup">
           {KINDS.map((k) => (
@@ -53,15 +58,15 @@ export function SetupForm() {
             </button>
           ))}
         </div>
-      </fieldset>
+      </fieldset>}
 
-      {advisor && (
+      {advisor && !forFirm && (
         <div className="space-y-1.5"><Label htmlFor="org_name">Your practice or firm name</Label><Input id="org_name" name="org_name" placeholder="e.g. Laidlaw Coaching" required /></div>
       )}
       <div className="space-y-1.5">
-        <Label htmlFor="business_name">{advisor ? "First client business to plan for" : "Business name"}</Label>
+        <Label htmlFor="business_name">{forFirm ? "Client business" : advisor ? "First client business to plan for" : "Business name"}</Label>
         <Input id="business_name" name="business_name" placeholder="e.g. DesignOne Concreting" required />
-        {advisor && <p className="text-xs text-muted-foreground">You&apos;ll be able to add more clients and invite them to their own login afterwards.</p>}
+        {advisor && !forFirm && <p className="text-xs text-muted-foreground">You&apos;ll be able to add more clients and invite them to their own login afterwards.</p>}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5"><Label>Country</Label>
@@ -93,7 +98,7 @@ export function SetupForm() {
         </p>
       </div>
       <FormError>{state?.error}</FormError>
-      <Button type="submit" disabled={pending}>{pending ? "Setting up…" : "Create my plan →"}</Button>
+      <Button type="submit" disabled={pending}>{pending ? "Setting up…" : forFirm ? "Add this business →" : "Create my plan →"}</Button>
     </form>
   );
 }

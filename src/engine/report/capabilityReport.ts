@@ -31,8 +31,10 @@ export type ReportTab = {
 
 export type CapabilityReportInput = {
   business: string;
-  /** "Prepared by" — the firm, for a plan written by a coach, consultant or accounting firm. */
+  /** The firm, for a plan written by a coach, consultant or accounting firm. */
   firm: string | null;
+  /** The firm's "Prepared by" line (§6.182), built from its details on My Firm; "Prepared by {firm}" without one. */
+  preparedBy?: string | null;
   adviser: boolean;
   /** "September 2026" for the cover; "28 September 2026" for the notice page. */
   date: string;
@@ -207,7 +209,7 @@ export function capabilityReport(i: CapabilityReportInput): ReportDoc {
     cover: {
       tagline: null,
       year: i.adviser ? "Planner's report" : "Report",
-      contact: i.firm ? `Prepared by ${i.firm}` : null,
+      contact: i.preparedBy ?? (i.firm ? `Prepared by ${i.firm}` : null),
       address: null,
     },
     disclaimer: {

@@ -69,3 +69,6 @@ export const LOGO_URL_TTL_SECONDS = 60 * 30;
  */
 export const FIRM_LOGO_BUCKET = "firm-logos";
 export const firmLogoObjectPath = (orgId: string, ext: "png" | "jpg") => `${orgId}/logo.${ext}`;
+
+/** The consultant's photo (§6.182): one per person at `<user id>/photo.<ext>`, private (0059). Same file rules. */
+export const PHOTO_BUCKET = "profile-photos";

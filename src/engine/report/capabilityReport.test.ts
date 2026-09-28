@@ -6,7 +6,7 @@ import { readTab, readViews } from "@/engine/capability/read";
 import { walk } from "./blocks";
 import { renderDocx } from "./docx";
 import { capabilityReport, capabilityReportFileName, type ReportTab } from "./capabilityReport";
-import { cleanColour, contrastOnWhite, readable, wordColour } from "@/engine/plan/brand";
+import { cleanColour, contrastOnWhite, preparedByLine, readable, wordColour } from "@/engine/plan/brand";
 
 /* SEQ's two actual years (as actual.test.ts). */
 const rows: HistoricRow[] = [
@@ -97,5 +97,17 @@ describe("the firm's colour (§6.180)", () => {
     expect(gold).not.toBe("#F2C94C");
     expect(contrastOnWhite(gold)).toBeGreaterThanOrEqual(3);
     expect(wordColour(null)).toBe("1F3A5F");
+  });
+});
+
+describe("the \u201cPrepared by\u201d line (§6.182)", () => {
+  it("is built from the firm's details when the firm has not written its own", () => {
+    expect(preparedByLine({ name: "Nic Clark Coaching", phone: "0400 111 222", website: "nicclark.com", preparedBy: null }, "nic@nicclark.com"))
+      .toBe("Prepared by Nic Clark Coaching · 0400 111 222 · nic@nicclark.com");
+    expect(preparedByLine({ name: "Nic Clark Coaching", phone: null, website: "nicclark.com", preparedBy: null }))
+      .toBe("Prepared by Nic Clark Coaching · nicclark.com");
+  });
+  it("is the firm's own words when it wrote some", () => {
+    expect(preparedByLine({ name: "X", phone: "1", website: null, preparedBy: "Coached by Nic Clark" }, "a@b.c")).toBe("Coached by Nic Clark");
   });
 });

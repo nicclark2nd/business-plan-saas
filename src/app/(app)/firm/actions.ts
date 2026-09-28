@@ -1,0 +1,201 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/plan";
+import { failed } from "@/lib/actionFailed";
+import { loadMyFirm } from "@/lib/myFirm";
+import { createPlan, readNewPlan } from "@/lib/createPlan";
+import { cleanColour } from "@/engine/plan/brand";
+import { checkLogo, firmLogoObjectPath, FIRM_LOGO_BUCKET, PHOTO_BUCKET } from "@/engine/plan/logo";
+
+type Result = { ok: true } | { ok: false; error: string };
+
+/**
+ * THE CONSULTANT'S OWN AREA — every change it can make (§6.182).
+ *
+ * Each action works out the firm from the person signed in (`loadMyFirm`), never from anything the browser
+ * sends. The database refuses a second time if that were ever wrong: only a firm admin may update the firm
+ * (0001), only its admins may write its logo (0058), and a person may only change their own profile.
+ */
+
+/* ---------------------------------------------------------------- the firm ---- */
+
+const FIRM_TEXT = {
+  name: 120, address_line: 200, city: 80, region: 80, postcode: 20, phone: 40, website: 200,
+  business_number: 40, prepared_by: 200, country: 80,
+} as const;
+export type FirmPatch = Partial<Record<keyof typeof FIRM_TEXT, string | null>> & {
+  colour?: string | null; default_page_size?: "a4" | "letter" | null;
+};
+
+async function adminFirm() {
+  const firm = await loadMyFirm();
+  if (!firm) return { firm: null, error: "You are not signed in to a firm." } as const;
+  if (firm.role !== "admin") return { firm: null, error: "Only your firm's admin can change the firm's details." } as const;
+  return { firm, error: null } as const;
+}
+
+export async function saveFirm(patch: FirmPatch): Promise<Result> {
+  const { firm, error: denied } = await adminFirm();
+  if (!firm) return { ok: false, error: denied };
+  const row: Record<string, unknown> = {};
+  for (const [k, max] of Object.entries(FIRM_TEXT)) {
+    const v = patch[k as keyof typeof FIRM_TEXT];
+    if (v === undefined) continue;
+    const t = String(v ?? "").trim();
+    if (t.length > max) return { ok: false, error: `That is longer than ${max} characters.` };
+    if (k === "name" && !t) return { ok: false, error: "The firm needs a name — it goes on every report you send." };
+    row[k] = t || null;
+  }
+  if (patch.colour !== undefined) {
+    const c = patch.colour ? cleanColour(patch.colour) : null;
+    if (patch.colour && !c) return { ok: false, error: "That is not a colour. Use six digits like #1F3A5F." };
+    row.brand_colour = c;
+  }
+  if (patch.default_page_size !== undefined) {
+    row.default_page_size = patch.default_page_size === "a4" || patch.default_page_size === "letter" ? patch.default_page_size : null;
+  }
+  if (!Object.keys(row).length) return { ok: true };
+  const supabase = await createClient();
+  const { error } = await supabase.from("organisations").update(row).eq("id", firm.id);
+  if (error) return failed(error, "save the firm's details");
+  revalidatePath("/firm", "layout");
+  return { ok: true };
+}
+
+/** Same rules as the plan's logo (§6.94): checked here, one object per firm, the old one removed on a change of format. */
+export async function uploadFirmLogo(form: FormData): Promise<Result> {
+  const { firm, error: denied } = await adminFirm();
+  if (!firm) return { ok: false, error: denied };
+  const file = form.get("logo");
+  if (!(file instanceof File)) return { ok: false, error: "No file arrived — try choosing it again." };
+  const check = checkLogo({ type: file.type, size: file.size, name: file.name });
+  if (!check.ok) return { ok: false, error: check.error };
+
+  const supabase = await createClient();
+  const path = firmLogoObjectPath(firm.id, check.ext);
+  const { error: upload } = await supabase.storage.from(FIRM_LOGO_BUCKET)
+    .upload(path, file, { upsert: true, contentType: file.type, cacheControl: "3600" });
+  if (upload) return failed(upload, "save that logo");
+  if (firm.logoPath && firm.logoPath !== path) await supabase.storage.from(FIRM_LOGO_BUCKET).remove([firm.logoPath]);
+  const { error } = await supabase.from("organisations").update({ logo_path: path }).eq("id", firm.id);
+  if (error) return failed(error, "save the logo");
+  revalidatePath("/firm", "layout");
+  return { ok: true };
+}
+
+export async function removeFirmLogo(): Promise<Result> {
+  const { firm, error: denied } = await adminFirm();
+  if (!firm) return { ok: false, error: denied };
+  const supabase = await createClient();
+  if (firm.logoPath) await supabase.storage.from(FIRM_LOGO_BUCKET).remove([firm.logoPath]);
+  const { error } = await supabase.from("organisations").update({ logo_path: null }).eq("id", firm.id);
+  if (error) return failed(error, "remove the logo");
+  revalidatePath("/firm", "layout");
+  return { ok: true };
+}
+
+/* ---------------------------------------------------------------- the person ---- */
+
+export type ProfilePatch = { full_name?: string; title?: string | null; phone?: string | null };
+
+export async function saveProfile(patch: ProfilePatch): Promise<Result> {
+  const session = await getSession();
+  if (!session) return { ok: false, error: "Sign in again." };
+  const row: Record<string, unknown> = {};
+  if (patch.full_name !== undefined) {
+    const t = String(patch.full_name).trim();
+    if (!t) return { ok: false, error: "Your name goes on what you send clients — it can't be blank." };
+    if (t.length > 120) return { ok: false, error: "That name is longer than 120 characters." };
+    row.full_name = t;
+  }
+  for (const k of ["title", "phone"] as const) {
+    if (patch[k] === undefined) continue;
+    const t = String(patch[k] ?? "").trim();
+    if (t.length > 80) return { ok: false, error: "That is longer than 80 characters." };
+    row[k] = t || null;
+  }
+  if (!Object.keys(row).length) return { ok: true };
+  const supabase = await createClient();
+  const { error } = await supabase.from("profiles").update(row).eq("id", session.user.id);
+  if (error) return failed(error, "save your details");
+  revalidatePath("/firm", "layout");
+  return { ok: true };
+}
+
+export async function uploadPhoto(form: FormData): Promise<Result> {
+  const session = await getSession();
+  if (!session) return { ok: false, error: "Sign in again." };
+  const file = form.get("logo");
+  if (!(file instanceof File)) return { ok: false, error: "No file arrived — try choosing it again." };
+  const check = checkLogo({ type: file.type, size: file.size, name: file.name });
+  if (!check.ok) return { ok: false, error: check.error.replace("A logo", "A photo").replace("a logo", "a photo") };
+
+  const supabase = await createClient();
+  const path = `${session.user.id}/photo.${check.ext}`;
+  const { error: upload } = await supabase.storage.from(PHOTO_BUCKET)
+    .upload(path, file, { upsert: true, contentType: file.type, cacheControl: "3600" });
+  if (upload) return failed(upload, "save that photo");
+  const { data: me } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
+  const previous = (me as Record<string, unknown> | null)?.photo_path as string | null | undefined;
+  if (previous && previous !== path) await supabase.storage.from(PHOTO_BUCKET).remove([previous]);
+  const { error } = await supabase.from("profiles").update({ photo_path: path }).eq("id", session.user.id);
+  if (error) return failed(error, "save the photo");
+  revalidatePath("/firm", "layout");
+  return { ok: true };
+}
+
+export async function removePhoto(): Promise<Result> {
+  const session = await getSession();
+  if (!session) return { ok: false, error: "Sign in again." };
+  const supabase = await createClient();
+  const { data: me } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
+  const previous = (me as Record<string, unknown> | null)?.photo_path as string | null | undefined;
+  if (previous) await supabase.storage.from(PHOTO_BUCKET).remove([previous]);
+  const { error } = await supabase.from("profiles").update({ photo_path: null }).eq("id", session.user.id);
+  if (error) return failed(error, "remove the photo");
+  revalidatePath("/firm", "layout");
+  return { ok: true };
+}
+
+/* ---------------------------------------------------------------- the clients ---- */
+
+export type ContactPatch = Partial<Record<"contact_first_name" | "contact_family_name" | "contact_email" | "contact_phone", string | null>>;
+
+/** The client's contact person (§6.182) — only on a plan that belongs to the consultant's own firm. */
+export async function saveClientContact(planId: string, patch: ContactPatch): Promise<Result> {
+  const firm = await loadMyFirm();
+  if (!firm) return { ok: false, error: "You are not signed in to a firm." };
+  const row: Record<string, unknown> = {};
+  for (const k of ["contact_first_name", "contact_family_name", "contact_email", "contact_phone"] as const) {
+    if (patch[k] === undefined) continue;
+    const t = String(patch[k] ?? "").trim();
+    if (t.length > 120) return { ok: false, error: "That is longer than 120 characters." };
+    if (k === "contact_email" && t && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) return { ok: false, error: "That doesn't look like an email address." };
+    row[k] = t || null;
+  }
+  if (!Object.keys(row).length) return { ok: true };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("plans").update(row).eq("id", planId).eq("organisation_id", firm.id).select("id");
+  if (error) return failed(error, "save the contact");
+  if (!data?.length) return { ok: false, error: "That business is not one of your firm's clients." };
+  revalidatePath("/firm/clients");
+  return { ok: true };
+}
+
+export type AddState = { error?: string } | undefined;
+
+/** My Clients → Add new business: a plan in the consultant's own firm, never a new organisation (§6.182). */
+export async function addClient(_: AddState, formData: FormData): Promise<AddState> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+  const firm = await loadMyFirm();
+  if (!firm) return { error: "You are not signed in to a firm." };
+  const read = readNewPlan(formData);
+  if ("error" in read) return { error: read.error };
+  const made = await createPlan(firm.id, session.user.id, { ...read, ownerEmail: null, pageSize: firm.defaultPageSize });
+  if ("error" in made) return { error: made.error };
+  redirect(`/firm/clients?client=${made.id}`);
+}

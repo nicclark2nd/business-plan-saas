@@ -2,8 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { currentFinancialYear } from "@/engine/plan/calendar";
-import { GENERIC_TAX_RATE, countryDefault } from "@/engine/plan/countryDefaults";
+import { createPlan, readNewPlan } from "@/lib/createPlan";
+import { loadMyFirm } from "@/lib/myFirm";
 
 /**
  * Remember the view preference. Deliberately does NOT revalidate: Guided vs Advanced changes which items
@@ -20,7 +20,14 @@ export async function setMode(mode: "guided" | "advanced"): Promise<boolean> {
 
 export type SetupState = { error?: string } | undefined;
 
-/** Setup wizard: creates the organisation (if needed) and the first plan. Triggers add the creator as admin/owner. */
+/**
+ * Setup (§6.182): a business owner's first plan, or a consultant's firm and first client.
+ *
+ * A CONSULTANT HAS ONE FIRM. This used to create a new organisation for every business set up, so a coach with
+ * twenty clients had twenty firms and no list of clients. Now a consultant who already has a firm adds the
+ * business to it, and lands on My Clients rather than inside the plan. An owner's plan is still its own
+ * organisation — a business planning for itself has nobody else in it.
+ */
 export async function completeSetup(_: SetupState, formData: FormData): Promise<SetupState> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -28,39 +35,28 @@ export async function completeSetup(_: SetupState, formData: FormData): Promise<
 
   const kind = String(formData.get("kind") ?? "owner");
   const orgName = String(formData.get("org_name") ?? "").trim();
-  const businessName = String(formData.get("business_name") ?? "").trim();
-  const country = String(formData.get("country") ?? "").trim() || null;
-  const currency = String(formData.get("currency") ?? "AUD").trim();
-  // The plan's financial calendar, stated at creation rather than left for Settings to be asked for later
-  // (§6.33.2). plan_year is the cover year and defaults to the year of creation; it is not the calendar.
-  const fyEndMonth = Math.min(12, Math.max(1, Math.trunc(Number(formData.get("financial_year_end_month"))) || 6));
-  const firstProjected = Math.trunc(Number(formData.get("first_projected_year")));
-  const firstProjectedYear = Number.isFinite(firstProjected) && firstProjected >= 1900 && firstProjected <= 2200
-    ? firstProjected : currentFinancialYear(fyEndMonth);
-  if (!businessName) return { error: "Give the business a name." };
+  const read = readNewPlan(formData);
+  if ("error" in read) return { error: read.error };
 
-  const { data: org, error: orgErr } = await supabase
-    .from("organisations")
-    .insert({ name: orgName || businessName, kind, country, currency, created_by: user.id })
-    .select("id").single();
-  if (orgErr) { console.error("create the organisation", orgErr); return { error: "Couldn't create the organisation. Try again." }; }
+  const existing = kind === "owner" ? null : await loadMyFirm();
+  let orgId = existing?.id ?? null;
+  if (!orgId) {
+    if (kind !== "owner" && !orgName) return { error: "Give your practice or firm a name." };
+    const { data: org, error: orgErr } = await supabase
+      .from("organisations")
+      .insert({ name: orgName || read.businessName, kind, country: read.country, currency: read.currency, created_by: user.id })
+      .select("id").single();
+    if (orgErr || !org) { console.error("create the organisation", orgErr); return { error: "Couldn't create the organisation. Try again." }; }
+    orgId = org.id as string;
+  }
 
-  const { data: plan, error: planErr } = await supabase
-    .from("plans")
-    .insert({ organisation_id: org.id, business_name: businessName, created_by: user.id })
-    .select("id").single();
-  if (planErr) { console.error("create the plan", planErr); return { error: "Couldn't create the plan. Try again." }; }
-
-  /*
-   * NOT ASKED TWICE (§6.151). The country gives the tax rate; and an owner planning their own business
-   * already gave the email the cover prints — they signed in with it. An adviser's sign-in address belongs
-   * on no client's cover, so theirs starts blank. Both stay changeable in Plan settings.
-   */
-  await supabase.from("plan_settings").update({
-    country, currency, financial_year_end_month: fyEndMonth, first_projected_year: firstProjectedYear,
-    tax_rate: countryDefault(country)?.taxRate ?? GENERIC_TAX_RATE,
-    ...(kind === "owner" && user.email ? { contact_email: user.email } : {}),
-  }).eq("plan_id", plan.id);
-  await supabase.from("profiles").update({ default_organisation_id: org.id }).eq("id", user.id);
-  redirect(`/plans/${plan.id}/dashboard`);
+  const made = await createPlan(orgId, user.id, {
+    ...read,
+    /* NOT ASKED TWICE (§6.151): an owner gave the cover's email when they signed in; a consultant's is not the client's. */
+    ownerEmail: kind === "owner" ? user.email ?? null : null,
+    pageSize: existing?.defaultPageSize ?? null,
+  });
+  if ("error" in made) return { error: made.error };
+  await supabase.from("profiles").update({ default_organisation_id: orgId }).eq("id", user.id);
+  redirect(kind === "owner" ? `/plans/${made.id}/dashboard` : `/firm/clients?client=${made.id}`);
 }
