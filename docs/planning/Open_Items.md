@@ -1120,3 +1120,8 @@ projection step and scored on the Plan view, after.)
   it in the menu, is passed on to the next step if they open its address, and cannot agree or change a target
   (refused in the action, not only hidden). Agreed targets still show on the steps they belong to. An owner
   planning for themselves is their own Planner and keeps the step; the firm's Planners are unchanged.
+- **§6.189** Logo upload failed with "Couldn't reach the server" (Nic, My Firm). Next caps a server action's body
+  at 1 MB by default, and the app accepts logos and photos up to 2 MB, so any file between the two was refused
+  before the action ran and the screen could only report a lost connection. `experimental.serverActions.
+  bodySizeLimit` is now 3 MB in next.config.ts (the 2 MB check still runs in the browser and in the action;
+  Vercel's own body limit is 4.5 MB). Affected the plan's logo too, since §6.94.

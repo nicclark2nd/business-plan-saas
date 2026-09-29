@@ -9,6 +9,17 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@resvg/resvg-js"],
 
   /**
+   * LOGOS AND PHOTOS ARRIVE THROUGH SERVER ACTIONS (§6.189), and Next caps a server action's body at 1 MB by
+   * default. The app accepts logos and photos up to 2 MB (`LOGO_MAX_BYTES`), so any file between the two was
+   * refused before it reached the action — and the screen could only say "couldn't reach the server". 3 MB
+   * leaves room for the form's own overhead above the 2 MB the app promises; the 2 MB check is still made,
+   * in the browser and again in the action. (Vercel's own limit on a request body is 4.5 MB.)
+   */
+  experimental: {
+    serverActions: { bodySizeLimit: "3mb" },
+  },
+
+  /**
    * SECURITY HEADERS (§6.119).
    *
    * There were none. These four are the ones that cannot break a working app, which is why they go in now
