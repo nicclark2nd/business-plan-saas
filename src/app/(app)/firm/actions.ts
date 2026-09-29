@@ -126,22 +126,37 @@ export async function saveProfile(patch: ProfilePatch): Promise<Result> {
   return { ok: true };
 }
 
+/**
+ * THE PHOTO (§6.190): the square fitted into the circle, and — when a new file was chosen — the original it was
+ * cut from, so "Adjust" can reopen the whole picture later. Both are checked here as well as in the browser.
+ * The square lives at `<id>/photo.jpg`, the original at `<id>/original` (its type travels as the content type).
+ */
 export async function uploadPhoto(form: FormData): Promise<Result> {
   const session = await getSession();
   if (!session) return { ok: false, error: "Sign in again." };
-  const file = form.get("logo");
-  if (!(file instanceof File)) return { ok: false, error: "No file arrived — try choosing it again." };
-  const check = checkLogo({ type: file.type, size: file.size, name: file.name });
-  if (!check.ok) return { ok: false, error: check.error.replace("A logo", "A photo").replace("a logo", "a photo") };
+  const photo = form.get("photo") ?? form.get("logo");
+  const original = form.get("original");
+  if (!(photo instanceof File)) return { ok: false, error: "No photo arrived — try choosing it again." };
+  for (const f of [photo, original]) {
+    if (!(f instanceof File)) continue;
+    const check = checkLogo({ type: f.type, size: f.size, name: f.name });
+    if (!check.ok) return { ok: false, error: check.error.replace("A logo", "A photo").replace("a logo", "a photo") };
+  }
 
   const supabase = await createClient();
-  const path = `${session.user.id}/photo.${check.ext}`;
+  const dir = session.user.id;
+  const path = `${dir}/photo.jpg`;
   const { error: upload } = await supabase.storage.from(PHOTO_BUCKET)
-    .upload(path, file, { upsert: true, contentType: file.type, cacheControl: "3600" });
+    .upload(path, photo, { upsert: true, contentType: "image/jpeg", cacheControl: "60" });
   if (upload) return failed(upload, "save that photo");
+  if (original instanceof File) {
+    const { error: up2 } = await supabase.storage.from(PHOTO_BUCKET)
+      .upload(`${dir}/original`, original, { upsert: true, contentType: original.type, cacheControl: "60" });
+    if (up2) console.error("photo original", up2); // the square is saved; only later re-adjusting loses the edges
+  }
   const { data: me } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
   const previous = (me as Record<string, unknown> | null)?.photo_path as string | null | undefined;
-  if (previous && previous !== path) await supabase.storage.from(PHOTO_BUCKET).remove([previous]);
+  if (previous && previous !== path && previous !== `${dir}/original`) await supabase.storage.from(PHOTO_BUCKET).remove([previous]);
   const { error } = await supabase.from("profiles").update({ photo_path: path }).eq("id", session.user.id);
   if (error) return failed(error, "save the photo");
   revalidatePath("/firm", "layout");
@@ -154,7 +169,7 @@ export async function removePhoto(): Promise<Result> {
   const supabase = await createClient();
   const { data: me } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
   const previous = (me as Record<string, unknown> | null)?.photo_path as string | null | undefined;
-  if (previous) await supabase.storage.from(PHOTO_BUCKET).remove([previous]);
+  await supabase.storage.from(PHOTO_BUCKET).remove([previous, `${session.user.id}/original`].filter((x): x is string => !!x));
   const { error } = await supabase.from("profiles").update({ photo_path: null }).eq("id", session.user.id);
   if (error) return failed(error, "remove the photo");
   revalidatePath("/firm", "layout");

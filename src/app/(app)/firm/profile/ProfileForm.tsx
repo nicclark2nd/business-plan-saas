@@ -3,11 +3,11 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Section, Field, FieldGrid, FieldInput } from "@/components/module/FieldGrid";
-import { ImageUpload } from "@/components/module/ImageUpload";
-import { removePhoto, saveProfile, uploadPhoto, type ProfilePatch } from "../actions";
+import { PhotoSection } from "./PhotoSection";
+import { saveProfile, type ProfilePatch } from "../actions";
 import { PlannerCard } from "@/components/PlannerCard";
 
-export type ProfileView = { fullName: string; title: string | null; phone: string | null; email: string | null; photoPath: string | null; photoUrl: string | null };
+export type ProfileView = { fullName: string; title: string | null; phone: string | null; email: string | null; photoPath: string | null; photoUrl: string | null; originalUrl: string | null };
 
 /**
  * MY PROFILE (§6.182) — the consultant as a person: what a client will see on the "Your Planner" card
@@ -70,10 +70,9 @@ export function ProfileForm({ me }: { me: ProfileView }) {
           </p>
         </div>
       </div>
-      <ImageUpload title="Your photo" noun="photo" path={me.photoPath} url={me.photoUrl}
-        onPending={(busy, e) => { setError(e); setNote(busy ? "Saving…" : undefined); }}
-        upload={uploadPhoto} remove={removePhoto}
-        blurb={<>A head-and-shoulders photo, shown on the <b>&ldquo;Your Planner&rdquo; card</b> your clients see.</>} />
+      <PhotoSection url={me.photoUrl} originalUrl={me.originalUrl}
+        initials={(p.fullName || p.email || "?").split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
+        onChange={(busy, e) => { setError(e); setNote(busy ? "Saving…" : undefined); }} />
     </div>
   );
 }

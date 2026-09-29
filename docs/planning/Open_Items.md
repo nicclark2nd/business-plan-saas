@@ -1125,3 +1125,11 @@ projection step and scored on the Plan view, after.)
   before the action ran and the screen could only report a lost connection. `experimental.serverActions.
   bodySizeLimit` is now 3 MB in next.config.ts (the 2 MB check still runs in the browser and in the action;
   Vercel's own body limit is 4.5 MB). Affected the plan's logo too, since §6.94.
+- **§6.190** The photo on My Profile can be fitted into its circle, as in any phone app (Nic). Choosing a photo, or
+  pressing **Adjust**, opens a crop window: drag to move it, the slider (or the scroll wheel, or the arrow keys)
+  to zoom; everything outside the circle is dimmed, so what will show is exactly what is bright. Save writes a
+  512 × 512 square of what is in the frame (`<id>/photo.jpg`) and keeps the original (`<id>/original`) so a
+  later Adjust has the whole picture to zoom back out into. The photo is shown as a circle on My Profile and on
+  the "Your Planner" card. The crop arithmetic — always covering the frame, zooming about the centre, saving
+  exactly the frame — is pure and tested (`engine/plan/crop.ts`). No library. A photo saved before this has no
+  original: Adjust reopens the square until a new one is chosen.
