@@ -64,7 +64,7 @@ export default async function PlanLayout({ children, params }: { children: React
           <button type="submit" title="Sign out" className="grid size-7 place-items-center rounded-full bg-sidebar-accent text-[11px] font-bold text-sidebar-accent-foreground ring-1 ring-sidebar-border hover:bg-sidebar-primary">{initials}</button>
         </form>
       </header>
-      <Sidebar planId={planId} doneSteps={doneSteps} planner={planner} />
+      <Sidebar planId={planId} doneSteps={doneSteps} planner={planner} isClient={!firm} />
       {/*
         WHERE THE APP'S READING WIDTH IS DECIDED (§6.118).
         

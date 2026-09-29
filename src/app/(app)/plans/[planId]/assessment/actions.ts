@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { nextHref } from "@/lib/nav";
 import { failed } from "@/lib/actionFailed";
+import { loadFirm } from "@/lib/firm";
 import { TARGET_META, clampTarget, mayWriteThrough, readTargets, type AgreedTargets, type TargetKind } from "@/engine/capability/targets";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
@@ -14,7 +15,7 @@ type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string
  * is itself the Planner working the step through: an empty `{}` marks it done without inventing a target.
  */
 export async function continueFromAssessment(planId: string, intent: "next" | "later", nothingToFix = false) {
-  if (nothingToFix) {
+  if (nothingToFix && (await loadFirm(planId))) {
     const supabase = await createClient();
     await supabase.from("plan_settings").update({ agreed_targets: {} }).eq("plan_id", planId).is("agreed_targets", null);
   }
@@ -32,6 +33,8 @@ export async function continueFromAssessment(planId: string, intent: "next" | "l
 export async function saveTarget(planId: string, kind: TargetKind, value: number | null, proposed: number):
   Promise<Result<{ targets: AgreedTargets; setting: number | null }>> {
   if (!TARGET_META[kind]) return { ok: false, error: "That target is not one this screen knows." };
+  /* Agreeing targets is the Planner's (§6.187): refused here for a firm's client, not only hidden from them. */
+  if (!(await loadFirm(planId))) return { ok: false, error: "Targets are agreed by your Planner." };
   const v = value === null ? null : clampTarget(kind, Number(value));
   if (value !== null && v === null) return { ok: false, error: "That figure is not a number." };
   const p = clampTarget(kind, Number(proposed)) ?? v ?? 0;

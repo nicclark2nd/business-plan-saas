@@ -10,7 +10,7 @@ import { PlannerCard, type PlannerCardData } from "@/components/PlannerCard";
 /** The "Your Planner" card (§6.183) — shown to a firm's client, never to the Planner themselves. */
 export type SidebarPlanner = PlannerCardData;
 
-export function Sidebar({ planId, doneSteps, planner = null }: { planId: string; doneSteps: number[]; planner?: SidebarPlanner | null }) {
+export function Sidebar({ planId, doneSteps, planner = null, isClient = false }: { planId: string; doneSteps: number[]; planner?: SidebarPlanner | null; isClient?: boolean }) {
   const { mode } = useMode();
   const path = usePathname();
   const area = useSearchParams().get("area");
@@ -33,7 +33,8 @@ export function Sidebar({ planId, doneSteps, planner = null }: { planId: string;
     if (!claimed.has(t.id)) claimed.set(t.id, new Set());
     claimed.get(t.id)!.add(t.area);
   }
-  const groups = NAV.map((g) => ({ ...g, items: g.items.filter((i) => mode === "advanced" || i.step || i.tool) })).filter((g) => g.items.length);
+  /* A firm's client does not see the Planner's assessment (§6.187). */
+  const groups = NAV.map((g) => ({ ...g, items: g.items.filter((i) => (mode === "advanced" || i.step || i.tool) && !(isClient && i.id === "assessment")) })).filter((g) => g.items.length);
 
   return (
     <nav className="flex h-full flex-col overflow-y-auto border-r border-sidebar-border bg-sidebar pb-6 pt-2 text-sidebar-foreground">

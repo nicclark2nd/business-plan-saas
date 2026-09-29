@@ -10,6 +10,9 @@ import { SELL_WEIGHTS } from "@/engine/capability/sell";
 import { readTargets } from "@/engine/capability/targets";
 import { createClient } from "@/lib/supabase/server";
 import { AssessmentModule, type AssessmentData } from "./AssessmentModule";
+import { redirect } from "next/navigation";
+import { loadFirm } from "@/lib/firm";
+import { nextHref } from "@/lib/nav";
 
 /**
  * THE PLANNER'S ASSESSMENT (§6.164) — step 8, between the accounts and the first projection.
@@ -26,6 +29,12 @@ const PAST: Record<string, string> = {
 
 export default async function AssessmentPage({ params }: { params: Promise<{ planId: string }> }) {
   const { planId } = await params;
+  /*
+   * THE PLANNER'S, NOT THE CLIENT'S (§6.187, Nic). A firm's client cannot read the firm at all, so `loadFirm`
+   * is null for them: they are passed on to the next step. An owner planning for themselves is their own
+   * Planner and keeps the step.
+   */
+  if (!(await loadFirm(planId))) redirect(nextHref(planId, "assessment"));
   const supabase = await createClient();
   const [f, stored] = await Promise.all([
     loadCapabilityFacts(planId),

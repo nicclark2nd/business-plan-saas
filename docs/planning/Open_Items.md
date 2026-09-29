@@ -1116,3 +1116,7 @@ projection step and scored on the Plan view, after.)
   to Planners only. Plan completeness could exceed 100% (fifteen goals on a six-area step read as 250% of that
   step; the dashboard showed 103%) — each step now counts at most once. A firm's client with no organisation of
   their own lands straight in their plan, never sees the firm's name on a plan list, and is not offered Billing.
+- **§6.188** The Planner's assessment (step 8) is the Planner's (Nic: "Planner only"). A firm's client does not see
+  it in the menu, is passed on to the next step if they open its address, and cannot agree or change a target
+  (refused in the action, not only hidden). Agreed targets still show on the steps they belong to. An owner
+  planning for themselves is their own Planner and keeps the step; the firm's Planners are unchanged.
