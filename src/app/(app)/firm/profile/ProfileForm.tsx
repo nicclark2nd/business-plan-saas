@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Section, Field, FieldGrid, FieldInput } from "@/components/module/FieldGrid";
 import { ImageUpload } from "@/components/module/ImageUpload";
 import { removePhoto, saveProfile, uploadPhoto, type ProfilePatch } from "../actions";
+import { PlannerCard } from "@/components/PlannerCard";
 
 export type ProfileView = { fullName: string; title: string | null; phone: string | null; email: string | null; photoPath: string | null; photoUrl: string | null };
 
@@ -51,11 +52,24 @@ export function ProfileForm({ me }: { me: ProfileView }) {
           {box("fullName", "full_name", "Your name", 3)}
           {box("title", "title", "Title", 3, "e.g. Business Coach")}
           {box("phone", "phone", "Direct phone", 3)}
-          <Field label="Email" span={3} hint="The address you sign in with. Change it from the sign-in screen, not here.">
+          <Field label="Email" span={3} hint="The address you sign in with — also the one on your card.">
             <FieldInput value={p.email ?? ""} disabled />
           </Field>
         </FieldGrid>
       </Section>
+      {/* THE CARD ITSELF (§6.187), live as the boxes change: what a client sees at the foot of their plan's menu. */}
+      <div className="px-5 pb-1.5 pt-3.5">
+        <h2 className="mb-2.5 flex items-center gap-2.5 text-xs font-semibold uppercase tracking-[.05em] text-muted-foreground">What your clients see<span className="h-px flex-1 bg-border" /></h2>
+        <div className="flex flex-wrap items-start gap-6">
+          <div className="w-[216px] rounded-md bg-sidebar p-3">
+            <PlannerCard planner={{ name: p.fullName.trim() || p.email || "Your name", title: p.title?.trim() || null, phone: p.phone?.trim() || null, email: p.email, photoUrl: me.photoUrl }} />
+          </div>
+          <p className="max-w-[46ch] text-[12.5px] text-muted-foreground">
+            This card sits at the foot of the menu in every plan your clients open, for the clients you look after. Nothing about your firm is on it — only you.
+            {!me.photoUrl && " Add a photo below and your initials are replaced by it."}
+          </p>
+        </div>
+      </div>
       <ImageUpload title="Your photo" noun="photo" path={me.photoPath} url={me.photoUrl}
         onPending={(busy, e) => { setError(e); setNote(busy ? "Saving…" : undefined); }}
         upload={uploadPhoto} remove={removePhoto}

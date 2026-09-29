@@ -186,6 +186,7 @@ export const getCompleteness = cache(async (planId: string, reconciled?: boolean
     { id: "forecast", label: "Review forecast", done: reconciled ? 1 : 0, total: 1 },
     { id: "goals", label: "Goals", done: annualGoals, total: 6 },
   ];
-  const done = sections.reduce((a, s) => a + s.done / s.total, 0);
+  /* A section is at most complete: fifteen goals on a six-area step is 100%, not 250% (§6.187 — the dashboard read 103%). */
+  const done = sections.reduce((a, s) => a + Math.min(1, s.done / s.total), 0);
   return { sections, percent: Math.round((done / sections.length) * 100) };
 });

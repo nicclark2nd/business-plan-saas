@@ -1104,3 +1104,15 @@ projection step and scored on the Plan view, after.)
   on the plan list, for site admins only. Migration 0063; database tests `platform.sql` (5 blocks) — all five
   files pass. Deferred: "create a sample plan" (needs a sample-plan template first) and "terms agreed" (there is
   no terms-of-service acceptance yet).
+- **§6.187** Walk-through of the consultant's side (Nic: screens, navigation between the firm area and client plans,
+  branding, the "Your Planner" card, reports). Found and fixed: the "Your Planner" card sat at the end of a
+  twenty-item menu, below the fold — it is now stuck to the foot of the menu; one `PlannerCard` component, also
+  shown as a live preview on My Profile ("What your clients see"). My Firm said the card used the firm's details
+  (it shows the person, from My Profile) and that the business number was "printed only where you choose" (there
+  was no such choice) — both reworded. The photo box repeated the logo's Word/cover advice. My Profile pointed to
+  a way of changing the email that does not exist. Team's "all · looks after 1". My Clients: reports one click from
+  the client (Business plan, Planner's report, Financial Capabilities), and "Use frank@…" to take the contact email
+  from the plan instead of typing it again. The plan's Reports page offers the Planner's report beside the plan,
+  to Planners only. Plan completeness could exceed 100% (fifteen goals on a six-area step read as 250% of that
+  step; the dashboard showed 103%) — each step now counts at most once. A firm's client with no organisation of
+  their own lands straight in their plan, never sees the firm's name on a plan list, and is not offered Billing.

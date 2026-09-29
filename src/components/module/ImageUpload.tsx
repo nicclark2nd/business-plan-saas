@@ -83,9 +83,11 @@ export function ImageUpload({ path, url, onPending, title, blurb, noun = "logo",
             {blurb}
           </p>
           <p className="mt-1 text-[11.5px] text-muted-foreground">
-            {LOGO_TYPES_LABEL}, up to {LOGO_MAX_LABEL}. A transparent PNG sits best on the cover.
-            {/* Said plainly rather than left for a client to discover from a broken document. */}
-            {" "}WebP and SVG are not accepted — Word cannot place them without breaking the page.
+            {LOGO_TYPES_LABEL}, up to {LOGO_MAX_LABEL}.
+            {noun === "photo"
+              ? " A square, head-and-shoulders photo works best — it is shown in a small circle."
+              /* Said plainly rather than left for a client to discover from a broken document. */
+              : " A transparent PNG sits best on the cover. WebP and SVG are not accepted — Word cannot place them without breaking the page."}
           </p>
           {error && <p className="mt-2 text-[12.5px] text-bad">{error}</p>}
 

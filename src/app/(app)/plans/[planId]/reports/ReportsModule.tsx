@@ -28,7 +28,9 @@ import { COPY } from "@/engine/report/content";
  */
 const STEP = GUIDED_STEPS.find((s) => s.id === "reports")?.step ?? 16;
 
-export function ReportsModule({ planId, mode, doc, reconciled, hasFigures, missing, pageSize, printSalaries, logoUrl, canDownload = true }: {
+export function ReportsModule({ planId, mode, doc, reconciled, hasFigures, missing, pageSize, printSalaries, logoUrl, canDownload = true, planner = false }: {
+  /** One of the firm's Planners (§6.187): offered the Planner's report beside the plan. */
+  planner?: boolean;
   /** A firm's client whose Planner has kept downloads to themselves (§6.183). */
   canDownload?: boolean;
   planId: string; mode: "guided" | "advanced"; doc: ReportDoc;
@@ -61,10 +63,13 @@ export function ReportsModule({ planId, mode, doc, reconciled, hasFigures, missi
         * A plain link, not a button that fetches (§6.90). The browser saves files; asking React to hold a
         * 200KB document in memory first so it can hand it back to the browser buys nothing and can fail.
         */
-      primaryAction={canDownload
-        ? <Button size="sm" render={<a href={`/plans/${planId}/reports/download`} download />}>Download as Word</Button>
-        : <span className="text-[12px] text-muted-foreground">Ask your Planner for a copy to download.</span>
-      }
+      primaryAction={<>
+        {/* The Planner's own report sits beside the plan, for the Planner only (§6.187). */}
+        {planner && <Button size="sm" variant="outline" render={<a href={`/plans/${planId}/capabilities/report`} download />}>Planner&apos;s report (Word)</Button>}
+        {canDownload
+          ? <Button size="sm" render={<a href={`/plans/${planId}/reports/download`} download />}>Download as Word</Button>
+          : <span className="text-[12px] text-muted-foreground">Ask your Planner for a copy to download.</span>}
+      </>}
       footer={<ModuleReadOnlyFooter planId={planId} moduleId="reports" nextLabel="Done →" />}
       help={<>
         <h3>What this is</h3>

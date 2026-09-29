@@ -185,6 +185,14 @@ function ClientPanel({ r, firm, me, origin, team, isAdmin }: { r: ClientRow; fir
         <Button render={<Link href={`/plans/${r.id}/dashboard`} />}>Open plan →</Button>
       </div>
 
+      {/* The documents, one click from the client (§6.187) — the same downloads as inside the plan. */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px]">
+        <span className="font-semibold text-muted-foreground">Reports:</span>
+        <a href={`/plans/${r.id}/reports/download`} className="font-semibold text-primary hover:underline">Business plan (Word)</a>
+        <a href={`/plans/${r.id}/capabilities/report`} className="font-semibold text-primary hover:underline">Planner&apos;s report (Word)</a>
+        <Link href={`/plans/${r.id}/capabilities`} className="font-semibold text-primary hover:underline">Financial Capabilities →</Link>
+      </div>
+
       <LookedAfterBy r={r} team={team} isAdmin={isAdmin} />
 
       <h3 className="eyebrow mt-6">The business</h3>
@@ -197,7 +205,13 @@ function ClientPanel({ r, firm, me, origin, team, isAdmin }: { r: ClientRow; fir
       </dl>
 
       <h3 className="eyebrow mt-6">Contact person</h3>
-      <p className="mt-1 text-[12px] text-muted-foreground">Who you deal with at the business. Their email is where their invitation will go.</p>
+      <p className="mt-1 text-[12px] text-muted-foreground">
+        Who you deal with at the business. Their email is where their invitation will go.
+        {/* Not asked twice (§6.187): the plan's own email, one click away, rather than typed again. */}
+        {!c.contact_email && r.email && (
+          <> <button type="button" className="font-semibold text-primary hover:underline" onClick={() => { setC((x) => ({ ...x, contact_email: r.email })); save("contact_email", r.email!); }}>Use {r.email}</button></>
+        )}
+      </p>
       <div className="mt-2 max-w-[720px]">
         <FieldGrid>
           {box("contact_first_name", "First name", 3)}

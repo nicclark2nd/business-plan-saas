@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/plan";
 import { loadMyFirm } from "@/lib/myFirm";
 import { isPlatformAdmin } from "@/lib/platform";
+import { myBillingOrg } from "@/lib/billing";
 import { SetupForm } from "./SetupForm";
 import { PlanCard } from "./PlanCard";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,16 @@ export default async function SetupPage() {
   if (!session) redirect("/login");
   /* A consultant's home is their own area, not a list of plans (§6.182). */
   if (await loadMyFirm()) redirect("/firm/clients");
+
+  /*
+   * A FIRM'S CLIENT (§6.187) — someone let into a plan by a consultant, with no organisation of their own. They
+   * are sent straight into their plan when there is one, see no firm's name on the list when there are more,
+   * and are not offered billing: their Planner's firm pays.
+   */
+  const ownOrg = await myBillingOrg();
+  const mine = (p: { organisation_id?: string | null }) => !!ownOrg && p.organisation_id === ownOrg.id;
+  const liveAll = session.plans.filter((p) => !p.archived_at);
+  if (!ownOrg && liveAll.length === 1) redirect(`/plans/${liveAll[0].id}/dashboard`);
 
   if (session.plans.length > 0) {
     // A plan that has been put away is still a plan (§6.58) — it is just not in front of you.
@@ -37,12 +48,12 @@ export default async function SetupPage() {
             <div className="flex items-center gap-2">
               {/* An owner's subscription (§6.185) — consultants never reach this page; theirs is in their own area. */}
               {(await isPlatformAdmin()) && <Button variant="outline" size="sm" render={<Link href="/admin" />}>Site Admin</Button>}
-              <Button variant="outline" size="sm" render={<Link href="/billing" />}>Billing</Button>
+              {ownOrg && <Button variant="outline" size="sm" render={<Link href="/billing" />}>Billing</Button>}
               <form action="/auth/signout" method="post"><Button variant="outline" size="sm" type="submit">Sign out</Button></form>
             </div>
           </div>
           <div className="space-y-2">
-            {live.map((p) => <PlanCard key={p.id} plan={p} orgName={orgName(p)} archived={false} />)}
+            {live.map((p) => <PlanCard key={p.id} plan={p} orgName={mine(p) ? orgName(p) : undefined} archived={false} />)}
             {live.length === 0 && (
               <p className="py-6 text-center text-[13px] text-muted-foreground">
                 Every plan is archived. Restore one below, or set up another business.
@@ -56,7 +67,7 @@ export default async function SetupPage() {
                 Archived ({archived.length})
               </summary>
               <div className="mt-3 space-y-2 opacity-75">
-                {archived.map((p) => <PlanCard key={p.id} plan={p} orgName={orgName(p)} archived />)}
+                {archived.map((p) => <PlanCard key={p.id} plan={p} orgName={mine(p) ? orgName(p) : undefined} archived />)}
               </div>
               <p className="mt-2 text-[12px] text-muted-foreground">
                 Nothing here has been deleted — an archived plan keeps every figure and opens as it always did.

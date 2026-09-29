@@ -84,7 +84,7 @@ export function TeamModule({ team, invites, isAdmin, me, firm, myName, origin }:
                     </select>
                   ) : ROLE[t.role].label}
                 </td>
-                <td className="py-2.5 pr-3 text-right tabular-nums">{t.role === "admin" ? <span className="text-muted-foreground" title="An admin sees every client">all · looks after {t.clients}</span> : t.clients}</td>
+                <td className="py-2.5 pr-3 text-right tabular-nums">{t.clients}{t.role === "admin" && <div className="text-[11px] text-muted-foreground">sees them all</div>}</td>
                 <td className="py-2.5 pr-3 text-muted-foreground">{date(t.joined)}</td>
                 {isAdmin && (
                   <td className="py-2.5 text-right">

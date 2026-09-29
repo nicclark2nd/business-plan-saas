@@ -60,7 +60,7 @@ export function FirmDetails({ firm, email, isAdmin }: { firm: FirmForm; email: s
         <div className="eyebrow">My Firm</div>
         <h1 className="text-[22px] font-semibold">Your firm&apos;s details</h1>
         <p className="mt-1 max-w-[80ch] text-[13px] text-muted-foreground">
-          Set once, used for every client: on the cover and every page of the Planner&apos;s report, and on the card that tells a client who their Planner is. None of it appears inside a client&apos;s plan.
+          Set once, used for every client on what your firm sends out — the cover, header and &ldquo;Prepared by&rdquo; line of the Planner&apos;s report. None of it appears inside a client&apos;s plan: the card your clients see there shows you as a person, from My Profile.
           {ro && <b className="text-foreground"> Only your firm&apos;s admin can change these.</b>}
         </p>
         {(error || note) && <p className={error ? "mt-2 text-[12.5px] font-semibold text-bad" : "mt-2 text-[12px] text-muted-foreground"} role={error ? "alert" : undefined}>{error ?? note}</p>}
@@ -69,7 +69,7 @@ export function FirmDetails({ firm, email, isAdmin }: { firm: FirmForm; email: s
       <Section title="The firm">
         <FieldGrid>
           {box("name", "name", "Firm name", 3)}
-          {box("businessNumber", "business_number", "Business number", 3, { hint: "ABN, EIN or company number — printed only where you choose." })}
+          {box("businessNumber", "business_number", "Business number", 3, { hint: "ABN, EIN or company number. Kept with your firm's details; add it to the “Prepared by” line below if you want it printed." })}
           {box("addressLine", "address_line", "Street address", 6)}
           {box("city", "city", "City or suburb", 2)}
           {box("region", "region", "State or region", 2)}

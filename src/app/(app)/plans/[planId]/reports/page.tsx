@@ -3,6 +3,7 @@ import { LOGO_BUCKET, LOGO_URL_TTL_SECONDS } from "@/engine/plan/logo";
 import { gatherReport } from "./gather";
 import { ReportsModule } from "./ReportsModule";
 import { mayDownload } from "@/lib/clientAccess";
+import { loadFirm } from "@/lib/firm";
 
 /**
  * The business plan (§6.83), assembled on the server and handed down finished. Everything it reads comes
@@ -17,5 +18,5 @@ export default async function ReportsPage({ params }: { params: Promise<{ planId
     ? (await supabase.storage.from(LOGO_BUCKET).createSignedUrl(logoPath, LOGO_URL_TTL_SECONDS)).data?.signedUrl ?? null
     : null;
   return <ReportsModule planId={planId} mode={mode} doc={doc} reconciled={reconciled} hasFigures={hasFigures} missing={missing}
-    pageSize={pageSize} printSalaries={printSalaries} logoUrl={logoUrl} canDownload={await mayDownload(planId)} />;
+    pageSize={pageSize} printSalaries={printSalaries} logoUrl={logoUrl} canDownload={await mayDownload(planId)} planner={!!(await loadFirm(planId))?.isPlanner} />;
 }
